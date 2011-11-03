@@ -1,0 +1,3 @@
+include LICENSE.txt
+include MANIFEST.in
+include README.rst
