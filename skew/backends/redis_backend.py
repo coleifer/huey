@@ -48,7 +48,7 @@ class RedisBlockingQueue(RedisQueue):
 
     def read(self):
         try:
-            return self.conn.brpop(self.queue_name)
+            return self.conn.brpop(self.queue_name)[1]
         except ConnectionError:
             # unfortunately, there is no way to differentiate a socket timing
             # out and a host being unreachable
