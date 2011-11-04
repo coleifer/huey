@@ -1,6 +1,9 @@
 import sys
 
 
+class EmptyResult(object):
+    pass
+
 def load_class(s):
     path, klass = s.rsplit('.', 1)
     __import__(path)
@@ -10,6 +13,3 @@ def load_class(s):
 def wrap_exception(exc_class):
     exc_class, exc, tb = sys.exc_info()
     raise exc_class(exc.message)
-
-class EmptyResult(object):
-    pass

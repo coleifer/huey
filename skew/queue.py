@@ -28,12 +28,16 @@ class AsyncResult(object):
             if res is not EmptyResult:
                 self._result = pickle.loads(res)
                 return self._result
+            else:
+                return res
         else:
             return self._result
     
     def get(self, blocking=False, timeout=None, backoff=1.15, max_delay=1.0):
         if not blocking:
-            return self._get()
+            res = self._get()
+            if res is not EmptyResult:
+                return res
         else:
             start = time.time()
             delay = .1
