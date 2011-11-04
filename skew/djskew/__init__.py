@@ -95,7 +95,7 @@ if isinstance(queue, basestring):
 result_store = config.get('RESULT_STORE', None)
 
 if isinstance(result_store, basestring):
-    ResultStoreClass = load_class(queue)
+    ResultStoreClass = load_class(result_store)
     result_store = ResultStoreClass(
         config.get('RESULT_STORE_NAME', db_name),
         config.get('RESULT_STORE_CONNECTION', None),
