@@ -6,3 +6,10 @@ def load_class(s):
     __import__(path)
     mod = sys.modules[path]
     return getattr(mod, klass)
+
+def wrap_exception(exc_class):
+    exc_class, exc, tb = sys.exc_info()
+    raise exc_class(exc.message)
+
+class EmptyResult(object):
+    pass

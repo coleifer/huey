@@ -1,5 +1,6 @@
 import re
 import redis
+from redis.exceptions import ConnectionError
 
 from skew.backends.base import BaseQueue, BaseResultStore
 
@@ -46,7 +47,12 @@ class RedisBlockingQueue(RedisQueue):
     blocking = True
 
     def read(self):
-        return self.conn.brpop(self.queue_name)
+        try:
+            return self.conn.brpop(self.queue_name)
+        except ConnectionError:
+            # unfortunately, there is no way to differentiate a socket timing
+            # out and a host being unreachable
+            return None
 
 
 class RedisResultStore(BaseResultStore):
@@ -70,4 +76,6 @@ class RedisResultStore(BaseResultStore):
         val = self.conn.hget(self.storage_name, task_id)
         if val:
             self.conn.hdel(self.storage_name, task_id)
+        else:
+            val = EmptyResult
         return val

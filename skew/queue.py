@@ -2,13 +2,11 @@ import datetime
 import os
 import pickle
 import uuid
+import sys
 
-from skew.exceptions import QueueException
+from skew.exceptions import QueueException, QueueWriteException, QueueReadException, ResultStoreGetException, ResultStorePutException
 from skew.registry import registry
-
-
-class EmptyResult(object):
-    pass
+from skew.utils import wrap_exception, EmptyResult
 
 
 class AsyncResult(object):
@@ -20,8 +18,12 @@ class AsyncResult(object):
     
     def get(self):
         if self._result is EmptyResult:
-            res = self.result_store.get(self.task_id)
-            if res is not None:
+            try:
+                res = self.result_store.get(self.task_id)
+            except:
+                wrap_exception(ResultStoreGetException)
+            
+            if res is not EmptyResult:
                 self._result = pickle.loads(res)
                 return self._result
         else:
@@ -43,7 +45,11 @@ class Invoker(object):
         self.queue.write(msg)
     
     def enqueue(self, command):
-        self.write(registry.get_message_for_command(command))
+        try:
+            self.write(registry.get_message_for_command(command))
+        except:
+            wrap_exception(QueueWriteException)
+        
         if self.result_store:
             return AsyncResult(self.result_store, command.task_id)
     
@@ -51,14 +57,21 @@ class Invoker(object):
         return self.queue.read()
     
     def dequeue(self):
-        msg = self.read()
+        try:
+            msg = self.read()
+        except:
+            wrap_exception(QueueReadException)
         
         if msg:
             command = registry.get_command_for_message(msg)
             result = command.execute()
             
-            if result is not None and self.result_store:
-                self.result_store.put(command.task_id, pickle.dumps(result))
+            if self.result_store:
+                deserialized = pickle.dumps(result)
+                try:
+                    self.result_store.put(command.task_id, deserialized)
+                except:
+                    wrap_exception(ResultStorePutException)
     
     def flush(self):
         self.queue.flush()

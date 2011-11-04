@@ -1,4 +1,5 @@
 from skew.backends.base import BaseQueue, BaseResultStore
+from skew.utils import EmptyResult
 
 
 class DummyQueue(BaseQueue):
@@ -31,4 +32,4 @@ class DummyResultStore(BaseResultStore):
         self._results[task_id] = value
     
     def get(self, task_id):
-        return self._results.pop(task_id, None)
+        return self._results.pop(task_id, EmptyResult)
