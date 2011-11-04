@@ -130,11 +130,11 @@ class Consumer(object):
         for job in self._queue:
             # spin up a worker with the given job
             self.spawn(self.worker, job)
+            
+            # indicate receipt of the task
+            self._queue.task_done()
     
     def worker(self, command):        
-        # indicate receipt of the task
-        self._queue.task_done()
-        
         try:
             self.invoker.execute(command)
         except ResultStorePutException:

@@ -31,8 +31,8 @@ class AsyncResult(object):
         else:
             return self._result
     
-    def get(self, block=False, timeout=None, backoff=1.15, max_delay=1.0):
-        if not block:
+    def get(self, blocking=False, timeout=None, backoff=1.15, max_delay=1.0):
+        if not blocking:
             return self._get()
         else:
             start = time.time()
