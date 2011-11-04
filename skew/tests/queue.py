@@ -6,6 +6,7 @@ from skew.decorators import queue_command, periodic_command, crontab
 from skew.exceptions import QueueException
 from skew.queue import Invoker, QueueCommand, PeriodicQueueCommand
 from skew.registry import registry
+from skew.utils import EmptyResult
 
 
 queue_name = 'test-queue'
@@ -17,6 +18,7 @@ res_queue = DummyQueue(res_queue_name, None)
 res_store = DummyResultStore(res_queue_name, None)
 
 res_invoker = Invoker(res_queue, res_store)
+res_invoker_nones = Invoker(res_queue, res_store, True)
 
 # store some global state
 state = {}
@@ -53,6 +55,9 @@ def add2(a, b):
 def returns_none():
     return None
 
+@queue_command(res_invoker_nones)
+def returns_none2():
+    return None
 
 class SkewTestCase(unittest.TestCase):
     def setUp(self):
@@ -176,5 +181,12 @@ class SkewTestCase(unittest.TestCase):
         self.assertEqual(res.get(), None)
         
         res_invoker.execute(res_invoker.dequeue())
+        self.assertEqual(res.get(), None)
+        self.assertEqual(res._result, EmptyResult)
+
+        res = returns_none2()
+        self.assertEqual(res.get(), None)
+
+        res_invoker_nones.execute(res_invoker_nones.dequeue())
         self.assertEqual(res.get(), None)
         self.assertEqual(res._result, None)

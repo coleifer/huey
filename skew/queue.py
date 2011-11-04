@@ -60,10 +60,11 @@ class Invoker(object):
     up the proper :class:`QueueCommand` for each message
     """
     
-    def __init__(self, queue, result_store=None):
+    def __init__(self, queue, result_store=None, store_none=False):
         self.queue = queue
         self.result_store = result_store
         self.blocking = self.queue.blocking
+        self.store_none = store_none
     
     def write(self, msg):
         try:
@@ -93,11 +94,14 @@ class Invoker(object):
             raise TypeError('Unknown object: %s' % command)
         
         result = command.execute()
+
+        if result is None and not self.store_none:
+            return
         
         if self.result_store and not isinstance(command, PeriodicQueueCommand):
-            deserialized = pickle.dumps(result)
+            serialized = pickle.dumps(result)
             try:
-                self.result_store.put(command.task_id, deserialized)
+                self.result_store.put(command.task_id, serialized)
             except:
                 wrap_exception(ResultStorePutException)
         
