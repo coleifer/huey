@@ -13,7 +13,7 @@ class CommandRegistry(object):
     _registry = {}
     _periodic_commands = []
     
-    message_template = '%(TASK_ID)s:%(CLASS)s:%(DATA)s'
+    message_template = '%(TASK_ID)s:%(CLASS)s:%(TIME)s:%(DATA)s'
 
     def command_to_string(self, command):
         return '%s.%s' % (command.__module__, command.__name__)
@@ -46,19 +46,20 @@ class CommandRegistry(object):
         return self.message_template % {
             'TASK_ID': command.task_id,
             'CLASS': self.command_to_string(type(command)),
+            'TIME': pickle.dumps(command.execute_time),
             'DATA': pickle.dumps(command.get_data())
         }
 
     def get_command_for_message(self, msg):
         """Convert a message from the queue into a command"""
         # parse out the pieces from the enqueued message
-        task_id, klass_str, data = msg.split(':', 2)
+        task_id, klass_str, execute_time, data = msg.split(':', 3)
         
         klass = self._registry.get(klass_str)
         if not klass:
             raise QueueException, '%s not found in CommandRegistry' % klass_str
         
-        return klass(pickle.loads(str(data)), task_id)
+        return klass(pickle.loads(str(data)), task_id, pickle.loads(execute_time))
     
     def get_periodic_commands(self):
         return self._periodic_commands

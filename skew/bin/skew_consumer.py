@@ -1,3 +1,4 @@
+import datetime
 import logging
 import os
 import Queue
@@ -100,26 +101,34 @@ class Consumer(object):
         except QueueException:
             self.logger.error('queue exception', exc_info=1)
         
-        if command:
-            self._pool.acquire()
-            
-            self.logger.info('processing: %s' % command)
-            self.delay = self.default_delay
-            
-            # put the command into the queue for the scheduler
-            self._queue.put(command)
-            
-            # wait to acknowledge receipt of the command
-            self.logger.debug('waiting for receipt of command')
-            self._queue.join()
-        elif not self.invoker.blocking:
-            if self.delay > self.max_delay:
-                self.delay = self.max_delay
-            
-            self.logger.debug('no commands, sleeping for: %s' % self.delay)
-            time.sleep(self.delay)
-            
-            self.delay *= self.backoff_factor
+        if not command and not self.invoker.blocking:
+            # no new messages and our queue doesn't block, so sleep a bit before
+            # checking again
+            self.sleep()
+        elif command:
+            self.schedule_command(command)
+    
+    def schedule_command(self, command):
+        self._pool.acquire()
+        
+        self.logger.info('processing: %s' % command)
+        self.delay = self.default_delay
+        
+        # put the command into the queue for the scheduler
+        self._queue.put(command)
+        
+        # wait to acknowledge receipt of the command
+        self.logger.debug('waiting for receipt of command')
+        self._queue.join()
+
+    def sleep(self):
+        if self.delay > self.max_delay:
+            self.delay = self.max_delay
+        
+        self.logger.debug('no commands, sleeping for: %s' % self.delay)
+        time.sleep(self.delay)
+        
+        self.delay *= self.backoff_factor
     
     def start_scheduler(self):
         self.logger.info('starting scheduler thread')
