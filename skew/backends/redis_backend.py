@@ -3,6 +3,7 @@ import redis
 from redis.exceptions import ConnectionError
 
 from skew.backends.base import BaseQueue, BaseResultStore
+from skew.utils import EmptyResult
 
 
 class RedisQueue(BaseQueue):
