@@ -1,4 +1,4 @@
-from skew.decorators import queue_command as _queue_command, periodic_command as _periodic_command
+from skew.decorators import queue_command as _queue_command, periodic_command as _periodic_command, crontab
 from skew.djskew import invoker
 
 
