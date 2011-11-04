@@ -8,7 +8,7 @@ class RedisQueue(BaseQueue):
     """
     A simple Queue that uses the redis to store messages
     """
-    def __init__(self, name, connection):
+    def __init__(self, name, connection, **connection_kwargs):
         """
         QUEUE_CONNECTION = 'host:port:database' or defaults to localhost:6379:0
         """
@@ -21,7 +21,7 @@ class RedisQueue(BaseQueue):
         host, port, db = connection.split(':')
 
         self.conn = redis.Redis(
-            host=host, port=int(port), db=int(db)
+            host=host, port=int(port), db=int(db), **connection_kwargs
         )
     
     def write(self, data):
@@ -50,7 +50,7 @@ class RedisBlockingQueue(RedisQueue):
 
 
 class RedisResultStore(BaseResultStore):
-    def __init__(self, name, connection):
+    def __init__(self, name, connection, **connection_kwargs):
         super(RedisResultStore, self).__init__(name, connection)
         
         if not connection:
@@ -60,7 +60,7 @@ class RedisResultStore(BaseResultStore):
         host, port, db = connection.split(':')
 
         self.conn = redis.Redis(
-            host=host, port=int(port), db=int(db)
+            host=host, port=int(port), db=int(db), **connection_kwargs
         )
     
     def put(self, task_id, value):
