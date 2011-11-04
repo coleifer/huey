@@ -7,6 +7,7 @@ from django.utils.importlib import import_module
 
 from skew.bin.skew_consumer import Consumer, load_config
 from skew.queue import Invoker
+from skew.utils import load_class
 
 
 class Command(BaseCommand):
@@ -19,14 +20,6 @@ class Command(BaseCommand):
     """
     
     help = "Run the queue consumer"
-    option_list = BaseCommand.option_list + (
-        make_option('--config', '-f',
-            dest='config',
-            default=getattr(settings, 'SKEW_CONFIGURATION', ''),
-            type='str',
-            help='Configuration module, i.e. myproject.config.QueueConfiguration'
-        ),
-    )
     
     def autodiscover(self):
         # this is to find modules named <commands.py> in a django project's
@@ -47,11 +40,7 @@ class Command(BaseCommand):
             app_path = sys.modules['%s.%s' % (app, module_name)]
     
     def handle(self, *args, **options):
-        config_module = options.get('config')
-        if not config_module:
-            raise CommandError('No configuration specified.')
-        
-        config = load_config(config_module)
+        config = load_config('skew.djskew.conf.Configuration')
         
         self.autodiscover()
         

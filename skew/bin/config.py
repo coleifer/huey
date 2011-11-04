@@ -9,7 +9,7 @@ class BaseConfiguration(object):
     PERIODIC = False
     THREADS = 1
 
-    LOGFILE = '/tmp/skew.log'
+    LOGFILE = None
     LOGLEVEL = logging.INFO
 
     BACKOFF = 1.15
