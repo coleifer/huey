@@ -7,7 +7,7 @@ import time
 import threading
 from logging.handlers import RotatingFileHandler
 
-from skew.exceptions import QueueException
+from skew.exceptions import QueueException, QueueReadException, ResultStorePutException
 from skew.queue import Invoker
 from skew.registry import registry
 from skew.utils import load_class
@@ -69,23 +69,23 @@ class Consumer(object):
         return t
     
     def start_periodic_command_thread(self):
-        self.logger.info('Starting periodic command execution thread')
+        self.logger.info('starting periodic command execution thread')
         return self.spawn(self.enqueue_periodic_commands)
 
     def enqueue_periodic_commands(self):
         while 1:
             start = time.time()
-            self.logger.debug('Enqueueing periodic commands')
+            self.logger.debug('enqueueing periodic commands')
             
             try:
                 self.invoker.enqueue_periodic_commands()
             except:
-                self.logger.error('Error enqueueing periodic commands', exc_info=1)
+                self.logger.error('error enqueueing periodic commands', exc_info=1)
             
             time.sleep(60 - (time.time() - start))
     
     def start_processor(self):
-        self.logger.info('Starting processor thread')
+        self.logger.info('starting processor thread')
         return self.spawn(self.processor)
     
     def processor(self):
@@ -93,31 +93,36 @@ class Consumer(object):
             self.process_message()
     
     def process_message(self):
-        message = self.invoker.read()
+        try:
+            command = self.invoker.dequeue()
+        except QueueReadException:
+            self.logger.error('error reading from queue', exc_info=1)
+        except QueueException:
+            self.logger.error('queue exception', exc_info=1)
         
-        if message:
+        if command:
             self._pool.acquire()
             
-            self.logger.info('Processing: %s' % message)
+            self.logger.info('processing: %s' % command)
             self.delay = self.default_delay
             
-            # put the message into the queue for the scheduler
-            self._queue.put(message)
+            # put the command into the queue for the scheduler
+            self._queue.put(command)
             
-            # wait to acknowledge receipt of the message
-            self.logger.debug('Waiting for receipt of message')
+            # wait to acknowledge receipt of the command
+            self.logger.debug('waiting for receipt of command')
             self._queue.join()
         else:
             if self.delay > self.max_delay:
                 self.delay = self.max_delay
             
-            self.logger.debug('No messages, sleeping for: %s' % self.delay)
+            self.logger.debug('no commands, sleeping for: %s' % self.delay)
             
             time.sleep(self.delay)
             self.delay *= self.backoff_factor
     
     def start_scheduler(self):
-        self.logger.info('Starting scheduler thread')
+        self.logger.info('starting scheduler thread')
         return self.spawn(self.scheduler)
     
     def scheduler(self):
@@ -125,18 +130,15 @@ class Consumer(object):
             # spin up a worker with the given job
             self.spawn(self.worker, job)
     
-    def worker(self, message):        
+    def worker(self, command):        
         # indicate receipt of the task
         self._queue.task_done()
         
         try:
-            command = registry.get_command_for_message(message)
-            command.execute()
-        except QueueException:
-            # log error
-            self.logger.warn('queue exception raised', exc_info=1)
+            invoker.execute(command)
+        except ResultStorePutException:
+            self.logger.warn('error storing result', exc_info=1)
         except:
-            # log the error and raise, killing the worker
             self.logger.error('unhandled exception in worker thread', exc_info=1)
         finally:
             self._pool.release()
@@ -153,15 +155,15 @@ class Consumer(object):
         self._queue.put(StopIteration)
     
     def handle_signal(self, sig_num, frame):
-        self.logger.info('Received SIGTERM, shutting down')
+        self.logger.info('received SIGTERM, shutting down')
         self.shutdown()
     
     def set_signal_handler(self):
-        self.logger.info('Setting signal handler')
+        self.logger.info('setting signal handler')
         signal.signal(signal.SIGTERM, self.handle_signal)
 
     def log_registered_commands(self):
-        msg = ['Skew initialized with following commands']
+        msg = ['skew initialized with following commands']
         for command in registry._registry:
             msg.append('+ %s' % command)
 
@@ -183,7 +185,7 @@ class Consumer(object):
             self.logger.error('error', exc_info=1)
             self.shutdown()
         
-        self.logger.info('Shutdown...')
+        self.logger.info('shutdown...')
 
 def err(s):
     print '\033[91m%s\033[0m' % s

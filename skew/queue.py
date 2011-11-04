@@ -3,8 +3,10 @@ import os
 import pickle
 import uuid
 import sys
+import time
 
-from skew.exceptions import QueueException, QueueWriteException, QueueReadException, ResultStoreGetException, ResultStorePutException
+from skew.exceptions import QueueWriteException, QueueReadException, \
+    ResultStoreGetException, ResultStorePutException, ResultStoreTimeout
 from skew.registry import registry
 from skew.utils import wrap_exception, EmptyResult
 
@@ -16,7 +18,7 @@ class AsyncResult(object):
         
         self._result = EmptyResult
     
-    def get(self):
+    def _get(self):
         if self._result is EmptyResult:
             try:
                 res = self.result_store.get(self.task_id)
@@ -27,6 +29,23 @@ class AsyncResult(object):
                 self._result = pickle.loads(res)
                 return self._result
         else:
+            return self._result
+    
+    def get(self, block=False, timeout=None, backoff=1.15, max_delay=1.0):
+        if not block:
+            return self._get()
+        else:
+            start = time.time()
+            delay = .1
+            while self._result is EmptyResult:
+                if timeout and time.time() - start >= timeout:
+                    raise ResultStoreTimeout
+                if delay > max_delay:
+                    delay = max_delay
+                if self._get() is EmptyResult:
+                    time.sleep(delay)
+                    delay *= backoff
+            
             return self._result
 
 
@@ -42,36 +61,42 @@ class Invoker(object):
         self.result_store = result_store
     
     def write(self, msg):
-        self.queue.write(msg)
-    
-    def enqueue(self, command):
         try:
-            self.write(registry.get_message_for_command(command))
+            self.queue.write(msg)
         except:
             wrap_exception(QueueWriteException)
+    
+    def enqueue(self, command):
+        self.write(registry.get_message_for_command(command))
         
         if self.result_store:
             return AsyncResult(self.result_store, command.task_id)
     
     def read(self):
-        return self.queue.read()
-    
-    def dequeue(self):
         try:
-            msg = self.read()
+            return self.queue.read()
         except:
             wrap_exception(QueueReadException)
+    
+    def dequeue(self):
+        message = self.read()
+        if message:
+            return registry.get_command_for_message(message)
+    
+    def execute(self, command):
+        if not isinstance(command, QueueCommand):
+            raise TypeError('Unknown object: %s' % command)
         
-        if msg:
-            command = registry.get_command_for_message(msg)
-            result = command.execute()
-            
-            if self.result_store:
-                deserialized = pickle.dumps(result)
-                try:
-                    self.result_store.put(command.task_id, deserialized)
-                except:
-                    wrap_exception(ResultStorePutException)
+        result = command.execute()
+        
+        if self.result_store:
+            deserialized = pickle.dumps(result)
+            try:
+                self.result_store.put(command.task_id, deserialized)
+            except:
+                wrap_exception(ResultStorePutException)
+        
+        return result
     
     def flush(self):
         self.queue.flush()

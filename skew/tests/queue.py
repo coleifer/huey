@@ -49,6 +49,10 @@ def throw_error():
 def add2(a, b):
     return a + b
 
+@queue_command(res_invoker)
+def returns_none():
+    return None
+
 
 class SkewTestCase(unittest.TestCase):
     def setUp(self):
@@ -104,28 +108,40 @@ class SkewTestCase(unittest.TestCase):
         
         self.assertFalse('periodic' in state)
         
-        invoker.dequeue()
+        invoker.execute(invoker.dequeue())
         self.assertEqual(state['periodic'], 'x')
     
     def test_error_raised(self):
         throw_error()
-        
-        self.assertRaises(BampfException, invoker.dequeue)
+        self.assertRaises(BampfException, invoker.execute, invoker.dequeue())
     
     def test_dequeueing(self):
-        invoker.dequeue() # no error raised if queue is empty
+        res = invoker.dequeue() # no error raised if queue is empty
+        self.assertEqual(res, None)
+                
+        add('k', 'v')
+        cmd = invoker.dequeue()
         
+        self.assertTrue(isinstance(cmd, QueueCommand))
+        self.assertEqual(cmd.get_data(), (('k', 'v'), {}))
+    
+    def test_execution(self):
         self.assertFalse('k' in state)
         add('k', 'v')
         
-        invoker.dequeue()
+        cmd = invoker.dequeue()
+        self.assertFalse('k' in state)
+        
+        invoker.execute(cmd)
         self.assertEqual(state['k'], 'v')
         
         add('k', 'X')
         self.assertEqual(state['k'], 'v')
         
-        invoker.dequeue()
+        invoker.execute(invoker.dequeue())
         self.assertEqual(state['k'], 'X')
+        
+        self.assertRaises(TypeError, invoker.execute, invoker.dequeue())
     
     def test_result_store(self):
         res = add2(1, 2)
@@ -136,17 +152,24 @@ class SkewTestCase(unittest.TestCase):
         self.assertEqual(res2.get(), None)
         self.assertEqual(res3.get(), None)
 
-        res_invoker.dequeue()
+        res_invoker.execute(res_invoker.dequeue())
         self.assertEqual(res.get(), 3)
         self.assertEqual(res2.get(), None)
         self.assertEqual(res3.get(), None)
         
-        res_invoker.dequeue()
+        res_invoker.execute(res_invoker.dequeue())
         self.assertEqual(res.get(), 3)
         self.assertEqual(res2.get(), 9)
         self.assertEqual(res3.get(), None)
         
-        res_invoker.dequeue()
+        res_invoker.execute(res_invoker.dequeue())
         self.assertEqual(res.get(), 3)
         self.assertEqual(res2.get(), 9)
         self.assertEqual(res3.get(), 0)
+    
+        res = returns_none()
+        self.assertEqual(res.get(), None)
+        
+        res_invoker.execute(res_invoker.dequeue())
+        self.assertEqual(res.get(), None)
+        self.assertEqual(res._result, None)

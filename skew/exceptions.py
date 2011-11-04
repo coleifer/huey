@@ -12,3 +12,6 @@ class ResultStoreGetException(QueueException):
 
 class ResultStorePutException(QueueException):
     pass
+
+class ResultStoreTimeout(QueueException):
+    pass
