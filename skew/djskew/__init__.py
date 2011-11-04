@@ -81,12 +81,15 @@ if not config or 'QUEUE' not in config:
 
 queue = config['QUEUE']
 
-db_name = settings.DATABASES['default']['NAME'].rsplit('/', 1)[-1]
+if 'default' in settings.DATABASES:
+    backup_name = settings.DATABASES['default']['NAME'].rsplit('/', 1)[-1]
+else:
+    backup_name = 'skew'
 
 if isinstance(queue, basestring):
     QueueClass = load_class(queue)
     queue = QueueClass(
-        config.get('QUEUE_NAME', db_name),
+        config.get('QUEUE_NAME', backup_name),
         config.get('QUEUE_CONNECTION', None),
         **config.get('QUEUE_CONNECTION_EXTRA', {})
     )
@@ -97,7 +100,7 @@ result_store = config.get('RESULT_STORE', None)
 if isinstance(result_store, basestring):
     ResultStoreClass = load_class(result_store)
     result_store = ResultStoreClass(
-        config.get('RESULT_STORE_NAME', db_name),
+        config.get('RESULT_STORE_NAME', backup_name),
         config.get('RESULT_STORE_CONNECTION', None),
         **config.get('RESULT_STORE_CONNECTION_EXTRA', {})
     )
