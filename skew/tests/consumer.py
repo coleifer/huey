@@ -44,7 +44,7 @@ class TestLogHandler(logging.Handler):
         logging.Handler.__init__(self, *args, **kwargs)
         
     def emit(self, record):
-        self.messages.append(record.message)
+        self.messages.append(record.getMessage())
 
 
 class SkewConsumerTestCase(unittest.TestCase):
