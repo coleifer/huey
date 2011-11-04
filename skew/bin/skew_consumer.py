@@ -112,13 +112,12 @@ class Consumer(object):
             # wait to acknowledge receipt of the command
             self.logger.debug('waiting for receipt of command')
             self._queue.join()
-        else:
+        elif not self.invoker.blocking:
             if self.delay > self.max_delay:
                 self.delay = self.max_delay
             
-            if not self.invoker.blocking:
-                self.logger.debug('no commands, sleeping for: %s' % self.delay)
-                time.sleep(self.delay)
+            self.logger.debug('no commands, sleeping for: %s' % self.delay)
+            time.sleep(self.delay)
             
             self.delay *= self.backoff_factor
     
