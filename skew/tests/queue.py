@@ -113,7 +113,12 @@ class SkewTestCase(unittest.TestCase):
     
     def test_error_raised(self):
         throw_error()
-        self.assertRaises(BampfException, invoker.execute, invoker.dequeue())
+        
+        # no error
+        cmd = invoker.dequeue()
+        
+        # error
+        self.assertRaises(BampfException, invoker.execute, cmd)
     
     def test_dequeueing(self):
         res = invoker.dequeue() # no error raised if queue is empty

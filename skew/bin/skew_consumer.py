@@ -54,7 +54,7 @@ class Consumer(object):
         log = logging.getLogger('skew.consumer.logger')
         log.setLevel(self.loglevel)
         
-        if not log.handlers:
+        if not log.handlers and self.logfile:
             handler = RotatingFileHandler(self.logfile, maxBytes=1024*1024, backupCount=3)
             handler.setFormatter(logging.Formatter("%(asctime)s:%(name)s:%(levelname)s:%(message)s"))
             
