@@ -90,7 +90,7 @@ class Invoker(object):
         
         result = command.execute()
         
-        if self.result_store and not isinstance(command, PeriodicCommand):
+        if self.result_store and not isinstance(command, PeriodicQueueCommand):
             deserialized = pickle.dumps(result)
             try:
                 self.result_store.put(command.task_id, deserialized)
