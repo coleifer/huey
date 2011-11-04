@@ -116,9 +116,10 @@ class Consumer(object):
             if self.delay > self.max_delay:
                 self.delay = self.max_delay
             
-            self.logger.debug('no commands, sleeping for: %s' % self.delay)
+            if not self.invoker.blocking:
+                self.logger.debug('no commands, sleeping for: %s' % self.delay)
+                time.sleep(self.delay)
             
-            time.sleep(self.delay)
             self.delay *= self.backoff_factor
     
     def start_scheduler(self):
@@ -135,7 +136,7 @@ class Consumer(object):
         self._queue.task_done()
         
         try:
-            invoker.execute(command)
+            self.invoker.execute(command)
         except ResultStorePutException:
             self.logger.warn('error storing result', exc_info=1)
         except:

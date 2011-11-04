@@ -59,6 +59,7 @@ class Invoker(object):
     def __init__(self, queue, result_store=None):
         self.queue = queue
         self.result_store = result_store
+        self.blocking = self.queue.blocking
     
     def write(self, msg):
         try:
