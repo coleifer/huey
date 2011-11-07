@@ -33,3 +33,6 @@ class DummyResultStore(BaseResultStore):
     
     def get(self, task_id):
         return self._results.pop(task_id, EmptyResult)
+    
+    def flush(self):
+        self._results = {}

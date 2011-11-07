@@ -80,3 +80,6 @@ class RedisResultStore(BaseResultStore):
         else:
             val = EmptyResult
         return val
+    
+    def flush(self):
+        self.conn.delete(self.storage_name)
