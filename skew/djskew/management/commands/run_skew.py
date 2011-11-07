@@ -1,5 +1,6 @@
 import imp
 import sys
+from optparse import make_option
 
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
@@ -21,6 +22,24 @@ class Command(BaseCommand):
     
     help = "Run the queue consumer"
     
+    option_list = BaseCommand.option_list + (
+        make_option('--periodic', '-p',
+            dest='periodic',
+            action='store_true',
+            help='Enqueue periodic commands'
+        ),
+        make_option('--no-periodic', '-n',
+            dest='periodic',
+            action='store_false',
+            help='Do not enqueue periodic commands'
+        ),
+        make_option('--threads', '-t',
+            dest='threads',
+            type='int',
+            help='Number of worker threads'
+        ),
+    )
+    
     def autodiscover(self):
         # this is to find modules named <commands.py> in a django project's
         # installed apps directories
@@ -41,6 +60,12 @@ class Command(BaseCommand):
     
     def handle(self, *args, **options):
         config = load_config('skew.djskew.conf.Configuration')
+
+        if options['threads'] is not None:
+            config.THREADS = options['threads']
+
+        if options['periodic'] is not None:
+            config.PERIODIC = options['periodic']
         
         self.autodiscover()
         
