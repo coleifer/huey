@@ -227,7 +227,8 @@ if __name__ == '__main__':
     
     queue = config.QUEUE
     result_store = config.RESULT_STORE
-    invoker = Invoker(queue, result_store)
+    task_store = config.TASK_STORE
+    invoker = Invoker(queue, result_store, task_store)
     
     consumer = Consumer(invoker, config)
     consumer.run()

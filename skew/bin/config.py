@@ -6,6 +6,7 @@ from skew.backends.dummy import DummyQueue
 class BaseConfiguration(object):
     QUEUE = None
     RESULT_STORE = None
+    TASK_STORE = None
     PERIODIC = False
     THREADS = 1
 

@@ -68,13 +68,13 @@ class RedisDataStore(BaseResultStore):
         self.storage_name = 'skew.redis.results.%s' % re.sub('[^a-z0-9]', '', name)
         self.conn = redis.Redis(**connection)
     
-    def put(self, task_id, value):
-        self.conn.hset(self.storage_name, task_id, value)
+    def put(self, key, value):
+        self.conn.hset(self.storage_name, key, value)
     
-    def get(self, task_id):
-        val = self.conn.hget(self.storage_name, task_id)
+    def get(self, key):
+        val = self.conn.hget(self.storage_name, key)
         if val:
-            self.conn.hdel(self.storage_name, task_id)
+            self.conn.hdel(self.storage_name, key)
         else:
             val = EmptyData
         return val

@@ -45,29 +45,20 @@ class BaseQueue(object):
 
 class BaseDataStore(object):
     """
-    Base implementation for a result store
+    Base implementation for a data store
     """
     def __init__(self, name, **connection):
         """
-        Initialize the result store - this happens once when the module is loaded
+        Initialize the data store - this happens once when the module is loaded
         """
         self.name = name
         self.connection = connection
     
-    def put(self, task_id, value):
-        """
-        Store the result of a task
-        """
+    def put(self, key, value):
         raise NotImplementedError
     
-    def get(self, task_id):
-        """
-        Retrieve a task's result from the backend
-        """
+    def get(self, key):
         raise NotImplementedError
     
     def flush(self):
-        """
-        Erase all results
-        """
         raise NotImplementedError

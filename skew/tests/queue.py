@@ -18,7 +18,7 @@ res_queue = DummyQueue(res_queue_name)
 res_store = DummyDataStore(res_queue_name)
 
 res_invoker = Invoker(res_queue, res_store)
-res_invoker_nones = Invoker(res_queue, res_store, True)
+res_invoker_nones = Invoker(res_queue, res_store, store_none=True)
 
 # store some global state
 state = {}

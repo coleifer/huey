@@ -28,11 +28,11 @@ class DummyDataStore(BaseDataStore):
         super(DummyDataStore, self).__init__(*args, **kwargs)
         self._results = {}
     
-    def put(self, task_id, value):
-        self._results[task_id] = value
+    def put(self, key, value):
+        self._results[key] = value
     
-    def get(self, task_id):
-        return self._results.pop(task_id, EmptyData)
+    def get(self, key):
+        return self._results.pop(key, EmptyData)
     
     def flush(self):
         self._results = {}

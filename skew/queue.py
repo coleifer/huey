@@ -60,9 +60,10 @@ class Invoker(object):
     up the proper :class:`QueueCommand` for each message
     """
     
-    def __init__(self, queue, result_store=None, store_none=False):
+    def __init__(self, queue, result_store=None, task_store=None, store_none=False):
         self.queue = queue
         self.result_store = result_store
+        self.task_store = task_store
         self.blocking = self.queue.blocking
         self.store_none = store_none
     
