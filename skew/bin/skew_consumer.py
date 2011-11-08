@@ -8,7 +8,7 @@ import time
 import threading
 from logging.handlers import RotatingFileHandler
 
-from skew.exceptions import QueueException, QueueReadException, ResultStorePutException
+from skew.exceptions import QueueException, QueueReadException, DataStorePutException
 from skew.queue import Invoker
 from skew.registry import registry
 from skew.utils import load_class
@@ -145,7 +145,7 @@ class Consumer(object):
     def worker(self, command):        
         try:
             self.invoker.execute(command)
-        except ResultStorePutException:
+        except DataStorePutException:
             self.logger.warn('error storing result', exc_info=1)
         except:
             self.logger.error('unhandled exception in worker thread', exc_info=1)

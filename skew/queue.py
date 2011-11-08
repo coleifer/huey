@@ -6,26 +6,26 @@ import sys
 import time
 
 from skew.exceptions import QueueWriteException, QueueReadException, \
-    ResultStoreGetException, ResultStorePutException, ResultStoreTimeout
+    DataStoreGetException, DataStorePutException, DataStoreTimeout
 from skew.registry import registry
-from skew.utils import wrap_exception, EmptyResult
+from skew.utils import wrap_exception, EmptyData
 
 
-class AsyncResult(object):
+class AsyncData(object):
     def __init__(self, result_store, task_id):
         self.result_store = result_store
         self.task_id = task_id
         
-        self._result = EmptyResult
+        self._result = EmptyData
     
     def _get(self):
-        if self._result is EmptyResult:
+        if self._result is EmptyData:
             try:
                 res = self.result_store.get(self.task_id)
             except:
-                wrap_exception(ResultStoreGetException)
+                wrap_exception(DataStoreGetException)
             
-            if res is not EmptyResult:
+            if res is not EmptyData:
                 self._result = pickle.loads(res)
                 return self._result
             else:
@@ -36,17 +36,17 @@ class AsyncResult(object):
     def get(self, blocking=False, timeout=None, backoff=1.15, max_delay=1.0):
         if not blocking:
             res = self._get()
-            if res is not EmptyResult:
+            if res is not EmptyData:
                 return res
         else:
             start = time.time()
             delay = .1
-            while self._result is EmptyResult:
+            while self._result is EmptyData:
                 if timeout and time.time() - start >= timeout:
-                    raise ResultStoreTimeout
+                    raise DataStoreTimeout
                 if delay > max_delay:
                     delay = max_delay
-                if self._get() is EmptyResult:
+                if self._get() is EmptyData:
                     time.sleep(delay)
                     delay *= backoff
             
@@ -76,7 +76,7 @@ class Invoker(object):
         self.write(registry.get_message_for_command(command))
         
         if self.result_store:
-            return AsyncResult(self.result_store, command.task_id)
+            return AsyncData(self.result_store, command.task_id)
     
     def read(self):
         try:
@@ -103,7 +103,7 @@ class Invoker(object):
             try:
                 self.result_store.put(command.task_id, serialized)
             except:
-                wrap_exception(ResultStorePutException)
+                wrap_exception(DataStorePutException)
         
         return result
     

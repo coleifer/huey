@@ -1,5 +1,5 @@
-from skew.backends.base import BaseQueue, BaseResultStore
-from skew.utils import EmptyResult
+from skew.backends.base import BaseQueue, BaseDataStore
+from skew.utils import EmptyData
 
 
 class DummyQueue(BaseQueue):
@@ -23,16 +23,16 @@ class DummyQueue(BaseQueue):
         return len(self._queue)
 
 
-class DummyResultStore(BaseResultStore):
+class DummyDataStore(BaseDataStore):
     def __init__(self, *args, **kwargs):
-        super(DummyResultStore, self).__init__(*args, **kwargs)
+        super(DummyDataStore, self).__init__(*args, **kwargs)
         self._results = {}
     
     def put(self, task_id, value):
         self._results[task_id] = value
     
     def get(self, task_id):
-        return self._results.pop(task_id, EmptyResult)
+        return self._results.pop(task_id, EmptyData)
     
     def flush(self):
         self._results = {}

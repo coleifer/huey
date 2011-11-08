@@ -7,11 +7,11 @@ class QueueWriteException(QueueException):
 class QueueReadException(QueueException):
     pass
 
-class ResultStoreGetException(QueueException):
+class DataStoreGetException(QueueException):
     pass
 
-class ResultStorePutException(QueueException):
+class DataStorePutException(QueueException):
     pass
 
-class ResultStoreTimeout(QueueException):
+class DataStoreTimeout(QueueException):
     pass

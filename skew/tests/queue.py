@@ -1,21 +1,21 @@
 import datetime
 import unittest
 
-from skew.backends.dummy import DummyQueue, DummyResultStore
+from skew.backends.dummy import DummyQueue, DummyDataStore
 from skew.decorators import queue_command, periodic_command, crontab
 from skew.exceptions import QueueException
 from skew.queue import Invoker, QueueCommand, PeriodicQueueCommand
 from skew.registry import registry
-from skew.utils import EmptyResult
+from skew.utils import EmptyData
 
 
 queue_name = 'test-queue'
-queue = DummyQueue(queue_name, None)
+queue = DummyQueue(queue_name)
 invoker = Invoker(queue)
 
 res_queue_name = 'test-queue-2'
-res_queue = DummyQueue(res_queue_name, None)
-res_store = DummyResultStore(res_queue_name, None)
+res_queue = DummyQueue(res_queue_name)
+res_store = DummyDataStore(res_queue_name)
 
 res_invoker = Invoker(res_queue, res_store)
 res_invoker_nones = Invoker(res_queue, res_store, True)
@@ -182,7 +182,7 @@ class SkewTestCase(unittest.TestCase):
         
         res_invoker.execute(res_invoker.dequeue())
         self.assertEqual(res.get(), None)
-        self.assertEqual(res._result, EmptyResult)
+        self.assertEqual(res._result, EmptyData)
 
         res = returns_none2()
         self.assertEqual(res.get(), None)

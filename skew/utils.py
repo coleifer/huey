@@ -1,7 +1,7 @@
 import sys
 
 
-class EmptyResult(object):
+class EmptyData(object):
     pass
 
 def load_class(s):

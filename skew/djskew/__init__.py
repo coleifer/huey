@@ -37,11 +37,11 @@ QUEUE_CONNECTION (string)
     
     Example: 'localhost:6379:0' # for the RedisQueue
 
-RESULT_STORE (string or ResultStore instance)
-    Either a ResultStore instance or a string pointing to the module path and
+RESULT_STORE (string or DataStore instance)
+    Either a DataStore instance or a string pointing to the module path and
     class name of the result store.
     
-    Example: 'skew.backends.redis_backend.RedisResultStore'
+    Example: 'skew.backends.redis_backend.RedisDataStore'
 
 RESULT_STORE_NAME (string), default = database name
 
@@ -98,8 +98,8 @@ if isinstance(queue, basestring):
 result_store = config.get('RESULT_STORE', None)
 
 if isinstance(result_store, basestring):
-    ResultStoreClass = load_class(result_store)
-    result_store = ResultStoreClass(
+    DataStoreClass = load_class(result_store)
+    result_store = DataStoreClass(
         config.get('RESULT_STORE_NAME', backup_name),
         config.get('RESULT_STORE_CONNECTION', None),
         **config.get('RESULT_STORE_CONNECTION_EXTRA', {})

@@ -2,8 +2,8 @@ import re
 import redis
 from redis.exceptions import ConnectionError
 
-from skew.backends.base import BaseQueue, BaseResultStore
-from skew.utils import EmptyResult
+from skew.backends.base import BaseQueue, BaseDataStore
+from skew.utils import EmptyData
 
 
 class RedisQueue(BaseQueue):
@@ -54,7 +54,7 @@ class RedisBlockingQueue(RedisQueue):
             return None
 
 
-class RedisResultStore(BaseResultStore):
+class RedisDataStore(BaseResultStore):
     def __init__(self, name, **connection):
         """
         RESULT_STORE_CONNECTION = {
@@ -63,7 +63,7 @@ class RedisResultStore(BaseResultStore):
             'db': 0,
         }
         """
-        super(RedisResultStore, self).__init__(name, **connection)
+        super(RedisDataStore, self).__init__(name, **connection)
         
         self.storage_name = 'skew.redis.results.%s' % re.sub('[^a-z0-9]', '', name)
         self.conn = redis.Redis(**connection)
@@ -76,7 +76,7 @@ class RedisResultStore(BaseResultStore):
         if val:
             self.conn.hdel(self.storage_name, task_id)
         else:
-            val = EmptyResult
+            val = EmptyData
         return val
     
     def flush(self):

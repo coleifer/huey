@@ -43,7 +43,7 @@ class BaseQueue(object):
         raise NotImplementedError
 
 
-class BaseResultStore(object):
+class BaseDataStore(object):
     """
     Base implementation for a result store
     """

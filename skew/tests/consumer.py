@@ -4,7 +4,7 @@ import threading
 import time
 import unittest
 
-from skew.backends.dummy import DummyQueue, DummyResultStore
+from skew.backends.dummy import DummyQueue, DummyDataStore
 from skew.decorators import queue_command
 from skew.exceptions import QueueException
 from skew.queue import Invoker, QueueCommand, PeriodicQueueCommand
@@ -17,8 +17,8 @@ from skew.bin.skew_consumer import load_config, Consumer, IterableQueue
 state = {}
 
 # create a queue, result store and invoker for testing
-test_queue = DummyQueue('test-queue', None)
-test_result_store = DummyResultStore('test-queue', None)
+test_queue = DummyQueue('test-queue')
+test_result_store = DummyDataStore('test-queue')
 test_invoker = Invoker(test_queue, test_result_store)
 
 # create a dummy config for passing to the consumer
