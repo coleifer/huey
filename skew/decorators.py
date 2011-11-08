@@ -37,6 +37,12 @@ def queue_command(invoker):
         """
         klass = create_command(QueueCommand, func)
         
+        def schedule(_dt, *args, **kwargs):
+            cmd = klass((args, kwargs), execute_time=_dt)
+            return invoker.enqueue(cmd)
+        
+        func.schedule = schedule
+        
         @wraps(func)
         def inner_run(*args, **kwargs):
             return invoker.enqueue(klass((args, kwargs)))
