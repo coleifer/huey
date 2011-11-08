@@ -76,12 +76,14 @@ class Consumer(object):
     def schedule_commands(self):
         while 1:
             start = time.time()
-            self.logger.debug('enqueueing periodic commands')
             
-            try:
-                self.invoker.enqueue_periodic_commands()
-            except:
-                self.logger.error('error enqueueing periodic commands', exc_info=1)
+            if self.periodic_commands:
+                self.logger.debug('enqueueing periodic commands')
+                
+                try:
+                    self.invoker.enqueue_periodic_commands()
+                except:
+                    self.logger.error('error enqueueing periodic commands', exc_info=1)
             
             time.sleep(60 - (time.time() - start))
     
@@ -153,7 +155,7 @@ class Consumer(object):
             self._pool.release()
     
     def start(self):
-        if self.periodic_commands:
+        if self.periodic_commands or self.invoker.task_store:
             self.start_scheduler()
         
         self._receiver_t = self.start_message_receiver()
