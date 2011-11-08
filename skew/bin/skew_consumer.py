@@ -69,11 +69,11 @@ class Consumer(object):
         t.start()
         return t
     
-    def start_periodic_command_thread(self):
-        self.logger.info('starting periodic command execution thread')
-        return self.spawn(self.enqueue_periodic_commands)
+    def start_scheduler(self):
+        self.logger.info('starting scheduler thread')
+        return self.spawn(self.schedule_commands)
 
-    def enqueue_periodic_commands(self):
+    def schedule_commands(self):
         while 1:
             start = time.time()
             self.logger.debug('enqueueing periodic commands')
@@ -85,15 +85,15 @@ class Consumer(object):
             
             time.sleep(60 - (time.time() - start))
     
-    def start_processor(self):
-        self.logger.info('starting processor thread')
-        return self.spawn(self.processor)
+    def start_message_receiver(self):
+        self.logger.info('starting message receiver thread')
+        return self.spawn(self.receive_messages)
     
-    def processor(self):
+    def receive_messages(self):
         while not self._shutdown.is_set():
-            self.process_message()
+            self.check_message()
     
-    def process_message(self):
+    def check_message(self):
         try:
             command = self.invoker.dequeue()
         except QueueReadException:
@@ -106,9 +106,9 @@ class Consumer(object):
             # checking again
             self.sleep()
         elif command:
-            self.schedule_command(command)
+            self.process_command(command)
     
-    def schedule_command(self, command):
+    def process_command(self, command):
         self._pool.acquire()
         
         self.logger.info('processing: %s' % command)
@@ -130,11 +130,11 @@ class Consumer(object):
         
         self.delay *= self.backoff_factor
     
-    def start_scheduler(self):
-        self.logger.info('starting scheduler thread')
-        return self.spawn(self.scheduler)
+    def start_worker_pool(self):
+        self.logger.info('starting worker threadpool')
+        return self.spawn(self.worker_pool)
     
-    def scheduler(self):
+    def worker_pool(self):
         for job in self._queue:
             # spin up a worker with the given job
             self.spawn(self.worker, job)
@@ -154,10 +154,10 @@ class Consumer(object):
     
     def start(self):
         if self.periodic_commands:
-            self.start_periodic_command_thread()
+            self.start_scheduler()
         
-        self._scheduler = self.start_scheduler()
-        self._processor = self.start_processor()
+        self._receiver_t = self.start_message_receiver()
+        self._worker_pool_t = self.start_worker_pool()
     
     def shutdown(self):
         self._shutdown.set()
