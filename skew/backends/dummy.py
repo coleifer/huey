@@ -24,8 +24,8 @@ class DummyQueue(BaseQueue):
 
 
 class DummyResultStore(BaseResultStore):
-    def __init__(self, name, conn):
-        super(DummyResultStore, self).__init__(name, conn)
+    def __init__(self, *args, **kwargs):
+        super(DummyResultStore, self).__init__(*args, **kwargs)
         self._results = {}
     
     def put(self, task_id, value):

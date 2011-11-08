@@ -10,21 +10,19 @@ class RedisQueue(BaseQueue):
     """
     A simple Queue that uses the redis to store messages
     """
-    def __init__(self, name, connection, **connection_kwargs):
+    def __init__(self, name, **connection):
         """
-        QUEUE_CONNECTION = 'host:port:database' or defaults to localhost:6379:0
+        QUEUE_CONNECTION = {
+            'host': 'localhost',
+            'port': 6379,
+            'db': 0,
+        }
         """
-        super(RedisQueue, self).__init__(name, connection)
-        
-        if not connection:
-            connection = 'localhost:6379:0'
+        super(RedisQueue, self).__init__(name, **connection)
         
         self.queue_name = 'skew.redis.%s' % re.sub('[^a-z0-9]', '', name)
-        host, port, db = connection.split(':')
 
-        self.conn = redis.Redis(
-            host=host, port=int(port), db=int(db), **connection_kwargs
-        )
+        self.conn = redis.Redis(**connection)
     
     def write(self, data):
         self.conn.lpush(self.queue_name, data)
@@ -57,18 +55,18 @@ class RedisBlockingQueue(RedisQueue):
 
 
 class RedisResultStore(BaseResultStore):
-    def __init__(self, name, connection, **connection_kwargs):
-        super(RedisResultStore, self).__init__(name, connection)
-        
-        if not connection:
-            connection = 'localhost:6379:0'
+    def __init__(self, name, **connection):
+        """
+        RESULT_STORE_CONNECTION = {
+            'host': 'localhost',
+            'port': 6379,
+            'db': 0,
+        }
+        """
+        super(RedisResultStore, self).__init__(name, **connection)
         
         self.storage_name = 'skew.redis.results.%s' % re.sub('[^a-z0-9]', '', name)
-        host, port, db = connection.split(':')
-
-        self.conn = redis.Redis(
-            host=host, port=int(port), db=int(db), **connection_kwargs
-        )
+        self.conn = redis.Redis(**connection)
     
     def put(self, task_id, value):
         self.conn.hset(self.storage_name, task_id, value)
