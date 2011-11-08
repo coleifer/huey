@@ -48,6 +48,9 @@ RESULT_STORE_NAME (string), default = database name
 RESULT_STORE_CONNECTION (string)
     See notes for QUEUE_CONNECTION
 
+TASK_STORE
+    Follows same pattern as RESULT_STORE
+
 
 The following settings are optional:
 ------------------------------------
@@ -104,4 +107,14 @@ if isinstance(result_store, basestring):
     )
     config['RESULT_STORE'] = result_store
 
-invoker = Invoker(queue, result_store)
+task_store = config.get('TASK_STORE', None)
+
+if isinstance(task_store, basestring):
+    DataStoreClass = load_class(task_store)
+    task_store = DataStoreClass(
+        config.get('TASK_STORE_NAME', backup_name),
+        **config.get('TASK_STORE_CONNECTION', {})
+    )
+    config['TASK_STORE'] = task_store
+
+invoker = Invoker(queue, result_store, task_store)

@@ -110,13 +110,58 @@ class Invoker(object):
     
     def flush(self):
         self.queue.flush()
-    
-    def enqueue_periodic_commands(self, dt=None):
-        dt = dt or datetime.datetime.now()
+
+
+class CommandSchedule(object):
+    def __init__(self, invoker, key_name='schedule'):
+        self.invoker = invoker
+        self.key_name = key_name
         
-        for command in registry.get_periodic_commands():
-            if command.validate_datetime(dt):
-                self.enqueue(command)
+        self.task_store = self.invoker.task_store
+        self._schedule = {}
+    
+    def load(self):
+        if self.task_store:
+            serialized = self.task_store.get(self.key_name)
+            
+            if serialized:
+                self.load_commands(pickle.loads(serialized))
+    
+    def load_commands(self, messages):
+        for cmd_string in messages:
+            try:
+                cmd_obj = registry.get_command_for_message(cmd_string)
+                self.add(cmd_obj)
+            except QueueException:
+                pass
+    
+    def save(self):
+        if self.task_store:
+            self.task_store.put(self.key_name, self.serialize_commands())
+    
+    def serialize_commands(self):
+        messages = [registry.get_message_for_command(c) for c in self.commands()]
+        return pickle.dumps(messages)
+    
+    def commands(self):
+        return self._schedule.values()
+    
+    def should_run(self, cmd, dt=None):
+        if cmd.execute_time is None:
+            return True
+        else:
+            return cmd.execute_time <= (dt or datetime.datetime.now())
+    
+    def add(self, cmd):
+        if not self.is_pending(cmd):
+            self._schedule[cmd.task_id] = cmd
+    
+    def remove(self, cmd):
+        if self.is_pending(cmd):
+            del(self._schedule[cmd.task_id])
+    
+    def is_pending(self, cmd):
+        return cmd.task_id in self._schedule
 
 
 class QueueCommandMetaClass(type):
@@ -179,6 +224,9 @@ class QueueCommand(object):
 
 
 class PeriodicQueueCommand(QueueCommand):
+    def create_id(self):
+        return registry.command_to_string(type(self))
+    
     def validate_datetime(self, dt):
         """Validate that the command should execute at the given datetime"""
         return False

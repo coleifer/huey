@@ -9,7 +9,7 @@ import threading
 from logging.handlers import RotatingFileHandler
 
 from skew.exceptions import QueueException, QueueReadException, DataStorePutException
-from skew.queue import Invoker
+from skew.queue import Invoker, CommandSchedule
 from skew.registry import registry
 from skew.utils import load_class
 
@@ -50,6 +50,9 @@ class Consumer(object):
         self._pool = threading.BoundedSemaphore(self.threads)
         
         self._shutdown = threading.Event()
+        
+        # initialize the command schedule
+        self.schedule = CommandSchedule(self.invoker)
     
     def get_logger(self):
         log = logging.getLogger('skew.consumer.logger')
@@ -76,16 +79,24 @@ class Consumer(object):
     def schedule_commands(self):
         while 1:
             start = time.time()
+            dt = datetime.datetime.now()
             
             if self.periodic_commands:
-                self.logger.debug('enqueueing periodic commands')
-                
-                try:
-                    self.invoker.enqueue_periodic_commands()
-                except:
-                    self.logger.error('error enqueueing periodic commands', exc_info=1)
+                self.enqueue_periodic_commands(dt)
+            
+            for command in self.schedule.commands():
+                if self.schedule.should_run(command, dt):
+                    self.schedule.remove(command)
+                    self.invoker.enqueue(command)
             
             time.sleep(60 - (time.time() - start))
+    
+    def enqueue_periodic_commands(self, dt):
+        self.logger.debug('enqueueing periodic commands')
+        
+        for command in registry.get_periodic_commands():
+            if command.validate_datetime(dt):
+                self.invoker.enqueue(command)
     
     def start_message_receiver(self):
         self.logger.info('starting message receiver thread')
@@ -108,15 +119,19 @@ class Consumer(object):
             # checking again
             self.sleep()
         elif command:
-            self.process_command(command)
+            if self.schedule.should_run(command):
+                self.process_command(command)
+            else:
+                # schedule the command for execution
+                self.schedule.add(command)
     
     def process_command(self, command):
         self._pool.acquire()
         
         self.logger.info('processing: %s' % command)
         self.delay = self.default_delay
-        
-        # put the command into the queue for the scheduler
+
+        # put the command into the queue for the worker pool
         self._queue.put(command)
         
         # wait to acknowledge receipt of the command
@@ -153,10 +168,12 @@ class Consumer(object):
             self.logger.error('unhandled exception in worker thread', exc_info=1)
         finally:
             self._pool.release()
-    
+
     def start(self):
-        if self.periodic_commands or self.invoker.task_store:
-            self.start_scheduler()
+        self.logger.info('loading command schedule')
+        self.schedule.load()
+        
+        self.start_scheduler()
         
         self._receiver_t = self.start_message_receiver()
         self._worker_pool_t = self.start_worker_pool()
@@ -195,6 +212,10 @@ class Consumer(object):
         except:
             self.logger.error('error', exc_info=1)
             self.shutdown()
+        
+        # save the schedule
+        self.logger.info('saving command schedule')
+        self.schedule.save()
         
         self.logger.info('shutdown...')
 
