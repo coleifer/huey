@@ -54,7 +54,7 @@ class RedisBlockingQueue(RedisQueue):
             return None
 
 
-class RedisDataStore(BaseResultStore):
+class RedisDataStore(BaseDataStore):
     def __init__(self, name, **connection):
         """
         RESULT_STORE_CONNECTION = {
