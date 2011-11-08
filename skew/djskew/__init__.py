@@ -90,8 +90,7 @@ if isinstance(queue, basestring):
     QueueClass = load_class(queue)
     queue = QueueClass(
         config.get('QUEUE_NAME', backup_name),
-        config.get('QUEUE_CONNECTION', None),
-        **config.get('QUEUE_CONNECTION_EXTRA', {})
+        **config.get('QUEUE_CONNECTION', {})
     )
     config['QUEUE'] = queue
 
@@ -101,8 +100,7 @@ if isinstance(result_store, basestring):
     DataStoreClass = load_class(result_store)
     result_store = DataStoreClass(
         config.get('RESULT_STORE_NAME', backup_name),
-        config.get('RESULT_STORE_CONNECTION', None),
-        **config.get('RESULT_STORE_CONNECTION_EXTRA', {})
+        **config.get('RESULT_STORE_CONNECTION', {})
     )
     config['RESULT_STORE'] = result_store
 
