@@ -103,20 +103,6 @@ class SkewTestCase(unittest.TestCase):
         # no changes to state
         self.assertFalse('k' in state)
     
-    def test_enqueue_periodic(self):
-        dt = datetime.datetime(2011, 1, 1, 0, 1)
-        invoker.enqueue_periodic_commands(dt)
-        self.assertEqual(len(queue), 0)
-        
-        dt = datetime.datetime(2011, 1, 1, 0, 0)
-        invoker.enqueue_periodic_commands(dt)
-        self.assertEqual(len(queue), 1)
-        
-        self.assertFalse('periodic' in state)
-        
-        invoker.execute(invoker.dequeue())
-        self.assertEqual(state['periodic'], 'x')
-    
     def test_schedule(self):
         dt = datetime.datetime(2011, 1, 1, 0, 1)
         add('k', 'v')

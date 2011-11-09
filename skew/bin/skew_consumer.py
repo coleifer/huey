@@ -77,19 +77,20 @@ class Consumer(object):
         return self.spawn(self.schedule_commands)
 
     def schedule_commands(self):
-        while 1:
+        while not self._shutdown.is_set():
             start = time.time()
             dt = datetime.datetime.now()
-            
             if self.periodic_commands:
                 self.enqueue_periodic_commands(dt)
-            
-            for command in self.schedule.commands():
-                if self.schedule.should_run(command, dt):
-                    self.schedule.remove(command)
-                    self.invoker.enqueue(command)
-            
+
+            self.check_schedule(dt)
             time.sleep(60 - (time.time() - start))
+    
+    def check_schedule(self, dt):
+        for command in self.schedule.commands():
+            if self.schedule.should_run(command, dt):
+                self.schedule.remove(command)
+                self.invoker.enqueue(command)
     
     def enqueue_periodic_commands(self, dt):
         self.logger.debug('enqueueing periodic commands')
@@ -170,8 +171,7 @@ class Consumer(object):
             self._pool.release()
 
     def start(self):
-        self.logger.info('loading command schedule')
-        self.schedule.load()
+        self.load_schedule()
         
         self.start_scheduler()
         
@@ -189,6 +189,14 @@ class Consumer(object):
     def set_signal_handler(self):
         self.logger.info('setting signal handler')
         signal.signal(signal.SIGTERM, self.handle_signal)
+    
+    def load_schedule(self):
+        self.logger.info('loading command schedule')
+        self.schedule.load()
+    
+    def save_schedule(self):
+        self.logger.info('saving command schedule')
+        self.schedule.save()
 
     def log_registered_commands(self):
         msg = ['skew initialized with following commands']
@@ -213,9 +221,7 @@ class Consumer(object):
             self.logger.error('error', exc_info=1)
             self.shutdown()
         
-        # save the schedule
-        self.logger.info('saving command schedule')
-        self.schedule.save()
+        self.save_schedule()
         
         self.logger.info('shutdown...')
 
