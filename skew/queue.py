@@ -221,6 +221,12 @@ class QueueCommand(object):
     def execute(self):
         """Execute any arbitary code here"""
         raise NotImplementedError
+    
+    def __eq__(self, rhs):
+        return \
+            self.task_id == rhs.task_id and \
+            self.execute_time == rhs.execute_time and \
+            type(self) == type(rhs)
 
 
 class PeriodicQueueCommand(QueueCommand):

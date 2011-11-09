@@ -4,7 +4,7 @@ import unittest
 from skew.backends.dummy import DummyQueue, DummyDataStore
 from skew.decorators import queue_command, periodic_command, crontab
 from skew.exceptions import QueueException
-from skew.queue import Invoker, QueueCommand, PeriodicQueueCommand
+from skew.queue import Invoker, QueueCommand, PeriodicQueueCommand, CommandSchedule
 from skew.registry import registry
 from skew.utils import EmptyData
 
@@ -16,9 +16,10 @@ invoker = Invoker(queue)
 res_queue_name = 'test-queue-2'
 res_queue = DummyQueue(res_queue_name)
 res_store = DummyDataStore(res_queue_name)
+task_store = DummyDataStore(res_queue_name)
 
-res_invoker = Invoker(res_queue, res_store)
-res_invoker_nones = Invoker(res_queue, res_store, store_none=True)
+res_invoker = Invoker(res_queue, res_store, task_store)
+res_invoker_nones = Invoker(res_queue, res_store, task_store, store_none=True)
 
 # store some global state
 state = {}
@@ -116,6 +117,19 @@ class SkewTestCase(unittest.TestCase):
         invoker.execute(invoker.dequeue())
         self.assertEqual(state['periodic'], 'x')
     
+    def test_schedule(self):
+        dt = datetime.datetime(2011, 1, 1, 0, 1)
+        add('k', 'v')
+        self.assertEqual(len(queue), 1)
+        
+        cmd = invoker.dequeue()
+        self.assertEqual(cmd.execute_time, None)
+        
+        add.schedule(dt, 'k2', 'v2')
+        self.assertEqual(len(queue), 1)
+        cmd = invoker.dequeue()
+        self.assertEqual(cmd.execute_time, dt)
+    
     def test_error_raised(self):
         throw_error()
         
@@ -158,35 +172,107 @@ class SkewTestCase(unittest.TestCase):
         res2 = add2(4, 5)
         res3 = add2(0, 0)
         
+        # none have been executed as yet
         self.assertEqual(res.get(), None)
         self.assertEqual(res2.get(), None)
         self.assertEqual(res3.get(), None)
 
+        # execute the first task
         res_invoker.execute(res_invoker.dequeue())
         self.assertEqual(res.get(), 3)
         self.assertEqual(res2.get(), None)
         self.assertEqual(res3.get(), None)
         
+        # execute the second task
         res_invoker.execute(res_invoker.dequeue())
         self.assertEqual(res.get(), 3)
         self.assertEqual(res2.get(), 9)
         self.assertEqual(res3.get(), None)
         
+        # execute the 3rd, which returns a zero value
         res_invoker.execute(res_invoker.dequeue())
         self.assertEqual(res.get(), 3)
         self.assertEqual(res2.get(), 9)
         self.assertEqual(res3.get(), 0)
     
+        # check that it returns None when nothing is present
         res = returns_none()
         self.assertEqual(res.get(), None)
         
+        # execute, it will still return None, but underneath it is an EmptyResult
+        # indicating its actual result was not persisted
         res_invoker.execute(res_invoker.dequeue())
         self.assertEqual(res.get(), None)
         self.assertEqual(res._result, EmptyData)
 
+        # execute again, this time note that we're pointing at the invoker
+        # that *does* accept None as a store-able result
         res = returns_none2()
         self.assertEqual(res.get(), None)
 
+        # it stores None
         res_invoker_nones.execute(res_invoker_nones.dequeue())
         self.assertEqual(res.get(), None)
         self.assertEqual(res._result, None)
+    
+    def test_task_store(self):
+        schedule = CommandSchedule(res_invoker)
+        
+        dt1 = datetime.datetime(2011, 1, 1, 0, 0)
+        dt2 = datetime.datetime(2035, 1, 1, 0, 0)
+        
+        add2.schedule(dt1, 'k', 'v')
+        cmd1 = res_invoker.dequeue()
+        
+        add2.schedule(dt2, 'k2', 'v2')
+        cmd2 = res_invoker.dequeue()
+        
+        add2('k3', 'v3')
+        cmd3 = res_invoker.dequeue()
+        
+        # add the command to the schedule
+        schedule.add(cmd1)
+        self.assertEqual(schedule.commands(), [cmd1])
+        
+        # cmd1 is in the schedule, cmd2 is not
+        self.assertTrue(schedule.is_pending(cmd1))
+        self.assertFalse(schedule.is_pending(cmd2))
+        
+        # multiple adds do not result in the list growing
+        schedule.add(cmd1)
+        self.assertEqual(schedule.commands(), [cmd1])
+        
+        # removing a non-existant cmd does not error
+        schedule.remove(cmd2)
+        
+        # add a future-dated command
+        schedule.add(cmd2)
+        
+        # sanity check what should be run
+        self.assertTrue(schedule.should_run(cmd1))
+        self.assertFalse(schedule.should_run(cmd2))
+        self.assertTrue(schedule.should_run(cmd3))
+        
+        # check remove works
+        schedule.remove(cmd1)
+        self.assertEqual(schedule.commands(), [cmd2])
+        
+        # check saving works
+        schedule.save()
+        schedule._schedule = {}
+        self.assertEqual(schedule.commands(), [])
+        
+        # check loading works
+        schedule.load()
+        self.assertEqual(schedule.commands(), [cmd2])
+        
+        schedule.add(cmd1)
+        schedule.add(cmd3)
+        schedule.save()
+        schedule._schedule = {}
+        
+        schedule.load()
+        self.assertEqual(len(schedule.commands()), 3)
+        self.assertTrue(cmd1 in schedule.commands())
+        self.assertTrue(cmd2 in schedule.commands())
+        self.assertTrue(cmd3 in schedule.commands())
