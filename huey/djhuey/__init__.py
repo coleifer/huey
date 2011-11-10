@@ -75,6 +75,9 @@ INITIAL_DELAY (numeric), default = 0.1
 
 MAX_DELAY (numeric), default = 10
     Max amount of time to sleep when waiting for jobs
+
+ALWAYS_EAGER, default = False
+    Whether to skip enqueue-ing and run in-band (useful for debugging)
 """
 
 config = getattr(settings, 'HUEY_CONFIG', None)
@@ -117,4 +120,4 @@ if isinstance(task_store, basestring):
     )
     config['TASK_STORE'] = task_store
 
-invoker = Invoker(queue, result_store, task_store)
+invoker = Invoker(queue, result_store, task_store, always_eager=config.get('ALWAYS_EAGER', False))

@@ -60,12 +60,14 @@ class Invoker(object):
     up the proper :class:`QueueCommand` for each message
     """
     
-    def __init__(self, queue, result_store=None, task_store=None, store_none=False):
+    def __init__(self, queue, result_store=None, task_store=None, store_none=False,
+                 always_eager=False):
         self.queue = queue
         self.result_store = result_store
         self.task_store = task_store
         self.blocking = self.queue.blocking
         self.store_none = store_none
+        self.always_eager = always_eager
     
     def write(self, msg):
         try:
@@ -74,6 +76,9 @@ class Invoker(object):
             wrap_exception(QueueWriteException)
     
     def enqueue(self, command):
+        if self.always_eager:
+            return command.execute()
+        
         self.write(registry.get_message_for_command(command))
         
         if self.result_store:
