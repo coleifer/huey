@@ -114,17 +114,17 @@ class Consumer(object):
             self.logger.error('error reading from queue', exc_info=1)
         except QueueException:
             self.logger.error('queue exception', exc_info=1)
-        
-        if not command and not self.invoker.blocking:
-            # no new messages and our queue doesn't block, so sleep a bit before
-            # checking again
-            self.sleep()
-        elif command:
-            if self.schedule.should_run(command):
-                self.process_command(command)
-            else:
-                # schedule the command for execution
-                self.schedule.add(command)
+        else:
+            if not command and not self.invoker.blocking:
+                # no new messages and our queue doesn't block, so sleep a bit before
+                # checking again
+                self.sleep()
+            elif command:
+                if self.schedule.should_run(command):
+                    self.process_command(command)
+                else:
+                    # schedule the command for execution
+                    self.schedule.add(command)
     
     def process_command(self, command):
         self._pool.acquire()
