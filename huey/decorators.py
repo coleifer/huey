@@ -37,8 +37,8 @@ def queue_command(invoker):
         """
         klass = create_command(QueueCommand, func)
         
-        def schedule(_dt, *args, **kwargs):
-            cmd = klass((args, kwargs), execute_time=_dt)
+        def schedule(args=None, kwargs=None, eta=None):
+            cmd = klass((args or (), kwargs or {}), execute_time=eta)
             return invoker.enqueue(cmd)
         
         func.schedule = schedule

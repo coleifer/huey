@@ -111,7 +111,7 @@ class SkewTestCase(unittest.TestCase):
         cmd = invoker.dequeue()
         self.assertEqual(cmd.execute_time, None)
         
-        add.schedule(dt, 'k2', 'v2')
+        add.schedule(args=('k2', 'v2'), eta=dt)
         self.assertEqual(len(queue), 1)
         cmd = invoker.dequeue()
         self.assertEqual(cmd.execute_time, dt)
@@ -207,10 +207,10 @@ class SkewTestCase(unittest.TestCase):
         dt1 = datetime.datetime(2011, 1, 1, 0, 0)
         dt2 = datetime.datetime(2035, 1, 1, 0, 0)
         
-        add2.schedule(dt1, 'k', 'v')
+        add2.schedule(args=('k', 'v'), eta=dt1)
         cmd1 = res_invoker.dequeue()
         
-        add2.schedule(dt2, 'k2', 'v2')
+        add2.schedule(args=('k2', 'v2'), eta=dt2)
         cmd2 = res_invoker.dequeue()
         
         add2('k3', 'v3')
