@@ -2,8 +2,8 @@ import re
 import redis
 from redis.exceptions import ConnectionError
 
-from skew.backends.base import BaseQueue, BaseDataStore
-from skew.utils import EmptyData
+from huey.backends.base import BaseQueue, BaseDataStore
+from huey.utils import EmptyData
 
 
 class RedisQueue(BaseQueue):
@@ -20,7 +20,7 @@ class RedisQueue(BaseQueue):
         """
         super(RedisQueue, self).__init__(name, **connection)
         
-        self.queue_name = 'skew.redis.%s' % re.sub('[^a-z0-9]', '', name)
+        self.queue_name = 'huey.redis.%s' % re.sub('[^a-z0-9]', '', name)
 
         self.conn = redis.Redis(**connection)
     
@@ -65,7 +65,7 @@ class RedisDataStore(BaseDataStore):
         """
         super(RedisDataStore, self).__init__(name, **connection)
         
-        self.storage_name = 'skew.redis.results.%s' % re.sub('[^a-z0-9]', '', name)
+        self.storage_name = 'huey.redis.results.%s' % re.sub('[^a-z0-9]', '', name)
         self.conn = redis.Redis(**connection)
     
     def put(self, key, value):

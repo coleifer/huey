@@ -2,15 +2,15 @@ import sys
 
 from django.conf import settings
 
-from skew.queue import Invoker
-from skew.utils import load_class
+from huey.queue import Invoker
+from huey.utils import load_class
 
 
 configuration_message = """
 Please configure your queue, example:
 
 SKEW_CONFIG = {
-    'QUEUE': 'skew.backends.redis_backend.RedisQueue',
+    'QUEUE': 'huey.backends.redis_backend.RedisQueue',
     'QUEUE_CONNECTION': 'localhost:6379:0',
     'THREADS': 4,
 }
@@ -23,7 +23,7 @@ QUEUE (string or Queue instance)
     name of the queue.  If a string is used, you may also need to specify a
     connection string.
     
-    Example: 'skew.backends.redis_backend.RedisQueue'
+    Example: 'huey.backends.redis_backend.RedisQueue'
 
 
 The following settings are recommended:
@@ -41,7 +41,7 @@ RESULT_STORE (string or DataStore instance)
     Either a DataStore instance or a string pointing to the module path and
     class name of the result store.
     
-    Example: 'skew.backends.redis_backend.RedisDataStore'
+    Example: 'huey.backends.redis_backend.RedisDataStore'
 
 RESULT_STORE_NAME (string), default = database name
 
@@ -87,7 +87,7 @@ queue = config['QUEUE']
 if 'default' in settings.DATABASES:
     backup_name = settings.DATABASES['default']['NAME'].rsplit('/', 1)[-1]
 else:
-    backup_name = 'skew'
+    backup_name = 'huey'
 
 if isinstance(queue, basestring):
     QueueClass = load_class(queue)

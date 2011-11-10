@@ -3,7 +3,7 @@ import re
 
 from functools import wraps
 
-from skew.queue import QueueCommand, PeriodicQueueCommand
+from huey.queue import QueueCommand, PeriodicQueueCommand
 
 
 def create_command(command_class, func, **kwargs):

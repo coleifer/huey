@@ -6,9 +6,9 @@ from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 from django.utils.importlib import import_module
 
-from skew.bin.skew_consumer import Consumer, load_config
-from skew.queue import Invoker
-from skew.utils import load_class
+from huey.bin.huey_consumer import Consumer, load_config
+from huey.queue import Invoker
+from huey.utils import load_class
 
 
 class Command(BaseCommand):
@@ -17,7 +17,7 @@ class Command(BaseCommand):
     
     To start the consumer (note you must export the settings module):
     
-    django-admin.py run_skew
+    django-admin.py run_huey
     """
     
     help = "Run the queue consumer"
@@ -59,7 +59,7 @@ class Command(BaseCommand):
             app_path = sys.modules['%s.%s' % (app, module_name)]
     
     def handle(self, *args, **options):
-        config = load_config('skew.djskew.conf.Configuration')
+        config = load_config('huey.djhuey.conf.Configuration')
 
         if options['threads'] is not None:
             config.THREADS = options['threads']

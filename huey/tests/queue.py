@@ -1,12 +1,12 @@
 import datetime
 import unittest
 
-from skew.backends.dummy import DummyQueue, DummyDataStore
-from skew.decorators import queue_command, periodic_command, crontab
-from skew.exceptions import QueueException
-from skew.queue import Invoker, QueueCommand, PeriodicQueueCommand, CommandSchedule
-from skew.registry import registry
-from skew.utils import EmptyData
+from huey.backends.dummy import DummyQueue, DummyDataStore
+from huey.decorators import queue_command, periodic_command, crontab
+from huey.exceptions import QueueException
+from huey.queue import Invoker, QueueCommand, PeriodicQueueCommand, CommandSchedule
+from huey.registry import registry
+from huey.utils import EmptyData
 
 
 queue_name = 'test-queue'
@@ -67,9 +67,9 @@ class SkewTestCase(unittest.TestCase):
         state = {}
     
     def test_registration(self):
-        self.assertTrue('skew.tests.queue.queuecmd_add' in registry)
-        self.assertTrue('skew.tests.queue.queuecmd_add_on_the_hour' in registry)
-        self.assertTrue('skew.tests.queue.AddCommand' in registry)
+        self.assertTrue('huey.tests.queue.queuecmd_add' in registry)
+        self.assertTrue('huey.tests.queue.queuecmd_add_on_the_hour' in registry)
+        self.assertTrue('huey.tests.queue.AddCommand' in registry)
     
     def test_enqueue(self):
         # sanity check

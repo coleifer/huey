@@ -4,13 +4,13 @@ import threading
 import time
 import unittest
 
-from skew.backends.dummy import DummyQueue, DummyDataStore
-from skew.decorators import queue_command
-from skew.exceptions import QueueException
-from skew.queue import Invoker, QueueCommand, PeriodicQueueCommand
-from skew.registry import registry
-from skew.bin.config import BaseConfiguration
-from skew.bin.skew_consumer import load_config, Consumer, IterableQueue
+from huey.backends.dummy import DummyQueue, DummyDataStore
+from huey.decorators import queue_command
+from huey.exceptions import QueueException
+from huey.queue import Invoker, QueueCommand, PeriodicQueueCommand
+from huey.registry import registry
+from huey.bin.config import BaseConfiguration
+from huey.bin.huey_consumer import load_config, Consumer, IterableQueue
 
 
 # store some global state
@@ -67,7 +67,7 @@ class SkewConsumerTestCase(unittest.TestCase):
         time.sleep = self.orig_sleep
     
     def test_consumer_loader(self):
-        config = load_config('skew.tests.config.Config')
+        config = load_config('huey.tests.config.Config')
         self.assertTrue(isinstance(config.QUEUE, DummyQueue))
         self.assertEqual(config.QUEUE.name, 'test-queue')
     

@@ -1,6 +1,6 @@
 import pickle
 
-from skew.exceptions import QueueException
+from huey.exceptions import QueueException
 
 
 class CommandRegistry(object):

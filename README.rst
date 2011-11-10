@@ -1,5 +1,5 @@
-skew simple queue
-=================
+huey - a little task queue
+==========================
 
 a lightweight alternative.
 

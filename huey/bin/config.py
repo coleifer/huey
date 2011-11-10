@@ -1,6 +1,6 @@
 import logging
 
-from skew.backends.dummy import DummyQueue
+from huey.backends.dummy import DummyQueue
 
 
 class BaseConfiguration(object):

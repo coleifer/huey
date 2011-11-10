@@ -1,5 +1,5 @@
-from skew.backends.base import BaseQueue, BaseDataStore
-from skew.utils import EmptyData
+from huey.backends.base import BaseQueue, BaseDataStore
+from huey.utils import EmptyData
 
 
 class DummyQueue(BaseQueue):

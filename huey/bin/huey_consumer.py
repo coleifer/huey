@@ -8,10 +8,10 @@ import time
 import threading
 from logging.handlers import RotatingFileHandler
 
-from skew.exceptions import QueueException, QueueReadException, DataStorePutException
-from skew.queue import Invoker, CommandSchedule
-from skew.registry import registry
-from skew.utils import load_class
+from huey.exceptions import QueueException, QueueReadException, DataStorePutException
+from huey.queue import Invoker, CommandSchedule
+from huey.registry import registry
+from huey.utils import load_class
 
 
 class IterableQueue(Queue.Queue):
@@ -55,7 +55,7 @@ class Consumer(object):
         self.schedule = CommandSchedule(self.invoker)
     
     def get_logger(self):
-        log = logging.getLogger('skew.consumer.logger')
+        log = logging.getLogger('huey.consumer.logger')
         log.setLevel(self.loglevel)
         
         if not log.handlers and self.logfile:
@@ -199,7 +199,7 @@ class Consumer(object):
         self.schedule.save()
 
     def log_registered_commands(self):
-        msg = ['skew initialized with following commands']
+        msg = ['huey initialized with following commands']
         for command in registry._registry:
             msg.append('+ %s' % command)
 

@@ -5,10 +5,10 @@ import uuid
 import sys
 import time
 
-from skew.exceptions import QueueWriteException, QueueReadException, \
+from huey.exceptions import QueueWriteException, QueueReadException, \
     DataStoreGetException, DataStorePutException, DataStoreTimeout
-from skew.registry import registry
-from skew.utils import wrap_exception, EmptyData
+from huey.registry import registry
+from huey.utils import wrap_exception, EmptyData
 
 
 class AsyncData(object):

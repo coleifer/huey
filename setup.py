@@ -3,15 +3,15 @@ from setuptools import setup, find_packages
 
 
 setup(
-    name='skew',
+    name='huey',
     version="0.1.0",
     description='a simple queue for python',
     author='Charles Leifer',
     author_email='coleifer@gmail.com',
-    url='http://github.com/coleifer/skew/tree/master',
+    url='http://github.com/coleifer/huey/tree/master',
     packages=find_packages(),
     package_data = {
-        'skew': [
+        'huey': [
         ],
     },
     classifiers=[
@@ -24,5 +24,5 @@ setup(
         'Framework :: Django',
     ],
     test_suite='runtests.runtests',
-    scripts = ['skew/bin/skew_consumer.py'],
+    scripts = ['huey/bin/huey_consumer.py'],
 )

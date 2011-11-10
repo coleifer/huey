@@ -1,7 +1,7 @@
 import datetime
 import unittest
 
-from skew.decorators import crontab
+from huey.decorators import crontab
 
 
 class SkewCrontabTestCase(unittest.TestCase):

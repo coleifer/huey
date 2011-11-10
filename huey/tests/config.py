@@ -1,6 +1,6 @@
 import logging
-from skew.backends.dummy import DummyQueue, DummyDataStore
-from skew.bin.config import BaseConfiguration
+from huey.backends.dummy import DummyQueue, DummyDataStore
+from huey.bin.config import BaseConfiguration
 
 
 class Config(BaseConfiguration):
