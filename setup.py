@@ -5,7 +5,7 @@ from setuptools import setup, find_packages
 setup(
     name='huey',
     version="0.1.0",
-    description='a simple queue for python',
+    description='huey, a little task queue',
     author='Charles Leifer',
     author_email='coleifer@gmail.com',
     url='http://github.com/coleifer/huey/tree/master',
