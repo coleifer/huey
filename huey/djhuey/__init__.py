@@ -9,7 +9,7 @@ from huey.utils import load_class
 configuration_message = """
 Please configure your queue, example:
 
-SKEW_CONFIG = {
+HUEY_CONFIG = {
     'QUEUE': 'huey.backends.redis_backend.RedisQueue',
     'QUEUE_CONNECTION': 'localhost:6379:0',
     'THREADS': 4,
@@ -32,7 +32,7 @@ The following settings are recommended:
 QUEUE_NAME (string), default = database name
 
 QUEUE_CONNECTION (string)
-    If the SKEW_QUEUE was specified using a string, use this parameter to
+    If the HUEY_QUEUE was specified using a string, use this parameter to
     instruct the queue class how to connect.
     
     Example: 'localhost:6379:0' # for the RedisQueue
@@ -77,7 +77,7 @@ MAX_DELAY (numeric), default = 10
     Max amount of time to sleep when waiting for jobs
 """
 
-config = getattr(settings, 'SKEW_CONFIG', None)
+config = getattr(settings, 'HUEY_CONFIG', None)
 if not config or 'QUEUE' not in config:
     print configuration_message
     sys.exit(1)
