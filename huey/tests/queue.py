@@ -6,7 +6,7 @@ from huey.decorators import queue_command, periodic_command, crontab
 from huey.exceptions import QueueException
 from huey.queue import Invoker, QueueCommand, PeriodicQueueCommand, CommandSchedule
 from huey.registry import registry
-from huey.utils import EmptyData
+from huey.utils import EmptyData, local_to_utc
 
 
 queue_name = 'test-queue'
@@ -112,6 +112,11 @@ class SkewTestCase(unittest.TestCase):
         self.assertEqual(cmd.execute_time, None)
         
         add.schedule(args=('k2', 'v2'), eta=dt)
+        self.assertEqual(len(queue), 1)
+        cmd = invoker.dequeue()
+        self.assertEqual(cmd.execute_time, local_to_utc(dt))
+        
+        add.schedule(args=('k3', 'v3'), eta=dt, convert_utc=False)
         self.assertEqual(len(queue), 1)
         cmd = invoker.dequeue()
         self.assertEqual(cmd.execute_time, dt)

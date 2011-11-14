@@ -9,6 +9,7 @@ from huey.decorators import queue_command
 from huey.exceptions import QueueException
 from huey.queue import Invoker, QueueCommand, PeriodicQueueCommand
 from huey.registry import registry
+from huey.utils import local_to_utc
 from huey.bin.config import BaseConfiguration
 from huey.bin.huey_consumer import load_config, Consumer, IterableQueue
 
@@ -163,8 +164,8 @@ class SkewConsumerTestCase(unittest.TestCase):
     def test_scheduling(self):
         dt = datetime.datetime(2011, 1, 1, 0, 0)
         dt2 = datetime.datetime(2037, 1, 1, 0, 0)
-        r1 = modify_state.schedule(args=('k', 'v'), eta=dt)
-        r2 = modify_state.schedule(args=('k2', 'v2'), eta=dt2)
+        r1 = modify_state.schedule(args=('k', 'v'), eta=dt, convert_utc=False)
+        r2 = modify_state.schedule(args=('k2', 'v2'), eta=dt2, convert_utc=False)
         
         # dequeue a *single* message 
         pt = self.spawn(self.consumer.check_message)
@@ -207,8 +208,8 @@ class SkewConsumerTestCase(unittest.TestCase):
     def test_schedule_persistence(self):
         dt = datetime.datetime(2037, 1, 1, 0, 0)
         dt2 = datetime.datetime(2037, 1, 1, 0, 1)
-        r = modify_state.schedule(args=('k', 'v'), eta=dt)
-        r2 = modify_state.schedule(args=('k2', 'v2'), eta=dt2)
+        r = modify_state.schedule(args=('k', 'v'), eta=dt, convert_utc=False)
+        r2 = modify_state.schedule(args=('k2', 'v2'), eta=dt2, convert_utc=False)
         
         # two messages in the queue
         self.assertEqual(len(self.consumer.invoker.queue), 2)
@@ -229,3 +230,14 @@ class SkewConsumerTestCase(unittest.TestCase):
         
         self.assertEqual(cmd1.execute_time, dt)
         self.assertEqual(cmd2.execute_time, dt2)
+        
+        # check w/conversion
+        r3 = modify_state.schedule(args=('k3', 'v3'), eta=dt)
+        self.consumer.check_message()
+        
+        self.consumer.save_schedule()
+        self.consumer.schedule._schedule = {}
+        
+        self.consumer.load_schedule()
+        cmd3 = self.consumer.schedule._schedule[r3.task_id]
+        self.assertEqual(cmd3.execute_time, local_to_utc(dt))

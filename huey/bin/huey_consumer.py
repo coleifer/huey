@@ -40,6 +40,8 @@ class Consumer(object):
         self.backoff_factor = config.BACKOFF
         self.max_delay = config.MAX_DELAY
         
+        self.utc = config.UTC
+        
         # initialize delay
         self.delay = self.default_delay
         
@@ -66,6 +68,12 @@ class Consumer(object):
         
         return log
     
+    def get_now(self):
+        if self.utc:
+            return datetime.datetime.utcnow()
+        else:
+            return datetime.datetime.now()
+    
     def spawn(self, func, *args, **kwargs):
         t = threading.Thread(target=func, args=args, kwargs=kwargs)
         t.daemon = True
@@ -79,7 +87,7 @@ class Consumer(object):
     def schedule_commands(self):
         while not self._shutdown.is_set():
             start = time.time()
-            dt = datetime.datetime.now()
+            dt = self.get_now()
             if self.periodic_commands:
                 self.enqueue_periodic_commands(dt)
 
@@ -120,7 +128,7 @@ class Consumer(object):
                 # checking again
                 self.sleep()
             elif command:
-                if self.schedule.should_run(command):
+                if self.schedule.should_run(command, self.get_now()):
                     self.process_command(command)
                 else:
                     # schedule the command for execution

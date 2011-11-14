@@ -4,6 +4,7 @@ import re
 from functools import wraps
 
 from huey.queue import QueueCommand, PeriodicQueueCommand
+from huey.utils import local_to_utc
 
 
 def create_command(command_class, func, **kwargs):
@@ -37,7 +38,9 @@ def queue_command(invoker):
         """
         klass = create_command(QueueCommand, func)
         
-        def schedule(args=None, kwargs=None, eta=None):
+        def schedule(args=None, kwargs=None, eta=None, convert_utc=True):
+            if convert_utc and eta:
+                eta = local_to_utc(eta)
             cmd = klass((args or (), kwargs or {}), execute_time=eta)
             return invoker.enqueue(cmd)
         
