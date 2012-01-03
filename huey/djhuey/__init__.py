@@ -31,7 +31,7 @@ The following settings are recommended:
 
 QUEUE_NAME (string), default = database name
 
-QUEUE_CONNECTION (string)
+QUEUE_CONNECTION (dictionary)
     If the HUEY_QUEUE was specified using a string, use this parameter to
     instruct the queue class how to connect.
     
