@@ -19,6 +19,7 @@ Contents:
    
    installation
    getting-started
+   troubleshooting
 
 
 
