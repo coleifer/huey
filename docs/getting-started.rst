@@ -5,16 +5,18 @@ Getting Started
 
 The goal of this document is to help you get running quickly and with as little
 fuss as possible.  Because huey works with python in general but also has some
-special integration, this guide is broken up into two parts:
+special django integration, this guide is broken up into two parts.  Read the
+general guide first, then continue on to the django guide, as information is
+presented in the general guide that is not covered in the django parts.
 
-* :ref:`getting-started-python <Standard guide>`
-* :ref:`getting-started-django <Getting started, Django edition>`
+* :ref:`General guide <getting-started-python>`
+* :ref:`Django integration <getting-started-django>`
 
 
-.. _getting-started-python
+.. _getting-started-python:
 
-Getting started, python
------------------------
+General guide
+-------------
 
 There are three main components (or processes) to consider when running huey:
 
@@ -168,9 +170,106 @@ main processes at work:
 .. image:: example_results.jpg
 
 
-.. _getting-started-django
+Executing tasks in the future
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Getting started, Django
------------------------
+It is often useful to enqueue a particular task to execute at some arbitrary time
+in the future, for example, mark a blog entry as published at a certain time.
+
+This is very simple to do with huey.  Returning to the interpreter session from
+the last section, let's schedule a bean counting to happen one minute in the future
+and see how huey handles it.  Execute the following:
+
+.. code-block:: python
+
+    >>> import datetime
+    >>> in_a_minute = datetime.datetime.now() + datetime.timedelta(seconds=60)
+    >>> res = count_beans.schedule(args=(100,), eta=in_a_minute)
+    >>> res
+    <huey.queue.AsyncData object at 0xb72915ec>
+    >>> res.get() # <--- this returns None, no data is ready
+    >>> res.get() # <--- still no data...
+    >>> res.get(blocking=True) # <--- ok, let's just block until its ready
+    'Counted 100 beans'
+
+Looking at the redis output, we see the following (simplified for reability)::
+
+    +1325563365.910640 "LPUSH" count_beans(100)
+    +1325563365.911912 "BRPOP" wait for next job
+    +1325563365.912435 "HSET" store 'Counted 100 beans'
+    +1325563366.393236 "HGET" retrieve result from task
+    +1325563366.393464 "HDEL" delete result after reading
+
+Here is a screenshot showing the same:
+
+.. image:: example_schedule.jpg
+
+
+Executing tasks at regular intervals
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The final usage pattern supported by huey is the execution of tasks at regular
+intervals.  This is modeled after ``crontab`` behavior, and even follows similar
+syntax.  Tasks run at regular intervals and should not return meaningful results, nor
+should they accept any parameters.
+
+Let's add a new task that prints the time every minute -- we'll use this to
+test that the consumer is executing the tasks on schedule.
+
+.. code-block:: python
+
+    # commands.py
+    import datetime
+    from huey.decorators import queue_command, periodic_command, crontab
+
+    from config import invoker
+
+
+    @queue_command(invoker)
+    def count_beans(num):
+        return 'Counted %s beans' % num
+
+    @periodic_command(invoker, crontab(minute='*'))
+    def print_time():
+        print datetime.datetime.now()
+
+
+Additionally, we need to indicate in the ``Configuration`` object that we want
+to run periodic tasks.  The reason this is configurable is because if you were
+wanting to run multiple consumer processes, only *one* of them should be responsible
+for enqueueing periodic commands.  The configuration now looks like this:
+
+.. code-block:: python
+
+    # config.py excerpt
+    class Configuration(BaseConfiguration):
+        QUEUE = queue
+        RESULT_STORE = result_store
+        PERIODIC = True # <-- new
+
+Now, when we run the consumer it will start printing the time every minute:
+
+.. image:: example_crontab.jpg
+
+
+Reading more
+^^^^^^^^^^^^
+
+That sums up the basic usage patterns of huey.  If you plan on using with django,
+read on -- otherwise check the detailed documentation on the following:
+
+* :py:class:`BaseConfiguration` - configuration options
+* :py:class:`BaseQueue` - the queue interface and writing your own backends
+* :py:class:`BaseDataStore` - the simple data store used for results and schedule serialization
+* :py:class:`Invoker` - responsible for coordinating executable tasks and queue backends
+* :py:func:`queue_command` - decorator to indicate an executable task
+* :py:func:`periodic_command` - decorator to indicate a task that executes at periodic intervals
+* :py:func:`crontab` - a function for defining what intervals to execute a periodic command
+
+
+.. _getting-started-django:
+
+Django integration
+------------------
 
 
