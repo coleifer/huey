@@ -58,6 +58,7 @@ use, where to log activity, etc.
 
     class Configuration(BaseConfiguration):
         QUEUE = queue
+        THREADS = 4
 
 The interesting parts of this configuration module are the :py:class:`Invoker` object
 and the :py:class:`RedisBlockingQueue` object.  The ``queue`` is responsible for 
@@ -132,6 +133,7 @@ lines to the ``config.py`` module:
     class Configuration(BaseConfiguration):
         QUEUE = queue
         RESULT_STORE = result_store # added
+        THREADS = 4
 
 To better illustrate getting results, we'll also modify the ``commands.py``
 module to return a string rather than simply printing to stdout:
@@ -272,4 +274,87 @@ read on -- otherwise check the detailed documentation on the following:
 Django integration
 ------------------
 
+Configuring huey to work with django is actually more simple due to the centralized
+nature of django's configuration and conventions.  Rather than maintaining a ``Configuration``
+object, as in the above example, everything is configured automatically using django
+settings.  Following the previous example, we'll re-create the bean counting task
+using django:
 
+First let's get the settings.  In the interests of focusing on the bare minimum
+to get things running, here are the only settings you need.  It assumes, in addition
+to the ``huey.djhuey`` app, a single app called ``test_app``:
+
+.. code-block:: python
+
+    INSTALLED_APPS = [
+        'huey.djhuey',
+        'test_app',
+    ]
+
+    HUEY_CONFIG = {
+        'QUEUE': 'huey.backends.redis_backend.RedisBlockingQueue',
+        'QUEUE_NAME': 'test-queue',
+        'QUEUE_CONNECTION': {
+            'host': 'localhost',
+            'port': 6379,
+        },
+        'THREADS': 4,
+    }
+
+The ``test_app`` will be as simple as possible:
+
+* __init__.py (empty)
+* manage.py (standard)
+* settings.py
+* test_app/
+    - __init__.py (empty)
+    - models.py (empty)
+    - commands.py
+
+The only file with any code in it is ``test_app.commands``:
+
+.. code-block:: python
+
+    from huey.djhuey.decorators import queue_command
+
+
+    @queue_command
+    def count_beans(number):
+        print 'Counted %s beans' % number
+
+If you're comparing against the example describe in the previous section, there
+are a couple key differences:
+
+* import has change from ``huey.decorators`` to ``huey.djhuey.decorators``
+* ``@queue_command`` decorator does not take any parameters
+
+Let's test it out:
+
+1. Start up the consumer using the management command: ``django-admin.py run_huey``
+2. Open up a shell: ``django-admin.py shell``
+3. Try running the ``count_beans()`` function a couple times
+
+.. image:: example_django.jpg
+
+Configuring a result backend
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+To enable support for task results, define a ``RESULT_STORE`` in the django
+settings module:
+
+.. code-block:: python
+
+    HUEY_CONFIG = {
+        'QUEUE': 'huey.backends.redis_backend.RedisBlockingQueue',
+        'QUEUE_NAME': 'test-queue',
+        'QUEUE_CONNECTION': {
+            'host': 'localhost',
+            'port': 6379,
+        },
+        'RESULT_STORE': 'huey.backends.redis_backend.RedisDataStore',
+        'RESULT_STORE_CONNECTION': {
+            'host': 'localhost',
+            'port': 6379,
+        },
+        'THREADS': 4,
+    }
