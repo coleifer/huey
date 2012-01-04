@@ -260,13 +260,13 @@ Reading more
 That sums up the basic usage patterns of huey.  If you plan on using with django,
 read on -- otherwise check the detailed documentation on the following:
 
-* :py:class:`BaseConfiguration` - configuration options
-* :py:class:`BaseQueue` - the queue interface and writing your own backends
-* :py:class:`BaseDataStore` - the simple data store used for results and schedule serialization
-* :py:class:`Invoker` - responsible for coordinating executable tasks and queue backends
-* :py:func:`queue_command` - decorator to indicate an executable task
-* :py:func:`periodic_command` - decorator to indicate a task that executes at periodic intervals
-* :py:func:`crontab` - a function for defining what intervals to execute a periodic command
+* :py:class:`~huey.bin.config.BaseConfiguration` - configuration options
+* :py:class:`~huey.backends.base.BaseQueue` - the queue interface and writing your own backends
+* :py:class:`~huey.backends.base.BaseDataStore` - the simple data store used for results and schedule serialization
+* :py:class:`~huey.queue.Invoker` - responsible for coordinating executable tasks and queue backends
+* :py:func:`~huey.decorators.queue_command` - decorator to indicate an executable task
+* :py:func:`~huey.decorators.periodic_command` - decorator to indicate a task that executes at periodic intervals
+* :py:func:`~huey.decorators.crontab` - a function for defining what intervals to execute a periodic command
 
 
 .. _getting-started-django:

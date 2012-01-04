@@ -264,6 +264,8 @@ The Invoker and AsyncData classes
 Configuration
 -------------
 
+.. py:module:: huey.bin.config
+
 .. py:class:: BaseConfiguration()
 
     Applications using huey should subclass ``BaseConfiguration`` when specifying
