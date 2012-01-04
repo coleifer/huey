@@ -18,6 +18,8 @@ Tasks not running
     by loading the config file you also import any :py:func:`queue_command` decorated 
     functions as well.  If using Django, ensure that your commands in are modules 
     named ``commands.py`` and their app is in ``INSTALLED_APPS``.
+    
+    For more information on how commands are imported, see the :ref:`docs <imports>`
 
 "Unable to import XXX" when starting consumer
     This error message occurs when the module containing the configuration

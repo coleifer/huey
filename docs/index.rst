@@ -19,7 +19,9 @@ Contents:
    
    installation
    getting-started
+   imports
    troubleshooting
+   api
 
 
 
