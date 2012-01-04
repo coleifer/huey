@@ -390,7 +390,7 @@ Base classes
 Redis implementation
 ^^^^^^^^^^^^^^^^^^^^
 
-All the following use the [python redis driver](https://github.com/andymccurdy/redis-py)
+All the following use the `python redis driver <https://github.com/andymccurdy/redis-py>`_
 written by Andy McCurdy.
 
 .. py:module:: huey.backends.redis_backend
@@ -416,7 +416,129 @@ written by Andy McCurdy.
     :param name: the name of the data store to use
     :param connection: a list of values passed directly into the ``redis.Redis`` class
 
+
 .. _django-api:
 
 Django API
-----------
+==========
+
+Good news, the django api is considerably simpler!  This is because django has
+very specific conventions for how things should be configured.  If you're using
+django you don't have to worry about invokers or configuration objects -- simply
+configure the queue and result store in the settings and use the decorators and
+management command to run the consumer.
+
+Function decorators and helpers
+-------------------------------
+
+.. py:module:: huey.djhuey.decorators
+
+.. py:function:: queue_command()
+
+    Identical to the :py:func:`~huey.decorators.queue_command` described above,
+    except that it takes no parameters.
+    
+    .. code-block:: python
+    
+        from huey.djhuey.decorators import queue_command
+        
+        @queue_command
+        def count_some_beans(how_many):
+            return 'Counted %s beans' % how_many
+
+.. py:function:: periodic_command(validate_datetime)
+
+    Identical to the :py:func:`~huey.decorators.periodic_command` described above,
+    except that it does not take an invoker as its first argument.
+    
+    .. code-block:: python
+    
+        from huey.djhuey.decorators import periodic_command, crontab
+        
+        @periodic_command(crontab(minute='*/5'))
+        def every_five_minutes():
+            # this function gets executed every 5 minutes by the consumer
+            print "It's been five minutes"
+
+Configuration
+-------------
+
+All configuration occurs in the django settings module.  Settings are configured
+using the same names as those in the python api with the exception that queues and
+data stores can be specified using a string module path, and connection keyword-arguments
+are specified using a dictionary.
+
+Example configuration:
+
+.. code-block:: python
+
+    HUEY_CONFIG = {
+        'QUEUE': 'huey.backends.redis_backend.RedisQueue',
+        'QUEUE_CONNECTION': {
+            'host': 'localhost',
+            'port': 6379
+        },
+        'THREADS': 4,
+    }
+
+Required settings
+^^^^^^^^^^^^^^^^^
+
+``QUEUE`` (string or ``Queue`` instance)
+    Either a queue instance or a string pointing to the module path and class
+    name of the queue.  If a string is used, you may also need to specify a
+    connection parameters.
+    
+    Example: ``huey.backends.redis_backend.RedisQueue``
+
+
+Recommended settings
+^^^^^^^^^^^^^^^^^^^^
+
+``QUEUE_NAME`` (string), default = database name
+
+``QUEUE_CONNECTION`` (dictionary)
+    If the ``QUEUE`` was specified using a string, use this parameter to
+    instruct the queue class how to connect.
+
+``RESULT_STORE`` (string or ``DataStore`` instance)
+    Either a ``DataStore`` instance or a string pointing to the module path and
+    class name of the result store.
+    
+    Example: ``huey.backends.redis_backend.RedisDataStore``
+
+``RESULT_STORE_NAME`` (string), default = database name
+
+``RESULT_STORE_CONNECTION`` (dictionary)
+    See notes for ``QUEUE_CONNECTION``
+
+``TASK_STORE``
+    Follows same pattern as ``RESULT_STORE``
+
+
+Optional settings
+^^^^^^^^^^^^^^^^^
+
+``PERIODIC`` (boolean), default = False
+    Determines whether or not to the consumer will enqueue periodic commands.
+    If you are running multiple consumers, only one of them should be configured
+    to enqueue periodic commands.
+
+``THREADS`` (int), default = 1
+    Number of worker threads to use when processing jobs
+
+``LOGFILE`` (string), default = None
+
+``LOGLEVEL`` (int), default = logging.INFO
+
+``BACKOFF`` (numeric), default = 1.15
+    How much to increase delay when no jobs are present
+
+``INITIAL_DELAY`` (numeric), default = 0.1
+    Initial amount of time to sleep when waiting for jobs
+
+``MAX_DELAY`` (numeric), default = 10
+    Max amount of time to sleep when waiting for jobs
+
+``ALWAYS_EAGER``, default = ``False``
+    Whether to skip enqueue-ing and run in-band (useful for debugging)
