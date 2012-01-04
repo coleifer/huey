@@ -1,0 +1,7 @@
+In one terminal, run:
+
+    huey_consumer.py main.Configuration
+
+In another terminal:
+
+    python main.py

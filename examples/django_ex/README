@@ -1,0 +1,12 @@
+In one terminal, run:
+
+    ./manage.py run_huey
+
+In another terminal:
+
+    ./manage.py shell
+
+Commands to try out:
+
+    from test_app.commands import count_beans
+    res = count_beans(500)
