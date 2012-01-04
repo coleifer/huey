@@ -208,7 +208,47 @@ The Invoker and AsyncData classes
 
     Although you will probably never instantiate an ``AsyncData`` object yourself,
     they are returned by any calls to :py:func:`queue_command` decorated functions
-    (provided the invoker is configured with a result store).
+    (provided the invoker is configured with a result store).  The ``AsyncData``
+    talks to the result store and is responsible for fetching results from tasks.
+    Once the consumer finishes executing a task, the return value is placed in the
+    result store, allowing the producer to retrieve it.
+    
+    Working with the ``AsyncData`` class is very simple:
+    
+    .. code-block:: python
+    
+        >>> from main import count_some_beans
+        >>> res = count_some_beans(100)
+        >>> res # <--- what is "res" ?
+        <huey.queue.AsyncData object at 0xb7471a4c>
+        
+        >>> res.get() # <--- get the result of this task, assuming it executed
+        'Counted 100 beans'
+    
+    What happens when data isn't available yet?  Let's assume the next call takes
+    about a minute to calculate:
+    
+    .. code-block:: python
+    
+        >>> res = count_some_beans(10000000) # let's pretend this is slow
+        >>> res.get() # data is not ready, so returns None
+        
+        >>> res.get() is None # data still not ready
+        True
+        
+        >>> res.get(blocking=True, timeout=5) # block for 5 seconds
+        Traceback (most recent call last):
+          File "<stdin>", line 1, in <module>
+          File "/home/charles/tmp/huey/src/huey/huey/queue.py", line 46, in get
+            raise DataStoreTimeout
+        huey.exceptions.DataStoreTimeout
+        
+        >>> res.get(blocking=True) # no timeout, will block until it gets data
+        'Counted 10000000 beans'
+    
+    .. py:method:: get([blocking=True[, timeout=None[, backoff=1.15[, max_delay=1.0]]]])
+    
+        Attempt to retrieve the return value
 
 .. _django-api:
 
