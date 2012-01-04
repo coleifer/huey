@@ -246,9 +246,175 @@ The Invoker and AsyncData classes
         >>> res.get(blocking=True) # no timeout, will block until it gets data
         'Counted 10000000 beans'
     
-    .. py:method:: get([blocking=True[, timeout=None[, backoff=1.15[, max_delay=1.0]]]])
+    .. py:method:: get([blocking=False[, timeout=None[, backoff=1.15[, max_delay=1.0]]]])
     
-        Attempt to retrieve the return value
+        Attempt to retrieve the return value of a task.  By default, it will simply
+        ask for the value, returning ``None`` if it is not ready yet.  If you want
+        to wait for a value, you can specify ``blocking = True`` -- this will loop,
+        backing off up to the provided ``max_delay`` until the value is ready or
+        until the ``timeout`` is reached.  If the ``timeout`` is reached before the
+        result is ready, a :py:class:`DataStoreTimeout` exception will be raised.
+        
+        :param blocking: boolean, whether to block while waiting for task result
+        :param timeout: number of seconds to block for (used with `blocking=True`)
+        :param backoff: amount to backoff delay each time no result is found
+        :param max_delay: maximum amount of time to wait between iterations when
+            attempting to fetch result.
+
+Configuration
+-------------
+
+.. py:class:: BaseConfiguration()
+
+    Applications using huey should subclass ``BaseConfiguration`` when specifying
+    the configuration options to use.  ``BaseConfiguration`` is where the queue,
+    result store, and many other settings are configured.  The configuration is
+    then used by the consumer to access the queue.  All configuration settings
+    are class attributes.
+    
+    .. py:attribute:: QUEUE
+    
+        An instance of a ``Queue`` class, which must be a subclass of :py:class:`BaseQueue`.
+        Tells consumer what queue to pull messages from.
+    
+    .. py:attribute:: RESULT_STORE
+    
+        An instance of a ``DataStore`` class, which must be a subclass of :py:class:`DataStore` or ``None``.
+        Tells consumer where to store results of messages.
+    
+    .. py:attribute:: TASK_STORE
+    
+        An instance of a ``DataStore`` class, which must be a subclass of :py:class:`DataStore` or ``None``.
+        Tells consumer where to serialize the schedule of pending tasks in the event the consumer is
+        shut down unexpectedly.
+    
+    .. py:attribute:: PERIODIC = False
+    
+        A boolean value indicating whether the consumer should enqueue periodic tasks
+    
+    .. py:attribute:: THREADS = 1
+    
+        Number of worker threads to run
+
+    .. py:attribute:: LOGFILE = None
+    .. py:attribute:: LOGLEVEL = logging.INFO
+    .. py:attribute:: BACKOFF = 1.15
+    .. py:attribute:: INITIAL_DELAY = .1
+    .. py:attribute:: MAX_DELAY = 10
+    .. py:attribute:: UTC = True
+    
+        Whether to run using local ``now()`` or ``utcnow()`` when determining
+        times to execute periodic commands and scheduled commands.
+
+Queues and DataStores
+---------------------
+
+Huey communicates with two types of data stores -- queues and datastores.  Thinking
+of them as python datatypes, a queue is sort of like a ``list`` and a datastore is
+sort of like a ``dict``.  Queues are FIFOs that store tasks -- producers put tasks
+in on one end and the consumer reads and executes tasks from the other.  DataStores
+are key-based stores that can store arbitrary results of tasks keyed by task id.
+DataStores can also be used to serialize task schedules so in the event your consumer
+goes down you can bring it back up and not lose any tasks that had been scheduled.
+
+Huey, like just about a zillion other projects, uses a "pluggable backend" approach,
+where the interface is defined on a couple classes :py:class:`BaseQueue` and :py:class:`BaseDataStore`,
+and you can write an implementation for any datastore you like.  The project ships
+with backends that talk to `redis <http://redis.io>`_, a fast key-based datastore,
+but the sky's the limit when it comes to what you want to interface with.  Below is
+an outline of the methods that must be implemented on each class.
+
+Base classes
+^^^^^^^^^^^^
+
+.. py:module:: huey.backends.base
+
+.. py:class:: BaseQueue(name, **connection)
+
+    Queue implementation -- any connections that must be made should be created
+    when instantiating this class.
+        
+    :param name: A string representation of the name for this queue
+    :param connection: Connection parameters for the queue
+    
+    .. py:attribute:: blocking = False
+    
+        Whether the backend blocks when waiting for new results.  If set to ``False``,
+        the backend will be polled at intervals, if ``True`` it will read and wait.
+    
+    .. py:method:: write(data)
+    
+        Write data to the queue - has no return value.
+        
+        :param data: a string
+    
+    .. py:method:: read()
+        
+        Read data from the queue, returning None if no data is available --
+        an empty queue should not raise an Exception!
+        
+        :rtype: a string message or ``None`` if no data is present
+    
+    .. py:method:: flush()
+    
+        Optional: Delete everything in the queue -- used by tests
+    
+    .. py:method:: __len__()
+    
+        Optional: Return the number of items in the queue -- used by tests
+
+.. py:class:: BaseDataStore(name, **connection)
+
+    Data store implementation -- any connections that must be made should be created
+    when instantiating this class.
+    
+    :param name: A string representation of the name for this data store
+    :param connection: Connection parameters for the data store
+
+    .. py:method:: put(key, value)
+    
+        Store the ``value`` using the ``key`` as the identifier
+    
+    .. py:method:: get(key)
+        
+        Retrieve the value stored at the given ``key``, returns a special value
+        :py:class:`EmptyData` if no data exists at the given key.  This is to
+        differentiate between "no data" and a stored ``None`` value.
+        
+        .. warning:: After a result is fetched it should be removed from the store!
+    
+    .. py:method:: flush()
+    
+        Remove all keys
+
+Redis implementation
+^^^^^^^^^^^^^^^^^^^^
+
+All the following use the [python redis driver](https://github.com/andymccurdy/redis-py)
+written by Andy McCurdy.
+
+.. py:module:: huey.backends.redis_backend
+
+.. py:class:: RedisQueue(name, **connection)
+
+    Does a simple ``RPOP`` to pull messages from the queue, meaning that it polls.
+
+    :param name: the name of the queue to use
+    :param connection: a list of values passed directly into the ``redis.Redis`` class
+
+.. py:class:: RedisBlockingQueue(name, **connection)
+
+    Does a ``BRPOP`` to pull messages from the queue, meaning that it blocks on reads.
+
+    :param name: the name of the queue to use
+    :param connection: a list of values passed directly into the ``redis.Redis`` class
+
+.. py:class:: RedisDataStore(name, **connection)
+
+    Stores results in a redis hash using ``HSET``, ``HGET`` and ``HDEL``
+
+    :param name: the name of the data store to use
+    :param connection: a list of values passed directly into the ``redis.Redis`` class
 
 .. _django-api:
 
