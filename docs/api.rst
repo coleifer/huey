@@ -18,8 +18,12 @@ using one, scheduling commands, etc).  The API documentation will follow the str
 of the huey API, starting with the highest-level interfaces (the decorators) and
 eventually discussing the lowest-level interfaces, the :py:class:`BaseQueue` and :py:class:`BaseDataStore` objects.
 
-Function decorators
--------------------
+.. _function-decorators:
+
+Function decorators and helpers
+-------------------------------
+
+.. py:module:: huey.decorators
 
 .. py:function:: queue_command(invoker)
 
@@ -112,6 +116,99 @@ Function decorators
 
 .. py:function:: periodic_command(invoker, validate_datetime)
 
+    Function decorator that marks the decorated function for processing by the
+    consumer *at a specific interval*.  Calls to functions decorated with ``periodic_command``
+    will execute normally, unlike :py:func:`queue_command`, which enqueues commands
+    for execution by the consumer.  Rather, the ``periodic_command`` decorator
+    serves to **mark a function as needing to be executed periodically** by the
+    consumer.
+    
+    .. note::
+        By default, the consumer will not execute ``periodic_command`` functions.
+        To enable this, simply add ``PERIODIC = True`` to your configuration.
+
+    The ``validate_datetime`` parameter is a function which accepts a datetime
+    object and returns a boolean value whether or not the decorated function
+    should execute at that time or not.  The consumer will send a datetime to
+    the function every minute, giving it the same granularity as the linux
+    crontab, which it was designed to mimic.
+    
+    For simplicity, there is a special function :py:func:`crontab`, which can
+    be used to quickly specify intervals at which a function should execute.  It
+    is described below.
+    
+    Here is an example of how you might use the ``periodic_command`` decorator
+    and the ``crontab`` helper:
+    
+    .. code-block:: python
+        
+        from config import invoker
+        from huey.decorators import periodic_command, crontab
+        
+        @periodic_command(invoker, crontab(minute='*/5'))
+        def every_five_minutes():
+            # this function gets executed every 5 minutes by the consumer
+            print "It's been five minutes"
+    
+    .. note::
+        Because functions decorated with ``periodic_command`` are meant to be
+        executed at intervals in isolation, they should not take any required
+        parameters nor should they be expected to return a meaningful value.
+        This is the same regardless of whether or not you are using a result store.
+    
+    :param invoker: an :py:class:`Invoker` instance
+    :param validate_datetime: a callable which takes a ``datetime`` and returns
+        a boolean whether the decorated function should execute at that time or not
+    :rtype: decorated function
+
+.. py:function:: crontab(month='*', day='*', day_of_week='*', hour='*', minute='*')
+
+    Convert a "crontab"-style set of parameters into a test function that will
+    return ``True`` when a given ``datetime`` matches the parameters set forth in
+    the crontab.
+    
+    Acceptable inputs:
+    
+    - "*" = every distinct value
+    - "\*/n" = run every "n" times, i.e. hours='\*/4' == 0, 4, 8, 12, 16, 20
+    - "m-n" = run every time m..n
+    - "m,n" = run on m and n
+    
+    :rtype: a test function that takes a ``datetime`` and returns a boolean
+
+The Invoker and AsyncData classes
+---------------------------------
+
+.. py:module:: huey.queue
+
+.. py:class:: Invoker(queue[, result_store=None[, task_store=None[, store_none=False[, always_eager=False]]]])
+
+    The ``Invoker`` ties together your application's queue, result store, and supplies
+    some options to configure how tasks are executed and how their results are stored.
+    
+    Applications will have **at least one** ``Invoker`` instance, as it is required
+    by the :ref:`function decorators <function-decorators>`.  Typically it should
+    be instantiated along with the ``Queue``, or wherever you create your configuration.
+    
+    Example:
+    
+    .. code-block:: python
+    
+        from huey.backends.redis_backend import RedisBlockingQueue, RedisDataStore
+        from huey.queue import Invoker
+
+        queue = RedisBlockingQueue('test-queue', host='localhost', port=6379)
+        result_store = RedisDataStore('results', host='localhost', port=6379)
+
+        # Create an invoker instance, which points at the queue and result store
+        # which are used by the application's Configuraiton object
+        invoker = Invoker(queue, result_store=result_store)
+
+.. py:class:: AsyncData(result_store, task_id)
+
+    Although you will probably never instantiate an ``AsyncData`` object yourself,
+    they are returned by any calls to :py:func:`queue_command` decorated functions
+    (provided the invoker is configured with a result store).
 
 .. _django-api:
 
