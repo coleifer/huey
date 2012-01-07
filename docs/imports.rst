@@ -13,7 +13,13 @@ Behind-the-scenes when you decorate a function with :py:func:`queue_command` or
 in-memory registry.  When that function is called, a reference is put into the 
 queue (among other things), and when that message is consumed
 the function is then looked-up in the consumer's registry.  Because of the way this
-works **all decorated functions must be imported when the consumer starts up**.
+works, it is strongly recommended that **all decorated functions be imported when 
+the consumer starts up**.
+
+.. note::
+    As of v0.1.1, if a command is not recognized, huey will try to dynamically
+    import it once before throwing a :py:class:`QueueException` for an
+    unrecognized command.
 
 The consumer is executed with a single parameter -- a module to load that contains a subclass
 of :py:class:`BaseConfiguration`.  It will import the class along with anything

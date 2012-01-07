@@ -1,0 +1,8 @@
+Changelog
+=========
+
+Jan 7, 2012 v0.1.1
+------------------
+
+* added some logic that will try once to dynamically import commands that are
+  not found in the command registry once before throwing a ``QueueException``
