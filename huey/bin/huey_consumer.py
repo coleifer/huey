@@ -8,7 +8,7 @@ import time
 import threading
 from logging.handlers import RotatingFileHandler
 
-from huey.exceptions import QueueException, QueueReadException, DataStorePutException
+from huey.exceptions import QueueException, QueueReadException, DataStorePutException, QueueWriteException
 from huey.queue import Invoker, CommandSchedule
 from huey.registry import registry
 from huey.utils import load_class
@@ -175,8 +175,18 @@ class Consumer(object):
             self.logger.warn('error storing result', exc_info=1)
         except:
             self.logger.error('unhandled exception in worker thread', exc_info=1)
+            if command.retries:
+                self.requeue_command(command)
         finally:
             self._pool.release()
+    
+    def requeue_command(self, command):
+        command.retries -= 1
+        self.logger.info('re-enqueueing task %s, %s tries left' % (command.task_id, command.retries))
+        try:
+            self.invoker.enqueue(command)
+        except QueueWriteException:
+            self.logger.error('unable to re-enqueue %s, error writing to backend' % command.task_id)
 
     def start(self):
         self.load_schedule()

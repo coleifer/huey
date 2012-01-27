@@ -27,7 +27,7 @@ def create_command(command_class, func, **kwargs):
     
     return klass
 
-def queue_command(invoker):
+def queue_command(invoker, retries=0):
     def decorator(func):
         """
         Decorator to execute a function out-of-band via the consumer.  Usage::
@@ -41,14 +41,14 @@ def queue_command(invoker):
         def schedule(args=None, kwargs=None, eta=None, convert_utc=True):
             if convert_utc and eta:
                 eta = local_to_utc(eta)
-            cmd = klass((args or (), kwargs or {}), execute_time=eta)
+            cmd = klass((args or (), kwargs or {}), execute_time=eta, retries=retries)
             return invoker.enqueue(cmd)
         
         func.schedule = schedule
         
         @wraps(func)
         def inner_run(*args, **kwargs):
-            return invoker.enqueue(klass((args, kwargs)))
+            return invoker.enqueue(klass((args, kwargs), retries=retries))
         return inner_run
     return decorator
 
