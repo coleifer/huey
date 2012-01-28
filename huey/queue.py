@@ -203,7 +203,7 @@ class QueueCommand(object):
     
     __metaclass__ = QueueCommandMetaClass
     
-    def __init__(self, data=None, task_id=None, execute_time=None, retries=0):
+    def __init__(self, data=None, task_id=None, execute_time=None, retries=0, retry_delay=0):
         """
         Initialize the command object with a receiver and optional data.  The
         receiver object *must* be a django model instance.
@@ -212,6 +212,7 @@ class QueueCommand(object):
         self.task_id = task_id or self.create_id()
         self.execute_time = execute_time
         self.retries = retries
+        self.retry_delay = retry_delay
     
     def create_id(self):
         return str(uuid.uuid4())

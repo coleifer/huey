@@ -14,7 +14,7 @@ class CommandRegistry(object):
     _periodic_commands = []
     _import_attempts = set()
     
-    message_template = '%(TASK_ID)s:%(CLASS)s:%(TIME)s:%(RETRIES)s:%(DATA)s'
+    message_template = '%(TASK_ID)s:%(CLASS)s:%(TIME)s:%(RETRIES)s:%(RETRY_DELAY)s:%(DATA)s'
 
     def command_to_string(self, command):
         return '%s.%s' % (command.__module__, command.__name__)
@@ -49,6 +49,7 @@ class CommandRegistry(object):
             'CLASS': self.command_to_string(type(command)),
             'TIME': pickle.dumps(command.execute_time),
             'RETRIES': command.retries,
+            'RETRY_DELAY': command.retry_delay,
             'DATA': pickle.dumps(command.get_data())
         }
 
@@ -73,12 +74,16 @@ class CommandRegistry(object):
     def get_command_for_message(self, msg):
         """Convert a message from the queue into a command"""
         # parse out the pieces from the enqueued message
-        task_id, klass_str, execute_time, retries, data = msg.split(':', 4)
-        retries = int(retries)
+        task_id, klass_str, execute_time, retries, delay, data = msg.split(':', 5)
         
         klass = self.get_command_class(klass_str)
         
-        return klass(pickle.loads(str(data)), task_id, pickle.loads(execute_time), retries)
+        command_data = pickle.loads(data)
+        ex_time = pickle.loads(execute_time)
+        retries = int(retries)
+        delay = int(delay)
+        
+        return klass(command_data, task_id, ex_time, retries, delay)
     
     def get_periodic_commands(self):
         return self._periodic_commands

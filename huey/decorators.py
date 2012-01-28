@@ -27,7 +27,7 @@ def create_command(command_class, func, **kwargs):
     
     return klass
 
-def queue_command(invoker, retries=0):
+def queue_command(invoker, retries=0, retry_delay=0):
     def decorator(func):
         """
         Decorator to execute a function out-of-band via the consumer.  Usage::
@@ -48,7 +48,7 @@ def queue_command(invoker, retries=0):
         
         @wraps(func)
         def inner_run(*args, **kwargs):
-            return invoker.enqueue(klass((args, kwargs), retries=retries))
+            return invoker.enqueue(klass((args, kwargs), retries=retries, retry_delay=retry_delay))
         return inner_run
     return decorator
 

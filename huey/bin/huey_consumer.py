@@ -80,6 +80,16 @@ class Consumer(object):
         t.start()
         return t
     
+    def start_periodic_task_scheduler(self):
+        self.logger.info('starting periodic task scheduler thread')
+        return self.spawn(self.schedule_periodic_tasks)
+    
+    def schedule_periodic_tasks(self):
+        while not self._shutdown.is_set():
+            start = time.time()
+            self.enqueue_periodic_commands(self.get_now())
+            time.sleep(60 - (time.time() - start))
+    
     def start_scheduler(self):
         self.logger.info('starting scheduler thread')
         return self.spawn(self.schedule_commands)
@@ -87,12 +97,12 @@ class Consumer(object):
     def schedule_commands(self):
         while not self._shutdown.is_set():
             start = time.time()
-            dt = self.get_now()
-            if self.periodic_commands:
-                self.enqueue_periodic_commands(dt)
-
-            self.check_schedule(dt)
-            time.sleep(60 - (time.time() - start))
+            self.check_schedule(self.get_now())
+            
+            # check schedule once per second
+            delta = time.time() - start
+            if delta < 1:
+                time.sleep(1 - (time.time() - start))
     
     def check_schedule(self, dt):
         for command in self.schedule.commands():
@@ -184,7 +194,12 @@ class Consumer(object):
         command.retries -= 1
         self.logger.info('re-enqueueing task %s, %s tries left' % (command.task_id, command.retries))
         try:
-            self.invoker.enqueue(command)
+            if command.retry_delay:
+                delay = datetime.timedelta(seconds=command.retry_delay)
+                command.execute_time = self.get_now() + delay
+                self.schedule.add(command)
+            else:
+                self.invoker.enqueue(command)
         except QueueWriteException:
             self.logger.error('unable to re-enqueue %s, error writing to backend' % command.task_id)
 
@@ -192,6 +207,9 @@ class Consumer(object):
         self.load_schedule()
         
         self.start_scheduler()
+        
+        if self.periodic_commands:
+            self.start_periodic_task_scheduler()
         
         self._receiver_t = self.start_message_receiver()
         self._worker_pool_t = self.start_worker_pool()
