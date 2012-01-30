@@ -67,9 +67,9 @@ class SkewTestCase(unittest.TestCase):
         state = {}
     
     def test_registration(self):
-        self.assertTrue('huey.tests.queue.queuecmd_add' in registry)
-        self.assertTrue('huey.tests.queue.queuecmd_add_on_the_hour' in registry)
-        self.assertTrue('huey.tests.queue.AddCommand' in registry)
+        self.assertTrue('queuecmd_add' in registry)
+        self.assertTrue('queuecmd_add_on_the_hour' in registry)
+        self.assertTrue('AddCommand' in registry)
     
     def test_enqueue(self):
         # sanity check

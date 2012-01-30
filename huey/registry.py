@@ -12,12 +12,11 @@ class CommandRegistry(object):
     
     _registry = {}
     _periodic_commands = []
-    _import_attempts = set()
     
     message_template = '%(TASK_ID)s:%(CLASS)s:%(TIME)s:%(RETRIES)s:%(RETRY_DELAY)s:%(DATA)s'
 
     def command_to_string(self, command):
-        return '%s.%s' % (command.__module__, command.__name__)
+        return '%s' % (command.__name__)
     
     def register(self, command_class):
         klass_str = self.command_to_string(command_class)
@@ -33,14 +32,14 @@ class CommandRegistry(object):
         klass_str = self.command_to_string(command_class)
         
         if klass_str in self._registry:
-            del(self._registry[str(command_class)])
+            del(self._registry[klass_str])
             
             for command in self._periodic_commands:
                 if isinstance(command, command_class):
                     self._periodic_commands.remove(command)
     
-    def __contains__(self, command_class):
-        return str(command_class) in self._registry
+    def __contains__(self, klass_str):
+        return klass_str in self._registry
 
     def get_message_for_command(self, command):
         """Convert a command object to a message for storage in the queue"""
@@ -55,16 +54,6 @@ class CommandRegistry(object):
 
     def get_command_class(self, klass_str):
         klass = self._registry.get(klass_str)
-
-        if not klass and klass_str not in self._import_attempts:
-            self._import_attempts.add(klass_str)
-            module_name, attr = klass_str.rsplit('.', 1)
-            try:
-                module = __import__(module_name)
-            except:
-                pass
-            else:
-                return self.get_command_class(klass_str)
 
         if not klass:
             raise QueueException, '%s not found in CommandRegistry' % klass_str
