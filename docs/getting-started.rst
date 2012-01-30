@@ -207,6 +207,59 @@ Here is a screenshot showing the same:
 .. image:: example_schedule.jpg
 
 
+Retrying tasks that fail
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+Huey supports retrying tasks a finite number of times.  If an exception is raised
+during the execution of the task and ``retries`` have been specified, the task
+will be re-queued and tried again, up to the number of retries specified.
+
+Here is a task that will be retried 3 times and will blow up every time:
+
+.. code-block:: python
+
+    # commands.py
+    from huey.decorators import queue_command
+
+    from config import invoker
+
+
+    @queue_command(invoker)
+    def count_beans(num):
+        return 'Counted %s beans' % num # changed "print" to "return"
+
+    @queue_command(invoker, retries=3)
+    def try_thrice():
+        print 'trying....'
+        raise Exception('nope')
+
+The console output shows our task being called in the main interpreter session,
+and then when the consumer picks it up and executes it we see it failing and being
+retried:
+
+.. image:: example_retry.jpg
+
+Oftentimes it is a good idea to wait a certain amount of time between retries.
+You can specify a *delay* between retries, in seconds, which is the minimum time
+before the task will be retried.  Here we've modified the command to include a
+delay, and also to print the current time to show that its working.
+
+.. code-block:: python
+
+    # commands.py
+    from datetime import datetime
+    
+    @queue_command(invoker, retries=3, retry_delay=10)
+    def try_thrice():
+        print 'trying....%s' % datetime.now()
+        raise Exception('nope')
+
+The console output below shows the task being retried, but in between retries I've
+also "counted some beans" -- that gets executed normally, in between retries.
+
+.. image:: example_retry_delay.jpg
+
+
 Executing tasks at regular intervals
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -221,7 +274,7 @@ test that the consumer is executing the tasks on schedule.
 .. code-block:: python
 
     # commands.py
-    import datetime
+    from datetime import datetime
     from huey.decorators import queue_command, periodic_command, crontab
 
     from config import invoker
@@ -230,10 +283,15 @@ test that the consumer is executing the tasks on schedule.
     @queue_command(invoker)
     def count_beans(num):
         return 'Counted %s beans' % num
+    
+    @queue_command(invoker, retries=3, retry_delay=10)
+    def try_thrice():
+        print 'trying....%s' % datetime.now()
+        raise Exception('nope')
 
     @periodic_command(invoker, crontab(minute='*'))
     def print_time():
-        print datetime.datetime.now()
+        print datetime.now()
 
 
 Additionally, we need to indicate in the ``Configuration`` object that we want

@@ -17,9 +17,7 @@ works, it is strongly recommended that **all decorated functions be imported whe
 the consumer starts up**.
 
 .. note::
-    As of v0.1.1, if a command is not recognized, huey will try to dynamically
-    import it once before throwing a :py:class:`QueueException` for an
-    unrecognized command.
+    If a command is not recognized, the consumer will throw a :py:class:`QueueException`
 
 The consumer is executed with a single parameter -- a module to load that contains a subclass
 of :py:class:`BaseConfiguration`.  It will import the class along with anything
