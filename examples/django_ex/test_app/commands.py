@@ -14,4 +14,6 @@ def every_five_mins():
 def try_thrice():
     if random.randint(1, 3) == 1:
         print 'OK'
-    raise Exception('Crap something went wrong')
+    else:
+        print 'About to fail, will retry in 10 seconds'
+        raise Exception('Crap something went wrong')
