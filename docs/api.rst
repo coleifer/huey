@@ -25,7 +25,7 @@ Function decorators and helpers
 
 .. py:module:: huey.decorators
 
-.. py:function:: queue_command(invoker)
+.. py:function:: queue_command(invoker[, retries=0[, retry_delay=0]])
 
     Function decorator that marks the decorated function for processing by the
     consumer.  Calls to the decorated function will do the following:
@@ -78,6 +78,8 @@ Function decorators and helpers
         'Counted 1000000 beans'
 
     :param invoker: an :py:class:`Invoker` instance
+    :param retries: number of times to retry the task if an exception occurs
+    :param retry_delay: number of seconds to wait between retries
     :rtype: decorated function
     
     The return value of any calls to the decorated function depends on whether the invoker
