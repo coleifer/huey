@@ -285,7 +285,6 @@ if __name__ == '__main__':
     args = sys.argv[1:]
     
     if len(args) == 0:
-        parser.print_help()
         err('Error, missing required parameter config.module')
         sys.exit(1)
     
