@@ -388,8 +388,8 @@ are a couple key differences:
 
 Let's test it out:
 
-1. Start up the consumer using the management command: ``django-admin.py run_huey``
-2. Open up a shell: ``django-admin.py shell``
+1. Start up the consumer using the management command: ``./manage.py run_huey``
+2. Open up a shell: ``manage.py shell``
 3. Try running the ``count_beans()`` function a couple times
 
 .. image:: example_django.jpg
