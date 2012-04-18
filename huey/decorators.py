@@ -7,9 +7,11 @@ from huey.queue import QueueCommand, PeriodicQueueCommand
 from huey.utils import local_to_utc
 
 
-def create_command(command_class, func, **kwargs):
+def create_command(command_class, func, retries_as_argument=False, **kwargs):
     def execute(self):
         args, kwargs = self.data or ((), {})
+        if retries_as_argument:
+            kwargs['retries'] = self.retries
         return func(*args, **kwargs)
     
     attrs = {
@@ -27,7 +29,7 @@ def create_command(command_class, func, **kwargs):
     
     return klass
 
-def queue_command(invoker, retries=0, retry_delay=0):
+def queue_command(invoker, retries=0, retry_delay=0, retries_as_argument=False):
     def decorator(func):
         """
         Decorator to execute a function out-of-band via the consumer.  Usage::
@@ -36,7 +38,7 @@ def queue_command(invoker, retries=0, retry_delay=0):
         def send_email(user, message):
             ... this code executed when dequeued by the consumer ...
         """
-        klass = create_command(QueueCommand, func)
+        klass = create_command(QueueCommand, func, retries_as_argument)
         
         def schedule(args=None, kwargs=None, eta=None, convert_utc=True):
             if convert_utc and eta:
