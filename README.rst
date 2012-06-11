@@ -19,4 +19,4 @@ supports:
 
 named after my cat:
 
-.. image:: http://charlesleifer.com/docs/huey/_images/huey.jpg
+.. image:: http://huey.readthedocs.org/en/latest/_images/huey.jpg
