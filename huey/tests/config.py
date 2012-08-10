@@ -1,7 +1,6 @@
 import logging
+from huey import BaseConfiguration, Invoker
 from huey.backends.dummy import DummyQueue, DummyDataStore
-from huey.bin.config import BaseConfiguration
-from huey.queue import Invoker
 
 
 test_queue = DummyQueue('test-queue')
