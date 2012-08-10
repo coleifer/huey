@@ -25,9 +25,9 @@ There are three main components (or processes) to consider when running huey:
 * the queue where tasks are stored, e.g. Redis
 
 These three processes are shown in the screenshot below -- the left-hand pane
-shows the producer: a simple program that asks the user for input on how many 
-"beans" to count.  In the top-right, the consumer is running.  It is doing the 
-actual "computation" and simply printing the number of beans counted.  In the 
+shows the producer: a simple program that asks the user for input on how many
+"beans" to count.  In the top-right, the consumer is running.  It is doing the
+actual "computation" and simply printing the number of beans counted.  In the
 bottom-right is the queue, Redis in this example, which we're monitoring and
 shows tasks being enqueued (``LPUSH``) and read (``BRPOP``) from the database.
 
@@ -47,9 +47,8 @@ use, where to log activity, etc.
 .. code-block:: python
 
     # config.py
+    from huey import BaseConfiguration, Invoker
     from huey.backends.redis_backend import RedisBlockingQueue
-    from huey.bin.config import BaseConfiguration
-    from huey.queue import Invoker
 
 
     queue = RedisBlockingQueue('test-queue', host='localhost', port=6379)
@@ -61,15 +60,15 @@ use, where to log activity, etc.
         THREADS = 4
 
 The interesting parts of this configuration module are the :py:class:`Invoker` object
-and the :py:class:`RedisBlockingQueue` object.  The ``queue`` is responsible for 
-storing and retrieving messages, and the ``invoker`` is used by your application 
-code to coordinate function calls with a queue backend.  We'll see how the ``invoker`` 
+and the :py:class:`RedisBlockingQueue` object.  The ``queue`` is responsible for
+storing and retrieving messages, and the ``invoker`` is used by your application
+code to coordinate function calls with a queue backend.  We'll see how the ``invoker``
 is used when looking at the actual function responsible for counting beans:
 
 .. code-block:: python
 
     # commands.py
-    from huey.decorators import queue_command
+    from huey import queue_command
 
     from config import invoker # import the invoker we instantiated in config.py
 
@@ -113,15 +112,14 @@ Getting results from jobs
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The above example illustrates a "send and forget" approach, but what if your
-application needs to do something with the results of a task?  To get results 
+application needs to do something with the results of a task?  To get results
 from your tasks, we'll set up the ``RedisDataStore`` by adding the following
 lines to the ``config.py`` module:
 
 .. code-block:: python
 
+    from huey import BaseConfiguration, Invoker
     from huey.backends.redis_backend import RedisBlockingQueue, RedisDataStore
-    from huey.bin.config import BaseConfiguration
-    from huey.queue import Invoker
 
 
     queue = RedisBlockingQueue('test-queue', host='localhost', port=6379)
@@ -140,7 +138,7 @@ module to return a string rather than simply printing to stdout:
 
 .. code-block:: python
 
-    from huey.decorators import queue_command
+    from huey import queue_command
 
     from config import invoker
 
@@ -219,7 +217,7 @@ Here is a task that will be retried 3 times and will blow up every time:
 .. code-block:: python
 
     # commands.py
-    from huey.decorators import queue_command
+    from huey import queue_command
 
     from config import invoker
 
@@ -248,7 +246,7 @@ delay, and also to print the current time to show that its working.
 
     # commands.py
     from datetime import datetime
-    
+
     @queue_command(invoker, retries=3, retry_delay=10)
     def try_thrice():
         print 'trying....%s' % datetime.now()
@@ -275,7 +273,7 @@ test that the consumer is executing the tasks on schedule.
 
     # commands.py
     from datetime import datetime
-    from huey.decorators import queue_command, periodic_command, crontab
+    from huey import queue_command, periodic_command, crontab
 
     from config import invoker
 
@@ -283,7 +281,7 @@ test that the consumer is executing the tasks on schedule.
     @queue_command(invoker)
     def count_beans(num):
         return 'Counted %s beans' % num
-    
+
     @queue_command(invoker, retries=3, retry_delay=10)
     def try_thrice():
         print 'trying....%s' % datetime.now()
