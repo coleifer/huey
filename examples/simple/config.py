@@ -1,6 +1,5 @@
+from huey import BaseConfiguration, Invoker
 from huey.backends.redis_backend import RedisBlockingQueue, RedisDataStore
-from huey.bin.config import BaseConfiguration
-from huey.queue import Invoker
 
 
 queue = RedisBlockingQueue('test-queue', host='localhost', port=6379)
