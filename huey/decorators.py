@@ -120,7 +120,7 @@ def crontab(month='*', day='*', day_of_week='*', hour='*', minute='*'):
             if piece.isdigit():
                 piece = int(piece)
                 if piece not in acceptable:
-                    raise ValidationError('%d is not a valid input' % piece)
+                    raise ValueError('%d is not a valid input' % piece)
                 settings.add(piece)
             
             else:
@@ -128,7 +128,7 @@ def crontab(month='*', day='*', day_of_week='*', hour='*', minute='*'):
                 if dash_match:
                     lhs, rhs = map(int, dash_match.groups())
                     if lhs not in acceptable or rhs not in acceptable:
-                        raise ValidationError('%s is not a valid input' % piece)
+                        raise ValueError('%s is not a valid input' % piece)
                     settings.update(range(lhs, rhs+1))
                     continue
                 
