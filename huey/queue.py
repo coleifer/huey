@@ -6,7 +6,8 @@ import sys
 import time
 
 from huey.exceptions import QueueWriteException, QueueReadException, \
-    DataStoreGetException, DataStorePutException, DataStoreTimeout
+    DataStoreGetException, DataStorePutException, DataStoreTimeout,\
+    QueueException
 from huey.registry import registry
 from huey.utils import wrap_exception, EmptyData
 
