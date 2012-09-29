@@ -1,0 +1,9 @@
+### PyDev (eclipse)
+/.settings
+/.project
+/.pydevproject
+### Python Compiled files
+*.pyc
+*.pyo
+### Others
+*~
