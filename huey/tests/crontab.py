@@ -84,3 +84,8 @@ class SkewCrontabTestCase(unittest.TestCase):
 
         # fails validation on minute
         self.assertFalse(validate(datetime.datetime(2011, 1, 1, 4, 6)))
+
+    def test_invalid_crontabs(self):
+        # check invalid configurations are detected and reported
+        self.assertRaises(ValueError, crontab, minute='61')
+        self.assertRaises(ValueError, crontab, minute='0-61')
