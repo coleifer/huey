@@ -351,6 +351,9 @@ class SkewConsumerTestCase(unittest.TestCase):
         self.assertEqual(command.execute_time, local_to_utc(dt2))
 
     def test_schedule_persistence(self):
+        # should not error out as it will be EmptyData
+        self.consumer.load_schedule()
+
         dt = datetime.datetime(2037, 1, 1, 0, 0)
         dt2 = datetime.datetime(2037, 1, 1, 0, 1)
         r = modify_state.schedule(args=('k', 'v'), eta=dt, convert_utc=False)
