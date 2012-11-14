@@ -130,7 +130,7 @@ class CommandSchedule(object):
         if self.task_store:
             serialized = self.task_store.get(self.key_name)
             
-            if serialized:
+            if serialized is not EmptyData:
                 self.load_commands(pickle.loads(serialized))
     
     def load_commands(self, messages):
