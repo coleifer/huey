@@ -16,5 +16,5 @@ class BaseConfiguration(object):
     BACKOFF = 1.15
     INITIAL_DELAY = .1
     MAX_DELAY = 10
-    
+
     UTC = True

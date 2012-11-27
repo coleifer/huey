@@ -9,35 +9,35 @@ class CommandRegistry(object):
     purpose of this registry is to allow translation from queue messages to
     command classes, and vice-versa.
     """
-    
+
     _registry = {}
     _periodic_commands = []
-    
+
     message_template = '%(TASK_ID)s:%(CLASS)s:%(TIME)s:%(RETRIES)s:%(RETRY_DELAY)s:%(DATA)s'
 
     def command_to_string(self, command):
         return '%s' % (command.__name__)
-    
+
     def register(self, command_class):
         klass_str = self.command_to_string(command_class)
-        
+
         if klass_str not in self._registry:
             self._registry[klass_str] = command_class
-            
+
             # store an instance in a separate list of periodic commands
             if hasattr(command_class, 'validate_datetime'):
                 self._periodic_commands.append(command_class())
 
     def unregister(self, command_class):
         klass_str = self.command_to_string(command_class)
-        
+
         if klass_str in self._registry:
             del(self._registry[klass_str])
-            
+
             for command in self._periodic_commands:
                 if isinstance(command, command_class):
                     self._periodic_commands.remove(command)
-    
+
     def __contains__(self, klass_str):
         return klass_str in self._registry
 
@@ -64,16 +64,16 @@ class CommandRegistry(object):
         """Convert a message from the queue into a command"""
         # parse out the pieces from the enqueued message
         task_id, klass_str, execute_time, retries, delay, data = msg.split(':', 5)
-        
+
         klass = self.get_command_class(klass_str)
-        
+
         command_data = pickle.loads(data)
         ex_time = pickle.loads(execute_time)
         retries = int(retries)
         delay = int(delay)
-        
+
         return klass(command_data, task_id, ex_time, retries, delay)
-    
+
     def get_periodic_commands(self):
         return self._periodic_commands
 
