@@ -47,6 +47,7 @@ def queue_command(invoker, retries=0, retry_delay=0, retries_as_argument=False):
             return invoker.enqueue(cmd)
 
         func.schedule = schedule
+        func.command_class = klass
 
         @wraps(func)
         def inner_run(*args, **kwargs):
@@ -76,6 +77,8 @@ def periodic_command(invoker, validate_datetime):
             func,
             validate_datetime=method_validate
         )
+
+        func.command_class = klass
 
         def _revoke(revoke_until=None, revoke_once=False):
             invoker.revoke(klass(), revoke_until, revoke_once)
