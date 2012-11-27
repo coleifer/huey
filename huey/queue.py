@@ -70,7 +70,7 @@ class Invoker(object):
         self.store_none = store_none
         self.always_eager = always_eager
 
-    def write(self, msg):
+    def _write(self, msg):
         try:
             self.queue.write(msg)
         except:
@@ -80,19 +80,19 @@ class Invoker(object):
         if self.always_eager:
             return command.execute()
 
-        self.write(registry.get_message_for_command(command))
+        self._write(registry.get_message_for_command(command))
 
         if self.result_store:
             return AsyncData(self.result_store, command.task_id)
 
-    def read(self):
+    def _read(self):
         try:
             return self.queue.read()
         except:
             wrap_exception(QueueReadException)
 
     def dequeue(self):
-        message = self.read()
+        message = self._read()
         if message:
             return registry.get_command_for_message(message)
 
