@@ -52,6 +52,10 @@ def throw_error():
 def add2(a, b):
     return a + b
 
+@periodic_command(res_invoker, crontab(minute='0'))
+def add_on_the_hour2():
+    state['periodic'] = 'x'
+
 @queue_command(res_invoker)
 def returns_none():
     return None
@@ -158,6 +162,53 @@ class SkewTestCase(unittest.TestCase):
         self.assertEqual(state['k'], 'X')
 
         self.assertRaises(TypeError, invoker.execute, invoker.dequeue())
+
+    def test_revoke(self):
+        ac = AddCommand(('k', 'v'))
+        ac2 = AddCommand(('k2', 'v2'))
+        ac3 = AddCommand(('k3', 'v3'))
+
+        res_invoker.enqueue(ac)
+        res_invoker.enqueue(ac2)
+        res_invoker.enqueue(ac3)
+        res_invoker.enqueue(ac2)
+        res_invoker.enqueue(ac)
+
+        self.assertEqual(len(res_queue), 5)
+        res_invoker.revoke(ac2)
+
+        schedule = CommandSchedule(res_invoker)
+
+        while res_queue:
+            cmd = res_invoker.dequeue()
+            if schedule.should_run(cmd):
+                res_invoker.execute(cmd)
+
+        self.assertEqual(state, {'k': 'v', 'k3': 'v3'})
+
+    def test_revoke_periodic(self):
+        add_on_the_hour2.revoke()
+        self.assertTrue(add_on_the_hour2.is_revoked())
+
+        # it is still revoked
+        self.assertTrue(add_on_the_hour2.is_revoked())
+
+        add_on_the_hour2.restore()
+        self.assertFalse(add_on_the_hour2.is_revoked())
+
+        add_on_the_hour2.revoke(revoke_once=True)
+        self.assertTrue(add_on_the_hour2.is_revoked()) # it is revoked once, but we are preserving that state
+        self.assertTrue(add_on_the_hour2.is_revoked(preserve=False)) # is revoked once, but clear state
+        self.assertFalse(add_on_the_hour2.is_revoked()) # no longer revoked
+
+        d = datetime.datetime
+        add_on_the_hour2.revoke(revoke_until=d(2011, 1, 1, 11, 0))
+        self.assertTrue(add_on_the_hour2.is_revoked(dt=d(2011, 1, 1, 10, 0)))
+        self.assertTrue(add_on_the_hour2.is_revoked(dt=d(2011, 1, 1, 10, 59)))
+        self.assertFalse(add_on_the_hour2.is_revoked(dt=d(2011, 1, 1, 11, 0)))
+
+        add_on_the_hour2.restore()
+        self.assertFalse(add_on_the_hour2.is_revoked())
 
     def test_result_store(self):
         res = add2(1, 2)
