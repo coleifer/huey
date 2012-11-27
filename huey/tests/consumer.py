@@ -260,7 +260,7 @@ class SkewConsumerTestCase(unittest.TestCase):
 
         # it got stored in the schedule instead of executing
         self.assertFalse('k2' in state)
-        self.assertTrue(r2.task_id in self.consumer.schedule._schedule)
+        self.assertTrue(r2.command.task_id in self.consumer.schedule._schedule)
 
         # run through an iteration of the scheduler
         self.consumer.check_schedule(dt)
@@ -279,7 +279,7 @@ class SkewConsumerTestCase(unittest.TestCase):
         # see that it is scheduled to run in the future and plop it back into the
         # schedule
         command = self.consumer.invoker.dequeue()
-        self.assertEqual(command.task_id, r2.task_id)
+        self.assertEqual(command.task_id, r2.command.task_id)
         self.assertEqual(command.execute_time, dt2)
 
     def test_retry_scheduling(self):
@@ -328,7 +328,7 @@ class SkewConsumerTestCase(unittest.TestCase):
 
         # it got stored in the schedule instead of executing
         self.assertFalse('k2' in state)
-        self.assertTrue(r2.task_id in self.consumer.schedule._schedule)
+        self.assertTrue(r2.command.task_id in self.consumer.schedule._schedule)
 
         # run through an iteration of the scheduler
         self.consumer.check_schedule(dt)
@@ -347,7 +347,7 @@ class SkewConsumerTestCase(unittest.TestCase):
         # see that it is scheduled to run in the future and plop it back into the
         # schedule
         command = self.consumer.invoker.dequeue()
-        self.assertEqual(command.task_id, r2.task_id)
+        self.assertEqual(command.task_id, r2.command.task_id)
         self.assertEqual(command.execute_time, local_to_utc(dt2))
 
     def test_schedule_persistence(self):
@@ -370,11 +370,11 @@ class SkewConsumerTestCase(unittest.TestCase):
         self.consumer.schedule._schedule = {}
 
         self.consumer.load_schedule()
-        self.assertTrue(r.task_id in self.consumer.schedule._schedule)
-        self.assertTrue(r2.task_id in self.consumer.schedule._schedule)
+        self.assertTrue(r.command.task_id in self.consumer.schedule._schedule)
+        self.assertTrue(r2.command.task_id in self.consumer.schedule._schedule)
 
-        cmd1 = self.consumer.schedule._schedule[r.task_id]
-        cmd2 = self.consumer.schedule._schedule[r2.task_id]
+        cmd1 = self.consumer.schedule._schedule[r.command.task_id]
+        cmd2 = self.consumer.schedule._schedule[r2.command.task_id]
 
         self.assertEqual(cmd1.execute_time, dt)
         self.assertEqual(cmd2.execute_time, dt2)
@@ -387,5 +387,5 @@ class SkewConsumerTestCase(unittest.TestCase):
         self.consumer.schedule._schedule = {}
 
         self.consumer.load_schedule()
-        cmd3 = self.consumer.schedule._schedule[r3.task_id]
+        cmd3 = self.consumer.schedule._schedule[r3.command.task_id]
         self.assertEqual(cmd3.execute_time, local_to_utc(dt))

@@ -13,18 +13,16 @@ from huey.utils import wrap_exception, EmptyData
 
 
 class AsyncData(object):
-    def __init__(self, result_store, task_id):
-        self.result_store = result_store
-        self.task_id = task_id
+    def __init__(self, invoker, command):
+        self.invoker = invoker
+        self.command = command
 
         self._result = EmptyData
 
     def _get(self):
+        task_id = self.command.task_id
         if self._result is EmptyData:
-            try:
-                res = self.result_store.get(self.task_id)
-            except:
-                wrap_exception(DataStoreGetException)
+            res = self.invoker._get(task_id)
 
             if res is not EmptyData:
                 self._result = pickle.loads(res)
@@ -34,7 +32,7 @@ class AsyncData(object):
         else:
             return self._result
 
-    def get(self, blocking=False, timeout=None, backoff=1.15, max_delay=1.0):
+    def get(self, blocking=False, timeout=None, backoff=1.15, max_delay=1.0, revoke_on_timeout=False):
         if not blocking:
             res = self._get()
             if res is not EmptyData:
@@ -44,6 +42,8 @@ class AsyncData(object):
             delay = .1
             while self._result is EmptyData:
                 if timeout and time.time() - start >= timeout:
+                    if revoke_on_timeout:
+                        self.revoke()
                     raise DataStoreTimeout
                 if delay > max_delay:
                     delay = max_delay
@@ -52,6 +52,9 @@ class AsyncData(object):
                     delay *= backoff
 
             return self._result
+
+    def revoke(self):
+        self.invoker.revoke(self.command)
 
 
 class Invoker(object):
@@ -110,7 +113,7 @@ class Invoker(object):
         self._write(registry.get_message_for_command(command))
 
         if self.result_store:
-            return AsyncData(self.result_store, command.task_id)
+            return AsyncData(self, command)
 
     def dequeue(self):
         message = self._read()
