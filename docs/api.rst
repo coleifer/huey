@@ -116,6 +116,17 @@ Function decorators and helpers
         :rtype: like calls to the decorated function, will return an :py:class:`AsyncData`
                 object if a result store is configured, otherwise returns ``None``
 
+    .. py:attribute:: {decorated func}.command_class
+
+        Store a reference to the command class for the decorated function.
+
+        .. code-block:: pycon
+
+            >>> count_some_beans.command_class
+            commands.queuecmd_count_beans
+    
+
+
 .. py:function:: periodic_command(invoker, validate_datetime)
 
     Function decorator that marks the decorated function for processing by the
@@ -163,6 +174,55 @@ Function decorators and helpers
         a boolean whether the decorated function should execute at that time or not
     :rtype: decorated function
 
+
+    Like :py:func:`queue_command`, the periodic command decorator adds several helpers
+    to the decorated function.  These helpers allow you to "revoke" and "restore" the
+    periodic command, effectively enabling you to pause it or prevent its execution.
+
+    .. py:function:: {decorated_func}.revoke([revoke_until=None[, revoke_once=False]])
+
+        Prevent the given periodic command from executing.  When no parameters are
+        provided the function will not execute again.
+
+        This function can be called multiple times, but each call will overwrite
+        the limitations of the previous.
+
+        :param datetime revoke_until: Prevent the execution of the command until the
+            given datetime.  If ``None`` it will prevent execution indefinitely.
+        :param bool revoke_once: If ``True`` will only prevent execution the next
+            time it would normally execute.
+
+        .. code-block:: python
+
+            # skip the next execution
+            every_five_minutes.revoke(revoke_once=True)
+
+            # pause the command indefinitely
+            every_five_minutes.revoke()
+
+            # pause the command for 24 hours
+            every_five_minutes.revoke(datetime.datetime.now() + datetime.timedelta(days=1))
+
+    .. py:function:: {decorated_func}.is_revoked([dt=None])
+
+        Check whether the given periodic command is revoked.  If ``dt`` is specified,
+        it will check if the command is revoked for the given datetime.
+
+        :param datetime dt: If provided, checks whether command is revoked at the
+            given datetime
+
+    .. py:function:: {decorated_func}.restore()
+
+        Clears any revoked status and run the command normally
+
+    If you want access to the underlying command class, it is stored as an attribute
+    on the decorated function:
+
+    .. py:attribute:: {decorated_func}.command_class
+
+        Store a reference to the command class for the decorated function.
+
+
 .. py:function:: crontab(month='*', day='*', day_of_week='*', hour='*', minute='*')
 
     Convert a "crontab"-style set of parameters into a test function that will
@@ -191,6 +251,11 @@ The Invoker and AsyncData classes
     Applications will have **at least one** ``Invoker`` instance, as it is required
     by the :ref:`function decorators <function-decorators>`.  Typically it should
     be instantiated along with the ``Queue``, or wherever you create your configuration.
+
+    :param queue: a Queue instance to use
+    :param result_store: a DataStore instance to use for storing task results and
+    :param task_store: a DataStore instance to use for persisting task schedules
+    :param always_eager: whether to run commands immediately
     
     Example:
     
@@ -206,7 +271,7 @@ The Invoker and AsyncData classes
         # which are used by the application's Configuraiton object
         invoker = Invoker(queue, result_store=result_store)
 
-.. py:class:: AsyncData(result_store, task_id)
+.. py:class:: AsyncData(invoker, command)
 
     Although you will probably never instantiate an ``AsyncData`` object yourself,
     they are returned by any calls to :py:func:`queue_command` decorated functions
@@ -248,7 +313,7 @@ The Invoker and AsyncData classes
         >>> res.get(blocking=True) # no timeout, will block until it gets data
         'Counted 10000000 beans'
     
-    .. py:method:: get([blocking=False[, timeout=None[, backoff=1.15[, max_delay=1.0]]]])
+    .. py:method:: get([blocking=False[, timeout=None[, backoff=1.15[, max_delay=1.0[, revoke_on_timeout=False]]]]])
     
         Attempt to retrieve the return value of a task.  By default, it will simply
         ask for the value, returning ``None`` if it is not ready yet.  If you want
@@ -262,6 +327,28 @@ The Invoker and AsyncData classes
         :param backoff: amount to backoff delay each time no result is found
         :param max_delay: maximum amount of time to wait between iterations when
             attempting to fetch result.
+        :param bool revoke_on_timeout: if a timeout occurs, revoke the task
+
+    .. py:method:: revoke()
+
+        Revoke the given command.  Unless it is in the process of executing, it will
+        be revoked and the command will not run.
+
+        .. code-block:: python
+
+            in_an_hour = datetime.datetime.now() + datetime.timedelta(seconds=3600)
+
+            # run this command in an hour
+            res = count_some_beans.schedule(args=(100000,), eta=in_an_hour)
+
+            # oh shoot, I changed my mind, do not run it after all
+            res.revoke()
+
+    .. py:method:: restore()
+
+        Restore the given command.  Unless it has already been skipped over, it
+        will be restored and run as scheduled.
+
 
 Configuration
 -------------
@@ -290,7 +377,7 @@ Configuration
     
         An instance of a ``DataStore`` class, which must be a subclass of :py:class:`DataStore` or ``None``.
         Tells consumer where to serialize the schedule of pending tasks in the event the consumer is
-        shut down unexpectedly.
+        shut down unexpectedly.  If not provided, will default to the ``RESULT_STORE``.
     
     .. py:attribute:: PERIODIC = False
     
@@ -358,6 +445,13 @@ Base classes
         an empty queue should not raise an Exception!
         
         :rtype: a string message or ``None`` if no data is present
+
+    .. py:method:: remove(data)
+
+        Remove all instances of given data from queue, returning number removed
+
+        :param string data:
+        :rtype: number of instances removed
     
     .. py:method:: flush()
     
@@ -378,6 +472,11 @@ Base classes
     .. py:method:: put(key, value)
     
         Store the ``value`` using the ``key`` as the identifier
+
+    .. py:method:: peek(key)
+
+        Retrieve the value stored at the given ``key``, returns a special value
+        :py:class:`EmptyData` if nothing exists at the given key.
     
     .. py:method:: get(key)
         
@@ -385,7 +484,7 @@ Base classes
         :py:class:`EmptyData` if no data exists at the given key.  This is to
         differentiate between "no data" and a stored ``None`` value.
         
-        .. warning:: After a result is fetched it should be removed from the store!
+        .. warning:: After a result is fetched it will be removed from the store!
     
     .. py:method:: flush()
     

@@ -310,6 +310,94 @@ Now, when we run the consumer it will start printing the time every minute:
 .. image:: example_crontab.jpg
 
 
+Preventing tasks from executing
+-------------------------------
+
+It is possible to prevent tasks from executing.  This applies to normal tasks,
+tasks scheduled in the future, and periodic tasks.
+
+.. note:: In order to "revoke" tasks you will need to be using a ``DataStore``.
+
+Canceling a normal task or one scheduled in the future
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+You can cancel a normal task provided the task has not started execution by
+the consumer:
+
+.. code-block:: python
+
+    # count some beans
+    res = count_beans(10000000)
+
+    # provided the command has not started executing yet, you can
+    # cancel it by calling revoke() on the AsyncData object
+    res.revoke()
+
+
+The same applies to tasks that are scheduled in the future:
+
+.. code-block:: python
+
+    res = count_beans.schedule(args=(100000,), eta=in_the_future)
+    res.revoke()
+
+    # and you can actually change your mind and restore it, provided
+    # it has not already been "skipped" by the consumer
+    res.restore()
+
+
+Canceling tasks that execute periodically
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+When we start dealing with periodic tasks, the options for revoking get
+a bit more interesting.
+
+We'll be using the print time command as an example:
+
+.. code-block:: python
+
+    @periodic_command(invoker, crontab(minute='*'))
+    def print_time():
+        print datetime.now()
+
+We can prevent a periodic task from executing on the next go-round:
+
+.. code-block:: python
+
+    # only prevent it from running once
+    print_time.revoke(revoke_once=True)
+
+Since the above task executes every minute, what we will see is that the
+output will skip the next minute and then resume normally.
+
+We can prevent a task from executing until a certain time:
+
+.. code-block:: python
+
+    # prevent printing time for 10 minutes
+    now = datetime.datetime.utcnow()
+    in_10 = now + datetime.timedelta(seconds=600)
+
+    print_time.revoke(revoke_until=in_10)
+
+.. note:: Remember to use UTC if the consumer is using UTC.
+
+Finally, we can prevent the task from running indefinitely:
+
+.. code-block:: python
+
+    # will not print time until we call revoke() again with
+    # different parameters or restore the task
+    print_time.revoke()
+
+At any time we can restore the task and it will resume normal
+execution:
+
+.. code-block:: python
+
+    print_time.restore()
+
+
 Reading more
 ^^^^^^^^^^^^
 
