@@ -544,3 +544,24 @@ class SkewConsumerTestCase(unittest.TestCase):
         assertQ(1)
         self.consumer.enqueue_periodic_commands(dt)
         assertQ(2)
+
+        # reset
+        state = {}
+        invoker.queue._queue = []
+
+        # revoke for an hour
+        td = datetime.timedelta(seconds=3600)
+        every_hour.revoke(revoke_until=dt + td)
+        self.consumer.enqueue_periodic_commands(dt)
+        assertQ(0)
+
+        # after an hour it is back
+        self.consumer.enqueue_periodic_commands(dt+td)
+        assertQ(1)
+        self.consumer.enqueue_periodic_commands(dt+(td*2))
+        assertQ(2)
+
+        # our data store should reflect the delay
+        cmd_obj = every_hour.command_class()
+        self.assertEqual(len(invoker.result_store._results), 1)
+        self.assertTrue(cmd_obj.revoke_id in invoker.result_store._results)
