@@ -181,7 +181,7 @@ class SkewTestCase(unittest.TestCase):
 
         while res_queue:
             cmd = res_invoker.dequeue()
-            if schedule.should_run(cmd):
+            if schedule.can_run(cmd):
                 res_invoker.execute(cmd)
 
         self.assertEqual(state, {'k': 'v', 'k3': 'v3'})

@@ -201,9 +201,10 @@ class CommandSchedule(object):
 
     def should_run(self, cmd, dt=None):
         dt = dt or datetime.datetime.now()
-        if cmd.execute_time is None or cmd.execute_time <= dt:
-            if not self.invoker.is_revoked(cmd, dt, False):
-                return True
+        return cmd.execute_time is None or cmd.execute_time <= dt
+
+    def can_run(self, cmd, dt=None):
+        return not self.invoker.is_revoked(cmd, dt, False)
 
     def add(self, cmd):
         if not self.is_pending(cmd):

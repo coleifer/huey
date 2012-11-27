@@ -109,7 +109,8 @@ class Consumer(object):
         for command in self.schedule.commands():
             if self.schedule.should_run(command, dt):
                 self.schedule.remove(command)
-                self.invoker.enqueue(command)
+                if self.schedule.can_run(command, dt):
+                    self.invoker.enqueue(command)
 
     def enqueue_periodic_commands(self, dt):
         self.logger.debug('enqueueing periodic commands')
@@ -140,11 +141,11 @@ class Consumer(object):
                 # checking again
                 self.sleep()
             elif command:
-                if self.schedule.should_run(command, self.get_now()):
-                    self.process_command(command)
-                else:
-                    # schedule the command for execution
+                now = self.get_now()
+                if not self.schedule.should_run(command, now):
                     self.schedule.add(command)
+                elif self.schedule.can_run(command, now):
+                    self.process_command(command)
 
     def process_command(self, command):
         self._pool.acquire()
