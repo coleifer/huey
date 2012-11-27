@@ -31,6 +31,9 @@ class DummyDataStore(BaseDataStore):
     def put(self, key, value):
         self._results[key] = value
 
+    def peek(self, key):
+        return self._results.get(key, EmptyData)
+
     def get(self, key):
         return self._results.pop(key, EmptyData)
 

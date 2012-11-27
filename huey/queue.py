@@ -126,6 +126,9 @@ class CommandSchedule(object):
         self.task_store = self.invoker.task_store
         self._schedule = {}
 
+    def __contains__(self, task_id):
+        return task_id in self._schedule
+
     def load(self):
         if self.task_store:
             serialized = self.task_store.get(self.key_name)
@@ -211,6 +214,7 @@ class QueueCommand(object):
         """
         self.set_data(data)
         self.task_id = task_id or self.create_id()
+        self.revoke_id = 'r:%s' % self.task_id
         self.execute_time = execute_time
         self.retries = retries
         self.retry_delay = retry_delay

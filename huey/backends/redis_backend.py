@@ -71,12 +71,15 @@ class RedisDataStore(BaseDataStore):
     def put(self, key, value):
         self.conn.hset(self.storage_name, key, value)
 
+    def peek(self, key):
+        if self.conn.hexists(self.storage_name, key):
+            return self.conn.hget(self.storage_name, key)
+        return EmptyData
+
     def get(self, key):
-        val = self.conn.hget(self.storage_name, key)
-        if val:
+        val = self.peek(key)
+        if val is not EmptyData:
             self.conn.hdel(self.storage_name, key)
-        else:
-            val = EmptyData
         return val
 
     def flush(self):
