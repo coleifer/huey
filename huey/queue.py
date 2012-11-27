@@ -56,6 +56,9 @@ class AsyncData(object):
     def revoke(self):
         self.invoker.revoke(self.command)
 
+    def restore(self):
+        self.invoker.restore(self.command)
+
 
 class Invoker(object):
     """
