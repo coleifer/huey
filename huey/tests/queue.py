@@ -60,6 +60,7 @@ def returns_none():
 def returns_none2():
     return None
 
+
 class SkewTestCase(unittest.TestCase):
     def setUp(self):
         global state

@@ -30,6 +30,12 @@ class BaseQueue(object):
         """
         raise NotImplementedError
 
+    def remove(self, data):
+        """
+        Remove the given data from the queue
+        """
+        raise NotImplementedError
+
     def flush(self):
         """
         Delete everything from the queue

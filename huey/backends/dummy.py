@@ -19,6 +19,17 @@ class DummyQueue(BaseQueue):
     def flush(self):
         self._queue = []
 
+    def remove(self, data):
+        clone = []
+        ct = 0
+        for elem in self._queue:
+            if elem == data:
+                ct += 1
+            else:
+                clone.append(elem)
+        self._queue = clone
+        return ct
+
     def __len__(self):
         return len(self._queue)
 

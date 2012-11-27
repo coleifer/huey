@@ -30,6 +30,9 @@ class RedisQueue(BaseQueue):
     def read(self):
         return self.conn.rpop(self.queue_name)
 
+    def remove(self, data):
+        return self.conn.lrem(self.queue_name, data)
+
     def flush(self):
         self.conn.delete(self.queue_name)
 
