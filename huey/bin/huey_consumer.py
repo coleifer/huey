@@ -116,7 +116,8 @@ class Consumer(object):
 
         for command in registry.get_periodic_commands():
             if command.validate_datetime(dt):
-                self.invoker.enqueue(command)
+                if not self.invoker.is_revoked(command, dt, False):
+                    self.invoker.enqueue(command)
 
     def start_message_receiver(self):
         self.logger.info('starting message receiver thread')

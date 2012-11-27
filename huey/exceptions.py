@@ -7,6 +7,9 @@ class QueueWriteException(QueueException):
 class QueueReadException(QueueException):
     pass
 
+class QueueRemoveException(QueueException):
+    pass
+
 class DataStoreGetException(QueueException):
     pass
 

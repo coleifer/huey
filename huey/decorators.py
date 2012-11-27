@@ -77,6 +77,18 @@ def periodic_command(invoker, validate_datetime):
             validate_datetime=method_validate
         )
 
+        def _revoke(revoke_until=None, revoke_once=False):
+            invoker.revoke(klass(), revoke_until, revoke_once)
+        func.revoke = _revoke
+
+        def _is_revoked(dt=None, preserve=True):
+            return invoker.is_revoked(klass(), dt, preserve)
+        func.is_revoked = _is_revoked
+
+        def _restore():
+            return invoker.restore(klass())
+        func.restore = _restore
+
         return func
     return decorator
 

@@ -76,6 +76,33 @@ class Invoker(object):
         except:
             wrap_exception(QueueWriteException)
 
+    def _read(self):
+        try:
+            return self.queue.read()
+        except:
+            wrap_exception(QueueReadException)
+
+    def _remove(self, msg):
+        try:
+            return self.queue.remove(msg)
+        except:
+            wrap_exception(QueueRemoveException)
+
+    def _get(self, key, peek=False):
+        try:
+            if peek:
+                return self.result_store.peek(key)
+            else:
+                return self.result_store.get(key)
+        except:
+            return wrap_exception(DataStoreGetException)
+
+    def _put(self, key, value):
+        try:
+            return self.result_store.put(key, value)
+        except:
+            return wrap_exception(DataStorePutException)
+
     def enqueue(self, command):
         if self.always_eager:
             return command.execute()
@@ -84,12 +111,6 @@ class Invoker(object):
 
         if self.result_store:
             return AsyncData(self.result_store, command.task_id)
-
-    def _read(self):
-        try:
-            return self.queue.read()
-        except:
-            wrap_exception(QueueReadException)
 
     def dequeue(self):
         message = self._read()
@@ -106,13 +127,33 @@ class Invoker(object):
             return
 
         if self.result_store and not isinstance(command, PeriodicQueueCommand):
-            serialized = pickle.dumps(result)
-            try:
-                self.result_store.put(command.task_id, serialized)
-            except:
-                wrap_exception(DataStorePutException)
+            self._put(command.task_id, pickle.dumps(result))
 
         return result
+
+    def revoke(self, command, revoke_until=None, revoke_once=False):
+        if not self.task_store:
+            raise QueueException('A DataStore is required to revoke commands')
+
+        serialized = pickle.dumps((revoke_until, revoke_once))
+        self._put(command.revoke_id, serialized)
+        #self._remove(registry.get_message_for_command(command))
+
+    def restore(self, command):
+        self._get(command.revoke_id) # simply get and delete if there
+
+    def is_revoked(self, command, dt=None, preserve=True):
+        if not self.result_store:
+            return False
+        res = self._get(command.revoke_id, peek=True)
+        if res is EmptyData:
+            return False
+        revoke_until, revoke_once = pickle.loads(res)
+        if revoke_once:
+            if not preserve:
+                self.restore(command)
+            return True
+        return revoke_until is None or revoke_until > dt
 
     def flush(self):
         self.queue.flush()
@@ -156,10 +197,10 @@ class CommandSchedule(object):
         return self._schedule.values()
 
     def should_run(self, cmd, dt=None):
-        if cmd.execute_time is None:
-            return True
-        else:
-            return cmd.execute_time <= (dt or datetime.datetime.now())
+        dt = dt or datetime.datetime.now()
+        if cmd.execute_time is None or cmd.execute_time <= dt:
+            if not self.invoker.is_revoked(cmd, dt, False):
+                return True
 
     def add(self, cmd):
         if not self.is_pending(cmd):
