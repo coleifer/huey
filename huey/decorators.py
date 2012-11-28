@@ -40,7 +40,11 @@ def queue_command(invoker, retries=0, retry_delay=0, retries_as_argument=False):
         """
         klass = create_command(QueueCommand, func, retries_as_argument)
 
-        def schedule(args=None, kwargs=None, eta=None, convert_utc=True):
+        def schedule(args=None, kwargs=None, eta=None, delay=None, convert_utc=True):
+            if delay and eta:
+                raise ValueError('Both a delay and an eta cannot be specified at the same time')
+            if delay:
+                eta = datetime.datetime.now() + datetime.timedelta(seconds=delay)
             if convert_utc and eta:
                 eta = local_to_utc(eta)
             cmd = klass((args or (), kwargs or {}), execute_time=eta, retries=retries)
