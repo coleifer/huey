@@ -92,7 +92,7 @@ Function decorators and helpers
     a special function **onto** the decorated function, which makes it possible
     to *schedule* the execution for a certain time in the future:
     
-    .. py:function:: {decorated func}.schedule(args=None, kwargs=None, eta=None, convert_utc=True)
+    .. py:function:: {decorated func}.schedule(args=None, kwargs=None, eta=None, delay=None, convert_utc=True)
     
         Use the special ``.schedule()`` function to schedule the execution of a
         queue command for a given time in the future:
@@ -106,11 +106,15 @@ Function decorators and helpers
             
             # schedule "count_some_beans" to run in an hour
             count_some_beans.schedule(args=(100000,), eta=in_an_hour)
+            
+            # another way of doing the same thing...
+            count_some_beans.schedule(args=(100000,), delay=(60 * 60))
     
+
         :param args: arguments to call the decorated function with
         :param kwargs: keyword arguments to call the decorated function with
-        :param eta: a ``datetime`` instance specifying the time at which the
-                    function should be executed
+        :param datetime eta: the time at which the function should be executed
+        :param int delay: number of seconds to wait before executing function
         :param convert_utc: whether the ``eta`` should be converted from local
                             time to UTC, defaults to ``True``
         :rtype: like calls to the decorated function, will return an :py:class:`AsyncData`

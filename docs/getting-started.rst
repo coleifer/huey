@@ -183,14 +183,20 @@ and see how huey handles it.  Execute the following:
 .. code-block:: python
 
     >>> import datetime
-    >>> in_a_minute = datetime.datetime.now() + datetime.timedelta(seconds=60)
-    >>> res = count_beans.schedule(args=(100,), eta=in_a_minute)
+    >>> res = count_beans.schedule(args=(100,), delay=60)
     >>> res
     <huey.queue.AsyncData object at 0xb72915ec>
     >>> res.get() # <--- this returns None, no data is ready
     >>> res.get() # <--- still no data...
     >>> res.get(blocking=True) # <--- ok, let's just block until its ready
     'Counted 100 beans'
+
+You can specify an "estimated time of arrival" as well using datetimes:
+
+.. code-block:: python
+
+    >>> in_a_minute = datetime.datetime.now() + datetime.timedelta(seconds=60)
+    >>> res = count_beans.schedule(args=(100,), eta=in_a_minute)
 
 Looking at the redis output, we see the following (simplified for reability)::
 
