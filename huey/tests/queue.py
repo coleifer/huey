@@ -322,9 +322,9 @@ class SkewTestCase(unittest.TestCase):
 
     def test_task_delay(self):
         schedule = CommandSchedule(res_invoker)
-        curr = datetime.datetime.utcnow()
-        curr50 = curr + datetime.timedelta(seconds=50)
-        curr70 = curr + datetime.timedelta(seconds=70)
+        now = datetime.datetime.utcnow()
+        in_50_seconds = now + datetime.timedelta(seconds=50)
+        in_70_seconds = now + datetime.timedelta(seconds=70)
 
         add2.schedule(args=('k', 'v'), delay=60)
         cmd1 = res_invoker.dequeue()
@@ -341,14 +341,14 @@ class SkewTestCase(unittest.TestCase):
         schedule.add(cmd3)
 
         # sanity check what should be run
-        self.assertFalse(schedule.should_run(cmd1))
-        self.assertFalse(schedule.should_run(cmd2))
-        self.assertTrue(schedule.should_run(cmd3))
+        self.assertFalse(schedule.should_run(cmd1, now))
+        self.assertFalse(schedule.should_run(cmd2, now))
+        self.assertTrue(schedule.should_run(cmd3, now))
 
-        self.assertFalse(schedule.should_run(cmd1, curr50))
-        self.assertFalse(schedule.should_run(cmd2, curr50))
-        self.assertTrue(schedule.should_run(cmd3, curr50))
+        self.assertFalse(schedule.should_run(cmd1, in_50_seconds))
+        self.assertFalse(schedule.should_run(cmd2, in_50_seconds))
+        self.assertTrue(schedule.should_run(cmd3, in_50_seconds))
 
-        self.assertTrue(schedule.should_run(cmd1, curr70))
-        self.assertFalse(schedule.should_run(cmd2, curr70))
-        self.assertTrue(schedule.should_run(cmd3, curr70))
+        self.assertTrue(schedule.should_run(cmd1, in_70_seconds))
+        self.assertFalse(schedule.should_run(cmd2, in_70_seconds))
+        self.assertTrue(schedule.should_run(cmd3, in_70_seconds))
