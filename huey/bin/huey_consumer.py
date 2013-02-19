@@ -9,6 +9,11 @@ import time
 import threading
 from logging.handlers import RotatingFileHandler
 
+try:
+    import multiprocessing
+except ImportError:
+    multiprocessing = None
+
 from huey.exceptions import QueueException, QueueReadException, DataStorePutException, QueueWriteException
 from huey.queue import Invoker, CommandSchedule
 from huey.registry import registry
@@ -286,6 +291,79 @@ class Consumer(BaseConsumer):
                 self.requeue_command(command)
         finally:
             self._pool.release()
+
+if multiprocessing:
+    import multiprocessing.queues
+    class MPIterableQueue(IterableQueueMixin, multiprocessing.queues.JoinableQueue):
+        pass
+
+def mp_requeue_command(schedule, command, logger, retries):
+    # only one worker should be working on a given task at a time, so I don't *think* there's
+    # a need for atomic decrement here...
+    retries[command.task_id] -= 1
+    logger.info('re-enqueueing task %s, %s tries left' % (command.task_id, retries[command.task_id]))
+    try:
+        if command.retry_delay:
+            delay = datetime.timedelta(seconds=command.retry_delay)
+            command.execute_time = self.get_now() + delay
+            schedule.add(command)
+        else:
+            schedule.invoker.enqueue(command)
+    except QueueWriteException:
+        logger.error('unable to re-enqueue %s, error writing to backend' % command.task_id)
+
+def mp_worker(schedule, command, retries):
+    logger = logging.getLogger('huey.consumer.logger')
+    try:
+        schedule.invoker.execute(command)
+        del retries[command.task_id]
+    except DataStorePutException:
+        logger.warn('error storing result', exc_info=1)
+    except:
+        logger.error('unhandled exception in worker thread', exc_info=1)
+        if retries[command.task_id]:
+            mp_requeue_command(schedule, command, logger, retries)
+        else:
+            del retries[command.task_id]
+
+class MPConsumer(BaseConsumer):
+    def __init__(self, invoker, config):
+        super(MPConsumer, self).__init__(invoker, config)
+
+        self._queue = MPIterableQueue()
+        self._shutdown = multiprocessing.Event()
+
+        self._manager = multiprocessing.Manager()
+        self._retries = self._manager.dict()
+
+        # patch the scheduler so its internal dict is shared
+        self.schedule._schedule = self._manager.dict()
+
+        self._pool = multiprocessing.Pool(processes=self.workers)
+
+    def spawn_worker(self, job):
+        self._retries[job.task_id] = job.retries
+        return self._pool.apply_async(mp_worker, args=[self.schedule, job, self._retries])
+
+    def process_command(self, command):
+        self.logger.info('processing: %s' % command)
+        self.delay = self.default_delay
+
+        # put the command into the queue for the worker pool
+        self._queue.put(command)
+
+        # wait to acknowledge receipt of the command
+        self.logger.debug('waiting for receipt of command')
+        self._queue.join()
+
+    def worker_pool(self):
+        for job in self._queue:
+            # spin up a worker with the given job
+            self.spawn_worker(job)
+
+            # indicate receipt of the task
+            self._queue.task_done()
+
 def err(s):
     print '\033[91m%s\033[0m' % s
     sys.exit(1)
