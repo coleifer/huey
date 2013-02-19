@@ -15,7 +15,7 @@ from huey.registry import registry
 from huey.utils import load_class
 
 
-class IterableQueue(Queue.Queue):
+class IterableQueueMixin:
     def __iter__(self):
         return self
 
@@ -25,8 +25,10 @@ class IterableQueue(Queue.Queue):
             raise result
         return result
 
+class IterableQueue(IterableQueueMixin, Queue.Queue):
+    pass
 
-class Consumer(object):
+class BaseConsumer(object):
     def __init__(self, invoker, config):
         self.invoker = invoker
         self.config = config
@@ -34,7 +36,7 @@ class Consumer(object):
         self.logfile = config.LOGFILE
         self.loglevel = config.LOGLEVEL
 
-        self.threads = config.THREADS
+        self.workers = config.THREADS
         self.periodic_commands = config.PERIODIC
 
         self.default_delay = config.INITIAL_DELAY
@@ -47,12 +49,6 @@ class Consumer(object):
         self.delay = self.default_delay
 
         self.logger = self.get_logger()
-
-        # queue to track messages to be processed
-        self._queue = IterableQueue()
-        self._pool = threading.BoundedSemaphore(self.threads)
-
-        self._shutdown = threading.Event()
 
         # initialize the command schedule
         self.schedule = CommandSchedule(self.invoker)
@@ -75,11 +71,14 @@ class Consumer(object):
         else:
             return datetime.datetime.now()
 
-    def spawn(self, func, *args, **kwargs):
+    def spawn_thread(self, func, *args, **kwargs):
         t = threading.Thread(target=func, args=args, kwargs=kwargs)
         t.daemon = True
         t.start()
         return t
+
+    def spawn_worker(self, job):
+        raise NotImplementedError
 
     def start_periodic_task_scheduler(self):
         self.logger.info('starting periodic task scheduler thread')
@@ -93,7 +92,7 @@ class Consumer(object):
 
     def start_scheduler(self):
         self.logger.info('starting scheduler thread')
-        return self.spawn(self.schedule_commands)
+        return self.spawn_thread(self.schedule_commands)
 
     def schedule_commands(self):
         while not self._shutdown.is_set():
@@ -122,7 +121,7 @@ class Consumer(object):
 
     def start_message_receiver(self):
         self.logger.info('starting message receiver thread')
-        return self.spawn(self.receive_messages)
+        return self.spawn_thread(self.receive_messages)
 
     def receive_messages(self):
         while not self._shutdown.is_set():
@@ -148,17 +147,7 @@ class Consumer(object):
                     self.process_command(command)
 
     def process_command(self, command):
-        self._pool.acquire()
-
-        self.logger.info('processing: %s' % command)
-        self.delay = self.default_delay
-
-        # put the command into the queue for the worker pool
-        self._queue.put(command)
-
-        # wait to acknowledge receipt of the command
-        self.logger.debug('waiting for receipt of command')
-        self._queue.join()
+        raise NotImplementedError
 
     def sleep(self):
         if self.delay > self.max_delay:
@@ -171,27 +160,13 @@ class Consumer(object):
 
     def start_worker_pool(self):
         self.logger.info('starting worker threadpool')
-        return self.spawn(self.worker_pool)
+        return self.spawn_thread(self.worker_pool)
 
     def worker_pool(self):
-        for job in self._queue:
-            # spin up a worker with the given job
-            self.spawn(self.worker, job)
-
-            # indicate receipt of the task
-            self._queue.task_done()
+        raise NotImplementedError
 
     def worker(self, command):
-        try:
-            self.invoker.execute(command)
-        except DataStorePutException:
-            self.logger.warn('error storing result', exc_info=1)
-        except:
-            self.logger.error('unhandled exception in worker thread', exc_info=1)
-            if command.retries:
-                self.requeue_command(command)
-        finally:
-            self._pool.release()
+        raise NotImplementedError
 
     def requeue_command(self, command):
         command.retries -= 1
@@ -244,6 +219,12 @@ class Consumer(object):
 
         self.logger.info('\n'.join(msg))
 
+    def run_main_loop(self):
+        # it seems that calling self._shutdown.wait() here prevents the
+        # signal handler from executing
+        while not self._shutdown.is_set():
+            self._shutdown.wait(.1)
+
     def run(self):
         self.set_signal_handler()
 
@@ -251,11 +232,7 @@ class Consumer(object):
 
         try:
             self.start()
-
-            # it seems that calling self._shutdown.wait() here prevents the
-            # signal handler from executing
-            while not self._shutdown.is_set():
-                self._shutdown.wait(.1)
+            self.run_main_loop()
         except:
             self.logger.error('error', exc_info=1)
             self.shutdown()
@@ -264,6 +241,51 @@ class Consumer(object):
 
         self.logger.info('shutdown...')
 
+class Consumer(BaseConsumer):
+    def __init__(self, invoker, config):
+        super(Consumer, self).__init__(invoker, config)
+
+        # queue to track messages to be processed
+        self._queue = IterableQueue()
+        self._pool = threading.BoundedSemaphore(self.workers)
+
+        self._shutdown = threading.Event()
+
+    def spawn_worker(self, job):
+        return self.spawn_thread(self.worker, job)
+
+    def process_command(self, command):
+        self._pool.acquire()
+
+        self.logger.info('processing: %s' % command)
+        self.delay = self.default_delay
+
+        # put the command into the queue for the worker pool
+        self._queue.put(command)
+
+        # wait to acknowledge receipt of the command
+        self.logger.debug('waiting for receipt of command')
+        self._queue.join()
+
+    def worker_pool(self):
+        for job in self._queue:
+            # spin up a worker with the given job
+            self.spawn_worker(job)
+
+            # indicate receipt of the task
+            self._queue.task_done()
+
+    def worker(self, command):
+        try:
+            self.invoker.execute(command)
+        except DataStorePutException:
+            self.logger.warn('error storing result', exc_info=1)
+        except:
+            self.logger.error('unhandled exception in worker thread', exc_info=1)
+            if command.retries:
+                self.requeue_command(command)
+        finally:
+            self._pool.release()
 def err(s):
     print '\033[91m%s\033[0m' % s
     sys.exit(1)
