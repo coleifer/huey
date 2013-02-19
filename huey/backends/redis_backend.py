@@ -6,7 +6,22 @@ from huey.backends.base import BaseQueue, BaseDataStore
 from huey.utils import EmptyData
 
 
-class RedisQueue(BaseQueue):
+class RedisPicklable(object):
+    @property
+    def conn(self):
+        conn = getattr(self, '_conn', None)
+        if not conn:
+            self._conn = redis.Redis(**self.conn_info)
+        return self._conn
+
+    # skip self.conn on pickle
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        if '_conn' in state:
+            del state['_conn']
+        return state
+
+class RedisQueue(RedisPicklable, BaseQueue):
     """
     A simple Queue that uses the redis to store messages
     """
@@ -22,7 +37,7 @@ class RedisQueue(BaseQueue):
 
         self.queue_name = 'huey.redis.%s' % re.sub('[^a-z0-9]', '', name)
 
-        self.conn = redis.Redis(**connection)
+        self.conn_info = connection
 
     def write(self, data):
         self.conn.lpush(self.queue_name, data)
@@ -57,7 +72,7 @@ class RedisBlockingQueue(RedisQueue):
             return None
 
 
-class RedisDataStore(BaseDataStore):
+class RedisDataStore(RedisPicklable, BaseDataStore):
     def __init__(self, name, **connection):
         """
         RESULT_STORE_CONNECTION = {
@@ -69,7 +84,8 @@ class RedisDataStore(BaseDataStore):
         super(RedisDataStore, self).__init__(name, **connection)
 
         self.storage_name = 'huey.redis.results.%s' % re.sub('[^a-z0-9]', '', name)
-        self.conn = redis.Redis(**connection)
+
+        self.conn_info = connection
 
     def put(self, key, value):
         self.conn.hset(self.storage_name, key, value)
