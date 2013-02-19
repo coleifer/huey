@@ -10,11 +10,12 @@ from huey.exceptions import QueueException
 from huey.queue import QueueCommand, PeriodicQueueCommand
 from huey.registry import registry
 from huey.utils import local_to_utc
-from huey.bin.huey_consumer import load_config, Consumer, IterableQueue
+from huey.bin.huey_consumer import load_config, Consumer, IterableQueue, MPConsumer, MPIterableQueue
 
 
 # store some global state
-state = {}
+import multiprocessing
+state = multiprocessing.Manager().dict()
 
 # create a queue, result store and invoker for testing
 test_queue = DummyQueue('test-queue')
@@ -69,6 +70,9 @@ class TestLogHandler(logging.Handler):
 
 
 class SkewConsumerTestCase(unittest.TestCase):
+    ConsumerCls = Consumer
+    IQCls = IterableQueue
+    
     def setUp(self):
         global state
         state = {}
@@ -78,8 +82,9 @@ class SkewConsumerTestCase(unittest.TestCase):
 
         self.orig_sleep = time.sleep
         time.sleep = lambda x: None
-
-        self.consumer = Consumer(test_invoker, DummyConfiguration)
+        
+        ConsumerCls = self.ConsumerCls
+        self.consumer = ConsumerCls(test_invoker, DummyConfiguration)
         self.consumer.invoker.queue._queue = []
         self.consumer.invoker.result_store._results = {}
         self.consumer.schedule._schedule = {}
@@ -104,7 +109,8 @@ class SkewConsumerTestCase(unittest.TestCase):
 
     def test_iterable_queue(self):
         store = []
-        q = IterableQueue()
+        IQCls = self.IQCls
+        q = IQCls()
 
         def do_queue(queue, result):
             for message in queue:
@@ -565,3 +571,7 @@ class SkewConsumerTestCase(unittest.TestCase):
         cmd_obj = every_hour.command_class()
         self.assertEqual(len(invoker.result_store._results), 1)
         self.assertTrue(cmd_obj.revoke_id in invoker.result_store._results)
+
+class SkewMPConsumerTestCase(SkewConsumerTestCase):
+    ConsumerCls = MPConsumer
+    IQCls = MPIterableQueue
