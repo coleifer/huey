@@ -173,6 +173,9 @@ class BaseConsumer(object):
     def worker(self, command):
         raise NotImplementedError
 
+    def sync_worker(self, command):
+        raise NotImplementedError
+
     def requeue_command(self, command):
         command.retries -= 1
         self.logger.info('re-enqueueing task %s, %s tries left' % (command.task_id, command.retries))
@@ -292,6 +295,10 @@ class Consumer(BaseConsumer):
         finally:
             self._pool.release()
 
+    def sync_worker(self, command):
+        self._pool.acquire()
+        self.worker(command)
+
 if multiprocessing:
     import multiprocessing.queues
     class MPIterableQueue(IterableQueueMixin, multiprocessing.queues.JoinableQueue):
@@ -363,6 +370,9 @@ class MPConsumer(BaseConsumer):
 
             # indicate receipt of the task
             self._queue.task_done()
+
+    def sync_worker(self, command):
+        return mp_worker(self.schedule, command, self._retries)
 
 def err(s):
     print '\033[91m%s\033[0m' % s
