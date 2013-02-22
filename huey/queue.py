@@ -4,6 +4,11 @@ import pickle
 import uuid
 import sys
 import time
+try:
+    import multiprocessing
+    import threading
+except:
+    multiprocessing = None
 
 from huey.exceptions import QueueWriteException, QueueReadException, \
     DataStoreGetException, DataStorePutException, DataStoreTimeout,\
@@ -219,6 +224,64 @@ class CommandSchedule(object):
 
     def is_pending(self, cmd):
         return cmd.task_id in self._schedule
+
+if multiprocessing:
+    class MPCommandSchedule(CommandSchedule):
+        def __init__(self, invoker, key_name='schedule'):
+            self.invoker = invoker
+            self.key_name = key_name
+
+            self.task_store = self.invoker.task_store
+            self._schedule = multiprocessing.Manager().dict()
+            self._lock = None
+
+        def __getstate__(self):
+            state = self.__dict__.copy()
+            state['_lock'] = None
+            return state
+
+        def acquire(self):
+            if self._lock is None:
+                self._lock = threading.Lock()
+            self._lock.acquire()
+
+        def release(self):
+            if self._lock is None:
+                self._lock = threading.Lock()
+            self._lock.release()
+
+        def __contains__(self, task_id):
+            self.acquire()
+            out = task_id in self._schedule
+            self.release()
+            return out
+
+        def commands(self):
+            self.acquire()
+            out = self._schedule.values()
+            self.release()
+            return out
+
+        def _is_pending(self, cmd):
+            return cmd.task_id in self._schedule
+
+        def is_pending(self, cmd):
+            self.acquire()
+            out = self._is_pending(cmd)
+            self.release()
+            return out
+
+        def remove(self, cmd):
+            self.acquire()
+            if self._is_pending(cmd):
+                del(self._schedule[cmd.task_id])
+            self.release()
+
+        def add(self, cmd):
+            self.acquire()
+            if not self._is_pending(cmd):
+                self._schedule[cmd.task_id] = cmd
+            self.release()
 
 
 class QueueCommandMetaClass(type):

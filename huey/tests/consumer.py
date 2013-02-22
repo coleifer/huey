@@ -16,26 +16,26 @@ try:
     import multiprocessing
 except ImportError:
     multiprocessing = None
+#multiprocessing = False
 
-if multiprocessing:
-    from huey.backends.mp_dummy import MPDummyQueue, MPDummyDataStore
+state = test_state = {}
 
-    state = multiprocessing.Manager().dict()
-
-    # create a queue, result store and invoker for testing
-    test_queue = MPDummyQueue('test-queue')
-    test_result_store = MPDummyDataStore('test-queue')
-    test_task_store = MPDummyDataStore('test-tasks')
-else:
-    # store some global state
-    state = {}
-
-    # create a queue, result store and invoker for testing
-    test_queue = DummyQueue('test-queue')
-    test_result_store = DummyDataStore('test-queue')
-    test_task_store = DummyDataStore('test-tasks')
+# create a queue, result store and invoker for testing
+test_queue = DummyQueue('test-queue')
+test_result_store = DummyDataStore('test-queue')
+test_task_store = DummyDataStore('test-tasks')
 
 test_invoker = Invoker(test_queue, test_result_store, test_task_store)
+
+if multiprocessing:
+    from huey.backends.redis_backend import *
+
+    mp_test_state = RedisDict("test-state")
+
+    # create a queue, result store and invoker for testing
+    mp_test_queue = RedisQueue('test-queue')
+    mp_test_result_store = RedisDataStore('test-queue')
+    mp_test_task_store = RedisDataStore('test-tasks')
 
 # create a dummy config for passing to the consumer
 class DummyConfiguration(BaseConfiguration):
@@ -43,6 +43,11 @@ class DummyConfiguration(BaseConfiguration):
     RESULT_STORE = test_result_store
     TASK_STORE = test_result_store
     THREADS = 2
+
+class MPDummyConfiguration(DummyConfiguration):
+    QUEUE = mp_test_queue
+    RESULT_STORE = mp_test_result_store
+    TASK_STORE = mp_test_task_store
 
 @queue_command(test_invoker)
 def modify_state(k, v):
@@ -89,7 +94,12 @@ class SkewConsumerTestCase(unittest.TestCase):
     
     def setUp(self):
         global state
-        state = {}
+        state = test_state
+        state.clear()
+
+        test_invoker.queue = test_queue
+        test_invoker.result_store = test_result_store
+        test_invoker.task_store = test_task_store
 
         self.orig_pc = registry._periodic_commands
         registry._periodic_commands = [every_hour.command_class()]
@@ -184,7 +194,7 @@ class SkewConsumerTestCase(unittest.TestCase):
         ])
 
         cmd = test_invoker.dequeue()
-        self.assertEqual(cmd.retries, 2)
+        self.assertEqual(self.consumer.retries_for_command(cmd), 2)
         self.consumer.sync_worker(cmd)
         self.assertEqual(self.handler.messages[-2:], [
             'unhandled exception in worker thread',
@@ -192,7 +202,7 @@ class SkewConsumerTestCase(unittest.TestCase):
         ])
 
         cmd = test_invoker.dequeue()
-        self.assertEqual(cmd.retries, 1)
+        self.assertEqual(self.consumer.retries_for_command(cmd), 1)
         self.consumer.sync_worker(cmd)
         self.assertEqual(self.handler.messages[-2:], [
             'unhandled exception in worker thread',
@@ -200,7 +210,7 @@ class SkewConsumerTestCase(unittest.TestCase):
         ])
 
         cmd = test_invoker.dequeue()
-        self.assertEqual(cmd.retries, 0)
+        self.assertEqual(self.consumer.retries_for_command(cmd), 0)
         self.consumer.sync_worker(cmd)
         self.assertEqual(len(self.handler.messages), 7)
         self.assertEqual(self.handler.messages[-1:], [
@@ -222,7 +232,7 @@ class SkewConsumerTestCase(unittest.TestCase):
         ])
 
         cmd = test_invoker.dequeue()
-        self.assertEqual(cmd.retries, 2)
+        self.assertEqual(self.consumer.retries_for_command(cmd), 2)
         self.consumer.sync_worker(cmd)
 
         self.assertEqual(state['blampf'], 'fixed')
@@ -307,7 +317,7 @@ class SkewConsumerTestCase(unittest.TestCase):
     def test_retry_scheduling(self):
         # this will continually fail
         res = retry_command_slow('blampf')
-        self.assertEqual(self.consumer.schedule._schedule, {})
+        self.assertEqual(len(self.consumer.schedule._schedule), 0)
 
         cur_time = datetime.datetime.utcnow()
 
@@ -318,11 +328,11 @@ class SkewConsumerTestCase(unittest.TestCase):
             're-enqueueing task %s, 2 tries left' % cmd.task_id,
         ])
 
-        self.assertEqual(self.consumer.schedule._schedule, {
+        self.assertEqual(dict(self.consumer.schedule._schedule), {
             cmd.task_id: cmd,
         })
         cmd_from_sched = self.consumer.schedule._schedule[cmd.task_id]
-        self.assertEqual(cmd_from_sched.retries, 2)
+        self.assertEqual(self.consumer.retries_for_command(cmd_from_sched), 2)
         exec_time = cmd.execute_time
 
         self.assertEqual((exec_time - cur_time).seconds, 10)
@@ -439,6 +449,7 @@ class SkewConsumerTestCase(unittest.TestCase):
         pt = self.spawn(self.consumer.check_message)
         pt.join()
 
+        print type(state), state.keys()
         self.assertTrue('k2' in state)
         self.assertEqual(len(self.consumer.schedule._schedule), 0)
 
@@ -478,8 +489,8 @@ class SkewConsumerTestCase(unittest.TestCase):
             pt = self.spawn(self.consumer.check_message)
             pt.join()
 
-            self.assertEqual(state, estate)
-            self.assertEqual(self.consumer.schedule._schedule, esc)
+            self.assertEqual(dict(state), estate)
+            self.assertEqual(dict(self.consumer.schedule._schedule), esc)
 
         # lets pretend its 2037
         self.consumer.check_schedule(dt2 + datetime.timedelta(seconds=1))
@@ -516,24 +527,24 @@ class SkewConsumerTestCase(unittest.TestCase):
         assertQ(0)
 
         # it has not been run
-        self.assertEqual(state, {})
+        self.assertEqual(len(state), 0)
 
         # the next go-round it will be enqueued
         self.consumer.enqueue_periodic_commands(dt)
         assertQ(1)
 
         # it has still not been run
-        self.assertEqual(state, {})
+        self.assertEqual(len(state), 0)
 
         # dequeue a *single* message
         pt = self.spawn(self.consumer.check_message)
         pt.join()
 
         # our command was run
-        self.assertEqual(state, {'p': 'y'})
+        self.assertEqual(dict(state), {'p': 'y'})
 
         # reset state
-        state = {}
+        state.clear()
 
         # revoke the command
         every_hour.revoke()
@@ -577,8 +588,33 @@ class SkewConsumerTestCase(unittest.TestCase):
         self.assertTrue(cmd_obj.revoke_id in invoker.result_store._results)
 
 if multiprocessing:
-    # create a dummy config for passing to the consumer
-
     class SkewMPConsumerTestCase(SkewConsumerTestCase):
         ConsumerCls = MPConsumer
         IQCls = MPIterableQueue
+
+        def setUp(self):
+            global state
+            state = mp_test_state
+            state.clear()
+
+            test_invoker.queue = mp_test_queue
+            test_invoker.result_store = mp_test_result_store
+            test_invoker.task_store = mp_test_task_store
+
+            self.orig_pc = registry._periodic_commands
+            registry._periodic_commands = [every_hour.command_class()]
+
+            self.orig_sleep = time.sleep
+            time.sleep = lambda x: None
+            
+            ConsumerCls = self.ConsumerCls
+            self.consumer = ConsumerCls(test_invoker, DummyConfiguration)
+            self.handler = TestLogHandler()
+            self.consumer.logger.addHandler(self.handler)
+
+        def tearDown(self):
+            super(SkewMPConsumerTestCase, self).tearDown()
+
+            self.consumer.invoker.queue.flush()
+            self.consumer.invoker.result_store.flush()
+            self.consumer.schedule._schedule.clear()

@@ -1,6 +1,7 @@
 import re
 import redis
 from redis.exceptions import ConnectionError
+from UserDict import DictMixin
 
 from huey.backends.base import BaseQueue, BaseDataStore
 from huey.utils import EmptyData
@@ -103,3 +104,35 @@ class RedisDataStore(RedisPicklable, BaseDataStore):
 
     def flush(self):
         self.conn.delete(self.storage_name)
+
+class RedisDict(RedisDataStore, DictMixin):
+    def __getitem__(self, key):
+        val = self.peek(key)
+        if val is EmptyData:
+            raise KeyError(key)
+        return val
+
+    def __setitem__(self, key, val):
+        self.put(key, val)
+
+    def __delitem__(self, key):
+        if self.__contains__(key):
+            self.conn.hdel(self.storage_name, key)
+        else:
+            raise KeyError(key)
+
+    def __contains__(self, key):
+        return self.conn.hexists(self.storage_name, key)
+
+    def __iter__(self):
+        for k in self.conn.hkeys(self.storage_name):
+            yield k
+
+    def keys(self):
+        return self.conn.hkeys(self.storage_name)
+
+    def iteritems(self):
+        return self.conn.hgetall(self.storage_name).iteritems()
+
+    def clear(self):
+        return self.flush()
