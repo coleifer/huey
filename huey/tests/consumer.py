@@ -27,6 +27,13 @@ test_task_store = DummyDataStore('test-tasks')
 
 test_invoker = Invoker(test_queue, test_result_store, test_task_store)
 
+# create a dummy config for passing to the consumer
+class DummyConfiguration(BaseConfiguration):
+    QUEUE = test_queue
+    RESULT_STORE = test_result_store
+    TASK_STORE = test_result_store
+    THREADS = 2
+
 if multiprocessing:
     from huey.backends.redis_backend import *
 
@@ -37,17 +44,10 @@ if multiprocessing:
     mp_test_result_store = RedisDataStore('test-queue')
     mp_test_task_store = RedisDataStore('test-tasks')
 
-# create a dummy config for passing to the consumer
-class DummyConfiguration(BaseConfiguration):
-    QUEUE = test_queue
-    RESULT_STORE = test_result_store
-    TASK_STORE = test_result_store
-    THREADS = 2
-
-class MPDummyConfiguration(DummyConfiguration):
-    QUEUE = mp_test_queue
-    RESULT_STORE = mp_test_result_store
-    TASK_STORE = mp_test_task_store
+    class MPDummyConfiguration(DummyConfiguration):
+        QUEUE = mp_test_queue
+        RESULT_STORE = mp_test_result_store
+        TASK_STORE = mp_test_task_store
 
 @queue_command(test_invoker)
 def modify_state(k, v):
@@ -111,7 +111,7 @@ class SkewConsumerTestCase(unittest.TestCase):
         self.consumer = ConsumerCls(test_invoker, DummyConfiguration)
         self.consumer.invoker.queue.flush()
         self.consumer.invoker.result_store.flush()
-        self.consumer.schedule._schedule.clear()
+        self.consumer.schedule.schedule_dict().clear()
         self.handler = TestLogHandler()
         self.consumer.logger.addHandler(self.handler)
 
@@ -284,7 +284,7 @@ class SkewConsumerTestCase(unittest.TestCase):
 
         pt.join()
         self.assertTrue('k' in state)
-        self.assertEqual(self.consumer.schedule._schedule, {})
+        self.assertEqual(self.consumer.schedule.schedule_dict(), {})
 
         # dequeue a *single* message
         pt = self.spawn(self.consumer.check_message)
@@ -292,7 +292,7 @@ class SkewConsumerTestCase(unittest.TestCase):
 
         # it got stored in the schedule instead of executing
         self.assertFalse('k2' in state)
-        self.assertTrue(r2.command.task_id in self.consumer.schedule._schedule)
+        self.assertTrue(r2.command.task_id in self.consumer.schedule.schedule_dict())
 
         # run through an iteration of the scheduler
         self.consumer.check_schedule(dt)
@@ -305,7 +305,7 @@ class SkewConsumerTestCase(unittest.TestCase):
 
         # it was enqueued
         self.assertEqual(len(self.consumer.invoker.queue), 1)
-        self.assertEqual(self.consumer.schedule._schedule, {})
+        self.assertEqual(self.consumer.schedule.schedule_dict(), {})
 
         # dequeue and inspect -- it won't be executed because the scheduler will
         # see that it is scheduled to run in the future and plop it back into the
@@ -317,7 +317,7 @@ class SkewConsumerTestCase(unittest.TestCase):
     def test_retry_scheduling(self):
         # this will continually fail
         res = retry_command_slow('blampf')
-        self.assertEqual(len(self.consumer.schedule._schedule), 0)
+        self.assertEqual(len(self.consumer.schedule.schedule_dict()), 0)
 
         cur_time = datetime.datetime.utcnow()
 
@@ -328,10 +328,10 @@ class SkewConsumerTestCase(unittest.TestCase):
             're-enqueueing task %s, 2 tries left' % cmd.task_id,
         ])
 
-        self.assertEqual(dict(self.consumer.schedule._schedule), {
+        self.assertEqual(self.consumer.schedule.schedule_dict(), {
             cmd.task_id: cmd,
         })
-        cmd_from_sched = self.consumer.schedule._schedule[cmd.task_id]
+        cmd_from_sched = self.consumer.schedule.schedule_dict()[cmd.task_id]
         self.assertEqual(self.consumer.retries_for_command(cmd_from_sched), 2)
         exec_time = cmd.execute_time
 
@@ -351,7 +351,7 @@ class SkewConsumerTestCase(unittest.TestCase):
 
         pt.join()
         self.assertTrue('k' in state)
-        self.assertEqual(self.consumer.schedule._schedule, {})
+        self.assertEqual(self.consumer.schedule.schedule_dict(), {})
 
         # dequeue a *single* message
         pt = self.spawn(self.consumer.check_message)
@@ -359,7 +359,7 @@ class SkewConsumerTestCase(unittest.TestCase):
 
         # it got stored in the schedule instead of executing
         self.assertFalse('k2' in state)
-        self.assertTrue(r2.command.task_id in self.consumer.schedule._schedule)
+        self.assertTrue(r2.command.task_id in self.consumer.schedule.schedule_dict())
 
         # run through an iteration of the scheduler
         self.consumer.check_schedule(dt)
@@ -372,7 +372,7 @@ class SkewConsumerTestCase(unittest.TestCase):
 
         # it was enqueued
         self.assertEqual(len(self.consumer.invoker.queue), 1)
-        self.assertEqual(self.consumer.schedule._schedule, {})
+        self.assertEqual(self.consumer.schedule.schedule_dict(), {})
 
         # dequeue and inspect -- it won't be executed because the scheduler will
         # see that it is scheduled to run in the future and plop it back into the
@@ -398,14 +398,14 @@ class SkewConsumerTestCase(unittest.TestCase):
         self.consumer.check_message()
 
         self.consumer.save_schedule()
-        self.consumer.schedule._schedule.clear()
+        self.consumer.schedule.schedule_dict().clear()
 
         self.consumer.load_schedule()
-        self.assertTrue(r.command.task_id in self.consumer.schedule._schedule)
-        self.assertTrue(r2.command.task_id in self.consumer.schedule._schedule)
+        self.assertTrue(r.command.task_id in self.consumer.schedule.schedule_dict())
+        self.assertTrue(r2.command.task_id in self.consumer.schedule.schedule_dict())
 
-        cmd1 = self.consumer.schedule._schedule[r.command.task_id]
-        cmd2 = self.consumer.schedule._schedule[r2.command.task_id]
+        cmd1 = self.consumer.schedule.schedule_dict()[r.command.task_id]
+        cmd2 = self.consumer.schedule.schedule_dict()[r2.command.task_id]
 
         self.assertEqual(cmd1.execute_time, dt)
         self.assertEqual(cmd2.execute_time, dt2)
@@ -415,10 +415,10 @@ class SkewConsumerTestCase(unittest.TestCase):
         self.consumer.check_message()
 
         self.consumer.save_schedule()
-        self.consumer.schedule._schedule.clear()
+        self.consumer.schedule.schedule_dict().clear()
 
         self.consumer.load_schedule()
-        cmd3 = self.consumer.schedule._schedule[r3.command.task_id]
+        cmd3 = self.consumer.schedule.schedule_dict()[r3.command.task_id]
         self.assertEqual(cmd3.execute_time, local_to_utc(dt))
 
     def test_revoking_normal(self):
@@ -443,15 +443,14 @@ class SkewConsumerTestCase(unittest.TestCase):
 
         # no changes and the task was not added to the schedule
         self.assertFalse('k' in state)
-        self.assertEqual(len(self.consumer.schedule._schedule), 0)
+        self.assertEqual(len(self.consumer.schedule.schedule_dict()), 0)
 
         # dequeue a *single* message
         pt = self.spawn(self.consumer.check_message)
         pt.join()
 
-        print type(state), state.keys()
         self.assertTrue('k2' in state)
-        self.assertEqual(len(self.consumer.schedule._schedule), 0)
+        self.assertEqual(len(self.consumer.schedule.schedule_dict()), 0)
 
     def test_revoking_schedule(self):
         global state
@@ -490,11 +489,11 @@ class SkewConsumerTestCase(unittest.TestCase):
             pt.join()
 
             self.assertEqual(dict(state), estate)
-            self.assertEqual(dict(self.consumer.schedule._schedule), esc)
+            self.assertEqual(self.consumer.schedule.schedule_dict(), esc)
 
         # lets pretend its 2037
         self.consumer.check_schedule(dt2 + datetime.timedelta(seconds=1))
-        self.assertEqual(len(self.consumer.schedule._schedule), 0)
+        self.assertEqual(len(self.consumer.schedule.schedule_dict()), 0)
 
         inv = self.consumer.invoker
         command = inv.dequeue()
@@ -608,7 +607,7 @@ if multiprocessing:
             time.sleep = lambda x: None
             
             ConsumerCls = self.ConsumerCls
-            self.consumer = ConsumerCls(test_invoker, DummyConfiguration)
+            self.consumer = ConsumerCls(test_invoker, MPDummyConfiguration)
             self.handler = TestLogHandler()
             self.consumer.logger.addHandler(self.handler)
 
@@ -617,4 +616,4 @@ if multiprocessing:
 
             self.consumer.invoker.queue.flush()
             self.consumer.invoker.result_store.flush()
-            self.consumer.schedule._schedule.clear()
+            self.consumer.schedule.schedule_dict().clear()

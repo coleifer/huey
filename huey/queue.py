@@ -207,6 +207,9 @@ class CommandSchedule(object):
     def commands(self):
         return self._schedule.values()
 
+    def schedule_dict(self):
+        return self._schedule
+
     def should_run(self, cmd, dt=None):
         dt = dt or datetime.datetime.now()
         return cmd.execute_time is None or cmd.execute_time <= dt
@@ -259,6 +262,12 @@ if multiprocessing:
         def commands(self):
             self.acquire()
             out = self._schedule.values()
+            self.release()
+            return out
+
+        def schedule_dict(self):
+            self.acquire()
+            out = dict(self._schedule)
             self.release()
             return out
 
