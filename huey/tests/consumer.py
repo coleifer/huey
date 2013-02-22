@@ -350,6 +350,7 @@ class SkewConsumerTestCase(unittest.TestCase):
         st = self.spawn(self.consumer.worker_pool)
 
         pt.join()
+        self.orig_sleep(0.1)
         self.assertTrue('k' in state)
         self.assertEqual(self.consumer.schedule.schedule_dict(), {})
 
@@ -448,6 +449,7 @@ class SkewConsumerTestCase(unittest.TestCase):
         # dequeue a *single* message
         pt = self.spawn(self.consumer.check_message)
         pt.join()
+        self.orig_sleep(0.1)
 
         self.assertTrue('k2' in state)
         self.assertEqual(len(self.consumer.schedule.schedule_dict()), 0)
@@ -488,6 +490,7 @@ class SkewConsumerTestCase(unittest.TestCase):
             pt = self.spawn(self.consumer.check_message)
             pt.join()
 
+            self.orig_sleep(0.1)
             self.assertEqual(dict(state), estate)
             self.assertEqual(self.consumer.schedule.schedule_dict(), esc)
 
@@ -540,6 +543,7 @@ class SkewConsumerTestCase(unittest.TestCase):
         pt.join()
 
         # our command was run
+        self.orig_sleep(0.1)
         self.assertEqual(dict(state), {'p': 'y'})
 
         # reset state
@@ -583,7 +587,7 @@ class SkewConsumerTestCase(unittest.TestCase):
 
         # our data store should reflect the delay
         cmd_obj = every_hour.command_class()
-        self.assertEqual(len(invoker.result_store._results), 1)
+        self.assertEqual(len(invoker.result_store), 1)
         self.assertTrue(cmd_obj.revoke_id in invoker.result_store._results)
 
 if multiprocessing:
