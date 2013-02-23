@@ -105,6 +105,9 @@ class RedisDataStore(RedisPicklable, BaseDataStore):
     def flush(self):
         self.conn.delete(self.storage_name)
 
+    def count(self):
+        return self.conn.hlen(self.storage_name)
+
 class RedisDict(RedisDataStore, DictMixin):
     def __getitem__(self, key):
         val = self.peek(key)

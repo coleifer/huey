@@ -323,8 +323,9 @@ def mp_requeue_command(schedule, command, logger, retries, utc):
     except QueueWriteException:
         logger.error('unable to re-enqueue %s, error writing to backend' % command.task_id)
 
-def mp_worker(schedule, command, retries, utc):
-    logger = logging.getLogger('huey.consumer.logger')
+def mp_worker(schedule, command, retries, utc, logger=None):
+    if not logger:
+        logger = logging.getLogger('huey.consumer.logger')
     try:
         schedule.invoker.execute(command)
         del retries[command.task_id]
@@ -356,6 +357,9 @@ class MPConsumer(BaseConsumer):
         self._retries[job.task_id] = job.retries
         return self._pool.apply_async(mp_worker, args=[self.schedule, job, self._retries, self.utc])
 
+    def requeue_command(self, command):
+        return mp_requeue_command(self.schedule, command, self.logger, self._retries, self.utc)
+
     def process_command(self, command):
         self.logger.info('processing: %s' % command)
         self.delay = self.default_delay
@@ -377,7 +381,7 @@ class MPConsumer(BaseConsumer):
 
     def sync_worker(self, command):
         self._retries[command.task_id] = command.retries
-        return mp_worker(self.schedule, command, self._retries, self.utc)
+        return mp_worker(self.schedule, command, self._retries, self.utc, self.logger)
 
     def retries_for_command(self, command):
         return self._retries[command.task_id]

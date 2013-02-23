@@ -283,6 +283,7 @@ class SkewConsumerTestCase(unittest.TestCase):
         st = self.spawn(self.consumer.worker_pool)
 
         pt.join()
+        self.orig_sleep(0.1)
         self.assertTrue('k' in state)
         self.assertEqual(self.consumer.schedule.schedule_dict(), {})
 
@@ -587,8 +588,8 @@ class SkewConsumerTestCase(unittest.TestCase):
 
         # our data store should reflect the delay
         cmd_obj = every_hour.command_class()
-        self.assertEqual(len(invoker.result_store), 1)
-        self.assertTrue(cmd_obj.revoke_id in invoker.result_store._results)
+        self.assertEqual(invoker.result_store.count(), 1)
+        self.assertTrue(invoker.result_store.peek(cmd_obj.revoke_id))
 
 if multiprocessing:
     class SkewMPConsumerTestCase(SkewConsumerTestCase):

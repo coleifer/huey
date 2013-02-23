@@ -71,3 +71,6 @@ class BaseDataStore(object):
 
     def flush(self):
         raise NotImplementedError
+
+    def count(self):
+        raise NotImplementedError
