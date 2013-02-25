@@ -6,7 +6,7 @@ from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 from django.utils.importlib import import_module
 
-from huey.bin.huey_consumer import Consumer, load_config
+from huey.bin.huey_consumer import Consumer, MPConsumer, load_config
 from huey.queue import Invoker
 from huey.utils import load_class
 
@@ -36,7 +36,13 @@ class Command(BaseCommand):
         make_option('--threads', '-t',
             dest='threads',
             type='int',
-            help='Number of worker threads'
+            help='Number of worker threads or processes'
+        ),
+        make_option('--multiprocessing', '-m',
+            dest='multiprocessing',
+            action='store_true',
+            default=False,
+            help='Use the multiprocessing backend instead of the thread backend'
         ),
     )
     
@@ -74,5 +80,9 @@ class Command(BaseCommand):
         task_store = config.TASK_STORE
         invoker = Invoker(queue, result_store, task_store)
         
-        consumer = Consumer(invoker, config)
+        if options['multiprocessing']:
+            consumer = MPConsumer(invoker, config)
+        else:
+            consumer = Consumer(invoker, config)
+
         consumer.run()

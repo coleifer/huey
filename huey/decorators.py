@@ -1,5 +1,6 @@
 import datetime
 import re
+import sys
 
 from functools import wraps
 
@@ -26,6 +27,8 @@ def create_command(command_class, func, retries_as_argument=False, **kwargs):
         (command_class,),
         attrs
     )
+
+    setattr(sys.modules[func.__module__], klass.__name__, klass)
 
     return klass
 

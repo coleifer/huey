@@ -1,12 +1,28 @@
 import re
 import redis
 from redis.exceptions import ConnectionError
+from UserDict import DictMixin
 
 from huey.backends.base import BaseQueue, BaseDataStore
 from huey.utils import EmptyData
 
 
-class RedisQueue(BaseQueue):
+class RedisPicklable(object):
+    @property
+    def conn(self):
+        conn = getattr(self, '_conn', None)
+        if not conn:
+            self._conn = redis.Redis(**self.conn_info)
+        return self._conn
+
+    # skip self.conn on pickle
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        if '_conn' in state:
+            del state['_conn']
+        return state
+
+class RedisQueue(RedisPicklable, BaseQueue):
     """
     A simple Queue that uses the redis to store messages
     """
@@ -22,7 +38,7 @@ class RedisQueue(BaseQueue):
 
         self.queue_name = 'huey.redis.%s' % re.sub('[^a-z0-9]', '', name)
 
-        self.conn = redis.Redis(**connection)
+        self.conn_info = connection
 
     def write(self, data):
         self.conn.lpush(self.queue_name, data)
@@ -57,7 +73,7 @@ class RedisBlockingQueue(RedisQueue):
             return None
 
 
-class RedisDataStore(BaseDataStore):
+class RedisDataStore(RedisPicklable, BaseDataStore):
     def __init__(self, name, **connection):
         """
         RESULT_STORE_CONNECTION = {
@@ -69,7 +85,8 @@ class RedisDataStore(BaseDataStore):
         super(RedisDataStore, self).__init__(name, **connection)
 
         self.storage_name = 'huey.redis.results.%s' % re.sub('[^a-z0-9]', '', name)
-        self.conn = redis.Redis(**connection)
+
+        self.conn_info = connection
 
     def put(self, key, value):
         self.conn.hset(self.storage_name, key, value)
@@ -87,3 +104,38 @@ class RedisDataStore(BaseDataStore):
 
     def flush(self):
         self.conn.delete(self.storage_name)
+
+    def count(self):
+        return self.conn.hlen(self.storage_name)
+
+class RedisDict(RedisDataStore, DictMixin):
+    def __getitem__(self, key):
+        val = self.peek(key)
+        if val is EmptyData:
+            raise KeyError(key)
+        return val
+
+    def __setitem__(self, key, val):
+        self.put(key, val)
+
+    def __delitem__(self, key):
+        if self.__contains__(key):
+            self.conn.hdel(self.storage_name, key)
+        else:
+            raise KeyError(key)
+
+    def __contains__(self, key):
+        return self.conn.hexists(self.storage_name, key)
+
+    def __iter__(self):
+        for k in self.conn.hkeys(self.storage_name):
+            yield k
+
+    def keys(self):
+        return self.conn.hkeys(self.storage_name)
+
+    def iteritems(self):
+        return self.conn.hgetall(self.storage_name).iteritems()
+
+    def clear(self):
+        return self.flush()

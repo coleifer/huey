@@ -50,3 +50,6 @@ class DummyDataStore(BaseDataStore):
 
     def flush(self):
         self._results = {}
+
+    def count(self):
+        return len(self._results)
