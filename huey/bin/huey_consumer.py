@@ -354,7 +354,8 @@ class MPConsumer(BaseConsumer):
         self._pool = multiprocessing.Pool(processes=self.workers)
 
     def spawn_worker(self, job):
-        self._retries[job.task_id] = job.retries
+        if job.task_id not in self._retries:
+            self._retries[job.task_id] = job.retries
         return self._pool.apply_async(mp_worker, args=[self.schedule, job, self._retries, self.utc])
 
     def requeue_command(self, command):
@@ -380,7 +381,8 @@ class MPConsumer(BaseConsumer):
             self._queue.task_done()
 
     def sync_worker(self, command):
-        self._retries[command.task_id] = command.retries
+        if command.task_id not in self._retries:
+            self._retries[command.task_id] = command.retries
         return mp_worker(self.schedule, command, self._retries, self.utc, self.logger)
 
     def retries_for_command(self, command):
