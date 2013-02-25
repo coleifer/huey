@@ -10,17 +10,12 @@ class CPUDummyConfiguration(DummyConfiguration):
 
 cpu_invoker = Invoker(mp_test_queue, mp_test_result_store, mp_test_task_store)
 
-def fib(n):
-    if n == 0:
-        return 0
-    elif n == 1:
-        return 1
-    else:
-        return fib(n-1) + fib(n-2)
-
 @queue_command(cpu_invoker)
 def stress_cpu(n):
-    return fib(n)
+    acc = 0
+    for i in xrange(n):
+        acc += i * i
+    return True
 
 
 class SkewCPUTestCase(unittest.TestCase):
@@ -50,11 +45,10 @@ class SkewCPUTestCase(unittest.TestCase):
 
         results = []
         for i in xrange(CPUDummyConfiguration.THREADS):
-            results.append(stress_cpu(35))
+            results.append(stress_cpu(100000000))
 
         for res in results:
             value = res.get(blocking=True)
-            self.assertEqual(value, 9227465)
 
         end = datetime.datetime.now()
 
