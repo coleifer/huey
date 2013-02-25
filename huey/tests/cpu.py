@@ -39,6 +39,7 @@ class SkewCPUTestCase(unittest.TestCase):
 
     def tearDown(self):
         self.consumer.shutdown()
+        self.consumer.cleanup()
         self.consumer.logger.removeHandler(self.handler)
 
     def test_stress_cpu(self):

@@ -233,6 +233,10 @@ class BaseConsumer(object):
         # signal handler from executing
         while not self._shutdown.is_set():
             self._shutdown.wait(.1)
+        self.cleanup()
+
+    def cleanup(self):
+        pass
 
     def run(self):
         self.set_signal_handler()
@@ -387,6 +391,10 @@ class MPConsumer(BaseConsumer):
 
     def retries_for_command(self, command):
         return self._retries[command.task_id]
+
+    def cleanup(self):
+        self._pool.terminate()
+        self._manager.shutdown()
 
 def err(s):
     print '\033[91m%s\033[0m' % s

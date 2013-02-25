@@ -117,6 +117,7 @@ class SkewConsumerTestCase(unittest.TestCase):
 
     def tearDown(self):
         self.consumer.shutdown()
+        self.consumer.cleanup()
         self.consumer.logger.removeHandler(self.handler)
         registry._periodic_commands = self.orig_pc
         time.sleep = self.orig_sleep
