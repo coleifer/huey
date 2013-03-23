@@ -17,4 +17,6 @@ class BaseConfiguration(object):
     INITIAL_DELAY = .1
     MAX_DELAY = 10
 
+    THREAD_WORKER = True
+
     UTC = True

@@ -19,6 +19,7 @@ class Configuration(BaseConfiguration):
     QUEUE = queue
     RESULT_STORE = result_store
     LOGLEVEL = 'DEBUG'
+    THREAD_WORKER = False
 
 
 @queue_command(invoker)
