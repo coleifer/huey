@@ -40,6 +40,7 @@ class Consumer(object):
         self.default_delay = config.INITIAL_DELAY
         self.backoff_factor = config.BACKOFF
         self.max_delay = config.MAX_DELAY
+        self.thread_worker = config.THREAD_WORKER
 
         self.utc = config.UTC
 
@@ -176,7 +177,10 @@ class Consumer(object):
     def worker_pool(self):
         for job in self._queue:
             # spin up a worker with the given job
-            self.spawn(self.worker, job)
+            if self.thread_worker:
+                self.spawn(self.worker, job)
+            else:
+                self.worker(job)
 
             # indicate receipt of the task
             self._queue.task_done()
@@ -259,6 +263,9 @@ class Consumer(object):
         except:
             self.logger.error('error', exc_info=1)
             self.shutdown()
+
+        if not self.thread_worker:
+            self._pool.acquire()
 
         self.save_schedule()
 
