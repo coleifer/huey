@@ -1,55 +1,47 @@
 #!/usr/bin/env python
+
 import datetime
 import logging
+import optparse
 import os
-import Queue
 import signal
 import sys
-import time
 import threading
+import time
 from logging.handlers import RotatingFileHandler
 
-from huey.exceptions import QueueException, QueueReadException, DataStorePutException, QueueWriteException
-from huey.queue import Invoker, CommandSchedule
+from huey.exceptions import QueueException
+from huey.exceptions import QueueReadException
+from huey.exceptions import DataStorePutException
+from huey.exceptions import QueueWriteException
+from huey.queue import CommandSchedule
+from huey.queue import Huey
 from huey.registry import registry
 from huey.utils import load_class
-
-
-class IterableQueue(Queue.Queue):
-    def __iter__(self):
-        return self
-
-    def next(self):
-        result = self.get()
-        if result is StopIteration:
-            raise result
-        return result
 
 
 class Consumer(object):
     def __init__(self, invoker, config):
         self.invoker = invoker
-        self.config = config
 
-        self.logfile = config.LOGFILE
-        self.loglevel = config.LOGLEVEL
+        self.logfile = config.logfile
+        self.loglevel = config.loglevel
 
-        self.threads = config.THREADS
-        self.periodic_commands = config.PERIODIC
+        self.threads = config.threads
+        self.periodic_commands = config.periodic
 
-        self.default_delay = config.INITIAL_DELAY
-        self.backoff_factor = config.BACKOFF
-        self.max_delay = config.MAX_DELAY
+        self.default_delay = config.initial_delay
+        self.backoff_factor = config.backoff
+        self.max_delay = config.max_delay
 
-        self.utc = config.UTC
+        self.utc = config.utc
 
         # initialize delay
         self.delay = self.default_delay
 
         self.logger = self.get_logger()
 
-        # queue to track messages to be processed
-        self._queue = IterableQueue()
+        # pool of workers
         self._pool = threading.BoundedSemaphore(self.threads)
 
         self._shutdown = threading.Event()
@@ -91,6 +83,14 @@ class Consumer(object):
             self.enqueue_periodic_commands(self.get_now())
             time.sleep(60 - (time.time() - start))
 
+    def enqueue_periodic_commands(self, dt):
+        self.logger.debug('enqueueing periodic commands')
+
+        for command in registry.get_periodic_commands():
+            if command.validate_datetime(dt):
+                if not self.invoker.is_revoked(command, dt, False):
+                    self.invoker.enqueue(command)
+
     def start_scheduler(self):
         self.logger.info('starting scheduler thread')
         return self.spawn(self.schedule_commands)
@@ -112,53 +112,29 @@ class Consumer(object):
                 if self.schedule.can_run(command, dt):
                     self.invoker.enqueue(command)
 
-    def enqueue_periodic_commands(self, dt):
-        self.logger.debug('enqueueing periodic commands')
-
-        for command in registry.get_periodic_commands():
-            if command.validate_datetime(dt):
-                if not self.invoker.is_revoked(command, dt, False):
-                    self.invoker.enqueue(command)
-
     def start_message_receiver(self):
         self.logger.info('starting message receiver thread')
         return self.spawn(self.receive_messages)
 
     def receive_messages(self):
         while not self._shutdown.is_set():
-            self.check_message()
-
-    def check_message(self):
-        try:
-            command = self.invoker.dequeue()
-        except QueueReadException:
-            self.logger.error('error reading from queue', exc_info=1)
-        except QueueException:
-            self.logger.error('queue exception', exc_info=1)
-        else:
-            if not command and not self.invoker.blocking:
-                # no new messages and our queue doesn't block, so sleep a bit before
-                # checking again
-                self.sleep()
-            elif command:
-                now = self.get_now()
-                if not self.schedule.should_run(command, now):
-                    self.schedule.add(command)
-                elif self.schedule.can_run(command, now):
-                    self.process_command(command)
-
-    def process_command(self, command):
-        self._pool.acquire()
-
-        self.logger.info('processing: %s' % command)
-        self.delay = self.default_delay
-
-        # put the command into the queue for the worker pool
-        self._queue.put(command)
-
-        # wait to acknowledge receipt of the command
-        self.logger.debug('waiting for receipt of command')
-        self._queue.join()
+            try:
+                command = self.invoker.dequeue()
+            except QueueReadException:
+                self.logger.error('error reading from queue', exc_info=1)
+            except QueueException:
+                self.logger.error('queue exception', exc_info=1)
+            else:
+                if not command and not self.invoker.blocking:
+                    # no new messages and our queue doesn't block, so sleep a bit before
+                    # checking again
+                    self.sleep()
+                elif command:
+                    now = self.get_now()
+                    if not self.schedule.should_run(command, now):
+                        self.schedule.add(command)
+                    elif self.schedule.can_run(command, now):
+                        self.process_command(command)
 
     def sleep(self):
         if self.delay > self.max_delay:
@@ -169,17 +145,14 @@ class Consumer(object):
 
         self.delay *= self.backoff_factor
 
-    def start_worker_pool(self):
-        self.logger.info('starting worker threadpool')
-        return self.spawn(self.worker_pool)
+    def process_command(self, command):
+        self._pool.acquire()
 
-    def worker_pool(self):
-        for job in self._queue:
-            # spin up a worker with the given job
-            self.spawn(self.worker, job)
+        # spin up a worker with the given job
+        self.spawn(self.worker, job)
 
-            # indicate receipt of the task
-            self._queue.task_done()
+        self.logger.info('processing: %s' % command)
+        self.delay = self.default_delay
 
     def worker(self, command):
         try:
@@ -215,11 +188,9 @@ class Consumer(object):
             self.start_periodic_task_scheduler()
 
         self._receiver_t = self.start_message_receiver()
-        self._worker_pool_t = self.start_worker_pool()
 
     def shutdown(self):
         self._shutdown.set()
-        self._queue.put(StopIteration)
 
     def handle_signal(self, sig_num, frame):
         self.logger.info('received SIGTERM, shutting down')
@@ -283,6 +254,10 @@ def load_config(config):
 
     return config
 
+def get_option_parser():
+    parser = optparse.OptionParser()
+    return parser
+
 if __name__ == '__main__':
     args = sys.argv[1:]
 
@@ -291,11 +266,6 @@ if __name__ == '__main__':
         sys.exit(1)
 
     config = load_config(args[0])
-
-    queue = config.QUEUE
-    result_store = config.RESULT_STORE
-    task_store = config.TASK_STORE
-    invoker = Invoker(queue, result_store, task_store)
 
     consumer = Consumer(invoker, config)
     consumer.run()

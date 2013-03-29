@@ -68,7 +68,8 @@ class RedisDataStore(BaseDataStore):
         """
         super(RedisDataStore, self).__init__(name, **connection)
 
-        self.storage_name = 'huey.redis.results.%s' % re.sub('[^a-z0-9]', '', name)
+        cleaned = re.sub('[^a-z0-9]', '', name)
+        self.storage_name = 'huey.redis.results.%s' % cleaned
         self.conn = redis.Redis(**connection)
 
     def put(self, key, value):

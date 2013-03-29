@@ -55,7 +55,7 @@ class BaseDataStore(object):
     """
     def __init__(self, name, **connection):
         """
-        Initialize the data store - this happens once when the module is loaded
+        Initialize the data store
         """
         self.name = name
         self.connection = connection

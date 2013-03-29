@@ -6,6 +6,7 @@ import time
 class EmptyData(object):
     pass
 
+
 def load_class(s):
     path, klass = s.rsplit('.', 1)
     __import__(path)
