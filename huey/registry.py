@@ -54,14 +54,15 @@ class CommandRegistry(object):
         klass = self._registry.get(klass_str)
 
         if not klass:
-            raise QueueException, '%s not found in CommandRegistry' % klass_str
+            raise QueueException('%s not found in CommandRegistry' % klass_str)
 
         return klass
 
     def get_command_for_message(self, msg):
         """Convert a message from the queue into a command"""
         # parse out the pieces from the enqueued message
-        task_id, klass_str, execute_time, retries, delay, data = pickle.loads(msg)
+        raw = pickle.loads(msg)
+        task_id, klass_str, execute_time, retries, delay, data = raw
 
         klass = self.get_command_class(klass_str)
         return klass(data, task_id, execute_time, retries, delay)
