@@ -14,7 +14,7 @@ a lightweight alternative.
 
 named after my cat
 
-.. image:: huey.jpg
+.. image:: http://media.charlesleifer.com/blog/photos/thumbnails/IMG_20130402_154858_650x650.jpg
 
 
 Contents:
