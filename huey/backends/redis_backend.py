@@ -59,13 +59,6 @@ class RedisBlockingQueue(RedisQueue):
 
 class RedisDataStore(BaseDataStore):
     def __init__(self, name, **connection):
-        """
-        RESULT_STORE_CONNECTION = {
-            'host': 'localhost',
-            'port': 6379,
-            'db': 0,
-        }
-        """
         super(RedisDataStore, self).__init__(name, **connection)
 
         cleaned = re.sub('[^a-z0-9]', '', name)

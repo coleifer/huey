@@ -1,3 +1,7 @@
+"""
+Test-only implementations of Queue and DataStore.  These will not work for
+real applications because they only store tasks/results in memory.
+"""
 from huey.backends.base import BaseQueue, BaseDataStore
 from huey.utils import EmptyData
 
