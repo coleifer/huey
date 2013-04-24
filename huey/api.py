@@ -40,8 +40,8 @@ class Huey(object):
         from huey.api import Huey, crontab
         from huey.backends.redis_backend import RedisQueue, RedisDataStore
 
-        queue = RedisQueue()
-        result_store = RedisDataStore()
+        queue = RedisQueue('my-app')
+        result_store = RedisDataStore('my-app')
         huey = Huey(queue, result_store)
 
         @huey.task()
