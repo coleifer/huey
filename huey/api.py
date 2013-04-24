@@ -1,6 +1,7 @@
 import datetime
 import os
 import pickle
+import re
 import sys
 import time
 import uuid
@@ -9,7 +10,7 @@ from huey.exceptions import DataStoreGetException
 from huey.exceptions import DataStorePutException
 from huey.exceptions import DataStoreTimeout
 from huey.exceptions import QueueException
-from huey.exceptions import QueueReadException 
+from huey.exceptions import QueueReadException
 from huey.exceptions import QueueWriteException
 from huey.registry import registry
 from huey.utils import EmptyData
@@ -19,12 +20,44 @@ from huey.utils import wrap_exception
 
 class Huey(object):
     """
+    Huey executes tasks by exposing function decorators that cause the function
+    call to be enqueued for execution by the consumer.
+
+    Typically your application will only need one Huey instance, but you can
+    have as many as you like -- the only caveat is that one consumer process
+    must be executed for each Huey instance.
+
+    :param queue: a queue instance, e.g. ``RedisQueue()``
+    :param result_store: a place to store results and the command schedule,
+        e.g. ``RedisResultStore()``
+    :param store_none: Flag to indicate whether tasks that return ``None``
+        should store their results in the result store.
+    :param always_eager: Useful for testing, this will execute all tasks
+        immediately, without enqueueing them.
+
+    Example usage::
+
+        from huey.api import Huey, crontab
+        from huey.backends.redis_backend import RedisQueue, RedisDataStore
+
+        queue = RedisQueue()
+        result_store = RedisDataStore()
+        huey = Huey(queue, result_store)
+
+        @huey.task()
+        def slow_function(some_arg):
+            # ... do something ...
+            return some_arg
+
+        @huey.periodic_task(crontab(minute='0', hour='3'))
+        def backup():
+            # do a backup every day at 3am
+            return
     """
-    def __init__(self, queue, result_store=None, task_store=None,
-                 store_none=False, always_eager=False):
+    def __init__(self, queue, result_store=None, store_none=False
+                 always_eager=False):
         self.queue = queue
         self.result_store = result_store
-        self.task_store = task_store
         self.blocking = self.queue.blocking
         self.store_none = store_none
         self.always_eager = always_eager
@@ -42,7 +75,7 @@ class Huey(object):
                     raise ValueError('Both a delay and an eta cannot be '
                                      'specified at the same time')
                 if delay:
-                    eta = (datetime.datetime.now() + 
+                    eta = (datetime.datetime.now() +
                            datetime.timedelta(seconds=delay))
                 if convert_utc and eta:
                     eta = local_to_utc(eta)
@@ -65,7 +98,7 @@ class Huey(object):
             return inner_run
         return decorator
 
-    def periodic_command(self, validate_datetime):
+    def periodic_task(self, validate_datetime):
         """
         Decorator to execute a function on a specific schedule.
         """
@@ -158,7 +191,7 @@ class Huey(object):
         return result
 
     def revoke(self, command, revoke_until=None, revoke_once=False):
-        if not self.task_store:
+        if not self.result_store:
             raise QueueException('A DataStore is required to revoke commands')
 
         serialized = pickle.dumps((revoke_until, revoke_once))
@@ -186,8 +219,8 @@ class Huey(object):
 
 
 class AsyncData(object):
-    def __init__(self, invoker, command):
-        self.invoker = invoker
+    def __init__(self, huey, command):
+        self.huey = huey
         self.command = command
 
         self._result = EmptyData
@@ -195,7 +228,7 @@ class AsyncData(object):
     def _get(self):
         task_id = self.command.task_id
         if self._result is EmptyData:
-            res = self.invoker._get(task_id)
+            res = self.huey._get(task_id)
 
             if res is not EmptyData:
                 self._result = pickle.loads(res)
@@ -228,27 +261,26 @@ class AsyncData(object):
             return self._result
 
     def revoke(self):
-        self.invoker.revoke(self.command)
+        self.huey.revoke(self.command)
 
     def restore(self):
-        self.invoker.restore(self.command)
-
+        self.huey.restore(self.command)
 
 
 class CommandSchedule(object):
-    def __init__(self, invoker, key_name='schedule'):
-        self.invoker = invoker
+    def __init__(self, huey, key_name='schedule'):
+        self.huey = huey
         self.key_name = key_name
 
-        self.task_store = self.invoker.task_store
+        self.result_store = self.huey.result_store
         self._schedule = {}
 
     def __contains__(self, task_id):
         return task_id in self._schedule
 
     def load(self):
-        if self.task_store:
-            serialized = self.task_store.get(self.key_name)
+        if self.result_store:
+            serialized = self.result_store.get(self.key_name)
 
             if serialized and serialized is not EmptyData:
                 self.load_commands(pickle.loads(serialized))
@@ -262,8 +294,8 @@ class CommandSchedule(object):
                 pass
 
     def save(self):
-        if self.task_store:
-            self.task_store.put(self.key_name, self.serialize_commands())
+        if self.result_store:
+            self.result_store.put(self.key_name, self.serialize_commands())
 
     def serialize_commands(self):
         return pickle.dumps([
@@ -277,7 +309,7 @@ class CommandSchedule(object):
         return cmd.execute_time is None or cmd.execute_time <= dt
 
     def can_run(self, cmd, dt=None):
-        return not self.invoker.is_revoked(cmd, dt, False)
+        return not self.huey.is_revoked(cmd, dt, False)
 
     def add(self, cmd):
         if not self.is_pending(cmd):
@@ -314,7 +346,7 @@ class QueueCommand(object):
             data = self.get_data()
             send_email(data['recipient'], data['subject'], data['body'])
 
-    invoker.enqueue(
+    huey.enqueue(
         SendEmailCommand({
             'recipient': 'somebody@spam.com',
             'subject': 'look at this awesome website',
