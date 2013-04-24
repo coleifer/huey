@@ -1,1 +1,1 @@
-from huey.queue import Huey, crontab
+from huey.api import Huey, crontab
