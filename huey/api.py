@@ -28,7 +28,7 @@ class Huey(object):
     must be executed for each Huey instance.
 
     :param queue: a queue instance, e.g. ``RedisQueue()``
-    :param result_store: a place to store results and the command schedule,
+    :param result_store: a place to store results and the task schedule,
         e.g. ``RedisResultStore()``
     :param store_none: Flag to indicate whether tasks that return ``None``
         should store their results in the result store.
@@ -67,7 +67,7 @@ class Huey(object):
             """
             Decorator to execute a function out-of-band via the consumer.
             """
-            klass = create_command(QueueCommand, func, retries_as_argument)
+            klass = create_task(QueueTask, func, retries_as_argument)
 
             def schedule(args=None, kwargs=None, eta=None, delay=None,
                          convert_utc=True):
@@ -86,7 +86,7 @@ class Huey(object):
                 return self.enqueue(cmd)
 
             func.schedule = schedule
-            func.command_class = klass
+            func.task_class = klass
 
             @wraps(func)
             def inner_run(*args, **kwargs):
@@ -106,13 +106,13 @@ class Huey(object):
             def method_validate(self, dt):
                 return validate_datetime(dt)
 
-            klass = create_command(
-                PeriodicQueueCommand,
+            klass = create_task(
+                PeriodicQueueTask,
                 func,
                 validate_datetime=method_validate
             )
 
-            func.command_class = klass
+            func.task_class = klass
 
             def _revoke(revoke_until=None, revoke_once=False):
                 self.revoke(klass(), revoke_until, revoke_once)
@@ -162,55 +162,55 @@ class Huey(object):
         except:
             return wrap_exception(DataStorePutException)
 
-    def enqueue(self, command):
+    def enqueue(self, task):
         if self.always_eager:
-            return command.execute()
+            return task.execute()
 
-        self._write(registry.get_message_for_command(command))
+        self._write(registry.get_message_for_task(task))
 
         if self.result_store:
-            return AsyncData(self, command)
+            return AsyncData(self, task)
 
     def dequeue(self):
         message = self._read()
         if message:
-            return registry.get_command_for_message(message)
+            return registry.get_task_for_message(message)
 
-    def execute(self, command):
-        if not isinstance(command, QueueCommand):
-            raise TypeError('Unknown object: %s' % command)
+    def execute(self, task):
+        if not isinstance(task, QueueTask):
+            raise TypeError('Unknown object: %s' % task)
 
-        result = command.execute()
+        result = task.execute()
 
         if result is None and not self.store_none:
             return
 
-        if self.result_store and not isinstance(command, PeriodicQueueCommand):
-            self._put(command.task_id, pickle.dumps(result))
+        if self.result_store and not isinstance(task, PeriodicQueueTask):
+            self._put(task.task_id, pickle.dumps(result))
 
         return result
 
-    def revoke(self, command, revoke_until=None, revoke_once=False):
+    def revoke(self, task, revoke_until=None, revoke_once=False):
         if not self.result_store:
-            raise QueueException('A DataStore is required to revoke commands')
+            raise QueueException('A DataStore is required to revoke task')
 
         serialized = pickle.dumps((revoke_until, revoke_once))
-        self._put(command.revoke_id, serialized)
-        #self._remove(registry.get_message_for_command(command))
+        self._put(task.revoke_id, serialized)
+        #self._remove(registry.get_message_for_task(task))
 
-    def restore(self, command):
-        self._get(command.revoke_id)  # simply get and delete if there
+    def restore(self, task):
+        self._get(task.revoke_id)  # simply get and delete if there
 
-    def is_revoked(self, command, dt=None, preserve=True):
+    def is_revoked(self, task, dt=None, preserve=True):
         if not self.result_store:
             return False
-        res = self._get(command.revoke_id, peek=True)
+        res = self._get(task.revoke_id, peek=True)
         if res is EmptyData:
             return False
         revoke_until, revoke_once = pickle.loads(res)
         if revoke_once:
             if not preserve:
-                self.restore(command)
+                self.restore(task)
             return True
         return revoke_until is None or revoke_until > dt
 
@@ -219,14 +219,14 @@ class Huey(object):
 
 
 class AsyncData(object):
-    def __init__(self, huey, command):
+    def __init__(self, huey, task):
         self.huey = huey
-        self.command = command
+        self.task = task
 
         self._result = EmptyData
 
     def _get(self):
-        task_id = self.command.task_id
+        task_id = self.task.task_id
         if self._result is EmptyData:
             res = self.huey._get(task_id)
 
@@ -261,13 +261,13 @@ class AsyncData(object):
             return self._result
 
     def revoke(self):
-        self.huey.revoke(self.command)
+        self.huey.revoke(self.task)
 
     def restore(self):
-        self.huey.restore(self.command)
+        self.huey.restore(self.task)
 
 
-class CommandSchedule(object):
+class TaskSchedule(object):
     def __init__(self, huey, key_name='schedule'):
         self.huey = huey
         self.key_name = key_name
@@ -283,25 +283,25 @@ class CommandSchedule(object):
             serialized = self.result_store.get(self.key_name)
 
             if serialized and serialized is not EmptyData:
-                self.load_commands(pickle.loads(serialized))
+                self.load_tasks(pickle.loads(serialized))
 
-    def load_commands(self, messages):
+    def load_tasks(self, messages):
         for cmd_string in messages:
             try:
-                cmd_obj = registry.get_command_for_message(cmd_string)
+                cmd_obj = registry.get_task_for_message(cmd_string)
                 self.add(cmd_obj)
             except QueueException:
                 pass
 
     def save(self):
         if self.result_store:
-            self.result_store.put(self.key_name, self.serialize_commands())
+            self.result_store.put(self.key_name, self.serialize_tasks())
 
-    def serialize_commands(self):
+    def serialize_tasks(self):
         return pickle.dumps([
-            registry.get_message_for_command(c) for c in self.commands()])
+            registry.get_message_for_task(c) for c in self.tasks()])
 
-    def commands(self):
+    def tasks(self):
         return self._schedule.values()
 
     def should_run(self, cmd, dt=None):
@@ -323,31 +323,31 @@ class CommandSchedule(object):
         return cmd.task_id in self._schedule
 
 
-class QueueCommandMetaClass(type):
+class QueueTaskMetaClass(type):
     def __init__(cls, name, bases, attrs):
         """
-        Metaclass to ensure that all command classes are registered
+        Metaclass to ensure that all task classes are registered
         """
         registry.register(cls)
 
 
-class QueueCommand(object):
+class QueueTask(object):
     """
     A class that encapsulates the logic necessary to 'do something' given some
     arbitrary data.  When enqueued with the :class:`Invoker`, it will be
     stored in a queue for out-of-band execution via the consumer.  See also
-    the :func:`queue_command` decorator, which can be used to automatically
+    the :func:`queue_task` decorator, which can be used to automatically
     execute any function out-of-band.
 
     Example::
 
-    class SendEmailCommand(QueueCommand):
+    class SendEmailTask(QueueTask):
         def execute(self):
             data = self.get_data()
             send_email(data['recipient'], data['subject'], data['body'])
 
     huey.enqueue(
-        SendEmailCommand({
+        SendEmailTask({
             'recipient': 'somebody@spam.com',
             'subject': 'look at this awesome website',
             'body': 'http://youtube.com'
@@ -355,12 +355,12 @@ class QueueCommand(object):
     )
     """
 
-    __metaclass__ = QueueCommandMetaClass
+    __metaclass__ = QueueTaskMetaClass
 
     def __init__(self, data=None, task_id=None, execute_time=None, retries=0,
                  retry_delay=0):
         """
-        Initialize the command object with a receiver and optional data.  The
+        Initialize the task object with a receiver and optional data.  The
         receiver object *must* be a django model instance.
         """
         self.set_data(data)
@@ -374,11 +374,11 @@ class QueueCommand(object):
         return str(uuid.uuid4())
 
     def get_data(self):
-        """Called by the Invoker when a command is being enqueued"""
+        """Called by the Invoker when a task is being enqueued"""
         return self.data
 
     def set_data(self, data):
-        """Called by the Invoker when a command is dequeued"""
+        """Called by the Invoker when a task is dequeued"""
         self.data = data
 
     def execute(self):
@@ -392,16 +392,16 @@ class QueueCommand(object):
             type(self) == type(rhs))
 
 
-class PeriodicQueueCommand(QueueCommand):
+class PeriodicQueueTask(QueueTask):
     def create_id(self):
-        return registry.command_to_string(type(self))
+        return registry.task_to_string(type(self))
 
     def validate_datetime(self, dt):
-        """Validate that the command should execute at the given datetime"""
+        """Validate that the task should execute at the given datetime"""
         return False
 
 
-def create_command(command_class, func, retries_as_argument=False, **kwargs):
+def create_task(task_class, func, retries_as_argument=False, **kwargs):
     def execute(self):
         args, kwargs = self.data or ((), {})
         if retries_as_argument:
@@ -417,7 +417,7 @@ def create_command(command_class, func, retries_as_argument=False, **kwargs):
 
     klass = type(
         'queuecmd_%s' % (func.__name__),
-        (command_class,),
+        (task_class,),
         attrs
     )
 
