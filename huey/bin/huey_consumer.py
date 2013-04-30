@@ -9,6 +9,7 @@ import signal
 import sys
 import threading
 import time
+from collections import namedtuple
 from logging.handlers import RotatingFileHandler
 
 from huey.api import Huey
@@ -20,7 +21,7 @@ from huey.registry import registry
 from huey.utils import load_class
 
 
-log = logging.getLogger('huey.consumer.logger')
+logger = logging.getLogger('huey.consumer.logger')
 
 class IterableQueue(Queue.Queue):
     def __iter__(self):
@@ -32,47 +33,16 @@ class IterableQueue(Queue.Queue):
             raise result
         return result
 
-class ExecuteTask(object):
-    def __init__(self, task, timestamp=None):
-        self.task = task
-        self.timestamp = timestamp
-
-"""
-Roles and Communication
-=======================
-
-* Timed thread
-
-
-    - 1/s check to see what needs to run
-    - keep track of commands that have been "delayed"
-    - commands that always run at certain time
-    - EXECUTE (executor inbox)
-
-* Message Receiver Thread
-
-    - DEQUEUE tasks
-    - SCHEDULE tasks (timed thread inbox)
-    - EXECUTE tasks (executor inbox)
-
-* Executor Thread
-
-    - inbox -> SPAWN WORKERS
-
-* Worker Thread
-
-    - RUN task
-    - ENQUEUE task if it fails
-
-"""
+ExecuteTask = namedtuple('ExecuteTask', ('task', 'timestamp'))
 
 class ConsumerThread(threading.Thread):
     def __init__(self, utc, shutdown):
         self.utc = utc
         self.shutdown = shutdown
+        super(ConsumerThread, self).__init__()
 
     def get_now(self):
-        if self.use_utc:
+        if self.utc:
             return datetime.datetime.utcnow()
         return datetime.datetime.now()
 
@@ -83,7 +53,7 @@ class ConsumerThread(threading.Thread):
         raise NotImplementedError
 
     def run(self):
-        while not self.shutdown:
+        while not self.shutdown.is_set():
             self.loop()
         self.on_shutdown()
 
@@ -97,29 +67,32 @@ class PeriodicTaskThread(ConsumerThread):
         now = self.get_now()
         for task in registry.get_periodic_tasks():
             if task.validate_datetime(now):
+                print 'PTT: scheduling %s for execution' % task
                 self.executor_inbox.put(ExecuteTask(task, now))
         time.sleep(60 - (time.time() - start))
 
 class SchedulerThread(ConsumerThread):
-    def __init__(self, schedule, executor_inbox, utc, shutdown):
-        self.schedule = schedule
+    def __init__(self, huey, executor_inbox, utc, shutdown):
+        self.huey = huey
         self.executor_inbox = executor_inbox
         super(SchedulerThread, self).__init__(utc, shutdown)
 
     def loop(self):
         start = time.time()
         now = self.get_now()
-        for task in self.schedule.tasks():
-            if task.execute_time is None or task.execute_time < now:
-                self.schedule.remove(command)
+        for task in self.huey.schedule():
+            if self.huey.ready_to_run(task, now):
+                print 'ST: scheduling %s for execution' % task
+                self.huey.remove_schedule(task)
                 self.executor_inbox.put(ExecuteTask(task, now))
         delta = time.time() - start
         if delta < 1:
             time.sleep(1 - (time.time() - start))
 
 class MessageReceiverThread(ConsumerThread):
-    def __init__(self, huey, default_delay, max_delay, backoff, utc, shutdown):
+    def __init__(self, huey, executor_inbox, default_delay, max_delay, backoff, utc, shutdown):
         self.huey = huey
+        self.executor_inbox = executor_inbox
         self.delay = self.default_delay = default_delay
         self.max_delay = max_delay
         self.backoff = backoff
@@ -129,118 +102,102 @@ class MessageReceiverThread(ConsumerThread):
         try:
             task = self.huey.dequeue()
         except QueueReadException:
-            self.logger.error('Error reading from queue', exc_info=1)
+            logger.error('Error reading from queue', exc_info=1)
+            raise
         except QueueException:
-            self.logger.error('Queue exception', exc_info=1)
+            logger.error('Queue exception', exc_info=1)
+            raise
         else:
-            if not task and not self.invoker.blocking:
-                # no new messages and our queue doesn't block, so sleep a bit before
-                # checking again
+            print 'MRT: got %s' % task
+            if not task and not self.huey.blocking:
+                print 'SLEEPING, no task?'
                 self.sleep()
-            elif command:
+            elif task:
+                print 'MRT: executing %s' % task
                 now = self.get_now()
-                if not self.schedule.should_run(command, now):
-                    self.schedule.add(command)
-                elif self.schedule.can_run(command, now):
-                    self.process_command(command)
+                self.executor_inbox.put(ExecuteTask(task, now))
 
     def sleep(self):
         if self.delay > self.max_delay:
             self.delay = self.max_delay
 
-        self.logger.debug('message receiver sleeping for: %s' % self.delay)
+        logger.debug('message receiver sleeping for: %s' % self.delay)
         time.sleep(self.delay)
-
         self.delay *= self.backoff_factor
 
-class ExecutorThread(ConsumerThread):
-    def __init__(self, workers, inbox, enqueue, utc, shutdown):
-        self.workers = workers
+class ExecutorThread(threading.Thread):
+    def __init__(self, inbox, workers, huey):
         self.inbox = inbox
+        self.workers = workers
+        self.huey = huey
         self.pool = threading.BoundedSemaphore(self.workers)
-        super(ExecutorThread, self).__init__(enqueue, utc, shutdown)
+        super(ExecutorThread, self).__init__()
 
-    def loop(self):
-        for message in self.inbox:
-            self.pool.acquire()
-            worker_t = WorkerThread(enqueue, job)
-            #
-    def process_command(self, command):
-        self._pool.acquire()
+    def run(self):
+        for execute_task in self.inbox:
+            task, ts = execute_task
+            print 'ETT: got %s' % task
+            if not self.huey.ready_to_run(task, ts):
+                print 'ETT: not ready to run task'
+                self.huey.add_schedule(task)
+            elif not self.huey.is_revoked(task, ts):
+                print 'ETT: processing %s' % task
+                self.process_task(task, ts)
 
-        # spin up a worker with the given job
-        self.spawn(self.worker, job)
+    def process_task(self, task, ts):
+        self.pool.acquire()
+        logger.info('processing: %s' % task)
+        worker_t = WorkerThread(self.huey, task, ts, self.pool)
+        worker_t.start()
 
-        log.info('processing: %s' % command)
-        self.delay = self.default_delay
+class WorkerThread(threading.Thread):
+    def __init__(self, huey, task, ts, pool):
+        self.huey = huey
+        self.task = task
+        self.ts = ts
+        self.pool = pool
+        super(WorkerThread, self).__init__()
 
-    def worker(self, command):
+    def run(self):
         try:
-            self.huey.execute(command)
+            self.huey.execute(self.task)
         except DataStorePutException:
-            log.warn('error storing result', exc_info=1)
+            logger.warn('error storing result', exc_info=1)
         except:
-            log.error('unhandled exception in worker thread', exc_info=1)
-            if command.retries:
-                self.requeue_command(command)
+            logger.error('unhandled exception in worker thread', exc_info=1)
+            if self.task.retries:
+                self.requeue_task()
         finally:
-            self._pool.release()
+            self.pool.release()
 
-    def requeue_command(self, command):
-        command.retries -= 1
-        log.info('re-enqueueing task %s, %s tries left' % (command.task_id, command.retries))
+    def requeue_task(self):
+        task = self.task
+        task.retries -= 1
+        logger.info('re-enqueueing task %s, %s tries left' %
+                         (task.task_id, task.retries))
         try:
-            if command.retry_delay:
-                delay = datetime.timedelta(seconds=command.retry_delay)
-                command.execute_time = self.get_now() + delay
-                self.schedule.add(command)
+            if task.retry_delay:
+                delay = datetime.timedelta(seconds=task.retry_delay)
+                task.execute_time = self.ts + delay
+                self.huey.add_schedule(task)
             else:
-                self.huey.enqueue(command)
+                self.huey.enqueue(task)
         except QueueWriteException:
-            log.error('unable to re-enqueue %s, error writing to backend' % command.task_id)
-
-
-class ScheduledTaskThread(ConsumerThread):
-    def __init__(self, queue, schedule, huey, utc, shutdown):
-        self.queue = queue
-        self.schedule = schedule
-        super(ScheduledTaskThread, self).__init__(huey, utc, shutdown)
-
-    def loop(self):
-        start = time.time()
-
-        # Load any new commands into the schedule
-        pass
-
-        for command in self.schedule.commands():
-            if self.schedule.should_run(command, dt):
-                self.schedule.remove(command)
-                if self.schedule.can_run(command, dt):
-                    self.huey.enqueue(command)
-
-        # check schedule once per second
-        delta = time.time() - start
-        if delta < 1:
-            time.sleep(1 - (time.time() - start))
-
-
-class MessageReceiverThread(ConsumerThread):
-    def loop(self):
-        pass
+            logger.error('unable to re-enqueue %s' % task)
 
 
 class Consumer(object):
     def __init__(self, huey, logfile=None, loglevel=logging.INFO,
-                 threads=1, periodic_commands=True, initial_delay=0.1,
-                 backoff_factor=1.15, max_delay=10.0, utc=True):
+                 workers=1, periodic_commands=True, initial_delay=0.1,
+                 backoff=1.15, max_delay=10.0, utc=True):
 
         self.huey = huey
         self.logfile = logfile
         self.loglevel = loglevel
-        self.threads = threads
+        self.workers = workers
         self.periodic_commands = periodic_commands
         self.default_delay = initial_delay
-        self.backoff_factor = backoff_factor
+        self.backoff = backoff
         self.max_delay = max_delay
         self.utc = utc
 
@@ -248,161 +205,85 @@ class Consumer(object):
 
         self.setup_logger()
 
-        # Pool of workers.
-        self._pool = threading.BoundedSemaphore(self.threads)
         self._shutdown = threading.Event()
-
-        self.schedule = CommandSchedule(self.huey)
+        self._executor_inbox = IterableQueue()
 
     def setup_logger(self):
-        log.setLevel(self.loglevel)
+        logger.setLevel(self.loglevel)
 
-        if not log.handlers and self.logfile:
+        if not logger.handlers and self.logfile:
             handler = RotatingFileHandler(self.logfile, maxBytes=1024*1024,
                                           backupCount=3)
             handler.setFormatter(logging.Formatter(
                 "%(asctime)s:%(name)s:%(levelname)s:%(message)s"))
-            log.addHandler(handler)
+            logger.addHandler(handler)
 
-    def receive_messages(self):
-        while not self._shutdown.is_set():
-            try:
-                command = self.huey.dequeue()
-            except QueueReadException:
-                log.error('error reading from queue', exc_info=1)
-            except QueueException:
-                log.error('queue exception', exc_info=1)
-            else:
-                if not command and not self.huey.blocking:
-                    # no new messages and our queue doesn't block, so sleep a bit before
-                    # checking again
-                    self.sleep()
-                elif command:
-                    now = self.get_now()
-                    if not self.schedule.should_run(command, now):
-                        self.schedule.add(command)
-                    elif self.schedule.can_run(command, now):
-                        self.process_command(command)
-
-    def sleep(self):
-        if self.delay > self.max_delay:
-            self.delay = self.max_delay
-
-        log.debug('no commands, sleeping for: %s' % self.delay)
-        time.sleep(self.delay)
-
-        self.delay *= self.backoff_factor
-
-    def process_command(self, command):
-        self._pool.acquire()
-
-        # spin up a worker with the given job
-        self.spawn(self.worker, job)
-
-        log.info('processing: %s' % command)
-        self.delay = self.default_delay
-
-    def worker(self, command):
-        try:
-            self.huey.execute(command)
-        except DataStorePutException:
-            log.warn('error storing result', exc_info=1)
-        except:
-            log.error('unhandled exception in worker thread', exc_info=1)
-            if command.retries:
-                self.requeue_command(command)
-        finally:
-            self._pool.release()
-
-    def requeue_command(self, command):
-        command.retries -= 1
-        log.info('re-enqueueing task %s, %s tries left' % (command.task_id, command.retries))
-        try:
-            if command.retry_delay:
-                delay = datetime.timedelta(seconds=command.retry_delay)
-                command.execute_time = self.get_now() + delay
-                self.schedule.add(command)
-            else:
-                self.huey.enqueue(command)
-        except QueueWriteException:
-            log.error('unable to re-enqueue %s, error writing to backend' % command.task_id)
+    def spawn(self, t):
+        t.daemon = True
+        t.start()
 
     def start(self):
-        self.load_schedule()
-
-        log.info('starting scheduler thread')
-        self.spawn(self.schedule_commands)
+        logger.info('starting scheduler thread')
+        scheduler_t = SchedulerThread(self.huey, self._executor_inbox,
+                                      self.utc, self._shutdown)
+        self.spawn(scheduler_t)
+        print 'HERE'
 
         if self.periodic_commands:
-            log.info('starting periodic task scheduler thread')
-            self.spawn(self.schedule_periodic_tasks)
+            logger.info('starting periodic task scheduler thread')
+            periodic_t = PeriodicTaskThread(self._executor_inbox, self.utc,
+                                        self._shutdown)
+            self.spawn(periodic_t)
 
-        log.info('starting message receiver thread')
-        self.spawn(self.receive_messages)
+        logger.info('starting message receiver thread')
+        message_t = MessageReceiverThread(
+            self.huey, self._executor_inbox, self.default_delay, self.max_delay,
+            self.backoff, self.utc, self._shutdown)
+        self.spawn(message_t)
+
+        logger.info('starting task executor thread')
+        executor_t = ExecutorThread(self._executor_inbox, self.workers,
+                                    self.huey)
+        self.spawn(executor_t)
 
     def shutdown(self):
         self._shutdown.set()
+        self._executor_inbox.put(StopIteration)
 
     def handle_signal(self, sig_num, frame):
-        log.info('received SIGTERM, shutting down')
+        logger.info('received SIGTERM, shutting down')
         self.shutdown()
 
     def set_signal_handler(self):
-        log.info('setting signal handler')
+        logger.info('setting signal handler')
         signal.signal(signal.SIGTERM, self.handle_signal)
-
-    def load_schedule(self):
-        log.info('loading command schedule')
-        self.schedule.load()
-
-    def save_schedule(self):
-        log.info('saving command schedule')
-        self.schedule.save()
 
     def log_registered_commands(self):
         msg = ['huey initialized with following commands']
         for command in registry._registry:
             msg.append('+ %s' % command)
-
-        log.info('\n'.join(msg))
+        logger.info('\n'.join(msg))
 
     def run(self):
         self.set_signal_handler()
-
         self.log_registered_commands()
 
+        self.huey.load_schedule()
         try:
             self.start()
-
             # it seems that calling self._shutdown.wait() here prevents the
             # signal handler from executing
             while not self._shutdown.is_set():
                 self._shutdown.wait(.1)
         except:
-            log.error('error', exc_info=1)
+            logger.error('error', exc_info=1)
             self.shutdown()
 
-        self.save_schedule()
-
-        log.info('shutdown...')
+        self.huey.save_schedule()
+        logger.info('shutdown...')
 
 def err(s):
     sys.stderr.write('\033[91m%s\033[0m\n' % s)
-
-def load_config(config):
-    config_module, config_obj = config.rsplit('.', 1)
-    try:
-        __import__(config_module)
-        mod = sys.modules[config_module]
-    except ImportError:
-        err('Unable to import "%s"' % config_module)
-
-    try:
-        config = getattr(mod, config_obj)
-    except AttributeError:
-        err('Missing module-level "%s"' % config_obj)
-
-    return config
 
 def get_option_parser():
     parser = optparse.OptionParser('Usage: %prog [options] path.to.huey_instance')
@@ -460,5 +341,15 @@ if __name__ == '__main__':
         err('Error importing %s' % args[0])
         sys.exit(2)
 
-    consumer = Consumer(huey_instance, config)
+    loglevel = logging.INFO if options.verbose else logging.DEBUG
+    consumer = Consumer(
+        huey_instance,
+        options.logfile,
+        loglevel,
+        options.threads,
+        options.periodic,
+        options.initial_delay,
+        options.backoff,
+        options.max_delay,
+        options.utc)
     consumer.run()

@@ -3,14 +3,17 @@ import os
 import pickle
 import re
 import sys
+import threading
 import time
 import uuid
+from functools import wraps
 
 from huey.exceptions import DataStoreGetException
 from huey.exceptions import DataStorePutException
 from huey.exceptions import DataStoreTimeout
 from huey.exceptions import QueueException
 from huey.exceptions import QueueReadException
+from huey.exceptions import QueueRemoveException
 from huey.exceptions import QueueWriteException
 from huey.registry import registry
 from huey.utils import EmptyData
@@ -54,13 +57,16 @@ class Huey(object):
             # do a backup every day at 3am
             return
     """
-    def __init__(self, queue, result_store=None, store_none=False
-                 always_eager=False):
+    def __init__(self, queue, result_store=None, store_none=False,
+                 always_eager=False, schedule_key='schedule'):
         self.queue = queue
         self.result_store = result_store
         self.blocking = self.queue.blocking
         self.store_none = store_none
         self.always_eager = always_eager
+        self.schedule_key = schedule_key
+        self._schedule = {}
+        self._lock = threading.Lock()
 
     def task(self, retries=0, retry_delay=0, retries_as_argument=False):
         def decorator(func):
@@ -118,8 +124,8 @@ class Huey(object):
                 self.revoke(klass(), revoke_until, revoke_once)
             func.revoke = _revoke
 
-            def _is_revoked(dt=None, preserve=True):
-                return self.is_revoked(klass(), dt, preserve)
+            def _is_revoked(dt=None, peek=True):
+                return self.is_revoked(klass(), dt, peek)
             func.is_revoked = _is_revoked
 
             def _restore():
@@ -129,38 +135,38 @@ class Huey(object):
             return func
         return decorator
 
+    def _wrapped_operation(exc_class):
+        def decorator(fn):
+            def inner(*args, **kwargs):
+                try:
+                    return fn(*args, **kwargs)
+                except:
+                    wrap_exception(exc_class)
+            return inner
+        return decorator
+
+    @_wrapped_operation(QueueWriteException)
     def _write(self, msg):
-        try:
-            self.queue.write(msg)
-        except:
-            wrap_exception(QueueWriteException)
+        self.queue.write(msg)
 
+    @_wrapped_operation(QueueReadException)
     def _read(self):
-        try:
-            return self.queue.read()
-        except:
-            wrap_exception(QueueReadException)
+        return self.queue.read()
 
+    @_wrapped_operation(QueueRemoveException)
     def _remove(self, msg):
-        try:
-            return self.queue.remove(msg)
-        except:
-            wrap_exception(QueueRemoveException)
+        return self.queue.remove(msg)
 
+    @_wrapped_operation(DataStoreGetException)
     def _get(self, key, peek=False):
-        try:
-            if peek:
-                return self.result_store.peek(key)
-            else:
-                return self.result_store.get(key)
-        except:
-            return wrap_exception(DataStoreGetException)
+        if peek:
+            return self.result_store.peek(key)
+        else:
+            return self.result_store.get(key)
 
+    @_wrapped_operation(DataStorePutException)
     def _put(self, key, value):
-        try:
-            return self.result_store.put(key, value)
-        except:
-            return wrap_exception(DataStorePutException)
+        return self.result_store.put(key, value)
 
     def enqueue(self, task):
         if self.always_eager:
@@ -196,12 +202,11 @@ class Huey(object):
 
         serialized = pickle.dumps((revoke_until, revoke_once))
         self._put(task.revoke_id, serialized)
-        #self._remove(registry.get_message_for_task(task))
 
     def restore(self, task):
         self._get(task.revoke_id)  # simply get and delete if there
 
-    def is_revoked(self, task, dt=None, preserve=True):
+    def is_revoked(self, task, dt=None, peek=True):
         if not self.result_store:
             return False
         res = self._get(task.revoke_id, peek=True)
@@ -209,13 +214,56 @@ class Huey(object):
             return False
         revoke_until, revoke_once = pickle.loads(res)
         if revoke_once:
-            if not preserve:
+            # This task *was* revoked for one run, but now it should be
+            # restored to normal execution.
+            if not peek:
                 self.restore(task)
             return True
         return revoke_until is None or revoke_until > dt
 
     def flush(self):
         self.queue.flush()
+
+    def load_schedule(self):
+        if not self.result_store:
+            return
+        with self._lock:
+            serialized = self.result_store.get(self.schedule_key)
+            if not serialized or serialized is EmptyData:
+                return
+
+            for cmd_string in pickle.loads(serialized):
+                try:
+                    cmd_obj = registry.get_task_for_message(cmd_string)
+                    self.schedule_add(cmd_obj)
+                except QueueException:
+                    pass
+
+    def save_schedule(self):
+        if not self.result_store:
+            return
+        with self._lock:
+            serialized_tasks = pickle.dumps([
+                registry.get_message_for_task(c) for c in self.schedule()])
+            self.result_store.put(self.schedule_key, serialized_tasks)
+
+    def ready_to_run(self, cmd, dt=None):
+        dt = dt or datetime.datetime.now()
+        return cmd.execute_time is None or cmd.execute_time <= dt
+
+    def add_schedule(self, cmd):
+        if not self.is_pending(cmd):
+            self._schedule[cmd.task_id] = cmd
+
+    def remove_schedule(self, cmd):
+        if self.is_pending(cmd):
+            del(self._schedule[cmd.task_id])
+
+    def is_pending(self, cmd):
+        return cmd.task_id in self._schedule
+
+    def schedule(self):
+        return iter(self._schedule.values())
 
 
 class AsyncData(object):
@@ -265,62 +313,6 @@ class AsyncData(object):
 
     def restore(self):
         self.huey.restore(self.task)
-
-
-class TaskSchedule(object):
-    def __init__(self, huey, key_name='schedule'):
-        self.huey = huey
-        self.key_name = key_name
-
-        self.result_store = self.huey.result_store
-        self._schedule = {}
-
-    def __contains__(self, task_id):
-        return task_id in self._schedule
-
-    def load(self):
-        if self.result_store:
-            serialized = self.result_store.get(self.key_name)
-
-            if serialized and serialized is not EmptyData:
-                self.load_tasks(pickle.loads(serialized))
-
-    def load_tasks(self, messages):
-        for cmd_string in messages:
-            try:
-                cmd_obj = registry.get_task_for_message(cmd_string)
-                self.add(cmd_obj)
-            except QueueException:
-                pass
-
-    def save(self):
-        if self.result_store:
-            self.result_store.put(self.key_name, self.serialize_tasks())
-
-    def serialize_tasks(self):
-        return pickle.dumps([
-            registry.get_message_for_task(c) for c in self.tasks()])
-
-    def tasks(self):
-        return self._schedule.values()
-
-    def should_run(self, cmd, dt=None):
-        dt = dt or datetime.datetime.now()
-        return cmd.execute_time is None or cmd.execute_time <= dt
-
-    def can_run(self, cmd, dt=None):
-        return not self.huey.is_revoked(cmd, dt, False)
-
-    def add(self, cmd):
-        if not self.is_pending(cmd):
-            self._schedule[cmd.task_id] = cmd
-
-    def remove(self, cmd):
-        if self.is_pending(cmd):
-            del(self._schedule[cmd.task_id])
-
-    def is_pending(self, cmd):
-        return cmd.task_id in self._schedule
 
 
 class QueueTaskMetaClass(type):
