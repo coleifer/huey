@@ -21,7 +21,7 @@ from huey.registry import registry
 from huey.utils import load_class
 
 
-logger = logging.getLogger('huey.consumer.logger')
+logger = logging.getLogger('huey.consumer')
 
 class IterableQueue(Queue.Queue):
     def __iter__(self):
@@ -56,6 +56,7 @@ class ConsumerThread(threading.Thread):
     def run(self):
         while not self.shutdown.is_set():
             self.loop()
+        logger.debug('Thread shutting down')
         self.on_shutdown()
 
 
@@ -65,6 +66,7 @@ class PeriodicTaskThread(ConsumerThread):
         super(PeriodicTaskThread, self).__init__(utc, shutdown)
 
     def loop(self):
+        logger.debug('Checking periodic command registry')
         start = time.time()
         now = self.get_now()
         for task in registry.get_periodic_tasks():
@@ -81,6 +83,7 @@ class SchedulerThread(ConsumerThread):
         super(SchedulerThread, self).__init__(utc, shutdown)
 
     def loop(self):
+        logger.debug('Checking schedule')
         start = time.time()
         now = self.get_now()
         for task in self.huey.schedule():
@@ -103,6 +106,7 @@ class MessageReceiverThread(ConsumerThread):
         super(MessageReceiverThread, self).__init__(utc, shutdown)
 
     def loop(self):
+        logger.debug('Checking for message')
         try:
             task = self.huey.dequeue()
         except QueueReadException:
@@ -120,7 +124,7 @@ class MessageReceiverThread(ConsumerThread):
         if self.delay > self.max_delay:
             self.delay = self.max_delay
 
-        logger.debug('message receiver sleeping for: %s' % self.delay)
+        logger.debug('No messages, sleeping for: %s' % self.delay)
         time.sleep(self.delay)
         self.delay *= self.backoff_factor
 
@@ -141,6 +145,7 @@ class ExecutorThread(threading.Thread):
                 self.huey.add_schedule(task)
             elif not self.huey.is_revoked(task, ts):
                 self.process_task(task, ts)
+        logger.debug('Finished processing messages')
 
     def process_task(self, task, ts):
         self.pool.acquire()
@@ -221,32 +226,32 @@ class Consumer(object):
             handler.setFormatter(formatter)
             logger.addHandler(handler)
 
-    def spawn(self, t):
-        t.daemon = True
+    def spawn(self, t, daemon=False):
+        t.daemon = daemon
         t.start()
 
     def start(self):
-        logger.info('starting scheduler thread')
+        logger.info('Starting scheduler thread')
         scheduler_t = SchedulerThread(self.huey, self._executor_inbox,
                                       self.utc, self._shutdown)
         scheduler_t.name = 'Scheduler'
         self.spawn(scheduler_t)
 
         if self.periodic:
-            logger.info('starting periodic task scheduler thread')
+            logger.info('Starting periodic task scheduler thread')
             periodic_t = PeriodicTaskThread(self._executor_inbox, self.utc,
                                         self._shutdown)
             periodic_t.name = 'Periodic Task'
-            self.spawn(periodic_t)
+            self.spawn(periodic_t, daemon=True)
 
-        logger.info('starting message receiver thread')
+        logger.info('Starting message receiver thread')
         message_t = MessageReceiverThread(
             self.huey, self._executor_inbox, self.default_delay, self.max_delay,
             self.backoff, self.utc, self._shutdown)
         message_t.name = 'Message Receiver'
-        self.spawn(message_t)
+        self.spawn(message_t, daemon=True)
 
-        logger.info('starting task executor thread')
+        logger.info('Starting task executor thread')
         executor_t = ExecutorThread(self._executor_inbox, self.workers,
                                     self.huey)
         executor_t.name = 'Executor'
@@ -266,9 +271,9 @@ class Consumer(object):
         signal.signal(signal.SIGTERM, self.handle_signal)
 
     def log_registered_commands(self):
-        msg = ['huey consumer initialized with following commands']
+        msg = ['Huey consumer initialized with following commands']
         for command in registry._registry:
-            msg.append('+ %s' % command)
+            msg.append('+ %s' % command.replace('queuecmd_', ''))
         logger.info('\n'.join(msg))
 
     def run(self):
@@ -288,7 +293,6 @@ class Consumer(object):
 
         self.huey.save_schedule()
         logger.info('Exiting')
-        import ipdb; ipdb.set_trace()
 
 def err(s):
     sys.stderr.write('\033[91m%s\033[0m\n' % s)

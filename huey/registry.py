@@ -9,6 +9,7 @@ class TaskRegistry(object):
     purpose of this registry is to allow translation from queue messages to
     task classes, and vice-versa.
     """
+    _ignore = ['QueueTask', 'PeriodicQueueTask']
 
     _registry = {}
     _periodic_tasks = []
@@ -18,6 +19,8 @@ class TaskRegistry(object):
 
     def register(self, task_class):
         klass_str = self.task_to_string(task_class)
+        if klass_str in self._ignore:
+            return
 
         if klass_str not in self._registry:
             self._registry[klass_str] = task_class

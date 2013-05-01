@@ -232,10 +232,10 @@ class Huey(object):
             if not serialized or serialized is EmptyData:
                 return
 
-            for cmd_string in pickle.loads(serialized):
+            for task_string in pickle.loads(serialized):
                 try:
-                    cmd_obj = registry.get_task_for_message(cmd_string)
-                    self.schedule_add(cmd_obj)
+                    task_obj = registry.get_task_for_message(task_string)
+                    self.add_schedule(task_obj)
                 except QueueException:
                     pass
 
@@ -263,7 +263,7 @@ class Huey(object):
         return cmd.task_id in self._schedule
 
     def schedule(self):
-        return iter(self._schedule.values())
+        return self._schedule.values()
 
 
 class AsyncData(object):

@@ -4,13 +4,15 @@ import threading
 import time
 import unittest
 
-from huey import crontab, periodic_command, queue_command, Invoker, BaseConfiguration
-from huey.backends.dummy import DummyQueue, DummyDataStore
+from huey import crontab
+from huey import Huey
+from huey.backends.dummy import DummyDataStore
+from huey.backends.dummy import DummyQueue
 from huey.exceptions import QueueException
-from huey.queue import QueueCommand, PeriodicQueueCommand
 from huey.registry import registry
 from huey.utils import local_to_utc
-from huey.bin.huey_consumer import load_config, Consumer, IterableQueue
+from huey.bin.huey_consumer import Consumer
+from huey.bin.huey_consumer import IterableQueue
 
 
 # store some global state
@@ -19,26 +21,18 @@ state = {}
 # create a queue, result store and invoker for testing
 test_queue = DummyQueue('test-queue')
 test_result_store = DummyDataStore('test-queue')
-test_task_store = DummyDataStore('test-tasks')
-test_invoker = Invoker(test_queue, test_result_store, test_task_store)
+test_huey = Huey(test_queue, test_result_store)
 
-# create a dummy config for passing to the consumer
-class DummyConfiguration(BaseConfiguration):
-    QUEUE = test_queue
-    RESULT_STORE = test_result_store
-    TASK_STORE = test_result_store
-    THREADS = 2
-
-@queue_command(test_invoker)
+@test_huey.task()
 def modify_state(k, v):
     state[k] = v
     return v
 
-@queue_command(test_invoker)
+@test_huey.task()
 def blow_up():
     raise Exception('blowed up')
 
-@queue_command(test_invoker, retries=3)
+@test_huey.task(retries=3)
 def retry_command(k, always_fail=True):
     if k not in state:
         if not always_fail:
@@ -46,7 +40,7 @@ def retry_command(k, always_fail=True):
         raise Exception('fappsk')
     return state[k]
 
-@queue_command(test_invoker, retries=3, retry_delay=10)
+@test_huey.task(retries=3, retry_delay=10)
 def retry_command_slow(k, always_fail=True):
     if k not in state:
         if not always_fail:
@@ -54,7 +48,7 @@ def retry_command_slow(k, always_fail=True):
         raise Exception('fappsk')
     return state[k]
 
-@periodic_command(test_invoker, crontab(minute='0'))
+@test_huey.periodic_task(crontab(minute='0'))
 def every_hour():
     state['p'] = 'y'
 
@@ -67,35 +61,32 @@ class TestLogHandler(logging.Handler):
     def emit(self, record):
         self.messages.append(record.getMessage())
 
+logger = logging.getLogger('huey.consumer')
 
-class SkewConsumerTestCase(unittest.TestCase):
+class ConsumerTestCase(unittest.TestCase):
     def setUp(self):
         global state
         state = {}
 
-        self.orig_pc = registry._periodic_commands
-        registry._periodic_commands = [every_hour.command_class()]
+        self.orig_pc = registry._periodic_tasks
+        registry._periodic_commands = [every_hour.task_class()]
 
         self.orig_sleep = time.sleep
         time.sleep = lambda x: None
 
-        self.consumer = Consumer(test_invoker, DummyConfiguration)
-        self.consumer.invoker.queue._queue = []
-        self.consumer.invoker.result_store._results = {}
-        self.consumer.schedule._schedule = {}
+        self.consumer = Consumer(test_huey)
+        self.consumer.huey.queue._queue = []
+        self.consumer.huey.result_store._results = {}
+        self.consumer.huey._schedule = {}
+
         self.handler = TestLogHandler()
-        self.consumer.logger.addHandler(self.handler)
+        logger.addHandler(self.handler)
 
     def tearDown(self):
         self.consumer.shutdown()
-        self.consumer.logger.removeHandler(self.handler)
-        registry._periodic_commands = self.orig_pc
+        logger.removeHandler(self.handler)
+        registry._periodic_tasks = self.orig_pc
         time.sleep = self.orig_sleep
-
-    def test_consumer_loader(self):
-        config = load_config('huey.tests.config.Config')
-        self.assertTrue(isinstance(config.QUEUE, DummyQueue))
-        self.assertEqual(config.QUEUE.name, 'test-queue')
 
     def spawn(self, func, *args, **kwargs):
         t = threading.Thread(target=func, args=args, kwargs=kwargs)

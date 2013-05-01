@@ -1,41 +1,44 @@
 import datetime
 import unittest
 
-from huey.backends.dummy import DummyQueue, DummyDataStore
-from huey.decorators import queue_command, periodic_command, crontab
+from huey import crontab
+from huey import Huey
+from huey.api import PeriodicQueueTask
+from huey.api import QueueTask
+from huey.backends.dummy import DummyDataStore
+from huey.backends.dummy import DummyQueue
 from huey.exceptions import QueueException
-from huey.queue import Invoker, QueueCommand, PeriodicQueueCommand, CommandSchedule
 from huey.registry import registry
-from huey.utils import EmptyData, local_to_utc
+from huey.utils import EmptyData
+from huey.utils import local_to_utc
 
 
 queue_name = 'test-queue'
 queue = DummyQueue(queue_name)
-invoker = Invoker(queue)
+huey = Huey(queue)
 
 res_queue_name = 'test-queue-2'
 res_queue = DummyQueue(res_queue_name)
 res_store = DummyDataStore(res_queue_name)
-task_store = DummyDataStore(res_queue_name)
 
-res_invoker = Invoker(res_queue, res_store, task_store)
-res_invoker_nones = Invoker(res_queue, res_store, task_store, store_none=True)
+res_huey = Huey(res_queue, res_store)
+res_huey_nones = Huey(res_queue, res_store, store_none=True)
 
 # store some global state
 state = {}
 
 # create a decorated queue command
-@queue_command(invoker)
+@huey.task()
 def add(key, value):
     state[key] = value
 
 # create a periodic queue command
-@periodic_command(invoker, crontab(minute='0'))
+@huey.periodic_task(crontab(minute='0'))
 def add_on_the_hour():
     state['periodic'] = 'x'
 
 # define a command using the class
-class AddCommand(QueueCommand):
+class AddTask(QueueTask):
     def execute(self):
         k, v = self.data
         state[k] = v
@@ -44,52 +47,54 @@ class AddCommand(QueueCommand):
 class BampfException(Exception):
     pass
 
-@queue_command(invoker)
+@huey.task()
 def throw_error():
     raise BampfException('bampf')
 
-@queue_command(res_invoker)
+@res_huey.task()
 def add2(a, b):
     return a + b
 
-@periodic_command(res_invoker, crontab(minute='0'))
+@res_huey.periodic_task(crontab(minute='0'))
 def add_on_the_hour2():
     state['periodic'] = 'x'
 
-@queue_command(res_invoker)
+@res_huey.task()
 def returns_none():
     return None
 
-@queue_command(res_invoker_nones)
+@res_huey_nones.task()
 def returns_none2():
     return None
 
 
-class SkewTestCase(unittest.TestCase):
+class HueyTestCase(unittest.TestCase):
     def setUp(self):
         global state
         queue.flush()
+        res_queue.flush()
+        res_huey._schedule = {}
         state = {}
 
     def test_registration(self):
         self.assertTrue('queuecmd_add' in registry)
         self.assertTrue('queuecmd_add_on_the_hour' in registry)
-        self.assertTrue('AddCommand' in registry)
+        self.assertTrue('AddTask' in registry)
 
     def test_enqueue(self):
         # sanity check
         self.assertEqual(len(queue), 0)
 
         # initializing the command does not enqueue it
-        ac = AddCommand(('k', 'v'))
+        ac = AddTask(('k', 'v'))
         self.assertEqual(len(queue), 0)
 
         # ok, enqueue it, then check that it was enqueued
-        invoker.enqueue(ac)
+        huey.enqueue(ac)
         self.assertEqual(len(queue), 1)
 
         # it can be enqueued multiple times
-        invoker.enqueue(ac)
+        huey.enqueue(ac)
         self.assertEqual(len(queue), 2)
 
         # no changes to state
@@ -113,76 +118,74 @@ class SkewTestCase(unittest.TestCase):
         add('k', 'v')
         self.assertEqual(len(queue), 1)
 
-        cmd = invoker.dequeue()
-        self.assertEqual(cmd.execute_time, None)
+        task = huey.dequeue()
+        self.assertEqual(task.execute_time, None)
 
         add.schedule(args=('k2', 'v2'), eta=dt)
         self.assertEqual(len(queue), 1)
-        cmd = invoker.dequeue()
-        self.assertEqual(cmd.execute_time, local_to_utc(dt))
+        task = huey.dequeue()
+        self.assertEqual(task.execute_time, local_to_utc(dt))
 
         add.schedule(args=('k3', 'v3'), eta=dt, convert_utc=False)
         self.assertEqual(len(queue), 1)
-        cmd = invoker.dequeue()
-        self.assertEqual(cmd.execute_time, dt)
+        task = huey.dequeue()
+        self.assertEqual(task.execute_time, dt)
 
     def test_error_raised(self):
         throw_error()
 
         # no error
-        cmd = invoker.dequeue()
+        task = huey.dequeue()
 
         # error
-        self.assertRaises(BampfException, invoker.execute, cmd)
+        self.assertRaises(BampfException, huey.execute, task)
 
     def test_dequeueing(self):
-        res = invoker.dequeue() # no error raised if queue is empty
+        res = huey.dequeue() # no error raised if queue is empty
         self.assertEqual(res, None)
 
         add('k', 'v')
-        cmd = invoker.dequeue()
+        task = huey.dequeue()
 
-        self.assertTrue(isinstance(cmd, QueueCommand))
-        self.assertEqual(cmd.get_data(), (('k', 'v'), {}))
+        self.assertTrue(isinstance(task, QueueTask))
+        self.assertEqual(task.get_data(), (('k', 'v'), {}))
 
     def test_execution(self):
         self.assertFalse('k' in state)
         add('k', 'v')
 
-        cmd = invoker.dequeue()
+        task = huey.dequeue()
         self.assertFalse('k' in state)
 
-        invoker.execute(cmd)
+        huey.execute(task)
         self.assertEqual(state['k'], 'v')
 
         add('k', 'X')
         self.assertEqual(state['k'], 'v')
 
-        invoker.execute(invoker.dequeue())
+        huey.execute(huey.dequeue())
         self.assertEqual(state['k'], 'X')
 
-        self.assertRaises(TypeError, invoker.execute, invoker.dequeue())
+        self.assertRaises(TypeError, huey.execute, huey.dequeue())
 
     def test_revoke(self):
-        ac = AddCommand(('k', 'v'))
-        ac2 = AddCommand(('k2', 'v2'))
-        ac3 = AddCommand(('k3', 'v3'))
+        ac = AddTask(('k', 'v'))
+        ac2 = AddTask(('k2', 'v2'))
+        ac3 = AddTask(('k3', 'v3'))
 
-        res_invoker.enqueue(ac)
-        res_invoker.enqueue(ac2)
-        res_invoker.enqueue(ac3)
-        res_invoker.enqueue(ac2)
-        res_invoker.enqueue(ac)
+        res_huey.enqueue(ac)
+        res_huey.enqueue(ac2)
+        res_huey.enqueue(ac3)
+        res_huey.enqueue(ac2)
+        res_huey.enqueue(ac)
 
         self.assertEqual(len(res_queue), 5)
-        res_invoker.revoke(ac2)
-
-        schedule = CommandSchedule(res_invoker)
+        res_huey.revoke(ac2)
 
         while res_queue:
-            cmd = res_invoker.dequeue()
-            if schedule.can_run(cmd):
-                res_invoker.execute(cmd)
+            task = res_huey.dequeue()
+            if not res_huey.is_revoked(task):
+                res_huey.execute(task)
 
         self.assertEqual(state, {'k': 'v', 'k3': 'v3'})
 
@@ -198,7 +201,7 @@ class SkewTestCase(unittest.TestCase):
 
         add_on_the_hour2.revoke(revoke_once=True)
         self.assertTrue(add_on_the_hour2.is_revoked()) # it is revoked once, but we are preserving that state
-        self.assertTrue(add_on_the_hour2.is_revoked(preserve=False)) # is revoked once, but clear state
+        self.assertTrue(add_on_the_hour2.is_revoked(peek=False)) # is revoked once, but clear state
         self.assertFalse(add_on_the_hour2.is_revoked()) # no longer revoked
 
         d = datetime.datetime
@@ -221,19 +224,19 @@ class SkewTestCase(unittest.TestCase):
         self.assertEqual(res3.get(), None)
 
         # execute the first task
-        res_invoker.execute(res_invoker.dequeue())
+        res_huey.execute(res_huey.dequeue())
         self.assertEqual(res.get(), 3)
         self.assertEqual(res2.get(), None)
         self.assertEqual(res3.get(), None)
 
         # execute the second task
-        res_invoker.execute(res_invoker.dequeue())
+        res_huey.execute(res_huey.dequeue())
         self.assertEqual(res.get(), 3)
         self.assertEqual(res2.get(), 9)
         self.assertEqual(res3.get(), None)
 
         # execute the 3rd, which returns a zero value
-        res_invoker.execute(res_invoker.dequeue())
+        res_huey.execute(res_huey.dequeue())
         self.assertEqual(res.get(), 3)
         self.assertEqual(res2.get(), 9)
         self.assertEqual(res3.get(), 0)
@@ -244,7 +247,7 @@ class SkewTestCase(unittest.TestCase):
 
         # execute, it will still return None, but underneath it is an EmptyResult
         # indicating its actual result was not persisted
-        res_invoker.execute(res_invoker.dequeue())
+        res_huey.execute(res_huey.dequeue())
         self.assertEqual(res.get(), None)
         self.assertEqual(res._result, EmptyData)
 
@@ -254,101 +257,98 @@ class SkewTestCase(unittest.TestCase):
         self.assertEqual(res.get(), None)
 
         # it stores None
-        res_invoker_nones.execute(res_invoker_nones.dequeue())
+        res_huey_nones.execute(res_huey_nones.dequeue())
         self.assertEqual(res.get(), None)
         self.assertEqual(res._result, None)
 
     def test_task_store(self):
-        schedule = CommandSchedule(res_invoker)
-
         dt1 = datetime.datetime(2011, 1, 1, 0, 0)
         dt2 = datetime.datetime(2035, 1, 1, 0, 0)
 
         add2.schedule(args=('k', 'v'), eta=dt1)
-        cmd1 = res_invoker.dequeue()
+        task1 = res_huey.dequeue()
 
         add2.schedule(args=('k2', 'v2'), eta=dt2)
-        cmd2 = res_invoker.dequeue()
+        task2 = res_huey.dequeue()
 
         add2('k3', 'v3')
-        cmd3 = res_invoker.dequeue()
+        task3 = res_huey.dequeue()
 
         # add the command to the schedule
-        schedule.add(cmd1)
-        self.assertEqual(schedule.commands(), [cmd1])
+        res_huey.add_schedule(task1)
+        self.assertEqual(res_huey.schedule(), [task1])
 
         # cmd1 is in the schedule, cmd2 is not
-        self.assertTrue(schedule.is_pending(cmd1))
-        self.assertFalse(schedule.is_pending(cmd2))
+        self.assertTrue(res_huey.is_pending(task1))
+        self.assertFalse(res_huey.is_pending(task2))
 
         # multiple adds do not result in the list growing
-        schedule.add(cmd1)
-        self.assertEqual(schedule.commands(), [cmd1])
+        res_huey.add_schedule(task1)
+        self.assertEqual(res_huey.schedule(), [task1])
 
         # removing a non-existant cmd does not error
-        schedule.remove(cmd2)
+        res_huey.remove_schedule(task2)
 
         # add a future-dated command
-        schedule.add(cmd2)
+        res_huey.add_schedule(task2)
 
         # sanity check what should be run
-        self.assertTrue(schedule.should_run(cmd1))
-        self.assertFalse(schedule.should_run(cmd2))
-        self.assertTrue(schedule.should_run(cmd3))
+        self.assertTrue(res_huey.ready_to_run(task1))
+        self.assertFalse(res_huey.ready_to_run(task2))
+        self.assertTrue(res_huey.ready_to_run(task3))
 
         # check remove works
-        schedule.remove(cmd1)
-        self.assertEqual(schedule.commands(), [cmd2])
+        res_huey.remove_schedule(task1)
+        self.assertEqual(res_huey.schedule(), [task2])
 
         # check saving works
-        schedule.save()
-        schedule._schedule = {}
-        self.assertEqual(schedule.commands(), [])
+        res_huey.save_schedule()
+        res_huey._schedule = {}
+        self.assertEqual(res_huey.schedule(), [])
 
         # check loading works
-        schedule.load()
-        self.assertEqual(schedule.commands(), [cmd2])
+        res_huey.load_schedule()
+        self.assertEqual(res_huey.schedule(), [task2])
 
-        schedule.add(cmd1)
-        schedule.add(cmd3)
-        schedule.save()
-        schedule._schedule = {}
+        res_huey.add_schedule(task1)
+        res_huey.add_schedule(task3)
+        res_huey.save_schedule()
+        res_huey._schedule = {}
 
-        schedule.load()
-        self.assertEqual(len(schedule.commands()), 3)
-        self.assertTrue(cmd1 in schedule.commands())
-        self.assertTrue(cmd2 in schedule.commands())
-        self.assertTrue(cmd3 in schedule.commands())
+        res_huey.load_schedule()
+        self.assertEqual(len(res_huey.schedule()), 3)
+        self.assertTrue(task1 in res_huey.schedule())
+        self.assertTrue(task2 in res_huey.schedule())
+        self.assertTrue(task3 in res_huey.schedule())
 
     def test_task_delay(self):
-        schedule = CommandSchedule(res_invoker)
         curr = datetime.datetime.utcnow()
         curr50 = curr + datetime.timedelta(seconds=50)
         curr70 = curr + datetime.timedelta(seconds=70)
 
         add2.schedule(args=('k', 'v'), delay=60)
-        cmd1 = res_invoker.dequeue()
+        task1 = res_huey.dequeue()
 
         add2.schedule(args=('k2', 'v2'), delay=600)
-        cmd2 = res_invoker.dequeue()
+        task2 = res_huey.dequeue()
 
         add2('k3', 'v3')
-        cmd3 = res_invoker.dequeue()
+        task3 = res_huey.dequeue()
 
         # add the command to the schedule
-        schedule.add(cmd1)
-        schedule.add(cmd2)
-        schedule.add(cmd3)
+        res_huey.add_schedule(task1)
+        res_huey.add_schedule(task2)
+        res_huey.add_schedule(task3)
 
         # sanity check what should be run
-        self.assertFalse(schedule.should_run(cmd1))
-        self.assertFalse(schedule.should_run(cmd2))
-        self.assertTrue(schedule.should_run(cmd3))
+        self.assertFalse(res_huey.ready_to_run(task1))
+        self.assertFalse(res_huey.ready_to_run(task2))
+        self.assertTrue(res_huey.ready_to_run(task3))
 
-        self.assertFalse(schedule.should_run(cmd1, curr50))
-        self.assertFalse(schedule.should_run(cmd2, curr50))
-        self.assertTrue(schedule.should_run(cmd3, curr50))
+        self.assertFalse(res_huey.ready_to_run(task1, curr50))
+        self.assertFalse(res_huey.ready_to_run(task2, curr50))
+        self.assertTrue(res_huey.ready_to_run(task3, curr50))
 
-        self.assertTrue(schedule.should_run(cmd1, curr70))
-        self.assertFalse(schedule.should_run(cmd2, curr70))
-        self.assertTrue(schedule.should_run(cmd3, curr70))
+        self.assertTrue(res_huey.ready_to_run(task1, curr70))
+        self.assertFalse(res_huey.ready_to_run(task2, curr70))
+        self.assertTrue(res_huey.ready_to_run(task3, curr70))
