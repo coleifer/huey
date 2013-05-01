@@ -126,7 +126,7 @@ class MessageReceiverThread(ConsumerThread):
 
         logger.debug('No messages, sleeping for: %s' % self.delay)
         time.sleep(self.delay)
-        self.delay *= self.backoff_factor
+        self.delay *= self.backoff
 
 
 class ExecutorThread(threading.Thread):
@@ -218,44 +218,55 @@ class Consumer(object):
             '%(threadName)s %(asctime)s %(name)s %(levelname)s %(message)s')
 
         if self.logfile or not logger.handlers:
+            handler = None
             if self.logfile:
                 handler = RotatingFileHandler(
                     self.logfile, maxBytes=1024*1024, backupCount=3)
-            else:
+            elif self.loglevel < logging.INFO:
                 handler = logging.StreamHandler()
-            handler.setFormatter(formatter)
-            logger.addHandler(handler)
+            if handler:
+                handler.setFormatter(formatter)
+                logger.addHandler(handler)
 
     def spawn(self, t, daemon=False):
         t.daemon = daemon
         t.start()
 
-    def start(self):
+    def start_scheduler(self):
         logger.info('Starting scheduler thread')
-        scheduler_t = SchedulerThread(self.huey, self._executor_inbox,
+        self.scheduler_t = SchedulerThread(self.huey, self._executor_inbox,
                                       self.utc, self._shutdown)
-        scheduler_t.name = 'Scheduler'
-        self.spawn(scheduler_t)
+        self.scheduler_t.name = 'Scheduler'
+        self.spawn(self.scheduler_t)
 
-        if self.periodic:
-            logger.info('Starting periodic task scheduler thread')
-            periodic_t = PeriodicTaskThread(self._executor_inbox, self.utc,
-                                        self._shutdown)
-            periodic_t.name = 'Periodic Task'
-            self.spawn(periodic_t, daemon=True)
-
+    def start_message_receiver(self):
         logger.info('Starting message receiver thread')
-        message_t = MessageReceiverThread(
+        self.message_t = MessageReceiverThread(
             self.huey, self._executor_inbox, self.default_delay, self.max_delay,
             self.backoff, self.utc, self._shutdown)
-        message_t.name = 'Message Receiver'
-        self.spawn(message_t, daemon=True)
+        self.message_t.name = 'Message Receiver'
+        self.spawn(self.message_t, daemon=True)
 
+    def start_executor(self):
         logger.info('Starting task executor thread')
-        executor_t = ExecutorThread(self._executor_inbox, self.workers,
-                                    self.huey)
-        executor_t.name = 'Executor'
-        self.spawn(executor_t)
+        self.executor_t = ExecutorThread(
+            self._executor_inbox, self.workers, self.huey)
+        self.executor_t.name = 'Executor'
+        self.spawn(self.executor_t)
+
+    def start_periodic_tasks(self):
+        logger.info('Starting periodic task scheduler thread')
+        self.periodic_t = PeriodicTaskThread(
+            self._executor_inbox, self.utc, self._shutdown)
+        self.periodic_t.name = 'Periodic Task'
+        self.spawn(self.periodic_t, daemon=True)
+
+    def start(self):
+        self.start_scheduler()
+        self.start_message_receiver()
+        self.start_executor()
+        if self.periodic:
+            self.start_periodic_tasks()
 
     def shutdown(self):
         logger.info('Shutdown initiated')

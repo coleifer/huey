@@ -8,12 +8,12 @@ from huey import crontab
 from huey import Huey
 from huey.backends.dummy import DummyDataStore
 from huey.backends.dummy import DummyQueue
+from huey.bin.huey_consumer import Consumer
+from huey.bin.huey_consumer import IterableQueue
+from huey.bin.huey_consumer import WorkerThread
 from huey.exceptions import QueueException
 from huey.registry import registry
 from huey.utils import local_to_utc
-from huey.bin.huey_consumer import Consumer
-from huey.bin.huey_consumer import IterableQueue
-
 
 # store some global state
 state = {}
@@ -74,7 +74,7 @@ class ConsumerTestCase(unittest.TestCase):
         self.orig_sleep = time.sleep
         time.sleep = lambda x: None
 
-        self.consumer = Consumer(test_huey)
+        self.consumer = Consumer(test_huey, workers=2)
         self.consumer.huey.queue._queue = []
         self.consumer.huey.result_store._results = {}
         self.consumer.huey._schedule = {}
@@ -92,6 +92,13 @@ class ConsumerTestCase(unittest.TestCase):
         t = threading.Thread(target=func, args=args, kwargs=kwargs)
         t.start()
         return t
+
+    def run_worker(self, task, ts=None):
+        pool = threading.Semaphore()
+        ts = ts or datetime.datetime.now()
+        worker_t = WorkerThread(test_huey, task, ts, pool)
+        worker_t.start()
+        worker_t.join()
 
     def test_iterable_queue(self):
         store = []
@@ -112,7 +119,7 @@ class ConsumerTestCase(unittest.TestCase):
 
     def test_message_processing(self):
         self.consumer.start_message_receiver()
-        self.consumer.start_worker_pool()
+        self.consumer.start_executor()
 
         self.assertFalse('k' in state)
 
@@ -123,76 +130,46 @@ class ConsumerTestCase(unittest.TestCase):
         self.assertEqual(res.get(), 'v')
 
     def test_worker(self):
-        res = modify_state('x', 'y')
-
-        cmd = test_invoker.dequeue()
-        self.assertEqual(res.get(), None)
-
-        # we will be calling release() after finishing work
-        self.consumer._pool.acquire()
-        self.consumer.worker(cmd)
-
-        self.assertTrue('x' in state)
-        self.assertEqual(res.get(), 'y')
+        res = modify_state('k', 'w')
+        task = test_huey.dequeue()
+        self.run_worker(task)
+        self.assertEqual(state, {'k': 'w'})
 
     def test_worker_exception(self):
         res = blow_up()
-        cmd = test_invoker.dequeue()
+        task = test_huey.dequeue()
 
-        self.consumer._pool.acquire()
-        self.consumer.worker(cmd)
-
-        self.assertEqual(self.handler.messages, [
-            'unhandled exception in worker thread',
-        ])
+        self.run_worker(task)
+        self.assertTrue(
+            'Unhandled exception in worker thread' in self.handler.messages)
 
     def test_retries_and_logging(self):
         # this will continually fail
         res = retry_command('blampf')
 
-        cmd = test_invoker.dequeue()
-        self.consumer._pool.acquire()
-        self.consumer.worker(cmd)
-        self.assertEqual(self.handler.messages, [
-            'unhandled exception in worker thread',
-            're-enqueueing task %s, 2 tries left' % cmd.task_id,
-        ])
+        for i in reversed(range(4)):
+            task = test_huey.dequeue()
+            self.assertEqual(task.retries, i)
+            self.run_worker(task)
+            if i > 0:
+                self.assertEqual(
+                    self.handler.messages[-1],
+                    'Re-enqueueing task %s, %s tries left' % (
+                        task.task_id, i - 1))
+                last_idx = -2
+            else:
+                last_idx = -1
+            self.assertEqual(self.handler.messages[last_idx],
+                             'Unhandled exception in worker thread')
 
-        cmd = test_invoker.dequeue()
-        self.assertEqual(cmd.retries, 2)
-        self.consumer._pool.acquire()
-        self.consumer.worker(cmd)
-        self.assertEqual(self.handler.messages[-2:], [
-            'unhandled exception in worker thread',
-            're-enqueueing task %s, 1 tries left' % cmd.task_id,
-        ])
-
-        cmd = test_invoker.dequeue()
-        self.assertEqual(cmd.retries, 1)
-        self.consumer._pool.acquire()
-        self.consumer.worker(cmd)
-        self.assertEqual(self.handler.messages[-2:], [
-            'unhandled exception in worker thread',
-            're-enqueueing task %s, 0 tries left' % cmd.task_id,
-        ])
-
-        cmd = test_invoker.dequeue()
-        self.assertEqual(cmd.retries, 0)
-        self.consumer._pool.acquire()
-        self.consumer.worker(cmd)
-        self.assertEqual(len(self.handler.messages), 7)
-        self.assertEqual(self.handler.messages[-1:], [
-            'unhandled exception in worker thread',
-        ])
-
-        self.assertEqual(test_invoker.dequeue(), None)
+        self.assertEqual(test_huey.dequeue(), None)
 
     def test_retries_with_success(self):
         # this will fail once, then succeed
         res = retry_command('blampf', False)
         self.assertFalse('blampf' in state)
 
-        cmd = test_invoker.dequeue()
+        task = test_huey.dequeue()
         self.consumer._pool.acquire()
         self.consumer.worker(cmd)
         self.assertEqual(self.handler.messages, [
