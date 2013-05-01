@@ -9,10 +9,10 @@ try:
     from huey.backends.redis_backend import RedisQueue, RedisDataStore
 except ImportError:
     RedisQueue = RedisDataStore = None
+from huey.backends.sqlite_backend import SqliteQueue, SqliteDataStore
 
-
-QUEUES = (DummyQueue, RedisQueue,)
-DATA_STORES = (DummyDataStore, RedisDataStore,)
+QUEUES = (DummyQueue, RedisQueue, SqliteQueue)
+DATA_STORES = (DummyDataStore, RedisDataStore, SqliteDataStore)
 
 
 class HueyBackendTestCase(unittest.TestCase):
