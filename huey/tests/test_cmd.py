@@ -1,6 +1,5 @@
-from huey.decorators import queue_command
-from config import test_invoker
+from huey.tests.config import test_huey
 
-@queue_command(test_invoker)
+@test_huey.task()
 def test_command_xxx(val):
     return val

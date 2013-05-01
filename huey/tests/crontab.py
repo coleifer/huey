@@ -4,7 +4,7 @@ import unittest
 from huey import crontab
 
 
-class SkewCrontabTestCase(unittest.TestCase):
+class CrontabTestCase(unittest.TestCase):
     def test_crontab_month(self):
         # validates the following months, 1, 4, 7, 8, 9
         valids = [1, 4, 7, 8, 9]
