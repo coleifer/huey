@@ -1,6 +1,6 @@
 In one terminal, run:
 
-    huey_consumer.py main.Configuration
+    ./cons.sh
 
 In another terminal:
 
