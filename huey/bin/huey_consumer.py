@@ -342,7 +342,6 @@ def get_option_parser():
 if __name__ == '__main__':
     parser = get_option_parser()
     options, args = parser.parse_args()
-    import ipdb; ipdb.set_trace()
 
     if options.verbose is None:
         loglevel = logging.INFO
