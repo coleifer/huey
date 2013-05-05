@@ -1,5 +1,5 @@
-from config import Configuration
-from commands import count_beans
+from config import huey
+from tasks import count_beans
 
 
 if __name__ == '__main__':
