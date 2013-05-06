@@ -55,7 +55,7 @@ class ConsumerThread(threading.Thread):
 
     def run(self):
         while not self.shutdown.is_set():
-            self.loop(self.get_now())
+            self.loop()
         logger.debug('Thread shutting down')
         self.on_shutdown()
 
@@ -65,7 +65,8 @@ class PeriodicTaskThread(ConsumerThread):
         self.executor_inbox = executor_inbox
         super(PeriodicTaskThread, self).__init__(utc, shutdown)
 
-    def loop(self, now):
+    def loop(self, now=None):
+        now = now or self.get_now()
         logger.debug('Checking periodic command registry')
         start = time.time()
         for task in registry.get_periodic_tasks():
@@ -80,8 +81,9 @@ class SchedulerThread(ConsumerThread):
         self.huey = huey
         super(SchedulerThread, self).__init__(utc, shutdown)
 
-    def loop(self, now):
+    def loop(self, now=None):
         logger.debug('Checking schedule')
+        now = now or self.get_now()
         start = time.time()
         for task in self.huey.schedule():
             if self.huey.ready_to_run(task, now):
@@ -104,7 +106,7 @@ class MessageReceiverThread(ConsumerThread):
         self.backoff = backoff
         super(MessageReceiverThread, self).__init__(utc, shutdown)
 
-    def loop(self, now):
+    def loop(self, now=None):
         logger.debug('Checking for message')
         try:
             task = self.huey.dequeue()
@@ -117,6 +119,7 @@ class MessageReceiverThread(ConsumerThread):
                 self.sleep()
             elif task:
                 self.pool.acquire()
+                now = now or self.get_now()
                 self.executor_inbox.put(ExecuteTask(task, now, True))
 
     def sleep(self):
@@ -185,6 +188,7 @@ class WorkerThread(threading.Thread):
             if task.retry_delay:
                 delay = datetime.timedelta(seconds=task.retry_delay)
                 task.execute_time = self.ts + delay
+                logger.debug('Execute %s at: %s' % (task, task.execute_time))
                 self.huey.add_schedule(task)
             else:
                 self.huey.enqueue(task)
