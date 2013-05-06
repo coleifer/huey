@@ -12,7 +12,7 @@ class RedisQueue(BaseQueue):
     """
     def __init__(self, name, **connection):
         """
-        QUEUE_CONNECTION = {
+        connection = {
             'host': 'localhost',
             'port': 6379,
             'db': 0,
