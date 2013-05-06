@@ -21,7 +21,7 @@ Contents:
 
 .. toctree::
    :maxdepth: 2
-   
+
    installation
    getting-started
    imports
