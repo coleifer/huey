@@ -399,8 +399,10 @@ class ConsumerTestCase(unittest.TestCase):
         global state
         def loop_periodic(ts):
             self.consumer.periodic_t.loop(ts)
-            self.consumer._executor_inbox.put(StopIteration)
-            self.consumer.executor_t.run()
+            for i in range(len(test_queue._queue)):
+                self.consumer.message_t.loop(ts)
+                self.consumer._executor_inbox.put(StopIteration)
+                self.consumer.executor_t.run()
 
         # revoke the command once
         every_hour.revoke(revoke_once=True)
