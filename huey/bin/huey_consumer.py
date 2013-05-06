@@ -61,8 +61,8 @@ class ConsumerThread(threading.Thread):
 
 
 class PeriodicTaskThread(ConsumerThread):
-    def __init__(self, executor_inbox, utc, shutdown):
-        self.executor_inbox = executor_inbox
+    def __init__(self, huey, utc, shutdown):
+        self.huey = huey
         super(PeriodicTaskThread, self).__init__(utc, shutdown)
 
     def loop(self, now=None):
@@ -72,7 +72,7 @@ class PeriodicTaskThread(ConsumerThread):
         for task in registry.get_periodic_tasks():
             if task.validate_datetime(now):
                 logger.info('Scheduling %s for execution' % task)
-                self.executor_inbox.put(ExecuteTask(task, now, False))
+                self.huey.enqueue(task)
         time.sleep(60 - (time.time() - start))
 
 
@@ -232,7 +232,7 @@ class Consumer(object):
         self.executor_t.name = 'Executor'
         if self.periodic:
             self.periodic_t = PeriodicTaskThread(
-                self._executor_inbox, self.utc, self._shutdown)
+                self.huey, self.utc, self._shutdown)
             self.periodic_t.daemon = True
             self.periodic_t.name = 'Periodic Task'
         else:
