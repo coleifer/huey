@@ -10,54 +10,75 @@ configuration_message = """
 Please configure your queue, example:
 
 HUEY_CONFIG = {
-    'queue': 'huey.backends.redis_backend.RedisQueue',
-    'queue_connection': 'localhost:6379:0',
-    'threads': 4,
+    'queue': {
+        'backend': 'huey.backends.redis_backend.RedisQueue',
+        'connection': {
+            'host': 'localhost',
+            'port': 6379,
+        },
+        'name': 'my-app',
+    },
+    'result_store': {
+        'backend': 'huey.backends.redis_backend.RedisDataStore',
+        'connection': {
+            'host': 'localhost',
+            'port': 6379,
+        },
+        'name': 'my-app',
+    },
+    'periodic': True,  # Process cron-like tasks.
+    'workers': 4,  # Use up to 4 worker threads.
 }
 
 The following settings are required:
 ------------------------------------
 
-queue (string or Queue instance)
-    Either a queue instance or a string pointing to the module path and class
-    name of the queue.  If a string is used, you may also need to specify a
-    connection string.
+queue (dictionary or Queue instance)
+    Either a queue instance or a dictionary containing information for
+    configuring your queue.
 
-    Example: 'huey.backends.redis_backend.RedisQueue'
+    Only the "backend" setting is strictly required.
 
+    Example::
+
+        'queue': {
+            'backend': 'huey.backends.redis_backend.RedisQueue',
+            'connection': {
+                'host': 'localhost',
+                'port': 6379,
+            },
+            'name': 'my-app',
+        }
 
 The following settings are recommended:
 ---------------------------------------
 
-queue_name (string), default = database name
+result_store (dictionary or DataStore instance)
+    Either a DataStore instance or a dictionary containing information for
+    configuring your data store.
 
-queue_connection (dictionary)
-    If the ``queue`` was specified using a string, use this parameter to
-    instruct the queue class how to connect.
+    Only the "backend" setting is required.
 
-    Example: 'localhost:6379:0' # for the RedisQueue
+    Example::
 
-result_store (string or DataStore instance)
-    Either a DataStore instance or a string pointing to the module path and
-    class name of the result store.
-
-    Example: 'huey.backends.redis_backend.RedisDataStore'
-
-result_store_name (string), default = database name
-
-result_store_connection (string)
-    See notes for ``queue_connection``
-
+        'result_store': {
+            'backend': 'huey.backends.redis_backend.RedisDataStore',
+            'connection': {
+                'host': 'localhost',
+                'port': 6379,
+            },
+            'name': 'my-app',
+        }
 
 The following settings are optional:
 ------------------------------------
 
-periodic (boolean), default = False
+periodic (boolean), default = True
     Determines whether or not to the consumer will enqueue periodic commands.
     If you are running multiple consumers, only one of them should be configured
     to enqueue periodic commands.
 
-threads (int), default = 1
+workers (int), default = 2
     Number of worker threads to use when processing jobs
 
 logfile (string), default = None
@@ -79,33 +100,40 @@ always_eager, default = False
     Whether to skip enqueue-ing and run in-band (useful for debugging)
 """
 
-_config = getattr(settings, 'HUEY_CONFIG', None)
-config = dict((k.lower(), v) for (k, v) in _config.iteritems())
-if not config or 'queue' not in config:
+_default = {
+    'queue': {'backend': 'huey.backends.redis_backend.RedisQueue'},
+    'result_store': {'backend': 'huey.backends.redis_backend.RedisDataStore'},
+    'periodic': True,
+    'workers': 2}
+config = dict(getattr(settings, 'HUEY_CONFIG', _default))
+
+try:
+    backend = config['queue']['backend']
+except:
     print configuration_message
     sys.exit(1)
 
-queue = config['queue']
-
-if 'default' in settings.DATABASES:
-    backup_name = settings.DATABASES['default']['NAME'].rsplit('/', 1)[-1]
+_db = settings.DATABASES
+if 'default' in _db and _db['default'].get('NAME'):
+    backup_name = _db['default']['NAME'].rsplit('/', 1)[-1]
 else:
     backup_name = 'huey'
 
-if isinstance(queue, basestring):
-    QueueClass = load_class(queue)
+queue = config.pop('queue')
+if isinstance(queue, dict):
+    QueueClass = load_class(queue['backend'])
     queue = QueueClass(
-        config.get('queue_name', backup_name),
-        **config.get('queue_connection', {})
+        queue.get('name', backup_name),
+        **queue.get('connection', {})
     )
 
-result_store = config.get('result_store', None)
+result_store = config.pop('result_store', None)
 
-if isinstance(result_store, basestring):
-    DataStoreClass = load_class(result_store)
+if isinstance(result_store, dict):
+    DataStoreClass = load_class(result_store['backend'])
     result_store = DataStoreClass(
-        config.get('result_store_name', backup_name),
-        **config.get('result_store_connection', {})
+        result_store.get('name', backup_name),
+        **result_store.get('connection', {})
     )
 
 always_eager = config.pop('always_eager', False)

@@ -4,17 +4,21 @@ INSTALLED_APPS = [
 ]
 
 HUEY_CONFIG = {
-    'QUEUE': 'huey.backends.redis_backend.RedisBlockingQueue',
-    'QUEUE_NAME': 'test-queue',
-    'QUEUE_CONNECTION': {
-        'host': 'localhost',
-        'port': 6379,
+    'queue': {
+        'backend': 'huey.backends.redis_backend.RedisBlockingQueue',
+        'name': 'test-queue',
+        'connection': {
+            'host': 'localhost',
+            'port': 6379,
+        },
     },
-    'RESULT_STORE': 'huey.backends.redis_backend.RedisDataStore',
-    'RESULT_STORE_CONNECTION': {
-        'host': 'localhost',
-        'port': 6379,
+    'result_store': {
+        'backend': 'huey.backends.redis_backend.RedisDataStore',
+        'connection': {
+            'host': 'localhost',
+            'port': 6379,
+        },
     },
-    'PERIODIC': True,
-    'THREADS': 4,
+    'periodic': True,
+    'workers': 4,
 }
