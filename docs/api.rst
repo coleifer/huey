@@ -7,16 +7,14 @@ Huey's API
     The django API is a slightly simplified version of the general python API.
     For details on using the django API, :ref:`read here <django-api>`
 
-Most end-users will interact with the API using the two decorators in ``huey.decorators``:
+Most end-users will interact with the API using the two decorators:
 
-* :py:func:`queue_command`
-* :py:func:`periodic_command`
+* :py:method:`Huey.task`
+* :py:method:`Huey.periodic_task`
 
-Each decorator takes an :py:class:`Invoker` instance -- the Invoker is responsible
-for coordinating with the various backends (the message queue, the result store if you're
-using one, scheduling commands, etc).  The API documentation will follow the structure
-of the huey API, starting with the highest-level interfaces (the decorators) and
-eventually discussing the lowest-level interfaces, the :py:class:`BaseQueue` and :py:class:`BaseDataStore` objects.
+The API documentation will follow the structure of the huey API, starting with
+the highest-level interfaces (the decorators) and eventually discussing the
+lowest-level interfaces, the :py:class:`BaseQueue` and :py:class:`BaseDataStore` objects.
 
 .. _function-decorators:
 
@@ -29,48 +27,48 @@ Function decorators and helpers
 
     Function decorator that marks the decorated function for processing by the
     consumer.  Calls to the decorated function will do the following:
-    
+
     1. Serialize the function call into a message suitable for storing in the queue
     2. Enqueue the message for execution by the consumer
     3. If a :py:class:`ResultStore` has been configured, return an :py:class:`AsyncData`
        instance which can retrieve the result of the function, or ``None`` if not
        using a result store.
-    
+
     .. note::
         The Invoker can be configured to execute the function immediately by
         instantiating it with ``always_eager = True`` -- this is useful for
         running in debug mode or when you do not wish to run the consumer.
-    
+
     Here is how you might use the ``queue_command`` decorator:
-    
+
     .. code-block:: python
-    
+
         # assume that we've created an invoker alongside the rest of the
         # config
         from config import invoker
         from huey.decorators import queue_command
-        
+
         @queue_command(invoker)
         def count_some_beans(num):
             # do some counting!
             return 'Counted %s beans' % num
-    
+
     Now, whenever you call this function in your application, the actual processing
     will occur when the consumer dequeues the message and your application will
     continue along on its way.
-    
+
     Without a result store:
-    
+
     .. code-block:: python
-    
+
         >>> res = count_some_beans(1000000)
         >>> res is None
         True
-    
+
     With a result store:
-    
+
     .. code-block:: python
-    
+
         >>> res = count_some_beans(1000000)
         >>> res
         <huey.queue.AsyncData object at 0xb7471a4c>
@@ -81,35 +79,35 @@ Function decorators and helpers
     :param retries: number of times to retry the task if an exception occurs
     :param retry_delay: number of seconds to wait between retries
     :rtype: decorated function
-    
+
     The return value of any calls to the decorated function depends on whether the invoker
     is configured with a result store.  If a result store is configured, the
     decorated function will return an :py:class:`AsyncData` object which can fetch the
     result of the call from the result store -- otherwise it will simply
     return ``None``.
-    
+
     The ``queue_command`` decorator also does one other important thing -- it adds
     a special function **onto** the decorated function, which makes it possible
     to *schedule* the execution for a certain time in the future:
-    
+
     .. py:function:: {decorated func}.schedule(args=None, kwargs=None, eta=None, delay=None, convert_utc=True)
-    
+
         Use the special ``.schedule()`` function to schedule the execution of a
         queue command for a given time in the future:
-        
+
         .. code-block:: python
-        
+
             import datetime
-            
+
             # get a datetime object representing one hour in the future
             in_an_hour = datetime.datetime.now() + datetime.timedelta(seconds=3600)
-            
+
             # schedule "count_some_beans" to run in an hour
             count_some_beans.schedule(args=(100000,), eta=in_an_hour)
-            
+
             # another way of doing the same thing...
             count_some_beans.schedule(args=(100000,), delay=(60 * 60))
-    
+
 
         :param args: arguments to call the decorated function with
         :param kwargs: keyword arguments to call the decorated function with
@@ -128,7 +126,7 @@ Function decorators and helpers
 
             >>> count_some_beans.command_class
             commands.queuecmd_count_beans
-    
+
 
 
 .. py:function:: periodic_command(invoker, validate_datetime)
@@ -139,7 +137,7 @@ Function decorators and helpers
     for execution by the consumer.  Rather, the ``periodic_command`` decorator
     serves to **mark a function as needing to be executed periodically** by the
     consumer.
-    
+
     .. note::
         By default, the consumer will not execute ``periodic_command`` functions.
         To enable this, simply add ``PERIODIC = True`` to your configuration.
@@ -149,30 +147,30 @@ Function decorators and helpers
     should execute at that time or not.  The consumer will send a datetime to
     the function every minute, giving it the same granularity as the linux
     crontab, which it was designed to mimic.
-    
+
     For simplicity, there is a special function :py:func:`crontab`, which can
     be used to quickly specify intervals at which a function should execute.  It
     is described below.
-    
+
     Here is an example of how you might use the ``periodic_command`` decorator
     and the ``crontab`` helper:
-    
+
     .. code-block:: python
-        
+
         from config import invoker
         from huey.decorators import periodic_command, crontab
-        
+
         @periodic_command(invoker, crontab(minute='*/5'))
         def every_five_minutes():
             # this function gets executed every 5 minutes by the consumer
             print "It's been five minutes"
-    
+
     .. note::
         Because functions decorated with ``periodic_command`` are meant to be
         executed at intervals in isolation, they should not take any required
         parameters nor should they be expected to return a meaningful value.
         This is the same regardless of whether or not you are using a result store.
-    
+
     :param invoker: an :py:class:`Invoker` instance
     :param validate_datetime: a callable which takes a ``datetime`` and returns
         a boolean whether the decorated function should execute at that time or not
@@ -232,14 +230,14 @@ Function decorators and helpers
     Convert a "crontab"-style set of parameters into a test function that will
     return ``True`` when a given ``datetime`` matches the parameters set forth in
     the crontab.
-    
+
     Acceptable inputs:
-    
+
     - "*" = every distinct value
     - "\*/n" = run every "n" times, i.e. hours='\*/4' == 0, 4, 8, 12, 16, 20
     - "m-n" = run every time m..n
     - "m,n" = run on m and n
-    
+
     :rtype: a test function that takes a ``datetime`` and returns a boolean
 
 The Invoker and AsyncData classes
@@ -251,7 +249,7 @@ The Invoker and AsyncData classes
 
     The ``Invoker`` ties together your application's queue, result store, and supplies
     some options to configure how tasks are executed and how their results are stored.
-    
+
     Applications will have **at least one** ``Invoker`` instance, as it is required
     by the :ref:`function decorators <function-decorators>`.  Typically it should
     be instantiated along with the ``Queue``, or wherever you create your configuration.
@@ -260,11 +258,11 @@ The Invoker and AsyncData classes
     :param result_store: a DataStore instance to use for storing task results and
     :param task_store: a DataStore instance to use for persisting task schedules
     :param always_eager: whether to run commands immediately
-    
+
     Example:
-    
+
     .. code-block:: python
-    
+
         from huey.backends.redis_backend import RedisBlockingQueue, RedisDataStore
         from huey.queue import Invoker
 
@@ -283,49 +281,49 @@ The Invoker and AsyncData classes
     talks to the result store and is responsible for fetching results from tasks.
     Once the consumer finishes executing a task, the return value is placed in the
     result store, allowing the producer to retrieve it.
-    
+
     Working with the ``AsyncData`` class is very simple:
-    
+
     .. code-block:: python
-    
+
         >>> from main import count_some_beans
         >>> res = count_some_beans(100)
         >>> res # <--- what is "res" ?
         <huey.queue.AsyncData object at 0xb7471a4c>
-        
+
         >>> res.get() # <--- get the result of this task, assuming it executed
         'Counted 100 beans'
-    
+
     What happens when data isn't available yet?  Let's assume the next call takes
     about a minute to calculate:
-    
+
     .. code-block:: python
-    
+
         >>> res = count_some_beans(10000000) # let's pretend this is slow
         >>> res.get() # data is not ready, so returns None
-        
+
         >>> res.get() is None # data still not ready
         True
-        
+
         >>> res.get(blocking=True, timeout=5) # block for 5 seconds
         Traceback (most recent call last):
           File "<stdin>", line 1, in <module>
           File "/home/charles/tmp/huey/src/huey/huey/queue.py", line 46, in get
             raise DataStoreTimeout
         huey.exceptions.DataStoreTimeout
-        
+
         >>> res.get(blocking=True) # no timeout, will block until it gets data
         'Counted 10000000 beans'
-    
+
     .. py:method:: get([blocking=False[, timeout=None[, backoff=1.15[, max_delay=1.0[, revoke_on_timeout=False]]]]])
-    
+
         Attempt to retrieve the return value of a task.  By default, it will simply
         ask for the value, returning ``None`` if it is not ready yet.  If you want
         to wait for a value, you can specify ``blocking = True`` -- this will loop,
         backing off up to the provided ``max_delay`` until the value is ready or
         until the ``timeout`` is reached.  If the ``timeout`` is reached before the
         result is ready, a :py:class:`DataStoreTimeout` exception will be raised.
-        
+
         :param blocking: boolean, whether to block while waiting for task result
         :param timeout: number of seconds to block for (used with `blocking=True`)
         :param backoff: amount to backoff delay each time no result is found
@@ -366,29 +364,29 @@ Configuration
     result store, and many other settings are configured.  The configuration is
     then used by the consumer to access the queue.  All configuration settings
     are class attributes.
-    
+
     .. py:attribute:: QUEUE
-    
+
         An instance of a ``Queue`` class, which must be a subclass of :py:class:`BaseQueue`.
         Tells consumer what queue to pull messages from.
-    
+
     .. py:attribute:: RESULT_STORE
-    
+
         An instance of a ``DataStore`` class, which must be a subclass of :py:class:`DataStore` or ``None``.
         Tells consumer where to store results of messages.
-    
+
     .. py:attribute:: TASK_STORE
-    
+
         An instance of a ``DataStore`` class, which must be a subclass of :py:class:`DataStore` or ``None``.
         Tells consumer where to serialize the schedule of pending tasks in the event the consumer is
         shut down unexpectedly.  If not provided, will default to the ``RESULT_STORE``.
-    
+
     .. py:attribute:: PERIODIC = False
-    
+
         A boolean value indicating whether the consumer should enqueue periodic tasks
-    
+
     .. py:attribute:: THREADS = 1
-    
+
         Number of worker threads to run
 
     .. py:attribute:: LOGFILE = None
@@ -397,7 +395,7 @@ Configuration
     .. py:attribute:: INITIAL_DELAY = .1
     .. py:attribute:: MAX_DELAY = 10
     .. py:attribute:: UTC = True
-    
+
         Whether to run using local ``now()`` or ``utcnow()`` when determining
         times to execute periodic commands and scheduled commands.
 
@@ -428,26 +426,26 @@ Base classes
 
     Queue implementation -- any connections that must be made should be created
     when instantiating this class.
-        
+
     :param name: A string representation of the name for this queue
     :param connection: Connection parameters for the queue
-    
+
     .. py:attribute:: blocking = False
-    
+
         Whether the backend blocks when waiting for new results.  If set to ``False``,
         the backend will be polled at intervals, if ``True`` it will read and wait.
-    
+
     .. py:method:: write(data)
-    
+
         Write data to the queue - has no return value.
-        
+
         :param data: a string
-    
+
     .. py:method:: read()
-        
+
         Read data from the queue, returning None if no data is available --
         an empty queue should not raise an Exception!
-        
+
         :rtype: a string message or ``None`` if no data is present
 
     .. py:method:: remove(data)
@@ -456,42 +454,42 @@ Base classes
 
         :param string data:
         :rtype: number of instances removed
-    
+
     .. py:method:: flush()
-    
+
         Optional: Delete everything in the queue -- used by tests
-    
+
     .. py:method:: __len__()
-    
+
         Optional: Return the number of items in the queue -- used by tests
 
 .. py:class:: BaseDataStore(name, **connection)
 
     Data store implementation -- any connections that must be made should be created
     when instantiating this class.
-    
+
     :param name: A string representation of the name for this data store
     :param connection: Connection parameters for the data store
 
     .. py:method:: put(key, value)
-    
+
         Store the ``value`` using the ``key`` as the identifier
 
     .. py:method:: peek(key)
 
         Retrieve the value stored at the given ``key``, returns a special value
         :py:class:`EmptyData` if nothing exists at the given key.
-    
+
     .. py:method:: get(key)
-        
+
         Retrieve the value stored at the given ``key``, returns a special value
         :py:class:`EmptyData` if no data exists at the given key.  This is to
         differentiate between "no data" and a stored ``None`` value.
-        
+
         .. warning:: After a result is fetched it will be removed from the store!
-    
+
     .. py:method:: flush()
-    
+
         Remove all keys
 
 Redis implementation
@@ -544,11 +542,11 @@ Function decorators and helpers
 
     Identical to the :py:func:`~huey.decorators.queue_command` described above,
     except that it takes no parameters.
-    
+
     .. code-block:: python
-    
+
         from huey.djhuey.decorators import queue_command
-        
+
         @queue_command
         def count_some_beans(how_many):
             return 'Counted %s beans' % how_many
@@ -557,11 +555,11 @@ Function decorators and helpers
 
     Identical to the :py:func:`~huey.decorators.periodic_command` described above,
     except that it does not take an invoker as its first argument.
-    
+
     .. code-block:: python
-    
+
         from huey.djhuey.decorators import periodic_command, crontab
-        
+
         @periodic_command(crontab(minute='*/5'))
         def every_five_minutes():
             # this function gets executed every 5 minutes by the consumer
@@ -595,7 +593,7 @@ Required settings
     Either a queue instance or a string pointing to the module path and class
     name of the queue.  If a string is used, you may also need to specify a
     connection parameters.
-    
+
     Example: ``huey.backends.redis_backend.RedisQueue``
 
 
@@ -611,7 +609,7 @@ Recommended settings
 ``RESULT_STORE`` (string or ``DataStore`` instance)
     Either a ``DataStore`` instance or a string pointing to the module path and
     class name of the result store.
-    
+
     Example: ``huey.backends.redis_backend.RedisDataStore``
 
 ``RESULT_STORE_NAME`` (string), default = database name
