@@ -4,13 +4,7 @@ Getting Started
 ===============
 
 The goal of this document is to help you get running quickly and with as little
-fuss as possible.  Because huey works with python in general but also has some
-special django integration, this guide is broken up into two parts.  Read the
-general guide first, then continue on to the django guide, as information is
-presented in the general guide that is not covered in the django parts.
-
-* :ref:`General guide <getting-started-python>`
-* :ref:`Django integration <getting-started-django>`
+fuss as possible.
 
 
 .. _getting-started-python:
@@ -24,12 +18,12 @@ There are three main components (or processes) to consider when running huey:
 * the consumer(s), which executes jobs placed into the queue
 * the queue where tasks are stored, e.g. Redis
 
-These three processes are shown in the screenshot below -- the left-hand pane
+These three processes are shown in the screenshots that follow. The left-hand pane
 shows the producer: a simple program that asks the user for input on how many
 "beans" to count.  In the top-right, the consumer is running.  It is doing the
-actual "computation" and simply printing the number of beans counted.  In the
-bottom-right is the queue, Redis in this example, which we're monitoring and
-shows tasks being enqueued (``LPUSH``) and read (``BRPOP``) from the database.
+actual "computation", for example printing the number of beans counted.  In the
+bottom-right is the queue, Redis in this example. We can see the tasks being
+enqueued (``LPUSH``) and read (``BRPOP``) from the database.
 
 .. image:: intro.png
 
@@ -48,7 +42,6 @@ a :py:class:`Huey` instance, which specifies which backend to use.
     # config.py
     from huey import Huey
     from huey.backends.redis_backend import RedisBlockingQueue
-
 
     queue = RedisBlockingQueue('test-queue', host='localhost', port=6379)
     huey = Huey(queue)
@@ -95,7 +88,8 @@ To run these scripts, follow these steps:
 
 1. Ensure you have `Redis <http://redis.io>`_ running locally
 2. Ensure you have :ref:`installed huey <installation>`
-3. Start the consumer: ``huey_consumer.py main.huey``
+3. Start the consumer: ``huey_consumer.py main.huey`` (notice this is "main.huey"
+   and not "config.huey").
 4. Run the main program: ``python main.py``
 
 Getting results from jobs
@@ -118,6 +112,14 @@ lines to the ``config.py`` module:
 
     huey = Huey(queue, result_store=result_store) # ADDED result store
 
+We can actually shorten this code to:
+
+.. code-block::python
+
+    from huey import RedisHuey
+
+    heuy = RedisHuey('test-queue', host='localhost', port=6379)
+
 To better illustrate getting results, we'll also modify the ``tasks.py``
 module to return a string rather in addition to printing to stdout:
 
@@ -134,13 +136,13 @@ module to return a string rather in addition to printing to stdout:
 We're ready to fire up the consumer.  Instead of simply executing the main
 program, though, we'll start an interpreter and run the following:
 
-.. code-block:: python
+.. code-block:: pycon
 
     >>> from main import count_beans
     >>> res = count_beans(100)
-    >>> res # <--- what is "res" ?
+    >>> res  # what is "res" ?
     <huey.api.AsyncData object at 0xb7471a4c>
-    >>> res.get() # <--- get the result of this task
+    >>> res.get()  # get the result of this task
     'Counted 100 beans'
 
 Following the same layout as our last example, here is a screenshot of the three
@@ -164,20 +166,20 @@ This is very simple to do with huey.  Returning to the interpreter session from
 the last section, let's schedule a bean counting to happen one minute in the future
 and see how huey handles it.  Execute the following:
 
-.. code-block:: python
+.. code-block:: pycon
 
     >>> import datetime
     >>> res = count_beans.schedule(args=(100,), delay=60)
     >>> res
     <huey.api.AsyncData object at 0xb72915ec>
-    >>> res.get() # <--- this returns None, no data is ready
-    >>> res.get() # <--- still no data...
-    >>> res.get(blocking=True) # <--- ok, let's just block until its ready
+    >>> res.get()  # this returns None, no data is ready
+    >>> res.get()  # still no data...
+    >>> res.get(blocking=True)  # ok, let's just block until its ready
     'Counted 100 beans'
 
 You can specify an "estimated time of arrival" as well using datetimes:
 
-.. code-block:: python
+.. code-block:: pycon
 
     >>> in_a_minute = datetime.datetime.now() + datetime.timedelta(seconds=60)
     >>> res = count_beans.schedule(args=(100,), eta=in_a_minute)
@@ -284,7 +286,8 @@ Preventing tasks from executing
 It is possible to prevent tasks from executing.  This applies to normal tasks,
 tasks scheduled in the future, and periodic tasks.
 
-.. note:: In order to "revoke" tasks you will need to be using a ``DataStore``.
+.. note:: In order to "revoke" tasks you will need to specify a ``result_store``
+    when instantiating your :py:class:`Huey` object.
 
 Canceling a normal task or one scheduled in the future
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -369,8 +372,8 @@ execution:
 Reading more
 ^^^^^^^^^^^^
 
-That sums up the basic usage patterns of huey.  If you plan on using with django,
-read on -- otherwise check the detailed documentation on the following:
+That sums up the basic usage patterns of huey.  Below are links for details
+on other aspects of the API:
 
 * :py:class:`~huey.api.Huey` - responsible for coordinating executable tasks and queue backends
 * :py:meth:`~huey.api.Huey.task` - decorator to indicate an executable task
@@ -379,98 +382,4 @@ read on -- otherwise check the detailed documentation on the following:
 * :py:class:`~huey.backends.base.BaseQueue` - the queue interface and writing your own backends
 * :py:class:`~huey.backends.base.BaseDataStore` - the simple data store used for results and schedule serialization
 
-
-.. _getting-started-django:
-
-Django integration
-------------------
-
-Configuring huey to work with django is actually more simple due to the centralized
-nature of django's configuration and conventions.  Rather than maintaining a ``Configuration``
-object, as in the above example, everything is configured automatically using django
-settings.  Following the previous example, we'll re-create the bean counting task
-using django:
-
-First let's get the settings.  In the interests of focusing on the bare minimum
-to get things running, here are the only settings you need.  It assumes, in addition
-to the ``huey.djhuey`` app, a single app called ``test_app``:
-
-.. code-block:: python
-
-    INSTALLED_APPS = [
-        'huey.djhuey',
-        'test_app',
-    ]
-
-    HUEY_CONFIG = {
-        'queue': {
-            'engine': 'huey.backends.redis_backend.RedisBlockingQueue',
-            'name': 'test-queue',
-            'connection': {
-                'host': 'localhost',
-                'port': 6379,
-            },
-        },
-        'workers': 4,
-    }
-
-The ``test_app`` will be as simple as possible:
-
-* __init__.py (empty)
-* manage.py (standard)
-* settings.py
-* test_app/
-    - __init__.py (empty)
-    - models.py (empty)
-    - tasks.py
-
-The only file with any code in it is ``test_app.tasks``:
-
-.. code-block:: python
-
-    from huey.djhuey.api import task
-
-    @task
-    def count_beans(number):
-        print 'Counted %s beans' % number
-
-If you're comparing against the example describe in the previous section, there
-are a couple key differences:
-
-* Instead of referencing ``huey.task`` we import the task decorator
-* ``@task`` decorator does not require any parameters
-
-Let's test it out:
-
-1. Start up the consumer using the management command: ``./manage.py run_huey`` (``django-admin.py run_huey`` also works)
-2. Open up a shell: ``./manage.py shell``
-3. Try running the ``count_beans()`` function a couple times
-
-.. image:: django.png
-
-Configuring a result backend
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-To enable support for task results, define a ``result_store`` in the django
-settings module:
-
-.. code-block:: python
-
-    HUEY_CONFIG = {
-        'queue': {
-            'backend': 'huey.backends.redis_backend.RedisBlockingQueue',
-            'name': 'test-queue',
-            'connection': {
-                'host': 'localhost',
-                'port': 6379,
-            },
-        },
-        'result_store': {
-            'backend': 'huey.backends.redis_backend.RedisDataStore',
-            'connection': {
-                'host': 'localhost',
-                'port': 6379,
-            },
-        },
-        'threads': 4,
-    }
+Also check out the :ref:`notes on running the consumer <consuming-tasks>`.

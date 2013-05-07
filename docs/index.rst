@@ -9,7 +9,6 @@ huey, a little task queue
 a lightweight alternative.
 
 * written in python
-* support for django
 * no deps outside stdlib, except redis (or roll your own backend)
 
 named after my cat
@@ -24,6 +23,7 @@ Contents:
 
    installation
    getting-started
+   consumer
    imports
    troubleshooting
    api
