@@ -3,10 +3,6 @@
 Huey's API
 ==========
 
-.. note::
-    The django API is a slightly simplified version of the general python API.
-    For details on using the django API, :ref:`read here <django-api>`
-
 Most end-users will interact with the API using the two decorators:
 
 * :py:method:`Huey.task`
@@ -21,208 +17,247 @@ lowest-level interfaces, the :py:class:`BaseQueue` and :py:class:`BaseDataStore`
 Function decorators and helpers
 -------------------------------
 
-.. py:module:: huey.decorators
+.. py:module:: huey.api
 
-.. py:function:: queue_command(invoker[, retries=0[, retry_delay=0]])
+.. py:class:: Huey(queue[, result_store=None[, store_none=False[, always_eager=False[, schedule_key='schedule']]]])
 
-    Function decorator that marks the decorated function for processing by the
-    consumer.  Calls to the decorated function will do the following:
+    Huey executes tasks by exposing function decorators that cause the function
+    call to be enqueued for execution by the consumer.
 
-    1. Serialize the function call into a message suitable for storing in the queue
-    2. Enqueue the message for execution by the consumer
-    3. If a :py:class:`ResultStore` has been configured, return an :py:class:`AsyncData`
-       instance which can retrieve the result of the function, or ``None`` if not
-       using a result store.
+    Typically your application will only need one Huey instance, but you can
+    have as many as you like -- the only caveat is that one consumer process
+    must be executed for each Huey instance.
 
-    .. note::
-        The Invoker can be configured to execute the function immediately by
-        instantiating it with ``always_eager = True`` -- this is useful for
-        running in debug mode or when you do not wish to run the consumer.
+    :param queue: a queue instance, e.g. :py:class:`RedisQueue`.
+    :param result_store: a place to store results and the task schedule,
+        e.g. :py:class:`RedisDataStore`.
+    :param boolean store_none: Flag to indicate whether tasks that return ``None``
+        should store their results in the result store.
+    :param always_eager: Useful for testing, this will execute all tasks
+        immediately, without enqueueing them.
+    :param schedule_key: Key used for persisting the schedule between runs
+        of the consumer.
 
-    Here is how you might use the ``queue_command`` decorator:
-
-    .. code-block:: python
-
-        # assume that we've created an invoker alongside the rest of the
-        # config
-        from config import invoker
-        from huey.decorators import queue_command
-
-        @queue_command(invoker)
-        def count_some_beans(num):
-            # do some counting!
-            return 'Counted %s beans' % num
-
-    Now, whenever you call this function in your application, the actual processing
-    will occur when the consumer dequeues the message and your application will
-    continue along on its way.
-
-    Without a result store:
+    Example usage:
 
     .. code-block:: python
 
-        >>> res = count_some_beans(1000000)
-        >>> res is None
-        True
+        from huey.api import Huey, crontab
+        from huey.backends.redis_backend import RedisQueue, RedisDataStore
 
-    With a result store:
+        queue = RedisQueue('my-app')
+        result_store = RedisDataStore('my-app')
+        huey = Huey(queue, result_store)
 
-    .. code-block:: python
+        @huey.task()
+        def slow_function(some_arg):
+            # ... do something ...
+            return some_arg
 
-        >>> res = count_some_beans(1000000)
-        >>> res
-        <huey.queue.AsyncData object at 0xb7471a4c>
-        >>> res.get()
-        'Counted 1000000 beans'
+        @huey.periodic_task(crontab(minute='0', hour='3'))
+        def backup():
+            # do a backup every day at 3am
+            return
 
-    :param invoker: an :py:class:`Invoker` instance
-    :param retries: number of times to retry the task if an exception occurs
-    :param retry_delay: number of seconds to wait between retries
-    :rtype: decorated function
+    .. py: method:: task([retries=0[, retry_delay=0[, retries_as_argument=False]]])
 
-    The return value of any calls to the decorated function depends on whether the invoker
-    is configured with a result store.  If a result store is configured, the
-    decorated function will return an :py:class:`AsyncData` object which can fetch the
-    result of the call from the result store -- otherwise it will simply
-    return ``None``.
+        Function decorator that marks the decorated function for processing by the
+        consumer. Calls to the decorated function will do the following:
 
-    The ``queue_command`` decorator also does one other important thing -- it adds
-    a special function **onto** the decorated function, which makes it possible
-    to *schedule* the execution for a certain time in the future:
+        1. Serialize the function call into a message suitable for storing in the queue
+        2. Enqueue the message for execution by the consumer
+        3. If a ``result_store`` has been configured, return an :py:class:`AsyncData`
+           instance which can retrieve the result of the function, or ``None`` if not
+           using a result store.
 
-    .. py:function:: {decorated func}.schedule(args=None, kwargs=None, eta=None, delay=None, convert_utc=True)
+        .. note::
+            Huey can be configured to execute the function immediately by
+            instantiating it with ``always_eager = True`` -- this is useful for
+            running in debug mode or when you do not wish to run the consumer.
 
-        Use the special ``.schedule()`` function to schedule the execution of a
-        queue command for a given time in the future:
+        Here is how you might use the ``task`` decorator:
 
         .. code-block:: python
 
-            import datetime
+            # assume that we've created a huey object
+            from huey import RedisHuey
 
-            # get a datetime object representing one hour in the future
-            in_an_hour = datetime.datetime.now() + datetime.timedelta(seconds=3600)
+            huey = RedisHuey()
 
-            # schedule "count_some_beans" to run in an hour
-            count_some_beans.schedule(args=(100000,), eta=in_an_hour)
+            @huey.task()
+            def count_some_beans(num):
+                # do some counting!
+                return 'Counted %s beans' % num
 
-            # another way of doing the same thing...
-            count_some_beans.schedule(args=(100000,), delay=(60 * 60))
+        Now, whenever you call this function in your application, the actual processing
+        will occur when the consumer dequeues the message and your application will
+        continue along on its way.
 
-
-        :param args: arguments to call the decorated function with
-        :param kwargs: keyword arguments to call the decorated function with
-        :param datetime eta: the time at which the function should be executed
-        :param int delay: number of seconds to wait before executing function
-        :param convert_utc: whether the ``eta`` should be converted from local
-                            time to UTC, defaults to ``True``
-        :rtype: like calls to the decorated function, will return an :py:class:`AsyncData`
-                object if a result store is configured, otherwise returns ``None``
-
-    .. py:attribute:: {decorated func}.command_class
-
-        Store a reference to the command class for the decorated function.
+        Without a result store:
 
         .. code-block:: pycon
 
-            >>> count_some_beans.command_class
-            commands.queuecmd_count_beans
+            >>> res = count_some_beans(1000000)
+            >>> res is None
+            True
+
+        With a result store:
+
+        .. code-block:: pycon
+
+            >>> res = count_some_beans(1000000)
+            >>> res
+            <huey.api.AsyncData object at 0xb7471a4c>
+            >>> res.get()
+            'Counted 1000000 beans'
+
+        :param int retries: number of times to retry the task if an exception occurs
+        :param int retry_delay: number of seconds to wait between retries
+        :param boolean retries_as_argument: whether the number of retries should
+            be passed in to the decorated function as an argument.
+        :rtype: decorated function
+
+        The return value of any calls to the decorated function depends on whether the invoker
+        is configured with a ``result_store``.  If a result store is configured, the
+        decorated function will return an :py:class:`AsyncData` object which can fetch the
+        result of the call from the result store -- otherwise it will simply
+        return ``None``.
+
+        The ``task`` decorator also does one other important thing -- it adds
+        a special function **onto** the decorated function, which makes it possible
+        to *schedule* the execution for a certain time in the future:
+
+        .. py:function:: {decorated func}.schedule(args=None, kwargs=None, eta=None, delay=None, convert_utc=True)
+
+            Use the special ``schedule`` function to schedule the execution of a
+            queue task for a given time in the future:
+
+            .. code-block:: python
+
+                import datetime
+
+                # get a datetime object representing one hour in the future
+                in_an_hour = datetime.datetime.now() + datetime.timedelta(seconds=3600)
+
+                # schedule "count_some_beans" to run in an hour
+                count_some_beans.schedule(args=(100000,), eta=in_an_hour)
+
+                # another way of doing the same thing...
+                count_some_beans.schedule(args=(100000,), delay=(60 * 60))
+
+            :param args: arguments to call the decorated function with
+            :param kwargs: keyword arguments to call the decorated function with
+            :param datetime eta: the time at which the function should be executed
+            :param int delay: number of seconds to wait before executing function
+            :param convert_utc: whether the ``eta`` should be converted from local
+                                time to UTC, defaults to ``True``
+            :rtype: like calls to the decorated function, will return an :py:class:`AsyncData`
+                    object if a result store is configured, otherwise returns ``None``
+
+        .. py:attribute:: {decorated func}.task_class
+
+            Store a reference to the task class for the decorated function.
+
+            .. code-block:: pycon
+
+                >>> count_some_beans.task_class
+                tasks.queuecmd_count_beans
 
 
+    .. py:method:: periodic_task(validate_datetime)
 
-.. py:function:: periodic_command(invoker, validate_datetime)
+        Function decorator that marks the decorated function for processing by the
+        consumer *at a specific interval*.  Calls to functions decorated with ``periodic_task``
+        will execute normally, unlike :py:meth:`~Huey.task`, which enqueues tasks
+        for execution by the consumer.  Rather, the ``periodic_task`` decorator
+        serves to **mark a function as needing to be executed periodically** by the
+        consumer.
 
-    Function decorator that marks the decorated function for processing by the
-    consumer *at a specific interval*.  Calls to functions decorated with ``periodic_command``
-    will execute normally, unlike :py:func:`queue_command`, which enqueues commands
-    for execution by the consumer.  Rather, the ``periodic_command`` decorator
-    serves to **mark a function as needing to be executed periodically** by the
-    consumer.
+        .. note::
+            By default, the consumer will execute ``periodic_task`` functions. To
+            disable this, run the consumer with ``-n`` or ``--no-periodic``.
 
-    .. note::
-        By default, the consumer will not execute ``periodic_command`` functions.
-        To enable this, simply add ``PERIODIC = True`` to your configuration.
+        The ``validate_datetime`` parameter is a function which accepts a datetime
+        object and returns a boolean value whether or not the decorated function
+        should execute at that time or not.  The consumer will send a datetime to
+        the function every minute, giving it the same granularity as the linux
+        crontab, which it was designed to mimic.
 
-    The ``validate_datetime`` parameter is a function which accepts a datetime
-    object and returns a boolean value whether or not the decorated function
-    should execute at that time or not.  The consumer will send a datetime to
-    the function every minute, giving it the same granularity as the linux
-    crontab, which it was designed to mimic.
+        For simplicity, there is a special function :py:func:`crontab`, which can
+        be used to quickly specify intervals at which a function should execute.  It
+        is described below.
 
-    For simplicity, there is a special function :py:func:`crontab`, which can
-    be used to quickly specify intervals at which a function should execute.  It
-    is described below.
-
-    Here is an example of how you might use the ``periodic_command`` decorator
-    and the ``crontab`` helper:
-
-    .. code-block:: python
-
-        from config import invoker
-        from huey.decorators import periodic_command, crontab
-
-        @periodic_command(invoker, crontab(minute='*/5'))
-        def every_five_minutes():
-            # this function gets executed every 5 minutes by the consumer
-            print "It's been five minutes"
-
-    .. note::
-        Because functions decorated with ``periodic_command`` are meant to be
-        executed at intervals in isolation, they should not take any required
-        parameters nor should they be expected to return a meaningful value.
-        This is the same regardless of whether or not you are using a result store.
-
-    :param invoker: an :py:class:`Invoker` instance
-    :param validate_datetime: a callable which takes a ``datetime`` and returns
-        a boolean whether the decorated function should execute at that time or not
-    :rtype: decorated function
-
-
-    Like :py:func:`queue_command`, the periodic command decorator adds several helpers
-    to the decorated function.  These helpers allow you to "revoke" and "restore" the
-    periodic command, effectively enabling you to pause it or prevent its execution.
-
-    .. py:function:: {decorated_func}.revoke([revoke_until=None[, revoke_once=False]])
-
-        Prevent the given periodic command from executing.  When no parameters are
-        provided the function will not execute again.
-
-        This function can be called multiple times, but each call will overwrite
-        the limitations of the previous.
-
-        :param datetime revoke_until: Prevent the execution of the command until the
-            given datetime.  If ``None`` it will prevent execution indefinitely.
-        :param bool revoke_once: If ``True`` will only prevent execution the next
-            time it would normally execute.
+        Here is an example of how you might use the ``periodic_task`` decorator
+        and the ``crontab`` helper:
 
         .. code-block:: python
 
-            # skip the next execution
-            every_five_minutes.revoke(revoke_once=True)
+            from huey import crontab
+            from huey import RedisHuey
 
-            # pause the command indefinitely
-            every_five_minutes.revoke()
+            huey = RedisHuey()
 
-            # pause the command for 24 hours
-            every_five_minutes.revoke(datetime.datetime.now() + datetime.timedelta(days=1))
+            @huey.periodic_task(crontab(minute='*/5'))
+            def every_five_minutes():
+                # this function gets executed every 5 minutes by the consumer
+                print "It's been five minutes"
 
-    .. py:function:: {decorated_func}.is_revoked([dt=None])
+        .. note::
+            Because functions decorated with ``periodic_task`` are meant to be
+            executed at intervals in isolation, they should not take any required
+            parameters nor should they be expected to return a meaningful value.
+            This is the same regardless of whether or not you are using a result store.
 
-        Check whether the given periodic command is revoked.  If ``dt`` is specified,
-        it will check if the command is revoked for the given datetime.
+        :param validate_datetime: a callable which takes a ``datetime`` and returns
+            a boolean whether the decorated function should execute at that time or not
+        :rtype: decorated function
 
-        :param datetime dt: If provided, checks whether command is revoked at the
-            given datetime
+        Like :py:meth:`~Huey.task`, the periodic task decorator adds several helpers
+        to the decorated function.  These helpers allow you to "revoke" and "restore" the
+        periodic task, effectively enabling you to pause it or prevent its execution.
 
-    .. py:function:: {decorated_func}.restore()
+        .. py:function:: {decorated_func}.revoke([revoke_until=None[, revoke_once=False]])
 
-        Clears any revoked status and run the command normally
+            Prevent the given periodic task from executing.  When no parameters are
+            provided the function will not execute again.
 
-    If you want access to the underlying command class, it is stored as an attribute
-    on the decorated function:
+            This function can be called multiple times, but each call will overwrite
+            the limitations of the previous.
 
-    .. py:attribute:: {decorated_func}.command_class
+            :param datetime revoke_until: Prevent the execution of the task until the
+                given datetime.  If ``None`` it will prevent execution indefinitely.
+            :param bool revoke_once: If ``True`` will only prevent execution the next
+                time it would normally execute.
 
-        Store a reference to the command class for the decorated function.
+            .. code-block:: python
+
+                # skip the next execution
+                every_five_minutes.revoke(revoke_once=True)
+
+                # pause the command indefinitely
+                every_five_minutes.revoke()
+
+                # pause the command for 24 hours
+                every_five_minutes.revoke(datetime.datetime.now() + datetime.timedelta(days=1))
+
+        .. py:function:: {decorated_func}.is_revoked([dt=None])
+
+            Check whether the given periodic task is revoked.  If ``dt`` is specified,
+            it will check if the task is revoked for the given datetime.
+
+            :param datetime dt: If provided, checks whether task is revoked at the
+                given datetime
+
+        .. py:function:: {decorated_func}.restore()
+
+            Clears any revoked status and run the task normally
+
+        If you want access to the underlying task class, it is stored as an attribute
+        on the decorated function:
+
+        .. py:attribute:: {decorated_func}.task_class
+
+            Store a reference to the task class for the decorated function.
 
 
 .. py:function:: crontab(month='*', day='*', day_of_week='*', hour='*', minute='*')
@@ -240,44 +275,16 @@ Function decorators and helpers
 
     :rtype: a test function that takes a ``datetime`` and returns a boolean
 
-The Invoker and AsyncData classes
----------------------------------
+AsyncData
+---------
 
-.. py:module:: huey.queue
+.. py:module:: huey.api
 
-.. py:class:: Invoker(queue[, result_store=None[, task_store=None[, store_none=False[, always_eager=False]]]])
-
-    The ``Invoker`` ties together your application's queue, result store, and supplies
-    some options to configure how tasks are executed and how their results are stored.
-
-    Applications will have **at least one** ``Invoker`` instance, as it is required
-    by the :ref:`function decorators <function-decorators>`.  Typically it should
-    be instantiated along with the ``Queue``, or wherever you create your configuration.
-
-    :param queue: a Queue instance to use
-    :param result_store: a DataStore instance to use for storing task results and
-    :param task_store: a DataStore instance to use for persisting task schedules
-    :param always_eager: whether to run commands immediately
-
-    Example:
-
-    .. code-block:: python
-
-        from huey.backends.redis_backend import RedisBlockingQueue, RedisDataStore
-        from huey.queue import Invoker
-
-        queue = RedisBlockingQueue('test-queue', host='localhost', port=6379)
-        result_store = RedisDataStore('results', host='localhost', port=6379)
-
-        # Create an invoker instance, which points at the queue and result store
-        # which are used by the application's Configuraiton object
-        invoker = Invoker(queue, result_store=result_store)
-
-.. py:class:: AsyncData(invoker, command)
+.. py:class:: AsyncData(huey, task)
 
     Although you will probably never instantiate an ``AsyncData`` object yourself,
-    they are returned by any calls to :py:func:`queue_command` decorated functions
-    (provided the invoker is configured with a result store).  The ``AsyncData``
+    they are returned by any calls to :py:meth:`~Huey.task` decorated functions
+    (provided that "huey" is configured with a result store).  The ``AsyncData``
     talks to the result store and is responsible for fetching results from tasks.
     Once the consumer finishes executing a task, the return value is placed in the
     result store, allowing the producer to retrieve it.
@@ -288,10 +295,10 @@ The Invoker and AsyncData classes
 
         >>> from main import count_some_beans
         >>> res = count_some_beans(100)
-        >>> res # <--- what is "res" ?
+        >>> res  # what is "res" ?
         <huey.queue.AsyncData object at 0xb7471a4c>
 
-        >>> res.get() # <--- get the result of this task, assuming it executed
+        >>> res.get()  # get the result of this task, assuming it executed
         'Counted 100 beans'
 
     What happens when data isn't available yet?  Let's assume the next call takes
@@ -300,19 +307,19 @@ The Invoker and AsyncData classes
     .. code-block:: python
 
         >>> res = count_some_beans(10000000) # let's pretend this is slow
-        >>> res.get() # data is not ready, so returns None
+        >>> res.get()  # data is not ready, so returns None
 
-        >>> res.get() is None # data still not ready
+        >>> res.get() is None  # data still not ready
         True
 
-        >>> res.get(blocking=True, timeout=5) # block for 5 seconds
+        >>> res.get(blocking=True, timeout=5)  # block for 5 seconds
         Traceback (most recent call last):
           File "<stdin>", line 1, in <module>
           File "/home/charles/tmp/huey/src/huey/huey/queue.py", line 46, in get
             raise DataStoreTimeout
         huey.exceptions.DataStoreTimeout
 
-        >>> res.get(blocking=True) # no timeout, will block until it gets data
+        >>> res.get(blocking=True)  # no timeout, will block until it gets data
         'Counted 10000000 beans'
 
     .. py:method:: get([blocking=False[, timeout=None[, backoff=1.15[, max_delay=1.0[, revoke_on_timeout=False]]]]])
@@ -333,8 +340,8 @@ The Invoker and AsyncData classes
 
     .. py:method:: revoke()
 
-        Revoke the given command.  Unless it is in the process of executing, it will
-        be revoked and the command will not run.
+        Revoke the given task.  Unless it is in the process of executing, it will
+        be revoked and the task will not run.
 
         .. code-block:: python
 
@@ -348,56 +355,9 @@ The Invoker and AsyncData classes
 
     .. py:method:: restore()
 
-        Restore the given command.  Unless it has already been skipped over, it
+        Restore the given task.  Unless it has already been skipped over, it
         will be restored and run as scheduled.
 
-
-Configuration
--------------
-
-.. py:module:: huey.bin.config
-
-.. py:class:: BaseConfiguration()
-
-    Applications using huey should subclass ``BaseConfiguration`` when specifying
-    the configuration options to use.  ``BaseConfiguration`` is where the queue,
-    result store, and many other settings are configured.  The configuration is
-    then used by the consumer to access the queue.  All configuration settings
-    are class attributes.
-
-    .. py:attribute:: QUEUE
-
-        An instance of a ``Queue`` class, which must be a subclass of :py:class:`BaseQueue`.
-        Tells consumer what queue to pull messages from.
-
-    .. py:attribute:: RESULT_STORE
-
-        An instance of a ``DataStore`` class, which must be a subclass of :py:class:`DataStore` or ``None``.
-        Tells consumer where to store results of messages.
-
-    .. py:attribute:: TASK_STORE
-
-        An instance of a ``DataStore`` class, which must be a subclass of :py:class:`DataStore` or ``None``.
-        Tells consumer where to serialize the schedule of pending tasks in the event the consumer is
-        shut down unexpectedly.  If not provided, will default to the ``RESULT_STORE``.
-
-    .. py:attribute:: PERIODIC = False
-
-        A boolean value indicating whether the consumer should enqueue periodic tasks
-
-    .. py:attribute:: THREADS = 1
-
-        Number of worker threads to run
-
-    .. py:attribute:: LOGFILE = None
-    .. py:attribute:: LOGLEVEL = logging.INFO
-    .. py:attribute:: BACKOFF = 1.15
-    .. py:attribute:: INITIAL_DELAY = .1
-    .. py:attribute:: MAX_DELAY = 10
-    .. py:attribute:: UTC = True
-
-        Whether to run using local ``now()`` or ``utcnow()`` when determining
-        times to execute periodic commands and scheduled commands.
 
 Queues and DataStores
 ---------------------
@@ -520,130 +480,3 @@ written by Andy McCurdy.
 
     :param name: the name of the data store to use
     :param connection: a list of values passed directly into the ``redis.Redis`` class
-
-
-.. _django-api:
-
-Django API
-==========
-
-Good news, the django api is considerably simpler!  This is because django has
-very specific conventions for how things should be configured.  If you're using
-django you don't have to worry about invokers or configuration objects -- simply
-configure the queue and result store in the settings and use the decorators and
-management command to run the consumer.
-
-Function decorators and helpers
--------------------------------
-
-.. py:module:: huey.djhuey.decorators
-
-.. py:function:: queue_command()
-
-    Identical to the :py:func:`~huey.decorators.queue_command` described above,
-    except that it takes no parameters.
-
-    .. code-block:: python
-
-        from huey.djhuey.decorators import queue_command
-
-        @queue_command
-        def count_some_beans(how_many):
-            return 'Counted %s beans' % how_many
-
-.. py:function:: periodic_command(validate_datetime)
-
-    Identical to the :py:func:`~huey.decorators.periodic_command` described above,
-    except that it does not take an invoker as its first argument.
-
-    .. code-block:: python
-
-        from huey.djhuey.decorators import periodic_command, crontab
-
-        @periodic_command(crontab(minute='*/5'))
-        def every_five_minutes():
-            # this function gets executed every 5 minutes by the consumer
-            print "It's been five minutes"
-
-Configuration
--------------
-
-All configuration occurs in the django settings module.  Settings are configured
-using the same names as those in the python api with the exception that queues and
-data stores can be specified using a string module path, and connection keyword-arguments
-are specified using a dictionary.
-
-Example configuration:
-
-.. code-block:: python
-
-    HUEY_CONFIG = {
-        'QUEUE': 'huey.backends.redis_backend.RedisQueue',
-        'QUEUE_CONNECTION': {
-            'host': 'localhost',
-            'port': 6379
-        },
-        'THREADS': 4,
-    }
-
-Required settings
-^^^^^^^^^^^^^^^^^
-
-``QUEUE`` (string or ``Queue`` instance)
-    Either a queue instance or a string pointing to the module path and class
-    name of the queue.  If a string is used, you may also need to specify a
-    connection parameters.
-
-    Example: ``huey.backends.redis_backend.RedisQueue``
-
-
-Recommended settings
-^^^^^^^^^^^^^^^^^^^^
-
-``QUEUE_NAME`` (string), default = database name
-
-``QUEUE_CONNECTION`` (dictionary)
-    If the ``QUEUE`` was specified using a string, use this parameter to
-    instruct the queue class how to connect.
-
-``RESULT_STORE`` (string or ``DataStore`` instance)
-    Either a ``DataStore`` instance or a string pointing to the module path and
-    class name of the result store.
-
-    Example: ``huey.backends.redis_backend.RedisDataStore``
-
-``RESULT_STORE_NAME`` (string), default = database name
-
-``RESULT_STORE_CONNECTION`` (dictionary)
-    See notes for ``QUEUE_CONNECTION``
-
-``TASK_STORE``
-    Follows same pattern as ``RESULT_STORE``
-
-
-Optional settings
-^^^^^^^^^^^^^^^^^
-
-``PERIODIC`` (boolean), default = False
-    Determines whether or not to the consumer will enqueue periodic commands.
-    If you are running multiple consumers, only one of them should be configured
-    to enqueue periodic commands.
-
-``THREADS`` (int), default = 1
-    Number of worker threads to use when processing jobs
-
-``LOGFILE`` (string), default = None
-
-``LOGLEVEL`` (int), default = logging.INFO
-
-``BACKOFF`` (numeric), default = 1.15
-    How much to increase delay when no jobs are present
-
-``INITIAL_DELAY`` (numeric), default = 0.1
-    Initial amount of time to sleep when waiting for jobs
-
-``MAX_DELAY`` (numeric), default = 10
-    Max amount of time to sleep when waiting for jobs
-
-``ALWAYS_EAGER``, default = ``False``
-    Whether to skip enqueue-ing and run in-band (useful for debugging)

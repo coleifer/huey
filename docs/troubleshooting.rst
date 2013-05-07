@@ -18,8 +18,7 @@ Tasks not running
 "QueueException: XXX not found in CommandRegistry" in log file
     Exception occurs when a task is called by a task producer, but is not imported
     by the consumer.  To fix this, ensure that by loading the :py:class:`Huey` object,
-    you also import any decorated functions as well.  If using Django, ensure that
-    your tasks in are modules named ``tasks.py`` and their app is in ``INSTALLED_APPS``.
+    you also import any decorated functions as well.
 
     For more information on how tasks are imported, see the :ref:`docs <imports>`
 
@@ -32,7 +31,8 @@ Tasks not running
     Example syntax: ``huey_consumer.py main_module.huey``
 
 Tasks not returning results
-    Ensure that you have configured a :py:class:`ResultStore` object.
+    Ensure that you have specified a ``result_store`` when creating your
+    :py:class:`Huey` object.
 
 Periodic tasks are being executed multiple times per-interval
     If you are running multiple consumer processes, it means that more than one

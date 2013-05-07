@@ -6,7 +6,6 @@ huey - a little task queue
 a lightweight alternative.
 
 * written in python
-* support for django
 * no deps outside the standard lib, except Redis (or you can roll your own backend)
 
 supports:

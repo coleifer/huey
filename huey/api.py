@@ -326,9 +326,9 @@ class QueueTaskMetaClass(type):
 class QueueTask(object):
     """
     A class that encapsulates the logic necessary to 'do something' given some
-    arbitrary data.  When enqueued with the :class:`Invoker`, it will be
+    arbitrary data.  When enqueued with the :class:`Huey`, it will be
     stored in a queue for out-of-band execution via the consumer.  See also
-    the :func:`queue_task` decorator, which can be used to automatically
+    the :meth:`task` decorator, which can be used to automatically
     execute any function out-of-band.
 
     Example::
@@ -351,10 +351,6 @@ class QueueTask(object):
 
     def __init__(self, data=None, task_id=None, execute_time=None, retries=0,
                  retry_delay=0):
-        """
-        Initialize the task object with a receiver and optional data.  The
-        receiver object *must* be a django model instance.
-        """
         self.set_data(data)
         self.task_id = task_id or self.create_id()
         self.revoke_id = 'r:%s' % self.task_id
@@ -366,11 +362,9 @@ class QueueTask(object):
         return str(uuid.uuid4())
 
     def get_data(self):
-        """Called by the Invoker when a task is being enqueued"""
         return self.data
 
     def set_data(self, data):
-        """Called by the Invoker when a task is dequeued"""
         self.data = data
 
     def execute(self):
