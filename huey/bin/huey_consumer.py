@@ -372,7 +372,7 @@ if __name__ == '__main__':
         huey_instance,
         options.logfile,
         loglevel,
-        options.threads,
+        options.workers,
         options.periodic,
         options.initial_delay,
         options.backoff,
