@@ -290,6 +290,7 @@ class Consumer(object):
     def run(self):
         self.set_signal_handler()
         self.log_registered_commands()
+        logger.info('%d worker threads' % self.workers)
 
         self.create_threads()
         self.huey.load_schedule()
@@ -317,8 +318,10 @@ def get_option_parser():
                       help='verbose logging', action='store_true')
     parser.add_option('-q', '--quiet', dest='verbose',
                       help='log exceptions only', action='store_false')
-    parser.add_option('-t', '--threads', dest='threads', type='int',
+    parser.add_option('-w', '--workers', dest='workers', type='int',
                       help='worker threads (default=1)', default=1)
+    parser.add_option('-t', '--threads', dest='workers', type='int',
+                      help='same as "workers"', default=1)
     parser.add_option('-p', '--periodic', dest='periodic', default=True,
                       help='execute periodic tasks (default=True)',
                       action='store_true')
