@@ -4,11 +4,11 @@ from setuptools import setup, find_packages
 
 setup(
     name='huey',
-    version="0.3.2",
+    version='0.4.0',
     description='huey, a little task queue',
     author='Charles Leifer',
     author_email='coleifer@gmail.com',
-    url='http://github.com/coleifer/huey/tree/master',
+    url='http://github.com/coleifer/huey/',
     packages=find_packages(),
     package_data = {
         'huey': [

@@ -383,3 +383,6 @@ on other aspects of the API:
 * :py:class:`~huey.backends.base.BaseDataStore` - the simple data store used for results and schedule serialization
 
 Also check out the :ref:`notes on running the consumer <consuming-tasks>`.
+
+.. note::
+    If you're using Django, check out the :ref:`django integration <django>`.

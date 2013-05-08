@@ -7,6 +7,7 @@ a lightweight alternative.
 
 * written in python
 * no deps outside the standard lib, except Redis (or you can roll your own backend)
+* support for Django
 
 supports:
 

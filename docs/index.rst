@@ -10,6 +10,7 @@ a lightweight alternative.
 
 * written in python
 * no deps outside stdlib, except redis (or roll your own backend)
+* support for django
 
 named after my cat
 

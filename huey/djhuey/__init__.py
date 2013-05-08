@@ -25,6 +25,10 @@ On the other hand, you can configure huey manually using the following
 setting structure.  The only required setting is 'queue'.  The following
 example uses Redis on localhost:
 
+.. note::
+    Huey settings are optional.  If not provided, Huey will default to using
+    Redis running locally.
+
 HUEY = {
     'queue': 'huey.backends.redis_backend.RedisBlockingQueue',  # required.
     'queue_name': 'unique name',
