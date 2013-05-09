@@ -6,7 +6,7 @@ Consuming Tasks
 To run the consumer, simply point it at the "import path" to your application's
 :py:class:`Huey` instance.  For example, here is how I run it on my blog:
 
-.. code-block:: shell
+.. code-block:: bash
 
     huey_consumer.py blog.main.huey --logfile=../logs/huey.log
 
@@ -87,13 +87,13 @@ Examples
  Running the consumer with 8 threads, a logfile for errors only, and a very
  short polling interval:
 
- .. code-block:: shell
+ .. code-block:: bash
 
     huey_consumer.py my.app.huey -l /var/log/app.huey.log -t 8 -b 1.1 -m 1.0
 
 Running single-threaded without a crontab and logging to stdout:
 
-.. code-block:: shell
+.. code-block:: bash
 
     huey_consumer.py my.app.huey -v -n
 

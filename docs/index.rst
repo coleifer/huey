@@ -23,10 +23,12 @@ Contents:
    :maxdepth: 2
 
    installation
+   upgrading
    getting-started
    consumer
    imports
    troubleshooting
+   django
    api
 
 

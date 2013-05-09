@@ -5,8 +5,8 @@ Huey's API
 
 Most end-users will interact with the API using the two decorators:
 
-* :py:method:`Huey.task`
-* :py:method:`Huey.periodic_task`
+* :py:meth:`Huey.task`
+* :py:meth:`Huey.periodic_task`
 
 The API documentation will follow the structure of the huey API, starting with
 the highest-level interfaces (the decorators) and eventually discussing the
@@ -278,8 +278,6 @@ Function decorators and helpers
 AsyncData
 ---------
 
-.. py:module:: huey.api
-
 .. py:class:: AsyncData(huey, task)
 
     Although you will probably never instantiate an ``AsyncData`` object yourself,
@@ -379,8 +377,6 @@ an outline of the methods that must be implemented on each class.
 
 Base classes
 ^^^^^^^^^^^^
-
-.. py:module:: huey.backends.base
 
 .. py:class:: BaseQueue(name, **connection)
 
