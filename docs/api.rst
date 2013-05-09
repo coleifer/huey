@@ -17,8 +17,6 @@ lowest-level interfaces, the :py:class:`BaseQueue` and :py:class:`BaseDataStore`
 Function decorators and helpers
 -------------------------------
 
-.. py:module:: huey.api
-
 .. py:class:: Huey(queue[, result_store=None[, store_none=False[, always_eager=False[, schedule_key='schedule']]]])
 
     Huey executes tasks by exposing function decorators that cause the function
@@ -59,7 +57,7 @@ Function decorators and helpers
             # do a backup every day at 3am
             return
 
-    .. py: method:: task([retries=0[, retry_delay=0[, retries_as_argument=False]]])
+    .. py:method:: task([retries=0[, retry_delay=0[, retries_as_argument=False]]])
 
         Function decorator that marks the decorated function for processing by the
         consumer. Calls to the decorated function will do the following:
@@ -453,8 +451,6 @@ Redis implementation
 
 All the following use the `python redis driver <https://github.com/andymccurdy/redis-py>`_
 written by Andy McCurdy.
-
-.. py:module:: huey.backends.redis_backend
 
 .. py:class:: RedisQueue(name, **connection)
 

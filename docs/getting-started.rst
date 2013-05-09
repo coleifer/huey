@@ -375,12 +375,12 @@ Reading more
 That sums up the basic usage patterns of huey.  Below are links for details
 on other aspects of the API:
 
-* :py:class:`~huey.api.Huey` - responsible for coordinating executable tasks and queue backends
-* :py:meth:`~huey.api.Huey.task` - decorator to indicate an executable task
-* :py:meth:`~huey.api.Huey.periodic_task` - decorator to indicate a task that executes at periodic intervals
-* :py:func:`~huey.api.crontab` - a function for defining what intervals to execute a periodic command
-* :py:class:`~huey.backends.base.BaseQueue` - the queue interface and writing your own backends
-* :py:class:`~huey.backends.base.BaseDataStore` - the simple data store used for results and schedule serialization
+* :py:class:`~Huey` - responsible for coordinating executable tasks and queue backends
+* :py:meth:`~Huey.task` - decorator to indicate an executable task
+* :py:meth:`~Huey.periodic_task` - decorator to indicate a task that executes at periodic intervals
+* :py:func:`crontab` - a function for defining what intervals to execute a periodic command
+* :py:class:`BaseQueue` - the queue interface and writing your own backends
+* :py:class:`BaseDataStore` - the simple data store used for results and schedule serialization
 
 Also check out the :ref:`notes on running the consumer <consuming-tasks>`.
 

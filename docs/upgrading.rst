@@ -97,3 +97,14 @@ Redis locally, Huey will "just work".  The new huey settings look like this:
         # Options to pass into the consumer when running ``manage.py run_huey``
         'consumer_options': {'workers': 4},
     }
+
+Additionally, the imports changed.  Now everything is imported from ``djhuey``:
+
+.. code-block:: python
+
+    # NEW
+    from huey.djhuey import task, periodic_task, crontab
+
+    @task()
+    def some_fn(a, b):
+        return a + b
