@@ -114,11 +114,11 @@ lines to the ``config.py`` module:
 
 We can actually shorten this code to:
 
-.. code-block::python
+.. code-block:: python
 
     from huey import RedisHuey
 
-    heuy = RedisHuey('test-queue', host='localhost', port=6379)
+    huey = RedisHuey('test-queue', host='localhost', port=6379)
 
 To better illustrate getting results, we'll also modify the ``tasks.py``
 module to return a string rather in addition to printing to stdout:

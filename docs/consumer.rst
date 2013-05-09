@@ -47,7 +47,7 @@ their default values.
  ``-q``, ``--quiet``
     Only log errors. The default loglevel for the consumer is ``INFO``.
 
-``-t``, ``--threads``
+``-w``, ``--workers``
     Number of worker threads, the default is ``1`` thread but for applications
     that have many I/O bound tasks, increasing this number may lead to greater
     throughput.
@@ -89,7 +89,7 @@ Examples
 
  .. code-block:: bash
 
-    huey_consumer.py my.app.huey -l /var/log/app.huey.log -t 8 -b 1.1 -m 1.0
+    huey_consumer.py my.app.huey -l /var/log/app.huey.log -w 8 -b 1.1 -m 1.0
 
 Running single-threaded without a crontab and logging to stdout:
 
