@@ -34,8 +34,6 @@ Huey's API
     def nightly_backup():
         sync_all_data()
 
-My Muse
--------
 
 named after my cat:
 
