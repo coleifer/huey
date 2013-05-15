@@ -108,3 +108,9 @@ Additionally, the imports changed.  Now everything is imported from ``djhuey``:
     @task()
     def some_fn(a, b):
         return a + b
+
+Django task autodiscovery
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The ``run_huey`` management command no longer auto-imports ``commands.py`` --
+instead it will auto-import ``tasks.py``.
