@@ -22,29 +22,24 @@ reason, huey will "just work" with no configuration at all provided you have
 Redis installed and running locally.
 
 On the other hand, you can configure huey manually using the following
-setting structure.  The only required setting is 'queue'.  The following
-example uses Redis on localhost:
+setting structure.  The following example uses Redis on localhost:
 
-.. note::
-    Huey settings are optional.  If not provided, Huey will default to using
-    Redis running locally.
+Simply point to a backend:
 
 HUEY = {
-    'queue': 'huey.backends.redis_backend.RedisBlockingQueue',  # required.
-    'queue_name': 'unique name',
-    'queue_connection': {'host': 'localhost', 'port': 6379},
+    'backend': 'huey.backends.redis_backend',
+    'name': 'unique name',
+    'connection': {'host': 'localhost', 'port': 6379}
 
-    # Options for configuring a result store -- *recommended*
-    'result_store': 'huey.backends.redis_backend.RedisDataStore',
-    'result_store_name': 'defaults to queue name',
-    'result_store_connection': {'host': 'localhost', 'port': 6379},
-
-    # Options to pass into the consumer when running ``manage.py run_huey``
     'consumer_options': {'workers': 4},
 }
 
 If you would like to configure Huey's logger using Django's integrated logging
 settings, the logger used by consumer is named "huey.consumer".
+
+For more granular control, you can assign HUEY programmatically:
+
+HUEY = Huey(RedisBlockingQueue('my-queue'))
 """
 
 def default_queue_name():
@@ -69,7 +64,7 @@ def dynamic_import(obj, key, required=False):
             config_error('Missing required configuration: "%s"' % key)
         return None
     try:
-        return load_class(path)
+        return load_class(path + '.Components')
     except ImportError:
         config_error('Unable to import %s: "%s"' % (key, path))
 
@@ -87,24 +82,14 @@ if HUEY is None:
     HUEY = RedisHuey(default_queue_name())
 
 if not isinstance(HUEY, Huey):
-    Queue = dynamic_import(HUEY, 'queue')
-    ResultStore = dynamic_import(HUEY, 'result_store')
-    if Queue is None:
-        try:
-            from huey.backends.redis_backend import RedisBlockingQueue
-            Queue = RedisBlockingQueue
-        except ImportError:
-            config_error('Redis not found.')
-    queue_name = HUEY.get('queue_name') or default_queue_name()
-    result_store_name = HUEY.get('result_store_name') or queue_name
-    queue = Queue(queue_name, **HUEY.get('queue_connection', {}))
-    if ResultStore:
-        result_store = ResultStore(result_store_name,
-                                   **HUEY.get('result_store_connection', {}))
-    else:
-        result_store = None
-    HUEY = Huey(queue, result_store, always_eager=settings.DEBUG)
-
+    Queue, DataStore, Schedule = dynamic_import(HUEY, 'backend')
+    name = HUEY.get('name') or default_queue_name()
+    conn = HUEY.get('connection', {})
+    HUEY = Huey(
+        Queue(name, **conn),
+        DataStore(name, **conn),
+        Schedule(name, **conn),
+        always_eager=settings.DEBUG)
 
 task = HUEY.task
 periodic_task = HUEY.periodic_task
