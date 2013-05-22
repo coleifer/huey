@@ -101,10 +101,9 @@ Running single-threaded without a crontab and logging to stdout:
 Consumer Internals
 ------------------
 
-The consumer is composed of 4 main threads:
+The consumer is composed of 3 types of threads:
 
-* Message receiver
-* Executor
+* Worker threads
 * Scheduler
 * Periodic task scheduler (optional)
 
@@ -115,15 +114,13 @@ tasks.  What happens when you call a decorated function in your application?
    put into the queue.  At this point your application returns.  If you are using
    a "data store", then you will be return an :py:class:`AsyncData` object.
 2. In a separate process, the consumer will be listening for new messages --
-   this is the Message Receiver thread.  If your backend supports blocking, it
-   will block until a new message is available, otherwise it will poll.  When
-   it gets your message it waits until there is a free worker available and
-   then sends the message to the Executor thread.
-3. The executor thread looks at the message and checks to see if it can be
+   one of the worker threads will pull down the message.  If your backend supports
+   blocking, it will block until a new message is available, otherwise it will
+   poll.
+3. The worker looks at the message and checks to see if it can be
    run (i.e., was this message "revoked"?  Is it scheduled to actually run
    later?).  If it is revoked, the message is thrown out.  If it is scheduled
-   to run later, it gets added to the schedule.  Otherwise, it is passed to
-   a Worker thread.
+   to run later, it gets added to the schedule.  Otherwise, it is executed.
 4. The worker thread executes the task.  If the task finishes, any results are
    published to the result store (if one is configured).  If the task fails and
    can be retried, it is either enqueued or added to the schedule (which happens

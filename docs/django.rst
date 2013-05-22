@@ -21,14 +21,9 @@ All configuration is kept in ``settings.HUEY``.  Here is an example:
 .. code-block:: python
 
     HUEY = {
-        'queue': 'huey.backends.redis_backend.RedisBlockingQueue',  # required.
-        'queue_name': 'unique name',
-        'queue_connection': {'host': 'localhost', 'port': 6379},
-
-        # Options for configuring a result store -- *recommended*
-        'result_store': 'huey.backends.redis_backend.RedisDataStore',
-        'result_store_name': 'defaults to queue name',
-        'result_store_connection': {'host': 'localhost', 'port': 6379},
+        'backend': 'huey.backends.redis_backend',  # required.
+        'name': 'unique name',
+        'connection': {'host': 'localhost', 'port': 6379},
 
         # Options to pass into the consumer when running ``manage.py run_huey``
         'consumer_options': {'workers': 4},
