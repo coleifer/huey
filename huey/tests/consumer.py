@@ -8,6 +8,7 @@ from huey import crontab
 from huey import Huey
 from huey.backends.dummy import DummyDataStore
 from huey.backends.dummy import DummyQueue
+from huey.backends.dummy import DummySchedule
 from huey.bin.huey_consumer import Consumer
 from huey.bin.huey_consumer import IterableQueue
 from huey.bin.huey_consumer import WorkerThread
@@ -22,7 +23,8 @@ state = {}
 # create a queue, result store and invoker for testing
 test_queue = DummyQueue('test-queue')
 test_result_store = DummyDataStore('test-queue')
-test_huey = Huey(test_queue, test_result_store)
+test_schedule = DummySchedule('test-queue')
+test_huey = Huey(test_queue, test_result_store, test_schedule)
 
 @test_huey.task()
 def modify_state(k, v):
@@ -75,11 +77,12 @@ class ConsumerTestCase(unittest.TestCase):
         self.orig_sleep = time.sleep
         time.sleep = lambda x: None
 
+        test_huey.queue.flush()
+        test_huey.result_store.flush()
+        test_huey.schedule.flush()
+
         self.consumer = Consumer(test_huey, workers=2)
         self.consumer.create_threads()
-        self.consumer.huey.queue._queue = []
-        self.consumer.huey.result_store._results = {}
-        self.consumer.huey._schedule = {}
 
         self.handler = TestLogHandler()
         logger.addHandler(self.handler)
@@ -95,29 +98,16 @@ class ConsumerTestCase(unittest.TestCase):
         t.start()
         return t
 
-    def run_worker(self, task, ts=None, pool=None, release=True):
-        pool = pool or threading.Semaphore()
+    def run_worker(self, task, ts=None):
+        worker_t = WorkerThread(
+            test_huey,
+            self.consumer.default_delay,
+            self.consumer.max_delay,
+            self.consumer.backoff,
+            self.consumer.utc,
+            self.consumer._shutdown)
         ts = ts or datetime.datetime.utcnow()
-        worker_t = WorkerThread(test_huey, task, ts, pool, release)
-        worker_t.start()
-        worker_t.join()
-
-    def run_one_task(self, wait=True, ts=None):
-        inbox = self.consumer._executor_inbox
-        pool = self.consumer._pool
-        pool.acquire()  # Simulate acquiring one worker, leaving one free.
-
-        # Run through one iteration of the message loop.
-        self.consumer.message_t.loop(now=ts)
-        inbox.put(StopIteration)
-        self.consumer.executor_t.run()
-
-        # Block until the task is finished then release.
-        if wait:
-            pool.acquire()
-            pool.release()
-
-        pool.release()  # Release the fake worker acquired above.
+        worker_t.handle_task(task, ts)
 
     def test_iterable_queue(self):
         store = []
@@ -137,8 +127,7 @@ class ConsumerTestCase(unittest.TestCase):
         self.assertEqual(store, [1, 2])
 
     def test_message_processing(self):
-        self.consumer.message_t.start()
-        self.consumer.executor_t.start()
+        self.consumer.worker_threads[0].start()
 
         self.assertFalse('k' in state)
 
@@ -201,72 +190,39 @@ class ConsumerTestCase(unittest.TestCase):
         self.assertEqual(state['blampf'], 'fixed')
         self.assertEqual(test_huey.dequeue(), None)
 
-    def test_pooling(self):
-        # Simulate one worker being occupied.
-        pool = self.consumer._pool
-        pool.acquire()
-
-        res = modify_state('x', 'y')
-
-        # instantiate a message receiver
-        self.assertEqual(len(test_queue._queue), 1)
-
-        # process the pending message.
-        self.consumer.message_t.loop(datetime.datetime.now())
-        self.assertEqual(len(test_queue._queue), 0)
-
-        # We cannot acquire the pool again until a worker releases it.
-        self.assertFalse(pool.acquire(False))
-
-        # Spawn executor and wait til it finishes the task.
-        self.consumer.executor_t.start()
-        res.get(blocking=True)
-        self.assertEqual(state, {'x': 'y'})
-
-        # The pool can now be acquired again.
-        self.assertTrue(pool.acquire(False))
-
     def test_scheduling(self):
         dt = datetime.datetime(2011, 1, 1, 0, 0)
         dt2 = datetime.datetime(2037, 1, 1, 0, 0)
         r1 = modify_state.schedule(args=('k', 'v'), eta=dt, convert_utc=False)
         r2 = modify_state.schedule(args=('k2', 'v2'), eta=dt2, convert_utc=False)
 
-        pool = self.consumer._pool
-        inbox = self.consumer._executor_inbox
-
         # dequeue the past-timestamped task and run it.
-        self.run_one_task()
+        worker = self.consumer.worker_threads[0]
+        worker.check_message()
 
         self.assertTrue('k' in state)
-        self.assertEqual(test_huey._schedule, {})
 
         # dequeue the future-timestamped task.
-        self.run_one_task(wait=False)
+        worker.check_message()
 
         # verify the task got stored in the schedule instead of executing
         self.assertFalse('k2' in state)
-        self.assertEqual(len(test_huey._schedule), 1)
 
         # run through an iteration of the scheduler
         self.consumer.scheduler_t.loop(dt)
 
         # our command was not enqueued
         self.assertEqual(len(test_queue._queue), 0)
-        self.assertEqual(len(test_huey._schedule), 1)
 
         # run through an iteration of the scheduler
         self.consumer.scheduler_t.loop(dt2)
 
         # our command was enqueued
         self.assertEqual(len(test_queue._queue), 1)
-        self.assertEqual(len(test_huey._schedule), 0)
 
     def test_retry_scheduling(self):
         # this will continually fail
         res = retry_command_slow('blampf')
-        self.assertEqual(test_huey._schedule, {})
-
         cur_time = datetime.datetime.utcnow()
 
         task = test_huey.dequeue()
@@ -276,53 +232,15 @@ class ConsumerTestCase(unittest.TestCase):
             'Re-enqueueing task %s, 2 tries left' % task.task_id,
         ])
 
-        self.assertEqual(test_huey._schedule, {task.task_id: task})
-        task_from_sched = test_huey._schedule[task.task_id]
-        self.assertEqual(task_from_sched.retries, 2)
+        in_11 = cur_time + datetime.timedelta(seconds=11)
+        tasks_from_sched = test_huey.read_schedule(in_11)
+        self.assertEqual(tasks_from_sched, [task])
+
+        task = tasks_from_sched[0]
+        self.assertEqual(task.retries, 2)
         exec_time = task.execute_time
 
         self.assertEqual((exec_time - cur_time).seconds, 10)
-
-    def test_schedule_persistence(self):
-        # should not error out as it will be EmptyData
-        test_huey.load_schedule()
-        self.assertEqual(test_huey._schedule, {})
-
-        dt = datetime.datetime(2037, 1, 1, 0, 0)
-        dt2 = datetime.datetime(2037, 1, 1, 0, 1)
-        r = modify_state.schedule(args=('k', 'v'), eta=dt, convert_utc=False)
-        r2 = modify_state.schedule(args=('k2', 'v2'), eta=dt2, convert_utc=False)
-
-        # two messages in the queue
-        self.assertEqual(len(test_huey.queue), 2)
-
-        # pull 'em down
-        self.run_one_task(wait=False)
-        self.run_one_task(wait=False)
-
-        test_huey.save_schedule()
-        test_huey._schedule = {}
-        test_huey.load_schedule()
-
-        self.assertTrue(r.task.task_id in test_huey._schedule)
-        self.assertTrue(r2.task.task_id in test_huey._schedule)
-
-        task1 = test_huey._schedule[r.task.task_id]
-        task2 = test_huey._schedule[r2.task.task_id]
-
-        self.assertEqual(task1.execute_time, dt)
-        self.assertEqual(task2.execute_time, dt2)
-
-        # check w/conversion
-        r3 = modify_state.schedule(args=('k3', 'v3'), eta=dt)
-        self.run_one_task(wait=False)
-
-        test_huey.save_schedule()
-        test_huey._schedule = {}
-
-        test_huey.load_schedule()
-        task3 = test_huey._schedule[r3.task.task_id]
-        self.assertEqual(task3.execute_time, local_to_utc(dt))
 
     def test_revoking_normal(self):
         # enqueue 2 normal commands
@@ -335,17 +253,17 @@ class ConsumerTestCase(unittest.TestCase):
         self.assertFalse(test_huey.is_revoked(r2.task))
 
         # dequeue a *single* message (r1)
-        self.run_one_task()
+        task = test_huey.dequeue()
+        self.run_worker(task)
 
         # no changes and the task was not added to the schedule
         self.assertFalse('k' in state)
-        self.assertEqual(test_huey._schedule, {})
 
         # dequeue a *single* message
-        self.run_one_task()
+        task = test_huey.dequeue()
+        self.run_worker(task)
 
         self.assertTrue('k2' in state)
-        self.assertEqual(test_huey._schedule, {})
 
     def test_revoking_schedule(self):
         global state
@@ -367,31 +285,31 @@ class ConsumerTestCase(unittest.TestCase):
 
         expected = [
             #state,        schedule
-            ({},           {}),
-            ({'k2': 'v2'}, {}),
-            ({'k2': 'v2'}, {r3.task.task_id: r3.task}),
-            ({'k2': 'v2'}, {r3.task.task_id: r3.task, r4.task.task_id: r4.task}),
+            ({},           0),
+            ({'k2': 'v2'}, 0),
+            ({'k2': 'v2'}, 1),
+            ({'k2': 'v2'}, 2),
         ]
 
         for i in range(4):
             estate, esc = expected[i]
 
             # dequeue a *single* message
-            self.run_one_task()
+            task = test_huey.dequeue()
+            self.run_worker(task)
 
             self.assertEqual(state, estate)
-            self.assertEqual(test_huey._schedule, esc)
+            self.assertEqual(len(test_huey.schedule._schedule), esc)
 
         # lets pretend its 2037
         future = dt2 + datetime.timedelta(seconds=1)
         self.consumer.scheduler_t.loop(future)
-        self.assertEqual(test_huey._schedule, {})
+        self.assertEqual(len(test_huey.schedule._schedule), 0)
 
         # There are two tasks in the queue now (r3 and r4) -- process both.
         for i in range(2):
-            self.consumer.message_t.loop(now=future)
-            self.consumer._executor_inbox.put(StopIteration)
-            self.consumer.executor_t.run()
+            task = test_huey.dequeue()
+            self.run_worker(task, future)
 
         self.assertEqual(state, {'k2': 'v2', 'k4': 'v4'})
 
@@ -400,9 +318,8 @@ class ConsumerTestCase(unittest.TestCase):
         def loop_periodic(ts):
             self.consumer.periodic_t.loop(ts)
             for i in range(len(test_queue._queue)):
-                self.consumer.message_t.loop(ts)
-                self.consumer._executor_inbox.put(StopIteration)
-                self.consumer.executor_t.run()
+                task = test_huey.dequeue()
+                self.run_worker(task, ts)
 
         # revoke the command once
         every_hour.revoke(revoke_once=True)
