@@ -81,3 +81,6 @@ class DummyDataStore(BaseDataStore):
 
     def flush(self):
         self._results = {}
+
+
+Components = (DummyQueue, DummyDataStore, DummySchedule)

@@ -111,3 +111,6 @@ class RedisDataStore(BaseDataStore):
 
     def flush(self):
         self.conn.delete(self.storage_name)
+
+
+Components = (RedisBlockingQueue, RedisDataStore, RedisSchedule)

@@ -99,3 +99,6 @@ class BaseDataStore(object):
 
     def flush(self):
         raise NotImplementedError
+
+
+Components = (BaseQueue, BaseDataStore, BaseSchedule)
