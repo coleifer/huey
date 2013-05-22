@@ -2,7 +2,11 @@
 Test-only implementations of Queue and DataStore.  These will not work for
 real applications because they only store tasks/results in memory.
 """
-from huey.backends.base import BaseQueue, BaseDataStore
+import heapq
+
+from huey.backends.base import BaseDataStore
+from huey.backends.base import BaseQueue
+from huey.backends.base import BaseSchedule
 from huey.utils import EmptyData
 
 
@@ -36,6 +40,26 @@ class DummyQueue(BaseQueue):
 
     def __len__(self):
         return len(self._queue)
+
+
+class DummySchedule(BaseSchedule):
+    def __init__(self, *args, **kwargs):
+        super(DummySchedule, self).__init__(*args, **kwargs)
+        self._schedule = []
+
+    def add(self, data, ts):
+        heapq.heappush(self._schedule, (ts, data))
+
+    def read(self, ts):
+        res = []
+        while len(self._schedule):
+            sts, data = heapq.heappop(self._schedule)
+            if sts <= ts:
+                res.append((sts, data))
+            else:
+                self.add(data, sts)
+                break
+        return res
 
 
 class DummyDataStore(BaseDataStore):

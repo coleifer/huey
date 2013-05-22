@@ -15,6 +15,8 @@ from huey.exceptions import QueueException
 from huey.exceptions import QueueReadException
 from huey.exceptions import QueueRemoveException
 from huey.exceptions import QueueWriteException
+from huey.exceptions import ScheduleAddException
+from huey.exceptions import ScheduleReadException
 from huey.registry import registry
 from huey.utils import EmptyData
 from huey.utils import local_to_utc
@@ -57,16 +59,14 @@ class Huey(object):
             # do a backup every day at 3am
             return
     """
-    def __init__(self, queue, result_store=None, store_none=False,
-                 always_eager=False, schedule_key='schedule'):
+    def __init__(self, queue, result_store=None, schedule=None,
+                 store_none=False, always_eager=False):
         self.queue = queue
         self.result_store = result_store
+        self.schedule = schedule
         self.blocking = self.queue.blocking
         self.store_none = store_none
         self.always_eager = always_eager
-        self.schedule_key = schedule_key
-        self._schedule = {}
-        self._lock = threading.Lock()
 
     def task(self, retries=0, retry_delay=0, retries_as_argument=False):
         def decorator(func):
@@ -88,7 +88,8 @@ class Huey(object):
                 cmd = klass(
                     (args or (), kwargs or {}),
                     execute_time=eta,
-                    retries=retries)
+                    retries=retries,
+                    retry_delay=retry_delay)
                 return self.enqueue(cmd)
 
             func.schedule = schedule
@@ -168,6 +169,18 @@ class Huey(object):
     def _put(self, key, value):
         return self.result_store.put(key, value)
 
+    @_wrapped_operation(ScheduleAddException)
+    def _add_schedule(self, data, ts):
+        if self.schedule is None:
+            raise AttributeError('Schedule not specified.')
+        self.schedule.add(data, ts)
+
+    @_wrapped_operation(ScheduleReadException)
+    def _read_schedule(self, ts):
+        if self.schedule is None:
+            raise AttributeError('Schedule not specified.')
+        return self.schedule.read(ts)
+
     def enqueue(self, task):
         if self.always_eager:
             return task.execute()
@@ -221,49 +234,20 @@ class Huey(object):
             return True
         return revoke_until is None or revoke_until > dt
 
+    def add_schedule(self, task):
+        msg = registry.get_message_for_task(task)
+        self._add_schedule(msg, task.execute_time)
+
+    def read_schedule(self, ts):
+        return [
+            registry.get_task_for_message(m) for m in self._read_schedule(ts)]
+
     def flush(self):
         self.queue.flush()
-
-    def load_schedule(self):
-        if not self.result_store:
-            return
-        with self._lock:
-            serialized = self.result_store.get(self.schedule_key)
-            if not serialized or serialized is EmptyData:
-                return
-
-            for task_string in pickle.loads(serialized):
-                try:
-                    task_obj = registry.get_task_for_message(task_string)
-                    self.add_schedule(task_obj)
-                except QueueException:
-                    pass
-
-    def save_schedule(self):
-        if not self.result_store:
-            return
-        with self._lock:
-            serialized_tasks = pickle.dumps([
-                registry.get_message_for_task(c) for c in self.schedule()])
-            self.result_store.put(self.schedule_key, serialized_tasks)
 
     def ready_to_run(self, cmd, dt=None):
         dt = dt or datetime.datetime.now()
         return cmd.execute_time is None or cmd.execute_time <= dt
-
-    def add_schedule(self, cmd):
-        if not self.is_pending(cmd):
-            self._schedule[cmd.task_id] = cmd
-
-    def remove_schedule(self, cmd):
-        if self.is_pending(cmd):
-            del(self._schedule[cmd.task_id])
-
-    def is_pending(self, cmd):
-        return cmd.task_id in self._schedule
-
-    def schedule(self):
-        return self._schedule.values()
 
 
 class AsyncData(object):

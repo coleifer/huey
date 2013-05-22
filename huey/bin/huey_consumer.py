@@ -17,6 +17,7 @@ from huey.exceptions import QueueException
 from huey.exceptions import QueueReadException
 from huey.exceptions import DataStorePutException
 from huey.exceptions import QueueWriteException
+from huey.exceptions import ScheduleReadException
 from huey.registry import registry
 from huey.utils import load_class
 
@@ -82,45 +83,53 @@ class SchedulerThread(ConsumerThread):
         super(SchedulerThread, self).__init__(utc, shutdown)
 
     def loop(self, now=None):
-        logger.debug('Checking schedule')
         now = now or self.get_now()
         start = time.time()
-        for task in self.huey.schedule():
-            if self.huey.ready_to_run(task, now):
+        try:
+            for task in self.huey.read_schedule(now):
                 logger.info('Scheduling %s for execution' % task)
-                self.huey.remove_schedule(task)
                 self.huey.enqueue(task)
+        except ScheduleReadException:
+            logger.error('Error reading schedule', exc_info=1)
+        except:
+            logger.error('Unhandled exception reading schedule', exc_info=1)
+
         delta = time.time() - start
         if delta < 1:
             time.sleep(1 - (time.time() - start))
 
 
-class MessageReceiverThread(ConsumerThread):
-    def __init__(self, huey, pool, executor_inbox, default_delay, max_delay,
-                 backoff, utc, shutdown):
+class WorkerThread(ConsumerThread):
+    def __init__(self, huey, default_delay, max_delay, backoff, utc,
+                 shutdown):
         self.huey = huey
-        self.pool = pool
-        self.executor_inbox = executor_inbox
         self.delay = self.default_delay = default_delay
         self.max_delay = max_delay
         self.backoff = backoff
-        super(MessageReceiverThread, self).__init__(utc, shutdown)
+        super(WorkerThread, self).__init__(utc, shutdown)
 
-    def loop(self, now=None):
+    def loop(self):
+        self.check_message()
+
+    def check_message(self):
         logger.debug('Checking for message')
+        task = exc_raised = None
         try:
             task = self.huey.dequeue()
         except QueueReadException:
             logger.error('Error reading from queue', exc_info=1)
+            exc_raised = True
         except QueueException:
             logger.error('Queue exception', exc_info=1)
-        else:
-            if not task and not self.huey.blocking:
-                self.sleep()
-            elif task:
-                self.pool.acquire()
-                now = now or self.get_now()
-                self.executor_inbox.put(ExecuteTask(task, now, True))
+            exc_raised = True
+        except:
+            logger.error('Unknown exception', exc_info=1)
+            exc_raised = True
+
+        if task:
+            self.handle_task(task, self.get_now())
+        elif exc_raised or self.huey.blocking:
+            self.sleep()
 
     def sleep(self):
         if self.delay > self.max_delay:
@@ -130,70 +139,39 @@ class MessageReceiverThread(ConsumerThread):
         time.sleep(self.delay)
         self.delay *= self.backoff
 
+    def handle_task(self, task, ts):
+        if not self.huey.ready_to_run(task, ts):
+            logger.info('Adding %s to schedule' % task)
+            self.huey.add_schedule(task)
+        elif not self.huey.is_revoked(task, ts, peek=False):
+            self.process_task(task, ts)
 
-class ExecutorThread(threading.Thread):
-    def __init__(self, huey, pool, inbox, workers):
-        self.huey = huey
-        self.pool = pool
-        self.inbox = inbox
-        self.workers = workers
-        super(ExecutorThread, self).__init__()
-
-    def run(self):
-        for (task, ts, release_pool) in self.inbox:
-            if not self.huey.ready_to_run(task, ts):
-                logger.info('Adding %s to schedule' % task)
-                self.huey.add_schedule(task)
-            elif not self.huey.is_revoked(task, ts, peek=False):
-                self.process_task(task, ts, release_pool)
-                release_pool = False  # The worker will handle this.
-            if release_pool:
-                self.pool.release()
-        logger.debug('Finished processing messages')
-
-    def process_task(self, task, ts, release_pool):
-        logger.info('Processing: %s' % task)
-        worker_t = WorkerThread(self.huey, task, ts, self.pool, release_pool)
-        worker_t.start()
-
-
-class WorkerThread(threading.Thread):
-    def __init__(self, huey, task, ts, pool, release_pool):
-        self.huey = huey
-        self.task = task
-        self.ts = ts
-        self.pool = pool
-        self.release_pool = release_pool
-        super(WorkerThread, self).__init__(name='Worker')
-
-    def run(self):
+    def process_task(self, task, ts):
         try:
-            self.huey.execute(self.task)
+            self.huey.execute(task)
         except DataStorePutException:
             logger.warn('Error storing result', exc_info=1)
         except:
             logger.error('Unhandled exception in worker thread', exc_info=1)
-            if self.task.retries:
-                self.requeue_task()
-        finally:
-            if self.release_pool:
-                self.pool.release()
+            if task.retries:
+                self.requeue_task(task, self.get_now())
 
-    def requeue_task(self):
-        task = self.task
+    def requeue_task(self, task, ts):
         task.retries -= 1
         logger.info('Re-enqueueing task %s, %s tries left' %
                     (task.task_id, task.retries))
         try:
             if task.retry_delay:
                 delay = datetime.timedelta(seconds=task.retry_delay)
-                task.execute_time = self.ts + delay
+                task.execute_time = ts + delay
                 logger.debug('Execute %s at: %s' % (task, task.execute_time))
                 self.huey.add_schedule(task)
             else:
                 self.huey.enqueue(task)
         except QueueWriteException:
             logger.error('Unable to re-enqueue %s' % task)
+        except:
+            logger.error('Unhandled exception re-enqueueing task', exc_info=1)
 
 
 class Consumer(object):
@@ -216,20 +194,24 @@ class Consumer(object):
         self.setup_logger()
 
         self._shutdown = threading.Event()
-        self._executor_inbox = IterableQueue()
-        self._pool = threading.BoundedSemaphore(self.workers)
 
     def create_threads(self):
         self.scheduler_t = SchedulerThread(self.huey, self.utc, self._shutdown)
         self.scheduler_t.name = 'Scheduler'
-        self.message_t = MessageReceiverThread(
-            self.huey, self._pool, self._executor_inbox, self.default_delay,
-            self.max_delay, self.backoff, self.utc, self._shutdown)
-        self.message_t.daemon = True
-        self.message_t.name = 'Message Receiver'
-        self.executor_t = ExecutorThread(
-            self.huey, self._pool, self._executor_inbox, self.workers)
-        self.executor_t.name = 'Executor'
+
+        self.worker_threads = []
+        for i in range(self.workers):
+            worker_t = WorkerThread(
+                self.huey,
+                self.default_delay,
+                self.max_delay,
+                self.backoff,
+                self.utc,
+                self._shutdown)
+            worker_t.daemon = True
+            worker_t.name = 'Worker %d' % (i + 1)
+            self.worker_threads.append(worker_t)
+
         if self.periodic:
             self.periodic_t = PeriodicTaskThread(
                 self.huey, self.utc, self._shutdown)
@@ -258,11 +240,9 @@ class Consumer(object):
         logger.info('Starting scheduler thread')
         self.scheduler_t.start()
 
-        logger.info('Starting message receiver thread')
-        self.message_t.start()
-
-        logger.info('Starting task executor thread')
-        self.executor_t.start()
+        logger.info('Starting worker threads')
+        for worker in self.worker_threads:
+            worker.start()
 
         if self.periodic:
             logger.info('Starting periodic task scheduler thread')
@@ -271,7 +251,6 @@ class Consumer(object):
     def shutdown(self):
         logger.info('Shutdown initiated')
         self._shutdown.set()
-        self._executor_inbox.put(StopIteration)
 
     def handle_signal(self, sig_num, frame):
         logger.info('Received SIGTERM')
@@ -293,7 +272,6 @@ class Consumer(object):
         logger.info('%d worker threads' % self.workers)
 
         self.create_threads()
-        self.huey.load_schedule()
         try:
             self.start()
             # it seems that calling self._shutdown.wait() here prevents the
@@ -304,7 +282,6 @@ class Consumer(object):
             logger.error('Error', exc_info=1)
             self.shutdown()
 
-        self.huey.save_schedule()
         logger.info('Exiting')
 
 def err(s):

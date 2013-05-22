@@ -18,3 +18,9 @@ class DataStorePutException(QueueException):
 
 class DataStoreTimeout(QueueException):
     pass
+
+class ScheduleAddException(QueueException):
+    pass
+
+class ScheduleReadException(QueueException):
+    pass

@@ -1,9 +1,17 @@
 import re
+import time
+
 import redis
 from redis.exceptions import ConnectionError
 
-from huey.backends.base import BaseQueue, BaseDataStore
+from huey.backends.base import BaseDataStore
+from huey.backends.base import BaseQueue
+from huey.backends.base import BaseSchedule
 from huey.utils import EmptyData
+
+
+def clean_name(name):
+    return re.sub('[^a-z0-9]', '', name)
 
 
 class RedisQueue(BaseQueue):
@@ -20,8 +28,7 @@ class RedisQueue(BaseQueue):
         """
         super(RedisQueue, self).__init__(name, **connection)
 
-        self.queue_name = 'huey.redis.%s' % re.sub('[^a-z0-9]', '', name)
-
+        self.queue_name = 'huey.redis.%s' % clean_name(name)
         self.conn = redis.Redis(**connection)
 
     def write(self, data):
@@ -57,12 +64,32 @@ class RedisBlockingQueue(RedisQueue):
             return None
 
 
+class RedisSchedule(BaseSchedule):
+    def __init__(self, name, **connection):
+        super(RedisSchedule, self).__init__(name, **connection)
+
+        self.key = 'huey.schedule.%s' % clean_name(name)
+        self.conn = redis.Redis(**connection)
+
+    def convert_ts(self, ts):
+        return time.mktime(ts.timetuple())
+
+    def add(self, data, ts):
+        self.conn.zadd(self.key, data, self.convert_ts(ts))
+
+    def read(self, ts):
+        unix_ts = self.convert_ts(ts)
+        tasks = self.conn.zrangebyscore(self.key, 0, unix_ts)
+        if len(tasks):
+            self.conn.zremrangebyscore(self.key, 0, unix_ts)
+        return tasks
+
+
 class RedisDataStore(BaseDataStore):
     def __init__(self, name, **connection):
         super(RedisDataStore, self).__init__(name, **connection)
 
-        cleaned = re.sub('[^a-z0-9]', '', name)
-        self.storage_name = 'huey.redis.results.%s' % cleaned
+        self.storage_name = 'huey.results.%s' % clean_name(name)
         self.conn = redis.Redis(**connection)
 
     def put(self, key, value):
