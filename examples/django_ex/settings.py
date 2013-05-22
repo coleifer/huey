@@ -6,9 +6,8 @@ INSTALLED_APPS = [
 ]
 
 HUEY = {
-    'queue_name': 'test-django',
-    'queue': 'huey.backends.redis_backend.RedisBlockingQueue',
-    'result_store': 'huey.backends.redis_backend.RedisDataStore',
+    'name': 'test-django',
+    'backend': 'huey.backends.redis_backend',
     'consumer_options': {
         'loglevel': logging.DEBUG,
         'workers': 2,
