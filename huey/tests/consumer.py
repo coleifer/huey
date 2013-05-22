@@ -10,11 +10,8 @@ from huey.backends.dummy import DummyDataStore
 from huey.backends.dummy import DummyQueue
 from huey.backends.dummy import DummySchedule
 from huey.bin.huey_consumer import Consumer
-from huey.bin.huey_consumer import IterableQueue
 from huey.bin.huey_consumer import WorkerThread
-from huey.exceptions import QueueException
 from huey.registry import registry
-from huey.utils import local_to_utc
 
 
 # store some global state
@@ -109,23 +106,6 @@ class ConsumerTestCase(unittest.TestCase):
         ts = ts or datetime.datetime.utcnow()
         worker_t.handle_task(task, ts)
 
-    def test_iterable_queue(self):
-        store = []
-        q = IterableQueue()
-
-        def do_queue(queue, result):
-            for message in queue:
-                result.append(message)
-
-        t = self.spawn(do_queue, q, store)
-        q.put(1)
-        q.put(2)
-        q.put(StopIteration)
-
-        t.join()
-        self.assertFalse(t.is_alive())
-        self.assertEqual(store, [1, 2])
-
     def test_message_processing(self):
         self.consumer.worker_threads[0].start()
 
@@ -138,13 +118,13 @@ class ConsumerTestCase(unittest.TestCase):
         self.assertEqual(res.get(), 'v')
 
     def test_worker(self):
-        res = modify_state('k', 'w')
+        modify_state('k', 'w')
         task = test_huey.dequeue()
         self.run_worker(task)
         self.assertEqual(state, {'k': 'w'})
 
     def test_worker_exception(self):
-        res = blow_up()
+        blow_up()
         task = test_huey.dequeue()
 
         self.run_worker(task)
@@ -153,7 +133,7 @@ class ConsumerTestCase(unittest.TestCase):
 
     def test_retries_and_logging(self):
         # this will continually fail
-        res = retry_command('blampf')
+        retry_command('blampf')
 
         for i in reversed(range(4)):
             task = test_huey.dequeue()
@@ -174,7 +154,7 @@ class ConsumerTestCase(unittest.TestCase):
 
     def test_retries_with_success(self):
         # this will fail once, then succeed
-        res = retry_command('blampf', False)
+        retry_command('blampf', False)
         self.assertFalse('blampf' in state)
 
         task = test_huey.dequeue()
@@ -193,8 +173,8 @@ class ConsumerTestCase(unittest.TestCase):
     def test_scheduling(self):
         dt = datetime.datetime(2011, 1, 1, 0, 0)
         dt2 = datetime.datetime(2037, 1, 1, 0, 0)
-        r1 = modify_state.schedule(args=('k', 'v'), eta=dt, convert_utc=False)
-        r2 = modify_state.schedule(args=('k2', 'v2'), eta=dt2, convert_utc=False)
+        modify_state.schedule(args=('k', 'v'), eta=dt, convert_utc=False)
+        modify_state.schedule(args=('k2', 'v2'), eta=dt2, convert_utc=False)
 
         # dequeue the past-timestamped task and run it.
         worker = self.consumer.worker_threads[0]
@@ -222,7 +202,7 @@ class ConsumerTestCase(unittest.TestCase):
 
     def test_retry_scheduling(self):
         # this will continually fail
-        res = retry_command_slow('blampf')
+        retry_command_slow('blampf')
         cur_time = datetime.datetime.utcnow()
 
         task = test_huey.dequeue()

@@ -3,13 +3,10 @@
 import datetime
 import logging
 import optparse
-import os
-import Queue
 import signal
 import sys
 import threading
 import time
-from collections import namedtuple
 from logging.handlers import RotatingFileHandler
 
 from huey.api import Huey
@@ -23,18 +20,6 @@ from huey.utils import load_class
 
 
 logger = logging.getLogger('huey.consumer')
-
-class IterableQueue(Queue.Queue):
-    def __iter__(self):
-        return self
-
-    def next(self):
-        result = self.get()
-        if result is StopIteration:
-            raise result
-        return result
-
-ExecuteTask = namedtuple('ExecuteTask', ('task', 'timestamp', 'release_pool'))
 
 
 class ConsumerThread(threading.Thread):

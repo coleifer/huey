@@ -3,12 +3,10 @@ import unittest
 
 from huey import crontab
 from huey import Huey
-from huey.api import PeriodicQueueTask
 from huey.api import QueueTask
 from huey.backends.dummy import DummyDataStore
 from huey.backends.dummy import DummyQueue
 from huey.backends.dummy import DummySchedule
-from huey.exceptions import QueueException
 from huey.registry import registry
 from huey.utils import EmptyData
 from huey.utils import local_to_utc

@@ -1,9 +1,6 @@
 import datetime
-import os
 import pickle
 import re
-import sys
-import threading
 import time
 import uuid
 from functools import wraps
@@ -417,7 +414,6 @@ def crontab(month='*', day='*', day_of_week='*', hour='*', minute='*'):
         ('M', minute, range(60))
     )
     cron_settings = []
-    min_interval = None
 
     for (date_str, value, acceptable) in validation:
         settings = set([])

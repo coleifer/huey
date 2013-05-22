@@ -4,8 +4,6 @@ import unittest
 from huey.backends.dummy import DummyDataStore
 from huey.backends.dummy import DummyQueue
 from huey.backends.dummy import DummySchedule
-from huey.exceptions import QueueException
-from huey.registry import registry
 from huey.utils import EmptyData
 try:
     from huey.backends.redis_backend import RedisDataStore
