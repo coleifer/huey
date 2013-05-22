@@ -55,11 +55,14 @@ class DummySchedule(BaseSchedule):
         while len(self._schedule):
             sts, data = heapq.heappop(self._schedule)
             if sts <= ts:
-                res.append((sts, data))
+                res.append(data)
             else:
                 self.add(data, sts)
                 break
         return res
+
+    def flush(self):
+        self._schedule = []
 
 
 class DummyDataStore(BaseDataStore):

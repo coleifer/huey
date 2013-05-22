@@ -236,7 +236,8 @@ class Huey(object):
 
     def add_schedule(self, task):
         msg = registry.get_message_for_task(task)
-        self._add_schedule(msg, task.execute_time)
+        ex_time = task.execute_time or datetime.datetime.fromtimestamp(0)
+        self._add_schedule(msg, ex_time)
 
     def read_schedule(self, ts):
         return [

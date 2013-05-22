@@ -84,6 +84,9 @@ class RedisSchedule(BaseSchedule):
             self.conn.zremrangebyscore(self.key, 0, unix_ts)
         return tasks
 
+    def flush(self):
+        self.conn.delete(self.key)
+
 
 class RedisDataStore(BaseDataStore):
     def __init__(self, name, **connection):

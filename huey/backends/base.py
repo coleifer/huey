@@ -72,6 +72,10 @@ class BaseSchedule(object):
         """
         raise NotImplementedError
 
+    def flush(self):
+        """Delete all items in schedule."""
+        raise NotImplementedError
+
 
 class BaseDataStore(object):
     """

@@ -3,18 +3,21 @@ import unittest
 
 from huey.backends.dummy import DummyDataStore
 from huey.backends.dummy import DummyQueue
+from huey.backends.dummy import DummySchedule
 from huey.exceptions import QueueException
 from huey.registry import registry
 from huey.utils import EmptyData
 try:
     from huey.backends.redis_backend import RedisDataStore
     from huey.backends.redis_backend import RedisQueue
+    from huey.backends.redis_backend import RedisSchedule
 except ImportError:
-    RedisQueue = RedisDataStore = None
+    RedisQueue = RedisDataStore = RedisSchedule = None
 
 
 QUEUES = (DummyQueue, RedisQueue,)
 DATA_STORES = (DummyDataStore, RedisDataStore,)
+SCHEDULES = (DummySchedule, RedisSchedule,)
 
 
 class HueyBackendTestCase(unittest.TestCase):
@@ -42,6 +45,7 @@ class HueyBackendTestCase(unittest.TestCase):
             self.assertEqual(queue.read(), 'x')
             self.assertEqual(queue.read(), 'd')
 
+    def test_data_stores(self):
         for d in DATA_STORES:
             if not d:
                 continue
@@ -57,3 +61,26 @@ class HueyBackendTestCase(unittest.TestCase):
             self.assertEqual(data_store.peek('k3'), 'v3')
             data_store.put('k3', 'v3-2')
             self.assertEqual(data_store.peek('k3'), 'v3-2')
+
+    def test_schedules(self):
+        for s in SCHEDULES:
+            if not s:
+                continue
+            schedule = s('test')
+            dt1 = datetime.datetime(2013, 1, 1, 0, 0)
+            dt2 = datetime.datetime(2013, 1, 2, 0, 0)
+            dt3 = datetime.datetime(2013, 1, 3, 0, 0)
+            dt4 = datetime.datetime(2013, 1, 4, 0, 0)
+
+            schedule.add('s2', dt2)
+            schedule.add('s1', dt1)
+            schedule.add('s4', dt4)
+            schedule.add('s3', dt3)
+
+            self.assertEqual(schedule.read(dt1 - datetime.timedelta(days=1)), [])
+
+            self.assertEqual(schedule.read(dt3), ['s1', 's2', 's3'])
+            self.assertEqual(schedule.read(dt3), [])
+
+            self.assertEqual(schedule.read(dt4), ['s4'])
+            self.assertEqual(schedule.read(dt4), [])

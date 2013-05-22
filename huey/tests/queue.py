@@ -7,6 +7,7 @@ from huey.api import PeriodicQueueTask
 from huey.api import QueueTask
 from huey.backends.dummy import DummyDataStore
 from huey.backends.dummy import DummyQueue
+from huey.backends.dummy import DummySchedule
 from huey.exceptions import QueueException
 from huey.registry import registry
 from huey.utils import EmptyData
@@ -15,13 +16,14 @@ from huey.utils import local_to_utc
 
 queue_name = 'test-queue'
 queue = DummyQueue(queue_name)
-huey = Huey(queue)
+schedule = DummySchedule(queue_name)
+huey = Huey(queue, schedule=schedule)
 
 res_queue_name = 'test-queue-2'
 res_queue = DummyQueue(res_queue_name)
 res_store = DummyDataStore(res_queue_name)
 
-res_huey = Huey(res_queue, res_store)
+res_huey = Huey(res_queue, res_store, schedule)
 res_huey_nones = Huey(res_queue, res_store, store_none=True)
 
 # store some global state
@@ -73,7 +75,7 @@ class HueyTestCase(unittest.TestCase):
         global state
         queue.flush()
         res_queue.flush()
-        res_huey._schedule = {}
+        schedule.flush()
         state = {}
 
     def test_registration(self):
@@ -265,6 +267,38 @@ class HueyTestCase(unittest.TestCase):
         dt1 = datetime.datetime(2011, 1, 1, 0, 0)
         dt2 = datetime.datetime(2035, 1, 1, 0, 0)
 
+        add2.schedule(args=('k', 'v'), eta=dt1, convert_utc=False)
+        task1 = res_huey.dequeue()
+
+        add2.schedule(args=('k2', 'v2'), eta=dt2, convert_utc=False)
+        task2 = res_huey.dequeue()
+
+        add2('k3', 'v3')
+        task3 = res_huey.dequeue()
+
+        # add the command to the schedule
+        res_huey.add_schedule(task1)
+        self.assertEqual(len(res_huey.schedule._schedule), 1)
+
+        # add a future-dated command
+        res_huey.add_schedule(task2)
+        self.assertEqual(len(res_huey.schedule._schedule), 2)
+
+        res_huey.add_schedule(task3)
+
+        tasks = res_huey.read_schedule(dt1)
+        self.assertEqual(tasks, [task3, task1])
+
+        tasks = res_huey.read_schedule(dt1)
+        self.assertEqual(tasks, [])
+
+        tasks = res_huey.read_schedule(dt2)
+        self.assertEqual(tasks, [task2])
+
+    def test_ready_to_run_method(self):
+        dt1 = datetime.datetime(2011, 1, 1, 0, 0)
+        dt2 = datetime.datetime(2035, 1, 1, 0, 0)
+
         add2.schedule(args=('k', 'v'), eta=dt1)
         task1 = res_huey.dequeue()
 
@@ -274,52 +308,10 @@ class HueyTestCase(unittest.TestCase):
         add2('k3', 'v3')
         task3 = res_huey.dequeue()
 
-        # add the command to the schedule
-        res_huey.add_schedule(task1)
-        self.assertEqual(res_huey.schedule(), [task1])
-
-        # cmd1 is in the schedule, cmd2 is not
-        self.assertTrue(res_huey.is_pending(task1))
-        self.assertFalse(res_huey.is_pending(task2))
-
-        # multiple adds do not result in the list growing
-        res_huey.add_schedule(task1)
-        self.assertEqual(res_huey.schedule(), [task1])
-
-        # removing a non-existant cmd does not error
-        res_huey.remove_schedule(task2)
-
-        # add a future-dated command
-        res_huey.add_schedule(task2)
-
         # sanity check what should be run
         self.assertTrue(res_huey.ready_to_run(task1))
         self.assertFalse(res_huey.ready_to_run(task2))
         self.assertTrue(res_huey.ready_to_run(task3))
-
-        # check remove works
-        res_huey.remove_schedule(task1)
-        self.assertEqual(res_huey.schedule(), [task2])
-
-        # check saving works
-        res_huey.save_schedule()
-        res_huey._schedule = {}
-        self.assertEqual(res_huey.schedule(), [])
-
-        # check loading works
-        res_huey.load_schedule()
-        self.assertEqual(res_huey.schedule(), [task2])
-
-        res_huey.add_schedule(task1)
-        res_huey.add_schedule(task3)
-        res_huey.save_schedule()
-        res_huey._schedule = {}
-
-        res_huey.load_schedule()
-        self.assertEqual(len(res_huey.schedule()), 3)
-        self.assertTrue(task1 in res_huey.schedule())
-        self.assertTrue(task2 in res_huey.schedule())
-        self.assertTrue(task3 in res_huey.schedule())
 
     def test_task_delay(self):
         curr = datetime.datetime.utcnow()
