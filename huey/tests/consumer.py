@@ -160,6 +160,7 @@ class ConsumerTestCase(unittest.TestCase):
         task = test_huey.dequeue()
         self.run_worker(task)
         self.assertEqual(self.handler.messages, [
+            'Executing %s' % task,
             'Unhandled exception in worker thread',
             'Re-enqueueing task %s, 2 tries left' % task.task_id])
 
@@ -208,6 +209,7 @@ class ConsumerTestCase(unittest.TestCase):
         task = test_huey.dequeue()
         self.run_worker(task, ts=cur_time)
         self.assertEqual(self.handler.messages, [
+            'Executing %s' % task,
             'Unhandled exception in worker thread',
             'Re-enqueueing task %s, 2 tries left' % task.task_id,
         ])
