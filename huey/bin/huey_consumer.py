@@ -149,6 +149,7 @@ class WorkerThread(ConsumerThread):
 
     def process_task(self, task, ts):
         try:
+            logger.info('Executing %s' % task)
             self.huey.execute(task)
         except DataStorePutException:
             logger.warn('Error storing result', exc_info=1)
