@@ -133,19 +133,19 @@ class WorkerThread(ConsumerThread):
         time.sleep(self.delay)
         self.delay *= self.backoff
 
-    def is_revoked(self, task, ts):
-        try:
-            return self.huey.is_revoked(task, ts, peek=False)
-        except DataStoreGetException:
-            logger.error('Error checking if task is revoked: %s' % task)
-            return True
-
     def handle_task(self, task, ts):
         if not self.huey.ready_to_run(task, ts):
             logger.info('Adding %s to schedule' % task)
             self.add_schedule(task)
         elif not self.is_revoked(task, ts):
             self.process_task(task, ts)
+
+    def is_revoked(self, task, ts):
+        try:
+            return self.huey.is_revoked(task, ts, peek=False)
+        except DataStoreGetException:
+            logger.error('Error checking if task is revoked: %s' % task)
+            return True
 
     def process_task(self, task, ts):
         try:
