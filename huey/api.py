@@ -5,6 +5,7 @@ import time
 import uuid
 from functools import wraps
 
+from huey.backends.dummy import DummySchedule
 from huey.exceptions import DataStoreGetException
 from huey.exceptions import DataStorePutException
 from huey.exceptions import DataStoreTimeout
@@ -30,8 +31,8 @@ class Huey(object):
     must be executed for each Huey instance.
 
     :param queue: a queue instance, e.g. ``RedisQueue()``
-    :param result_store: a place to store results and the task schedule,
-        e.g. ``RedisResultStore()``
+    :param result_store: a place to store results, e.g. ``RedisResultStore()``
+    :param schedule: a place to store pending tasks, e.g. ``RedisSchedule()``
     :param store_none: Flag to indicate whether tasks that return ``None``
         should store their results in the result store.
     :param always_eager: Useful for testing, this will execute all tasks
@@ -40,11 +41,15 @@ class Huey(object):
     Example usage::
 
         from huey.api import Huey, crontab
-        from huey.backends.redis_backend import RedisQueue, RedisDataStore
+        from huey.backends.redis_backend import RedisQueue, RedisDataStore, RedisSchedule
 
         queue = RedisQueue('my-app')
         result_store = RedisDataStore('my-app')
-        huey = Huey(queue, result_store)
+        schedule = RedisSchedule('my-app')
+        huey = Huey(queue, result_store, schedule)
+
+        # This is equivalent to the previous 4 lines:
+        # huey = RedisHuey('my-app', {'host': 'localhost', 'port': 6379})
 
         @huey.task()
         def slow_function(some_arg):
@@ -60,7 +65,7 @@ class Huey(object):
                  store_none=False, always_eager=False):
         self.queue = queue
         self.result_store = result_store
-        self.schedule = schedule
+        self.schedule = schedule or DummySchedule(self.queue.name)
         self.blocking = self.queue.blocking
         self.store_none = store_none
         self.always_eager = always_eager

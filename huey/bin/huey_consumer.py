@@ -10,10 +10,12 @@ import time
 from logging.handlers import RotatingFileHandler
 
 from huey.api import Huey
+from huey.exceptions import DataStoreGetException
 from huey.exceptions import QueueException
 from huey.exceptions import QueueReadException
 from huey.exceptions import DataStorePutException
 from huey.exceptions import QueueWriteException
+from huey.exceptions import ScheduleAddException
 from huey.exceptions import ScheduleReadException
 from huey.registry import registry
 from huey.utils import load_class
@@ -23,7 +25,8 @@ logger = logging.getLogger('huey.consumer')
 
 
 class ConsumerThread(threading.Thread):
-    def __init__(self, utc, shutdown):
+    def __init__(self, huey, utc, shutdown):
+        self.huey = huey
         self.utc = utc
         self.shutdown = shutdown
         super(ConsumerThread, self).__init__()
@@ -45,12 +48,20 @@ class ConsumerThread(threading.Thread):
         logger.debug('Thread shutting down')
         self.on_shutdown()
 
+    def enqueue(self, task):
+        try:
+            self.huey.enqueue(task)
+        except QueueWriteException:
+            logger.error('Error enqueueing task: %s' % task)
+
+    def add_schedule(self, task):
+        try:
+            self.huey.add_schedule(task)
+        except ScheduleAddException:
+            logger.error('Error adding task to schedule: %s' % task)
+
 
 class PeriodicTaskThread(ConsumerThread):
-    def __init__(self, huey, utc, shutdown):
-        self.huey = huey
-        super(PeriodicTaskThread, self).__init__(utc, shutdown)
-
     def loop(self, now=None):
         now = now or self.get_now()
         logger.debug('Checking periodic command registry')
@@ -58,26 +69,25 @@ class PeriodicTaskThread(ConsumerThread):
         for task in registry.get_periodic_tasks():
             if task.validate_datetime(now):
                 logger.info('Scheduling %s for execution' % task)
-                self.huey.enqueue(task)
+                self.enqueue(task)
         time.sleep(60 - (time.time() - start))
 
 
 class SchedulerThread(ConsumerThread):
-    def __init__(self, huey, utc, shutdown):
-        self.huey = huey
-        super(SchedulerThread, self).__init__(utc, shutdown)
+    def read_schedule(self, ts):
+        try:
+            return self.huey.read_schedule(ts)
+        except ScheduleReadException:
+            logger.error('Error reading schedule', exc_info=1)
+            return []
 
     def loop(self, now=None):
         now = now or self.get_now()
         start = time.time()
-        try:
-            for task in self.huey.read_schedule(now):
-                logger.info('Scheduling %s for execution' % task)
-                self.huey.enqueue(task)
-        except ScheduleReadException:
-            logger.error('Error reading schedule', exc_info=1)
-        except:
-            logger.error('Unhandled exception reading schedule', exc_info=1)
+
+        for task in self.read_schedule(now):
+            logger.info('Scheduling %s for execution' % task)
+            self.enqueue(task)
 
         delta = time.time() - start
         if delta < 1:
@@ -87,11 +97,10 @@ class SchedulerThread(ConsumerThread):
 class WorkerThread(ConsumerThread):
     def __init__(self, huey, default_delay, max_delay, backoff, utc,
                  shutdown):
-        self.huey = huey
         self.delay = self.default_delay = default_delay
         self.max_delay = max_delay
         self.backoff = backoff
-        super(WorkerThread, self).__init__(utc, shutdown)
+        super(WorkerThread, self).__init__(huey, utc, shutdown)
 
     def loop(self):
         self.check_message()
@@ -124,11 +133,18 @@ class WorkerThread(ConsumerThread):
         time.sleep(self.delay)
         self.delay *= self.backoff
 
+    def is_revoked(self, task, ts):
+        try:
+            return self.huey.is_revoked(task, ts, peek=False)
+        except DataStoreGetException:
+            logger.error('Error checking if task is revoked: %s' % task)
+            return True
+
     def handle_task(self, task, ts):
         if not self.huey.ready_to_run(task, ts):
             logger.info('Adding %s to schedule' % task)
-            self.huey.add_schedule(task)
-        elif not self.huey.is_revoked(task, ts, peek=False):
+            self.add_schedule(task)
+        elif not self.is_revoked(task, ts):
             self.process_task(task, ts)
 
     def process_task(self, task, ts):
@@ -145,18 +161,13 @@ class WorkerThread(ConsumerThread):
         task.retries -= 1
         logger.info('Re-enqueueing task %s, %s tries left' %
                     (task.task_id, task.retries))
-        try:
-            if task.retry_delay:
-                delay = datetime.timedelta(seconds=task.retry_delay)
-                task.execute_time = ts + delay
-                logger.debug('Execute %s at: %s' % (task, task.execute_time))
-                self.huey.add_schedule(task)
-            else:
-                self.huey.enqueue(task)
-        except QueueWriteException:
-            logger.error('Unable to re-enqueue %s' % task)
-        except:
-            logger.error('Unhandled exception re-enqueueing task', exc_info=1)
+        if task.retry_delay:
+            delay = datetime.timedelta(seconds=task.retry_delay)
+            task.execute_time = ts + delay
+            logger.debug('Execute %s at: %s' % (task, task.execute_time))
+            self.add_schedule(task)
+        else:
+            self.enqueue(task)
 
 
 class Consumer(object):
