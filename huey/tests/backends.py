@@ -70,15 +70,25 @@ class HueyBackendTestCase(unittest.TestCase):
             dt3 = datetime.datetime(2013, 1, 3, 0, 0)
             dt4 = datetime.datetime(2013, 1, 4, 0, 0)
 
+            # Add to schedule out-of-order to ensure sorting is performed by
+            # the schedule.
             schedule.add('s2', dt2)
             schedule.add('s1', dt1)
             schedule.add('s4', dt4)
             schedule.add('s3', dt3)
 
-            self.assertEqual(schedule.read(dt1 - datetime.timedelta(days=1)), [])
+            # Ensure that asking for a timestamp previous to any item in the
+            # schedule returns empty list.
+            self.assertEqual(
+                schedule.read(dt1 - datetime.timedelta(days=1)),
+                [])
 
+            # Ensure the upper boundary is inclusive of whatever timestamp
+            # is passed in.
             self.assertEqual(schedule.read(dt3), ['s1', 's2', 's3'])
             self.assertEqual(schedule.read(dt3), [])
 
+            # Ensure the schedule is flushed and an empty schedule returns an
+            # empty list.
             self.assertEqual(schedule.read(dt4), ['s4'])
             self.assertEqual(schedule.read(dt4), [])
