@@ -85,11 +85,12 @@ if not isinstance(HUEY, Huey):
     Queue, DataStore, Schedule = dynamic_import(HUEY, 'backend')
     name = HUEY.get('name') or default_queue_name()
     conn = HUEY.get('connection', {})
+    always_eager = HUEY.get('always_eager', False)
     HUEY = Huey(
         Queue(name, **conn),
         DataStore(name, **conn),
         Schedule(name, **conn),
-        always_eager=settings.DEBUG)
+        always_eager=always_eager)
 
 task = HUEY.task
 periodic_task = HUEY.periodic_task
