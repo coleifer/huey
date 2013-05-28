@@ -119,7 +119,7 @@ class Huey(object):
             klass = create_task(
                 PeriodicQueueTask,
                 func,
-                name=name,
+                task_name=name,
                 validate_datetime=method_validate,
             )
 
