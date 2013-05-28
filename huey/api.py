@@ -70,12 +70,13 @@ class Huey(object):
         self.store_none = store_none
         self.always_eager = always_eager
 
-    def task(self, retries=0, retry_delay=0, retries_as_argument=False):
+    def task(self, retries=0, retry_delay=0, retries_as_argument=False,
+             name=None):
         def decorator(func):
             """
             Decorator to execute a function out-of-band via the consumer.
             """
-            klass = create_task(QueueTask, func, retries_as_argument)
+            klass = create_task(QueueTask, func, retries_as_argument, name)
 
             def schedule(args=None, kwargs=None, eta=None, delay=None,
                          convert_utc=True):
@@ -107,7 +108,7 @@ class Huey(object):
             return inner_run
         return decorator
 
-    def periodic_task(self, validate_datetime):
+    def periodic_task(self, validate_datetime, name=None):
         """
         Decorator to execute a function on a specific schedule.
         """
@@ -118,7 +119,8 @@ class Huey(object):
             klass = create_task(
                 PeriodicQueueTask,
                 func,
-                validate_datetime=method_validate
+                name=name,
+                validate_datetime=method_validate,
             )
 
             func.task_class = klass
@@ -374,7 +376,8 @@ class PeriodicQueueTask(QueueTask):
         return False
 
 
-def create_task(task_class, func, retries_as_argument=False, **kwargs):
+def create_task(task_class, func, retries_as_argument=False, task_name=None,
+                **kwargs):
     def execute(self):
         args, kwargs = self.data or ((), {})
         if retries_as_argument:
@@ -389,7 +392,7 @@ def create_task(task_class, func, retries_as_argument=False, **kwargs):
     attrs.update(kwargs)
 
     klass = type(
-        'queuecmd_%s' % (func.__name__),
+        task_name or 'queuecmd_%s' % (func.__name__),
         (task_class,),
         attrs
     )
