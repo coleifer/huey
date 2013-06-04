@@ -3,14 +3,17 @@ import logging
 import threading
 import time
 import unittest
+import json
 
 from huey import crontab
 from huey import Huey
 from huey.backends.dummy import DummyDataStore
 from huey.backends.dummy import DummyQueue
 from huey.backends.dummy import DummySchedule
+from huey.backends.redis_backend import RedisQueue
 from huey.bin.huey_consumer import Consumer
 from huey.bin.huey_consumer import WorkerThread
+from huey.bin.pubsub_consumer import PubSubWorkerThread, PubSubConsumer
 from huey.registry import registry
 
 
@@ -22,6 +25,7 @@ test_queue = DummyQueue('test-queue')
 test_result_store = DummyDataStore('test-queue')
 test_schedule = DummySchedule('test-queue')
 test_huey = Huey(test_queue, test_result_store, test_schedule)
+
 
 @test_huey.task()
 def modify_state(k, v):
@@ -358,3 +362,107 @@ class ConsumerTestCase(unittest.TestCase):
         task_obj = every_hour.task_class()
         self.assertEqual(len(test_huey.result_store._results), 1)
         self.assertTrue(task_obj.revoke_id in test_huey.result_store._results)
+
+
+class PubSubTestCase(unittest.TestCase):
+    def setUp(self):
+        import redis
+        global state
+        state = {}
+        self.conn = {
+            'server':redis.Redis(host='localhost', port=6379, db=0),
+            'channel':'testmssgqueue'
+        }
+
+        self.orig_pc = registry._periodic_tasks
+        registry._periodic_commands = [every_hour.task_class()]
+
+        self.orig_sleep = time.sleep
+        time.sleep = lambda x: None
+
+        test_huey.queue.flush()
+        test_huey.result_store.flush()
+        test_huey.schedule.flush()
+        self.consumer = PubSubConsumer(test_huey,connection=self.conn, workers=2)
+        self.consumer.create_threads()
+
+        self.handler = TestLogHandler()
+        logger.addHandler(self.handler)
+
+        self.client = self.conn['server'].pubsub() # simple client to get pubsub messages
+        self.client.subscribe(self.conn['channel'])
+        self.messages = self.client.listen()
+
+    def tearDown(self):
+        self.consumer.shutdown()
+        logger.removeHandler(self.handler)
+        registry._periodic_tasks = self.orig_pc
+        time.sleep = self.orig_sleep
+        self.client.unsubscribe()
+
+    def run_worker(self, task, ts=None):
+        worker_t = PubSubWorkerThread(
+            test_huey,
+            self.conn,
+            self.consumer.default_delay,
+            self.consumer.max_delay,
+            self.consumer.backoff,
+            self.consumer.utc,
+            self.consumer._shutdown)
+        ts = ts or datetime.datetime.utcnow()
+        worker_t.handle_task(task, ts)
+
+    def test_ps_worker(self):
+        modify_state('k', 'v')
+        task = test_huey.dequeue()
+        self.run_worker(task)
+        self.assertEqual(state, {'k': 'v'})
+        self.messages.next()
+        mssg = self.messages.next()
+        result = json.loads(mssg['data'])
+        self.assertEqual(result['status'], 'Started')
+        mssg = self.messages.next()
+        result = json.loads(mssg['data'])
+        self.assertEqual(result['status'], 'Completed')
+        self.assertEqual(result['result'], 'v')
+
+    def test_worker_exception(self):
+        blow_up()
+        task = test_huey.dequeue()
+        self.run_worker(task)
+        self.assertTrue(
+            'Unhandled exception in worker thread' in self.handler.messages)
+        self.messages.next()
+        self.messages.next()
+        mssg = self.messages.next()
+        result = json.loads(mssg['data'])
+        self.assertTrue("Traceback" in result['result'])
+
+    def test_retries_with_success(self):
+        # this will fail once, then succeed
+        retry_command('blampf', False)
+        self.assertFalse('blampf' in state)
+
+        task = test_huey.dequeue()
+        self.run_worker(task)
+        self.assertEqual(self.handler.messages, [
+            'Executing %s' % task,
+            'Unhandled exception in worker thread',
+            'Re-enqueueing task %s, 2 tries left' % task.task_id])
+        self.messages.next()
+        self.messages.next()
+        mssg = self.messages.next()
+        result = json.loads(mssg['data'])
+        self.assertEqual(result['status'], 'Error')
+        mssg = self.messages.next()
+        result = json.loads(mssg['data'])
+        self.assertEqual(result['status'], 'Retrying')
+
+        task = test_huey.dequeue()
+        self.assertEqual(task.retries, 2)
+        self.run_worker(task)
+
+        self.assertEqual(state['blampf'], 'fixed')
+        self.assertEqual(test_huey.dequeue(), None)
+
+
