@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import logging, sys, traceback
 from huey.bin.huey_consumer import WorkerThread, SchedulerThread, PeriodicTaskThread,\
         Consumer, run_consumer, logger
@@ -42,10 +44,11 @@ class PubSubWorkerThread(WorkerThread):
                 self.requeue_task(task, self.get_now())
 
 class PubSubConsumer(Consumer):
-    def __init__(self, huey, connection, logfile=None, loglevel=logging.INFO,
+    def __init__(self, huey, pubsub, logfile=None, loglevel=logging.INFO,
                  workers=1, periodic=True, initial_delay=0.1,
                  backoff=1.15, max_delay=10.0, utc=True):
-        self.connection = connection # the redis connection to publish with
+        self.connection = redis.Redis(host=pubsub['host'], port=pubsub['port'], db=0) # the redis connection to publish with
+        self.channel = pubsub['channel']
         super(PubSubConsumer, self).__init__(huey, logfile, loglevel,
                                        workers, periodic,
                                        initial_delay,backoff,
@@ -55,10 +58,15 @@ class PubSubConsumer(Consumer):
         self.scheduler_t = SchedulerThread(self.huey, self.utc, self._shutdown)
         self.scheduler_t.name = 'Scheduler'
         self.worker_threads = []
+        ps_connection = {
+                    'server':self.connection,
+                    'channel':self.channel
+        }
+
         for i in range(self.workers):
             worker_t = PubSubWorkerThread(
                 self.huey,
-                self.connection,
+                ps_connection,
                 self.default_delay,
                 self.max_delay,
                 self.backoff,
@@ -81,9 +89,10 @@ class PubSubConsumer(Consumer):
 
 
 if __name__ == '__main__':
-    conn = {'server':redis.Redis(host='localhost', port=6379, db=0),
+    conn = {'host':'localhost',
+            'port':6379,
             'channel':'defaultmssgqueue'
-            }
+    }
     pubsub_consumer = PubSubConsumer(
         huey_instance,
         conn,

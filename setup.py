@@ -24,5 +24,5 @@ setup(
         'Framework :: Django',
     ],
     test_suite='runtests.runtests',
-    scripts = ['huey/bin/huey_consumer.py'],
+    scripts = ['huey/bin/huey_consumer.py','huey/bin/pubsub_consumer.py'],
 )

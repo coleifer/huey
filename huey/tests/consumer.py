@@ -366,14 +366,12 @@ class ConsumerTestCase(unittest.TestCase):
 
 class PubSubTestCase(unittest.TestCase):
     def setUp(self):
-        import redis
         global state
         state = {}
-        self.conn = {
-            'server':redis.Redis(host='localhost', port=6379, db=0),
-            'channel':'testmssgqueue'
+        self.conn = {'host':'localhost',
+            'port':6379,
+            'channel':'defaultmssgqueue'
         }
-
         self.orig_pc = registry._periodic_tasks
         registry._periodic_commands = [every_hour.task_class()]
 
@@ -383,13 +381,13 @@ class PubSubTestCase(unittest.TestCase):
         test_huey.queue.flush()
         test_huey.result_store.flush()
         test_huey.schedule.flush()
-        self.consumer = PubSubConsumer(test_huey,connection=self.conn, workers=2)
+        self.consumer = PubSubConsumer(test_huey, pubsub=self.conn, workers=2)
         self.consumer.create_threads()
 
         self.handler = TestLogHandler()
         logger.addHandler(self.handler)
 
-        self.client = self.conn['server'].pubsub() # simple client to get pubsub messages
+        self.client = self.consumer.connection.pubsub() # simple client to get pubsub messages
         self.client.subscribe(self.conn['channel'])
         self.messages = self.client.listen()
 
@@ -403,7 +401,7 @@ class PubSubTestCase(unittest.TestCase):
     def run_worker(self, task, ts=None):
         worker_t = PubSubWorkerThread(
             test_huey,
-            self.conn,
+            {'server':self.consumer.connection, 'channel':self.conn['channel']},
             self.consumer.default_delay,
             self.consumer.max_delay,
             self.consumer.backoff,

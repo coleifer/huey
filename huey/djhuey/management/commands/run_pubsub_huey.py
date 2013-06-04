@@ -6,7 +6,7 @@ from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.utils.importlib import import_module
 
-from huey.bin.huey_consumer import Consumer
+from huey.bin.pubsub_consumer import PubSubConsumer
 
 
 class Command(BaseCommand):
@@ -56,6 +56,23 @@ class Command(BaseCommand):
             app_path = sys.modules['%s.%s' % (app, module_name)]
 
     def handle(self, *args, **options):
+
+        """ PubSubConsumer options should include Redis connection info
+
+            It should look like:
+            HUEY = {
+                'backend': 'huey.backends.redis_backend',  # required.
+                'name': 'unique name',
+                'connection': {'host': 'localhost', 'port': 6379},
+                'always_eager': False, # Defaults to False when running via manage.py run_huey
+                                # Options to pass into the consumer when running ``manage.py run_huey``
+                'consumer_options': {
+                    'workers': 4,
+                    'pubsub':{'host': 'localhost', 'port': 6379, 'channel':'mychannel'},
+
+                },
+            }
+        """
         from huey.djhuey import HUEY
         try:
             consumer_options = settings.HUEY['consumer_options']
@@ -69,6 +86,5 @@ class Command(BaseCommand):
             consumer_options['periodic'] = options['periodic']
 
         self.autodiscover()
-
-        consumer = Consumer(HUEY, **consumer_options)
+        consumer = PubSubConsumer(HUEY, **consumer_options)
         consumer.run()
