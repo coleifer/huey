@@ -119,7 +119,6 @@ class WorkerThread(ConsumerThread):
         except:
             logger.error('Unknown exception', exc_info=1)
             exc_raised = True
-
         if task:
             self.handle_task(task, self.get_now())
         elif exc_raised or self.huey.blocking:
@@ -150,7 +149,7 @@ class WorkerThread(ConsumerThread):
     def process_task(self, task, ts):
         try:
             logger.info('Executing %s' % task)
-            self.huey.execute(task)
+            result = self.huey.execute(task)
         except DataStorePutException:
             logger.warn('Error storing result', exc_info=1)
         except:
@@ -320,7 +319,7 @@ def get_option_parser():
                       help='use local time for all tasks')
     return parser
 
-if __name__ == '__main__':
+def run_consumer(consumer=None):
     parser = get_option_parser()
     options, args = parser.parse_args()
 
@@ -342,14 +341,21 @@ if __name__ == '__main__':
         err('Error importing %s' % args[0])
         sys.exit(2)
 
-    consumer = Consumer(
-        huey_instance,
-        options.logfile,
-        loglevel,
-        options.workers,
-        options.periodic,
-        options.initial_delay,
-        options.backoff,
-        options.max_delay,
-        options.utc)
+    if not consumer:
+        # run the default consumer
+        consumer = Consumer(
+            huey_instance,
+            options.logfile,
+            loglevel,
+            options.workers,
+            options.periodic,
+            options.initial_delay,
+            options.backoff,
+            options.max_delay,
+            options.utc)
+
     consumer.run()
+
+
+if __name__ == '__main__':
+    run_consumer()
