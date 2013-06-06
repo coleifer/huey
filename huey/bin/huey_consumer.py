@@ -204,10 +204,16 @@ class Consumer(object):
 
         # set up pubsub publisher if available
         if publisher is not None:
-            pubclass = load_class(publisher)
-            self.publisher = pubclass(**pubsub_options)
+            try:
+                pubclass = load_class(publisher)
+                self.publisher = pubclass(**pubsub_options)
+                logger.info('Using Publisher %s' % publisher)
+            except ImportError:
+                self.publisher = None
+                logger.info('Could Not load Publisher %s' % publisher)
         else:
             self.publisher = None
+
 
     def create_threads(self):
         self.scheduler_t = SchedulerThread(self.huey, self.utc, self._shutdown)

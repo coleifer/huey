@@ -424,6 +424,10 @@ class PubSubConsumerTestCase(unittest.TestCase):
         registry._periodic_tasks = self.orig_pc
         time.sleep = self.orig_sleep
 
+    def test_broken_publisher(self):
+        pubsub_opts = {}
+        broken_consumer = Consumer(test_huey, workers=2, publisher='i.dont.ExistPubSub',**pubsub_opts)
+
     def run_worker(self, task, ts=None):
         worker_t = WorkerThread(
             test_huey,
