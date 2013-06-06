@@ -407,7 +407,7 @@ class PubSubConsumerTestCase(unittest.TestCase):
         test_huey.result_store.flush()
         test_huey.schedule.flush()
         pubsub_opts = {'channel':'testchannel'}
-        self.consumer = Consumer(test_huey, workers=2, publisher=RedisPubSub,**pubsub_opts)
+        self.consumer = Consumer(test_huey, workers=2, publisher='huey.consumers.pubsub.RedisPubSub',**pubsub_opts)
         self.consumer.create_threads()
 
         self.handler = TestLogHandler()

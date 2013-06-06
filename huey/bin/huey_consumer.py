@@ -20,7 +20,6 @@ from huey.exceptions import ScheduleAddException
 from huey.exceptions import ScheduleReadException
 from huey.registry import registry
 from huey.utils import load_class
-from huey.consumers.pubsub import RedisPubSub
 
 
 logger = logging.getLogger('huey.consumer')
@@ -205,7 +204,8 @@ class Consumer(object):
 
         # set up pubsub publisher if available
         if publisher is not None:
-            self.publisher = publisher(**pubsub_options)
+            pubclass = load_class(publisher)
+            self.publisher = pubclass(**pubsub_options)
         else:
             self.publisher = None
 
@@ -355,7 +355,7 @@ if __name__ == '__main__':
 
     if options.pubsub:
         conn = {'channel':options.pubsub}
-        pubsub = RedisPubSub
+        pubsub = 'huey.consumers.pubsub.RedisPubSub'
     else:
         pubsub = None
         conn = {}
