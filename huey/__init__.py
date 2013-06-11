@@ -12,4 +12,7 @@ try:
             schedule = RedisSchedule(name, **conn_kwargs)
             super(RedisHuey, self).__init__(queue, result_store, schedule)
 except ImportError:
-    pass
+    class RedisHuey(object):
+        def __init__(self, *args, **kwargs):
+            raise RuntimeError('Error, "redis" is not installed. Install '
+                               'using pip: "pip install redis"')

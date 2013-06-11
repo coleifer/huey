@@ -340,7 +340,7 @@ if __name__ == '__main__':
         huey_instance = load_class(args[0])
     except:
         err('Error importing %s' % args[0])
-        sys.exit(2)
+        raise
 
     consumer = Consumer(
         huey_instance,
