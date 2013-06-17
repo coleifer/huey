@@ -9,6 +9,17 @@ to accomodate:
 1. Configuring your queue and consumer via django settings module.
 2. Run the consumer as a management command.
 
+Apps
+----
+
+``huey.djhuey`` must be included in the INSTALLED_APPS within the Django settings.py file.
+
+.. code-block:: python
+
+    INSTALLED_APPS = (
+        'huey.djhuey',
+        ...
+        
 Huey Settings
 -------------
 
