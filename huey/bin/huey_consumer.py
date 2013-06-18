@@ -5,6 +5,7 @@ import logging
 import optparse
 import signal
 import sys
+import traceback
 import threading
 import time
 from logging.handlers import RotatingFileHandler
@@ -96,10 +97,11 @@ class SchedulerThread(ConsumerThread):
 
 class WorkerThread(ConsumerThread):
     def __init__(self, huey, default_delay, max_delay, backoff, utc,
-                 shutdown):
+                 shutdown, publisher=None):
         self.delay = self.default_delay = default_delay
         self.max_delay = max_delay
         self.backoff = backoff
+        self.publisher = publisher
         super(WorkerThread, self).__init__(huey, utc, shutdown)
 
     def loop(self):
@@ -148,14 +150,19 @@ class WorkerThread(ConsumerThread):
             return True
 
     def process_task(self, task, ts):
+        task_name = registry.task_to_string(type(task))
         try:
             logger.info('Executing %s' % task)
-            self.huey.execute(task)
+            self.publish_message(status='Started', task_display_name=task_name, task_id=task.task_id)
+            task_result = self.huey.execute(task)
+            self.publish_message(status='Completed',task_display_name=task_name,  result=task_result, task_id=task.task_id)
         except DataStorePutException:
             logger.warn('Error storing result', exc_info=1)
         except:
             logger.error('Unhandled exception in worker thread', exc_info=1)
+            self.publish_message(status='Error', task_display_name=task_name, result=traceback.format_exc(), task_id=task.task_id)
             if task.retries:
+                self.publish_message(status='Retrying', task_display_name=task_name, task_id=task.task_id)
                 self.requeue_task(task, self.get_now())
 
     def requeue_task(self, task, ts):
@@ -170,11 +177,14 @@ class WorkerThread(ConsumerThread):
         else:
             self.enqueue(task)
 
+    def publish_message(self, task_id=None, task_display_name=None, status=None, result=None):
+        if self.publisher is not None:
+            self.publisher.send_message(task_id, task_display_name, status, result)
 
 class Consumer(object):
     def __init__(self, huey, logfile=None, loglevel=logging.INFO,
                  workers=1, periodic=True, initial_delay=0.1,
-                 backoff=1.15, max_delay=10.0, utc=True):
+                 backoff=1.15, max_delay=10.0, utc=True, publisher=None, **pubsub_options):
 
         self.huey = huey
         self.logfile = logfile
@@ -192,6 +202,19 @@ class Consumer(object):
 
         self._shutdown = threading.Event()
 
+        # set up pubsub publisher if available
+        if publisher is not None:
+            try:
+                pubclass = load_class(publisher)
+                self.publisher = pubclass(**pubsub_options)
+                logger.info('Using Publisher %s' % publisher)
+            except ImportError:
+                self.publisher = None
+                logger.info('Could Not load Publisher %s' % publisher)
+        else:
+            self.publisher = None
+
+
     def create_threads(self):
         self.scheduler_t = SchedulerThread(self.huey, self.utc, self._shutdown)
         self.scheduler_t.name = 'Scheduler'
@@ -204,7 +227,9 @@ class Consumer(object):
                 self.max_delay,
                 self.backoff,
                 self.utc,
-                self._shutdown)
+                self._shutdown,
+                self.publisher
+            )
             worker_t.daemon = True
             worker_t.name = 'Worker %d' % (i + 1)
             self.worker_threads.append(worker_t)
@@ -318,6 +343,9 @@ def get_option_parser():
                       default=True)
     parser.add_option('--localtime', dest='utc', action='store_false',
                       help='use local time for all tasks')
+    parser.add_option('-c','--use-pubsub-channel', dest='pubsub', action='store_false',
+                      help='publish task messages to this redis channel')
+
     return parser
 
 if __name__ == '__main__':
@@ -330,6 +358,13 @@ if __name__ == '__main__':
         loglevel = logging.DEBUG
     else:
         loglevel = logging.ERROR
+
+    if options.pubsub:
+        conn = {'channel':options.pubsub}
+        pubsub = 'huey.consumers.pubsub.RedisPubSub'
+    else:
+        pubsub = None
+        conn = {}
 
     if len(args) == 0:
         err('Error:   missing import path to `Huey` instance')
@@ -351,5 +386,8 @@ if __name__ == '__main__':
         options.initial_delay,
         options.backoff,
         options.max_delay,
-        options.utc)
+        options.utc,
+        pubsub,
+        **conn
+    )
     consumer.run()
