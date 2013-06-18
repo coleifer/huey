@@ -211,6 +211,8 @@ class Huey(object):
             return registry.get_task_for_message(message)
 
     def _format_time(self, dt):
+        if dt is None:
+            return None
         return time.mktime(dt.timetuple())
 
     def emit_task(self, status, task, error=False):
@@ -218,10 +220,10 @@ class Huey(object):
             message_data = {'status': status}
             message_data.update({
                 'id': task.task_id,
-                'task': task.__name__,
+                'task': type(task).__name__,
                 'retries': task.retries,
                 'retry_delay': task.retry_delay,
-                'execute_time': task.execute_time,
+                'execute_time': self._format_time(task.execute_time),
                 'error': error})
             if error:
                 message_data['traceback'] = traceback.format_exc()

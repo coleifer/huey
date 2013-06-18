@@ -2,6 +2,7 @@
 Test-only implementations of Queue and DataStore.  These will not work for
 real applications because they only store tasks/results in memory.
 """
+from collections import deque
 import heapq
 
 from huey.backends.base import BaseDataStore
@@ -85,8 +86,18 @@ class DummyDataStore(BaseDataStore):
 
 
 class DummyEventEmitter(BaseEventEmitter):
+    def __init__(self, *args, **kwargs):
+        super(DummyEventEmitter, self).__init__(*args, **kwargs)
+        self._events = deque()
+        self.__size = 100
+
     def emit(self, message):
-        pass
+        self._events.appendleft(message)
+        num_events = len(self._events)
+        if num_events > self.__size * 1.5:
+            while num_events > self.__size:
+                self._events.popright()
+                num_events -= 1
 
 
 Components = (DummyQueue, DummyDataStore, DummySchedule, DummyEventEmitter)

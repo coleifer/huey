@@ -1,21 +1,25 @@
+from collections import deque
 import datetime
 import unittest
 
 from huey.backends.dummy import DummyDataStore
+from huey.backends.dummy import DummyEventEmitter
 from huey.backends.dummy import DummyQueue
 from huey.backends.dummy import DummySchedule
 from huey.utils import EmptyData
 try:
     from huey.backends.redis_backend import RedisDataStore
+    from huey.backends.redis_backend import RedisEventEmitter
     from huey.backends.redis_backend import RedisQueue
     from huey.backends.redis_backend import RedisSchedule
 except ImportError:
-    RedisQueue = RedisDataStore = RedisSchedule = None
+    RedisQueue = RedisDataStore = RedisSchedule = RedisEventEmitter = None
 
 
 QUEUES = (DummyQueue, RedisQueue,)
 DATA_STORES = (DummyDataStore, RedisDataStore,)
 SCHEDULES = (DummySchedule, RedisSchedule,)
+EVENTS = (DummyEventEmitter, RedisEventEmitter,)
 
 
 class HueyBackendTestCase(unittest.TestCase):
@@ -92,3 +96,16 @@ class HueyBackendTestCase(unittest.TestCase):
             # empty list.
             self.assertEqual(schedule.read(dt4), ['s4'])
             self.assertEqual(schedule.read(dt4), [])
+
+    def test_events(self):
+        for e in EVENTS:
+            if not e:
+                continue
+            e = e('test')
+
+            messages = ['a', 'b', 'c', 'd']
+            for message in messages:
+                e.emit(message)
+
+            if hasattr(e, '_events'):
+                self.assertEqual(e._events, deque(['d', 'c', 'b', 'a']))
