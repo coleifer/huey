@@ -17,7 +17,7 @@ lowest-level interfaces, the :py:class:`BaseQueue` and :py:class:`BaseDataStore`
 Function decorators and helpers
 -------------------------------
 
-.. py:class:: Huey(queue[, result_store=None[, store_none=False[, always_eager=False[, schedule_key='schedule']]]])
+.. py:class:: Huey(queue[, result_store=None[, schedule=None[, events=None[, store_none=False[, always_eager=False]]]]])
 
     Huey executes tasks by exposing function decorators that cause the function
     call to be enqueued for execution by the consumer.
@@ -29,23 +29,29 @@ Function decorators and helpers
     :param queue: a queue instance, e.g. :py:class:`RedisQueue`.
     :param result_store: a place to store results and the task schedule,
         e.g. :py:class:`RedisDataStore`.
+    :param schedule: scheduler implementation, e.g. an instance of :py:class:`RedisSchedule`.
+    :param events: event emitter implementation, e.g. an instance of :py:class:`RedisEventEmitter`.
     :param boolean store_none: Flag to indicate whether tasks that return ``None``
         should store their results in the result store.
     :param always_eager: Useful for testing, this will execute all tasks
         immediately, without enqueueing them.
-    :param schedule_key: Key used for persisting the schedule between runs
-        of the consumer.
 
     Example usage:
 
     .. code-block:: python
 
         from huey.api import Huey, crontab
-        from huey.backends.redis_backend import RedisQueue, RedisDataStore
+        from huey.backends.redis_backend import RedisBlockingQueue, RedisDataStore,\
+            RedisSchedule, RedisEventEmitter
 
-        queue = RedisQueue('my-app')
+        queue = RedisBlockingQueue('my-app')
         result_store = RedisDataStore('my-app')
-        huey = Huey(queue, result_store)
+        schedule = RedisSchedule('my-app')
+        events = RedisEventEmitter('my-app')
+        huey = Huey(queue, result_store, schedule, events)
+
+        # THIS IS EQUIVALENT TO ABOVE CODE:
+        # huey = RedisHuey('my-app')
 
         @huey.task()
         def slow_function(some_arg):
@@ -446,6 +452,33 @@ Base classes
 
         Remove all keys
 
+.. py:class:: BaseSchedule(name, **connection)
+
+    Schedule tasks, should be able to efficiently find tasks that are ready
+    for execution.
+
+    .. py:method:: add(data, timestamp)
+
+        Add the timestamped data (a serialized task) to the task schedule.
+
+    .. py:method:: read(timestamp)
+
+        Return all tasks that are ready for execution at the given timestamp.
+
+    .. py:method:: flush()
+
+        Remove all tasks from the schedule.
+
+.. py:class:: BaseEventEmitter(channel, **connection)
+
+    A send-and-forget event emitter that is used for sending real-time updates
+    for tasks in the consumer.
+
+    .. py:method:: emit(data)
+
+        Send the data on the specified channel.
+
+
 Redis implementation
 ^^^^^^^^^^^^^^^^^^^^
 
@@ -472,3 +505,17 @@ written by Andy McCurdy.
 
     :param name: the name of the data store to use
     :param connection: a list of values passed directly into the ``redis.Redis`` class
+
+.. py:class:: RedisSchedule(name, **connection)
+
+    Uses sorted sets to efficiently manage a schedule of timestamped tasks.
+
+    :param name: the name of the data store to use
+    :param connection: a list of values passed directly into the ``redis.Redis`` class
+
+ .. py:class:: RedisEventEmitter(channel, **connection)
+
+    Uses Redis pubsub to emit json-serialized updates about tasks in real-time.
+
+    :param channel: the channel to send messages on.
+    :param connection: values passed directly to the ``redis.Redis`` class.
