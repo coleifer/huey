@@ -5,6 +5,7 @@ import redis
 from redis.exceptions import ConnectionError
 
 from huey.backends.base import BaseDataStore
+from huey.backends.base import BaseEventEmitter
 from huey.backends.base import BaseQueue
 from huey.backends.base import BaseSchedule
 from huey.utils import EmptyData
@@ -113,4 +114,14 @@ class RedisDataStore(BaseDataStore):
         self.conn.delete(self.storage_name)
 
 
-Components = (RedisBlockingQueue, RedisDataStore, RedisSchedule)
+class RedisEventEmitter(BaseEventEmitter):
+    def __init__(self, channel, **connection):
+        super(RedisEventEmitter, self).__init__(channel, **connection)
+        self.conn = redis.Redis(**connection)
+
+    def emit(self, message):
+        self.conn.publish(self.channel, message)
+
+
+Components = (RedisBlockingQueue, RedisDataStore, RedisSchedule,
+              RedisEventEmitter)

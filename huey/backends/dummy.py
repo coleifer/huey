@@ -5,6 +5,7 @@ real applications because they only store tasks/results in memory.
 import heapq
 
 from huey.backends.base import BaseDataStore
+from huey.backends.base import BaseEventEmitter
 from huey.backends.base import BaseQueue
 from huey.backends.base import BaseSchedule
 from huey.utils import EmptyData
@@ -83,4 +84,9 @@ class DummyDataStore(BaseDataStore):
         self._results = {}
 
 
-Components = (DummyQueue, DummyDataStore, DummySchedule)
+class DummyEventEmitter(BaseEventEmitter):
+    def emit(self, message):
+        pass
+
+
+Components = (DummyQueue, DummyDataStore, DummySchedule, DummyEventEmitter)

@@ -101,4 +101,13 @@ class BaseDataStore(object):
         raise NotImplementedError
 
 
-Components = (BaseQueue, BaseDataStore, BaseSchedule)
+class BaseEventEmitter(object):
+    def __init__(self, channel, **connection):
+        self.channel = channel
+        self.connection = connection
+
+    def emit(self, message):
+        raise NotImplementedError
+
+
+Components = (BaseQueue, BaseDataStore, BaseSchedule, BaseEventEmitter)

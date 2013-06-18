@@ -51,14 +51,26 @@ class ConsumerThread(threading.Thread):
     def enqueue(self, task):
         try:
             self.huey.enqueue(task)
+            self.huey.emit_task('enqueued', task)
         except QueueWriteException:
             logger.error('Error enqueueing task: %s' % task)
 
     def add_schedule(self, task):
         try:
             self.huey.add_schedule(task)
+            self.huey.emit_task('scheduled', task)
         except ScheduleAddException:
             logger.error('Error adding task to schedule: %s' % task)
+
+    def is_revoked(self, task, ts):
+        try:
+            if self.huey.is_revoked(task, ts, peek=False):
+                self.huey.emit_task('revoked', task)
+                return True
+            return False
+        except DataStoreGetException:
+            logger.error('Error checking if task is revoked: %s' % task)
+            return True
 
 
 class PeriodicTaskThread(ConsumerThread):
@@ -140,22 +152,19 @@ class WorkerThread(ConsumerThread):
         elif not self.is_revoked(task, ts):
             self.process_task(task, ts)
 
-    def is_revoked(self, task, ts):
-        try:
-            return self.huey.is_revoked(task, ts, peek=False)
-        except DataStoreGetException:
-            logger.error('Error checking if task is revoked: %s' % task)
-            return True
-
     def process_task(self, task, ts):
         try:
             logger.info('Executing %s' % task)
+            self.huey.emit_task('started', task)
             self.huey.execute(task)
+            self.huey.emit_task('finished', task)
         except DataStorePutException:
             logger.warn('Error storing result', exc_info=1)
         except:
             logger.error('Unhandled exception in worker thread', exc_info=1)
+            self.huey.emit_task('error', task, error=True)
             if task.retries:
+                self.huey.emit_task('retrying', task)
                 self.requeue_task(task, self.get_now())
 
     def requeue_task(self, task, ts):

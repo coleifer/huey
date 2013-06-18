@@ -1,7 +1,9 @@
 import datetime
+import json
 import pickle
 import re
 import time
+import traceback
 import uuid
 from functools import wraps
 
@@ -33,6 +35,7 @@ class Huey(object):
     :param queue: a queue instance, e.g. ``RedisQueue()``
     :param result_store: a place to store results, e.g. ``RedisResultStore()``
     :param schedule: a place to store pending tasks, e.g. ``RedisSchedule()``
+    :param events: channel to send events on, e.g. ``RedisEventEmitter()``
     :param store_none: Flag to indicate whether tasks that return ``None``
         should store their results in the result store.
     :param always_eager: Useful for testing, this will execute all tasks
@@ -61,11 +64,12 @@ class Huey(object):
             # do a backup every day at 3am
             return
     """
-    def __init__(self, queue, result_store=None, schedule=None,
+    def __init__(self, queue, result_store=None, schedule=None, events=None,
                  store_none=False, always_eager=False):
         self.queue = queue
         self.result_store = result_store
         self.schedule = schedule or DummySchedule(self.queue.name)
+        self.events = events
         self.blocking = self.queue.blocking
         self.store_none = store_none
         self.always_eager = always_eager
@@ -185,6 +189,13 @@ class Huey(object):
             raise AttributeError('Schedule not specified.')
         return self.schedule.read(ts)
 
+    def emit(self, message):
+        """Events should always fail silently."""
+        try:
+            self.events.emit(message)
+        except:
+            pass
+
     def enqueue(self, task):
         if self.always_eager:
             return task.execute()
@@ -198,6 +209,23 @@ class Huey(object):
         message = self._read()
         if message:
             return registry.get_task_for_message(message)
+
+    def _format_time(self, dt):
+        return time.mktime(dt.timetuple())
+
+    def emit_task(self, status, task, error=False):
+        if self.events:
+            message_data = {'status': status}
+            message_data.update({
+                'id': task.task_id,
+                'task': task.__name__,
+                'retries': task.retries,
+                'retry_delay': task.retry_delay,
+                'execute_time': task.execute_time,
+                'error': error})
+            if error:
+                message_data['traceback'] = traceback.format_exc()
+            self.emit(json.dumps(message_data))
 
     def execute(self, task):
         if not isinstance(task, QueueTask):
