@@ -1,0 +1,13 @@
+<div class="message">
+  <p>
+    <span class="label">{{ channel }}</span>
+    <span class="label {% if data.status == 'finished' %}label-success{% elif data.status == 'error' %}label-important{% endif %}">{{ data.status }}</span>
+    <strong>{{ data.task }}</strong>: {{ data.id }}
+    {% if data.retries %}
+    <span class="quiet">Retries: {{ data.retries }} ({{ data.retry_delay }} delay)</span>
+    {% endif %}
+  </p>
+  {% if data.error %}
+    <pre>{{ data.traceback }}</pre>
+  {% endif %}
+</div>

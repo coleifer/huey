@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <title>huey webstatus</title>
+    <meta charset="utf-8">
+    <link rel=stylesheet type=text/css href="{{ url_for('static', filename='css/bootstrap.min.css') }}" />
+    <link rel=stylesheet type=text/css href="{{ url_for('static', filename='css/style.css') }}" />
+    <script src="{{ url_for('static', filename='js/jquery.min.js') }}" type="text/javascript"></script>
+    <script src="{{ url_for('static', filename='js/bootstrap.min.js') }}"></script>
+    <script>
+      $(function() {
+        if ("WebSocket" in window) {
+          log = $('div#log');
+          ws = new WebSocket("ws://" + document.domain + ":{{ port }}/websocket");
+          ws.onmessage = function (msg) {
+            log.prepend(msg.data);
+            if (log.find('p').length > 100) {
+              log.find('p:gt(100)').remove();
+            }
+          }
+        }
+
+        $("form").submit(function(e) {
+          e.preventDefault();
+          ws.send(JSON.stringify({'channels': $('#id_channels').val()}));
+        });
+
+        window.onbeforeunload = function() {
+          ws.onclose = function () {}; // disable onclose handler first
+          ws.close();
+        }
+      });
+    </script>
+  </head>
+  
+  <body>
+    <div class="container">
+      <div class="page-header">
+        <h1>Huey Webstatus</h1>
+      </div>
+      <hr />
+      <form class="form form-inline">
+        <input class="input-medium" id="id_channels" name="channels" placeholder="Channels to subscribe" type="text" value="*" />
+        <button type="submit">Update</button>
+      </form>
+      <div id="log">
+      </div>
+    </div>
+  </body>
+</html>
