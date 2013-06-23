@@ -47,10 +47,14 @@ def listen(pubsub, websocket):
     while True:
         for message in pubsub.listen():
             channel = message['channel']
-            data = json.loads(message['data'])
-            websocket.send(template.render(
-                channel=channel,
-                data=data))
+            try:
+                data = json.loads(message['data'])
+            except (ValueError, TypeError):
+                pass
+            else:
+                websocket.send(template.render(
+                    channel=channel,
+                    data=data))
 
 def handle_websocket(ws):
     pubsub = redis.pubsub()
