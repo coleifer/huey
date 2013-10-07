@@ -281,7 +281,7 @@ class Huey(object):
         self.queue.flush()
 
     def ready_to_run(self, cmd, dt=None):
-        dt = dt or datetime.datetime.now()
+        dt = dt or datetime.datetime.utcnow()
         return cmd.execute_time is None or cmd.execute_time <= dt
 
 
