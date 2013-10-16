@@ -133,6 +133,7 @@ class WorkerThread(ConsumerThread):
             exc_raised = True
 
         if task:
+            self.delay = self.default_delay
             self.handle_task(task, self.get_now())
         elif exc_raised or self.huey.blocking:
             self.sleep()
@@ -197,7 +198,8 @@ class Consumer(object):
 
         self.delay = self.default_delay
 
-        self.setup_logger()
+        if not logger.handlers:
+            self.setup_logger()
 
         self._shutdown = threading.Event()
 
