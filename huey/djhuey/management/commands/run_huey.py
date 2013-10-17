@@ -35,6 +35,11 @@ class Command(BaseCommand):
             type='int',
             help='Number of worker threads'
         ),
+        make_option('--delay', '-d',
+            dest='initial_delay',
+            type='float',
+            help='Delay between polling requests'
+        ),
     )
 
     def autodiscover(self):
@@ -67,6 +72,9 @@ class Command(BaseCommand):
 
         if options['periodic'] is not None:
             consumer_options['periodic'] = options['periodic']
+
+        if options['initial_delay'] is not None:
+            consumer_options['initial_delay'] = options['initial_delay']
 
         self.autodiscover()
 
