@@ -1,5 +1,5 @@
 import random
-from huey.djhuey import task, periodic_task, crontab
+from huey.djhuey import task, periodic_task, crontab, db_task
 
 
 @task()
@@ -18,3 +18,7 @@ def try_thrice():
     else:
         print 'About to fail, will retry in 10 seconds'
         raise Exception('Crap something went wrong')
+
+@db_task()
+def foo(number):
+    print 'foo(%s)' % number

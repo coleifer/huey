@@ -13,3 +13,5 @@ HUEY = {
         'workers': 2,
     }
 }
+
+SECRET_KEY = 'foo'

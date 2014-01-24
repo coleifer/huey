@@ -7,6 +7,7 @@ settings module.
 import sys
 
 from django.conf import settings
+from django.db import close_connection
 
 from huey import crontab
 from huey import Huey
@@ -95,3 +96,21 @@ if not isinstance(HUEY, Huey):
 
 task = HUEY.task
 periodic_task = HUEY.periodic_task
+
+def close_db(fn):
+    """Decorator to be used with tasks that may operate on the database."""
+    def inner(*args, **kwargs):
+        res = fn(*args, **kwargs)
+        close_connection()
+        return res
+    return inner
+
+def db_task(*args, **kwargs):
+    def decorator(fn):
+        return close_db(task(*args, **kwargs)(fn))
+    return decorator
+
+def db_periodic_task(*args, **kwargs):
+    def decorator(fn):
+        return close_db(periodic_task(*args, **kwargs)(fn))
+    return decorator
