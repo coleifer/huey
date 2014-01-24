@@ -100,9 +100,10 @@ periodic_task = HUEY.periodic_task
 def close_db(fn):
     """Decorator to be used with tasks that may operate on the database."""
     def inner(*args, **kwargs):
-        res = fn(*args, **kwargs)
-        close_connection()
-        return res
+        try:
+            return fn(*args, **kwargs)
+        finally:
+            close_connection()
     return inner
 
 def db_task(*args, **kwargs):

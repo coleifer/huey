@@ -19,7 +19,7 @@ Apps
     INSTALLED_APPS = (
         'huey.djhuey',
         ...
-        
+
 Huey Settings
 -------------
 
@@ -85,3 +85,24 @@ Here is how you might create two tasks:
     @periodic_task(crontab(minute='*/5'))
     def every_five_mins():
         print 'Every five minutes this will be printed by the consumer'
+
+Tasks that execute queries
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+If you plan on executing queries inside your task, it is a good idea to close
+the connection once your task finishes.  To make this easier, huey provides a
+special decorator to use in place of ``task`` and ``periodic_task`` which will
+automatically close the connection for you.
+
+.. code-block:: python
+
+    from huey.djhuey import crontab, db_periodic_task, db_task
+
+    @db_task()
+    def do_some_queries():
+        # This task executes queries. Once the task finishes, the connection
+        # will be closed.
+
+    @db_periodic_task(crontab(minute='*/5'))
+    def every_five_mins():
+        # This is a periodic task that executes queries.
