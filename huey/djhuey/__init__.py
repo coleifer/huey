@@ -52,9 +52,9 @@ def default_queue_name():
         return 'huey'
 
 def config_error(msg):
-    print configuration_message
-    print '\n\n'
-    print msg
+    print(configuration_message)
+    print('\n\n')
+    print(msg)
     sys.exit(1)
 
 def dynamic_import(obj, key, required=False):
