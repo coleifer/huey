@@ -74,7 +74,7 @@ class SqliteQueue(BaseQueue):
             conn.execute(self._append.format(self.queue_name), (data,))
 
     def read(self):
-        with self._db.get_connection() as conn:
+        with self._db.get_connection(immediate=True) as conn:
             cursor = conn.execute(self._get.format(self.queue_name))
             try:
                 id, data = next(cursor)
