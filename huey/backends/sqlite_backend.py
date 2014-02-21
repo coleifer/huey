@@ -7,8 +7,11 @@ Inspired from a snippet by Thiago Arruda [1]
 import json
 import sqlite3
 import time
-from cPickle import dumps, loads
-from thread import get_ident
+try:
+    from thread import get_ident
+except ImportError:  # Python 3
+    from threading import get_ident
+    buffer = memoryview
 
 from huey.backends.base import BaseDataStore
 from huey.backends.base import BaseEventEmitter
@@ -67,26 +70,24 @@ class SqliteQueue(BaseQueue):
             conn.execute(self._create.format(self.queue_name))
 
     def write(self, data):
-        obj_buffer = buffer(dumps(data, 2))
         with self._db.get_connection() as conn:
-            conn.execute(self._append.format(self.queue_name), (obj_buffer,))
+            conn.execute(self._append.format(self.queue_name), (data,))
 
     def read(self):
         with self._db.get_connection() as conn:
             cursor = conn.execute(self._get.format(self.queue_name))
             try:
-                id, obj_buffer = cursor.next()
+                id, data = next(cursor)
             except StopIteration:
                 return None
             if id:
                 conn.execute(self._remove_by_id.format(self.queue_name), (id,))
-                return loads(str(obj_buffer))
+                return data
 
     def remove(self, data):
-        obj_buffer = buffer(dumps(data, 2))
         with self._db.get_connection() as conn:
             return conn.execute(self._remove_by_value.format(self.queue_name),
-                                (obj_buffer,)).rowcount
+                                (data,)).rowcount
 
     def flush(self):
         with self._db.get_connection() as conn:
@@ -94,7 +95,7 @@ class SqliteQueue(BaseQueue):
 
     def __len__(self):
         with self._db.get_connection() as conn:
-            return conn.execute(self._count.format(self.queue_name)).next()[0]
+            return next(conn.execute(self._count.format(self.queue_name)))[0]
 
 
 class SqliteSchedule(BaseSchedule):
@@ -125,10 +126,9 @@ class SqliteSchedule(BaseSchedule):
         return time.mktime(ts.timetuple())
 
     def add(self, data, ts):
-        obj_buffer = buffer(dumps(data, 2))
         with self._db.get_connection() as conn:
             conn.execute(self._add_item.format(self.name),
-                         (obj_buffer, self.convert_ts(ts)))
+                         (data, self.convert_ts(ts)))
 
     def read(self, ts):
         with self._db.get_connection() as conn:
@@ -136,7 +136,7 @@ class SqliteSchedule(BaseSchedule):
                                    (self.convert_ts(ts),)).fetchall()
             conn.execute(self._delete_items.format(self.name),
                          (self.convert_ts(ts),))
-        return [loads(str(obj_buffer)) for obj_buffer, _ in results]
+        return [data for data, _ in results]
 
     def flush(self):
         with self._db.get_connection() as conn:
@@ -165,29 +165,27 @@ class SqliteDataStore(BaseDataStore):
             conn.execute(self._create.format(self.name))
 
     def put(self, key, value):
-        obj_buffer = buffer(dumps(value, 2))
         with self._db.get_connection() as conn:
             conn.execute(self._remove.format(self.name), (key,))
-            conn.execute(self._put.format(self.name), (key, obj_buffer))
+            conn.execute(self._put.format(self.name), (key, value))
 
     def peek(self, key):
         with self._db.get_connection() as conn:
             try:
-                obj_buffer = conn.execute(self._peek.format(self.name),
-                                          (key,)).next()[0]
+                return next(conn.execute(self._peek.format(self.name),
+                                         (key,)))[0]
             except StopIteration:
                 return EmptyData
-        return loads(str(obj_buffer))
 
     def get(self, key):
         with self._db.get_connection() as conn:
             try:
-                obj_buffer = conn.execute(self._peek.format(self.name),
-                                          (key,)).next()[0]
+                data = next(conn.execute(self._peek.format(self.name),
+                                         (key,)))[0]
+                conn.execute(self._remove.format(self.name), (key,))
+                return data
             except StopIteration:
                 return EmptyData
-            conn.execute(self._remove.format(self.name), (key,))
-        return loads(str(obj_buffer))
 
     def flush(self):
         with self._db.get_connection() as conn:
@@ -221,7 +219,7 @@ class SqliteEventEmitter(BaseEventEmitter):
     def emit(self, message):
         with self._db.get_connection() as conn:
             conn.execute(self._emit.format(self.name), (message,))
-            size = conn.execute(self._count.format(self.name)).next()[0]
+            size = next(conn.execute(self._count.format(self.name)))[0]
             if size > self._size:
                 conn.execute(self._purge_old.format(self.name),
                              (self._size-200,))
