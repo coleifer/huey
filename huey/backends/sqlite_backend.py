@@ -42,19 +42,16 @@ class SqliteQueue(BaseQueue):
     """
     A simple Queue that uses SQLite to store messages
     """
-    _create = (
-        "CREATE TABLE IF NOT EXISTS {0} "
-        "("
-        "  id INTEGER PRIMARY KEY AUTOINCREMENT,"
-        "  item BLOB"
-        ")"
-    )
+    _create = """
+        CREATE TABLE IF NOT EXISTS {0}
+        (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          item BLOB
+        )
+    """
     _count = "SELECT COUNT(*) FROM {0}"
     _append = "INSERT INTO {0} (item) VALUES (?)"
-    _get = (
-        "SELECT id, item FROM {0} "
-        "ORDER BY id LIMIT 1"
-    )
+    _get = "SELECT id, item FROM {0} ORDER BY id LIMIT 1"
     _write_lock = "BEGIN IMMEDIATE"
     _remove_by_value = "DELETE FROM {0} WHERE item = ?"
     _remove_by_id = "DELETE FROM {0} WHERE id = ?"
@@ -135,21 +132,19 @@ class SqliteBlockingQueue(SqliteQueue):
 
 
 class SqliteSchedule(BaseSchedule):
-    _create = (
-        "CREATE TABLE IF NOT EXISTS {0} "
-        "("
-        "  id INTEGER PRIMARY KEY AUTOINCREMENT,"
-        "  item BLOB,"
-        "  timestamp INTEGER"
-        ")"
-    )
-    _read_items = (
-        "SELECT item, timestamp FROM {0} WHERE timestamp <= ? "
-        "ORDER BY timestamp"
-    )
-    _delete_items = (
-        "DELETE FROM {0} WHERE timestamp <= ?"
-    )
+    _create = """
+        CREATE TABLE IF NOT EXISTS {0}
+        (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          item BLOB,
+          timestamp INTEGER
+        )
+    """
+    _read_items = """
+        SELECT item, timestamp FROM {0} WHERE timestamp <= ?
+        ORDER BY timestamp
+    """
+    _delete_items = "DELETE FROM {0} WHERE timestamp <= ?"
     _add_item = "INSERT INTO {0} (item, timestamp) VALUES (?, ?)"
     _flush = "DELETE FROM {0}"
 
@@ -183,14 +178,14 @@ class SqliteSchedule(BaseSchedule):
 
 
 class SqliteDataStore(BaseDataStore):
-    _create = (
-        "CREATE TABLE IF NOT EXISTS {0} "
-        "("
-        "  id INTEGER PRIMARY KEY AUTOINCREMENT,"
-        "  key TEXT,"
-        "  result BLOB"
-        ")"
-    )
+    _create = """
+        CREATE TABLE IF NOT EXISTS {0}
+        (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          key TEXT,
+          result BLOB
+        )
+    """
     _put = "INSERT INTO {0} (key, result) VALUES (?, ?)"
     _peek = "SELECT result FROM {0} WHERE key = ?"
     _remove = "DELETE FROM {0} WHERE key = ?"
@@ -234,22 +229,19 @@ class SqliteDataStore(BaseDataStore):
 
 
 class SqliteEventEmitter(BaseEventEmitter):
-    _create = (
-        "CREATE TABLE IF NOT EXISTS {0} "
-        "("
-        "  id INTEGER PRIMARY KEY AUTOINCREMENT,"
-        "  message TEXT"
-        ")"
-    )
-    _purge_old = (
-        "DELETE FROM {0} WHERE id IN "
-        "(SELECT id FROM {0} ORDER BY id ASC LIMIT ?)"
-    )
+    _create = """
+        CREATE TABLE IF NOT EXISTS {0}
+        (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          message TEXT
+        )
+    """
+    _purge_old = """
+        DELETE FROM {0} WHERE id IN
+        (SELECT id FROM {0} ORDER BY id ASC LIMIT ?)
+    """
     _emit = "INSERT INTO {0} (message) VALUES (?)"
-    _get = (
-        "SELECT id, message FROM {0} "
-        "ORDER BY id DESC LIMIT ?"
-    )
+    _get = "SELECT id, message FROM {0} ORDER BY id DESC LIMIT ?"
     _count = "SELECT COUNT(*) FROM {0}"
 
     def __init__(self, channel, location, size=500):
