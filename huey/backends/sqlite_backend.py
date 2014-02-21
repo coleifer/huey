@@ -25,12 +25,15 @@ class _SqliteDatabase(object):
         self.location = location
         self._conn_cache = {}
 
-    def get_connection(self):
+    def get_connection(self, immediate=False):
         """ Obtain a sqlite3.Connection instance for the database.
 
         Connections are cached on a by-thread basis, i.e. every calling thread
         will always get the same Connection object back.
         """
+        if immediate:
+            return sqlite3.Connection(self.location, timeout=60,
+                                      isolation_level="IMMEDIATE")
         id = get_ident()
         if id not in self._conn_cache:
             self._conn_cache[id] = sqlite3.Connection(
@@ -52,7 +55,6 @@ class SqliteQueue(BaseQueue):
     _count = "SELECT COUNT(*) FROM {0}"
     _append = "INSERT INTO {0} (item) VALUES (?)"
     _get = "SELECT id, item FROM {0} ORDER BY id LIMIT 1"
-    _write_lock = "BEGIN IMMEDIATE"
     _remove_by_value = "DELETE FROM {0} WHERE item = ?"
     _remove_by_id = "DELETE FROM {0} WHERE id = ?"
     _flush = "DELETE FROM {0}"
@@ -71,10 +73,6 @@ class SqliteQueue(BaseQueue):
 
     def read(self):
         with self._db.get_connection() as conn:
-            # NOTE: We issue a write lock so we can make sure that the
-            #       database stays consistent for the duration of  our
-            #       transaction
-            conn.execute(self._write_lock)
             cursor = conn.execute(self._get.format(self.queue_name))
             try:
                 id, obj_buffer = cursor.next()
