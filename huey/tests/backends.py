@@ -12,7 +12,6 @@ from huey.utils import EmptyData
 from huey.backends.sqlite_backend import SqliteDataStore
 from huey.backends.sqlite_backend import SqliteEventEmitter
 from huey.backends.sqlite_backend import SqliteQueue
-from huey.backends.sqlite_backend import SqliteBlockingQueue
 from huey.backends.sqlite_backend import SqliteSchedule
 try:
     from huey.backends.redis_backend import RedisDataStore

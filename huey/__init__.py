@@ -28,7 +28,7 @@ except ImportError:
                                'using pip: "pip install redis"')
 
 
-from huey.backends.sqlite_backend import SqliteBlockingQueue
+from huey.backends.sqlite_backend import SqliteQueue
 from huey.backends.sqlite_backend import SqliteDataStore
 from huey.backends.sqlite_backend import SqliteEventEmitter
 from huey.backends.sqlite_backend import SqliteSchedule
@@ -40,7 +40,7 @@ class SqliteHuey(Huey):
         if location is None:
             raise ValueError("Please specify a database file with the "
                              "'location' parameter")
-        queue = SqliteBlockingQueue(name, location)
+        queue = SqliteQueue(name, location)
         result_store = SqliteDataStore(name, location)
         schedule = SqliteSchedule(name, location)
         events = SqliteEventEmitter(name, location=location)

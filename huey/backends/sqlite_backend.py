@@ -97,38 +97,6 @@ class SqliteQueue(BaseQueue):
             return conn.execute(self._count.format(self.queue_name)).next()[0]
 
 
-class SqliteBlockingQueue(SqliteQueue):
-    """
-    Use a simulated blocking right pop, should behave similarly to
-    RedisBlockingQueue.
-    """
-    blocking = True
-
-    def read(self):
-        wait = 0.1  # Initial wait period
-        max_wait = 2  # Maximum wait duration
-        tries = 0
-        with self._db.get_connection() as conn:
-            id = None
-            while True:
-                conn.execute(self._write_lock)
-                cursor = conn.execute(self._get
-                                      .format(self.queue_name))
-                try:
-                    id, obj_buffer = cursor.next()
-                    break
-                except StopIteration:
-                    conn.commit()  # unlock the database
-                    tries += 1
-                    time.sleep(wait)
-                    # Increase the wait period
-                    wait = min(max_wait, tries/10 + wait)
-            if id:
-                conn.execute(self._remove_by_id.format(self.queue_name), (id,))
-                return loads(str(obj_buffer))
-        return None
-
-
 class SqliteSchedule(BaseSchedule):
     _create = """
         CREATE TABLE IF NOT EXISTS {0}
@@ -286,5 +254,4 @@ class SqliteEventEmitter(BaseEventEmitter):
                     wait = min(max_wait, tries/10 + wait)
 
 
-Components = (SqliteBlockingQueue, SqliteDataStore, SqliteSchedule,
-              SqliteEventEmitter)
+Components = (SqliteQueue, SqliteDataStore, SqliteSchedule, SqliteEventEmitter)
