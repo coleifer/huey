@@ -36,7 +36,10 @@ from huey.backends.sqlite_backend import SqliteSchedule
 
 class SqliteHuey(Huey):
     def __init__(self, name='huey', store_none=False, always_eager=False,
-                 location=':memory:'):
+                 location=None):
+        if location is None:
+            raise ValueError("Please specify a database file with the "
+                             "'location' parameter")
         queue = SqliteBlockingQueue(name, location)
         result_store = SqliteDataStore(name, location)
         schedule = SqliteSchedule(name, location)
