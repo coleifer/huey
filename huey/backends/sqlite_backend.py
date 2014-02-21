@@ -4,6 +4,7 @@ Inspired from a snippet by Thiago Arruda [1]
 
 [1] http://flask.pocoo.org/snippets/88/
 """
+import json
 import sqlite3
 import time
 from cPickle import dumps, loads
@@ -287,7 +288,7 @@ class SqliteEventEmitter(BaseEventEmitter):
                 if recent_id != last_id:
                     cursor = conn.execute(
                         self._get.format(self.name), (recent_id-last_id,))
-                    return (msg for id, msg in cursor)
+                    return (json.loads(msg) for id, msg in cursor)
                 else:
                     tries += 1
                     time.sleep(wait)
