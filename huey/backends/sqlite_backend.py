@@ -272,13 +272,18 @@ class SqliteEventEmitter(BaseEventEmitter):
         max_wait = 2  # Maximum wait duration
         tries = 0
         with self._db.get_connection() as conn:
-            rv = next(conn.execute(self._get.format(self.name), (1,)))
-            last_id = rv[0]
-            print last_id
+            try:
+                last_id = next(
+                    conn.execute(self._get.format(self.name), (1,)))[0]
+            except StopIteration:
+                last_id = 0
+
             while True:
-                recent_id = next(conn.execute(self._get
-                                              .format(self.name), (1,)))[0]
-                print recent_id
+                try:
+                    recent_id = next(
+                        conn.execute(self._get.format(self.name), (1,)))[0]
+                except StopIteration:
+                    recent_id = 0
                 if recent_id != last_id:
                     cursor = conn.execute(
                         self._get.format(self.name), (recent_id-last_id,))
