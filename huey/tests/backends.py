@@ -1,5 +1,7 @@
 from collections import deque
+from tempfile import mkdtemp
 import datetime
+import shutil
 import unittest
 
 from huey.backends.dummy import DummyDataStore
@@ -15,19 +17,39 @@ try:
 except ImportError:
     RedisQueue = RedisDataStore = RedisSchedule = RedisEventEmitter = None
 
+try:
+    import plyvel
+    from huey.backends.leveldb_backend import LevelDbDataStore
+    from huey.backends.leveldb_backend import LevelDbEventEmitter
+    from huey.backends.leveldb_backend import LevelDbQueue
+    from huey.backends.leveldb_backend import LevelDbSchedule
+except ImportError:
+    (LevelDbDataStore, LevelDbEventEmitter, LevelDbQueue,
+     LevelDbSchedule) = None
 
-QUEUES = (DummyQueue, RedisQueue,)
-DATA_STORES = (DummyDataStore, RedisDataStore,)
-SCHEDULES = (DummySchedule, RedisSchedule,)
-EVENTS = (DummyEventEmitter, RedisEventEmitter,)
+
+QUEUES = (DummyQueue, RedisQueue, LevelDbQueue)
+DATA_STORES = (DummyDataStore, RedisDataStore, LevelDbDataStore)
+SCHEDULES = (DummySchedule, RedisSchedule, LevelDbSchedule)
+EVENTS = (DummyEventEmitter, RedisEventEmitter, LevelDbEventEmitter)
 
 
 class HueyBackendTestCase(unittest.TestCase):
+    def setUp(self):
+        self.leveldb_path = mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.leveldb_path)
+
     def test_queues(self):
         for q in QUEUES:
             if not q:
                 continue
-            queue = q('test')
+            if issubclass(q, LevelDbQueue):
+                queue = q('test', plyvel.DB(self.leveldb_path,
+                                            create_if_missing=True))
+            else:
+                queue = q('test')
             queue.write('a')
             queue.write('b')
             self.assertEqual(len(queue), 2)
@@ -51,7 +73,11 @@ class HueyBackendTestCase(unittest.TestCase):
         for d in DATA_STORES:
             if not d:
                 continue
-            data_store = d('test')
+            if issubclass(d, LevelDbDataStore):
+                data_store = d('test', plyvel.DB(self.leveldb_path,
+                                                 create_if_missing=True))
+            else:
+                data_store = d('test')
             data_store.put('k1', 'v1')
             data_store.put('k2', 'v2')
             data_store.put('k3', 'v3')
@@ -68,7 +94,11 @@ class HueyBackendTestCase(unittest.TestCase):
         for s in SCHEDULES:
             if not s:
                 continue
-            schedule = s('test')
+            if issubclass(s, LevelDbSchedule):
+                schedule = s('test', plyvel.DB(self.leveldb_path,
+                                               create_if_missing=True))
+            else:
+                schedule = s('test')
             dt1 = datetime.datetime(2013, 1, 1, 0, 0)
             dt2 = datetime.datetime(2013, 1, 2, 0, 0)
             dt3 = datetime.datetime(2013, 1, 3, 0, 0)
@@ -101,7 +131,11 @@ class HueyBackendTestCase(unittest.TestCase):
         for e in EVENTS:
             if not e:
                 continue
-            e = e('test')
+            if issubclass(e, LevelDbEventEmitter):
+                e = e('test', plyvel.DB(self.leveldb_path,
+                                        create_if_missing=True))
+            else:
+                e = e('test')
 
             messages = ['a', 'b', 'c', 'd']
             for message in messages:
