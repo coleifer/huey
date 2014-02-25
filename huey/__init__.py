@@ -26,3 +26,37 @@ except ImportError:
         def __init__(self, *args, **kwargs):
             raise RuntimeError('Error, "redis" is not installed. Install '
                                'using pip: "pip install redis"')
+
+
+try:
+    import plyvel
+    from huey.backends.leveldb_backend import LevelDbQueue
+    from huey.backends.leveldb_backend import LevelDbDataStore
+    from huey.backends.leveldb_backend import LevelDbEventEmitter
+    from huey.backends.leveldb_backend import LevelDbSchedule
+
+    class LevelDbHuey(Huey):
+        def __init__(self, location, name='huey', sync=False, store_none=False,
+                     always_eager=False):
+            # NOTE: All backend objects share the same database, this is
+            # neccessary since only one LevelDb database instance can exist per
+            # process.
+            db = plyvel.DB(location, create_if_missing=True).prefixed_db(name)
+
+            queue = LevelDbQueue(name, db, sync)
+            result_store = LevelDbDataStore(name, db, sync)
+            schedule = LevelDbSchedule(name, db, sync)
+            events = LevelDbEventEmitter(name, db, sync)
+            super(LevelDbHuey, self).__init__(
+                queue=queue,
+                result_store=result_store,
+                schedule=schedule,
+                events=events,
+                store_none=store_none,
+                always_eager=always_eager)
+
+except ImportError:
+    class LevelDbHuey(object):
+        def __init__(self, *args, **kwargs):
+            raise RuntimeError('Error, "plyvel" is not installed. Install '
+                               'using pip: "pip install plyvel"')
