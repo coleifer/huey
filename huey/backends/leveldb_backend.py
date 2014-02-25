@@ -129,6 +129,12 @@ class LevelDbSchedule(BaseSchedule):
             if entry_ts <= ts:
                 results.append(data)
                 self._db.delete(key)
+            # Since we store the timestamp in ISO format and LevelDB sorts in
+            # lexicographical order, we can safely assume that, once we reach
+            # a timestamp that is larger (=in the future of) the passed
+            # timestamp, there will be no more relevant entries ahead.
+            if entry_ts > ts:
+                break
         return results
 
     def flush(self):
@@ -137,9 +143,6 @@ class LevelDbSchedule(BaseSchedule):
 
 
 class LevelDbDataStore(BaseDataStore):
-    """
-    Base implementation for a data store
-    """
     def __init__(self, name, db, sync=False):
         self._db = db.prefixed_db("huey_results_{0}".format(name))
         self._sync = sync
