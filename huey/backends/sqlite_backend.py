@@ -27,6 +27,13 @@ class _SqliteDatabase(object):
                              "in-memory databases are not supported.")
         self.location = location
         self._conn_cache = {}
+        with self.get_connection() as conn:
+            # Enable write-ahead logging
+            conn.execute("PRAGMA journal_mode=WAL;")
+            # Hand over syncing responsibility to OS
+            conn.execute("PRAGMA synchronous=OFF;")
+            # Store temporary tables and indices in memory
+            conn.execute("PRAGMA temp_store=MEMORY;")
 
     def get_connection(self, immediate=False):
         """ Obtain a sqlite3.Connection instance for the database.
