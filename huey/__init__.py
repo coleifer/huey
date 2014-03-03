@@ -26,3 +26,28 @@ except ImportError:
         def __init__(self, *args, **kwargs):
             raise RuntimeError('Error, "redis" is not installed. Install '
                                'using pip: "pip install redis"')
+
+
+from huey.backends.sqlite_backend import SqliteQueue
+from huey.backends.sqlite_backend import SqliteDataStore
+from huey.backends.sqlite_backend import SqliteEventEmitter
+from huey.backends.sqlite_backend import SqliteSchedule
+
+
+class SqliteHuey(Huey):
+    def __init__(self, name='huey', store_none=False, always_eager=False,
+                 location=None):
+        if location is None:
+            raise ValueError("Please specify a database file with the "
+                             "'location' parameter")
+        queue = SqliteQueue(name, location)
+        result_store = SqliteDataStore(name, location)
+        schedule = SqliteSchedule(name, location)
+        events = SqliteEventEmitter(name, location=location)
+        super(SqliteHuey, self).__init__(
+            queue=queue,
+            result_store=result_store,
+            schedule=schedule,
+            events=events,
+            store_none=store_none,
+            always_eager=always_eager)

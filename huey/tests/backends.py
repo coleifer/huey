@@ -1,5 +1,7 @@
 from collections import deque
 import datetime
+import os
+import tempfile
 import unittest
 
 from huey.backends.dummy import DummyDataStore
@@ -7,6 +9,10 @@ from huey.backends.dummy import DummyEventEmitter
 from huey.backends.dummy import DummyQueue
 from huey.backends.dummy import DummySchedule
 from huey.utils import EmptyData
+from huey.backends.sqlite_backend import SqliteDataStore
+from huey.backends.sqlite_backend import SqliteEventEmitter
+from huey.backends.sqlite_backend import SqliteQueue
+from huey.backends.sqlite_backend import SqliteSchedule
 try:
     from huey.backends.redis_backend import RedisDataStore
     from huey.backends.redis_backend import RedisEventEmitter
@@ -16,18 +22,27 @@ except ImportError:
     RedisQueue = RedisDataStore = RedisSchedule = RedisEventEmitter = None
 
 
-QUEUES = (DummyQueue, RedisQueue,)
-DATA_STORES = (DummyDataStore, RedisDataStore,)
-SCHEDULES = (DummySchedule, RedisSchedule,)
-EVENTS = (DummyEventEmitter, RedisEventEmitter,)
+QUEUES = (DummyQueue, RedisQueue, SqliteQueue)
+DATA_STORES = (DummyDataStore, RedisDataStore, SqliteDataStore)
+SCHEDULES = (DummySchedule, RedisSchedule, SqliteSchedule)
+EVENTS = (DummyEventEmitter, RedisEventEmitter, SqliteEventEmitter)
 
 
 class HueyBackendTestCase(unittest.TestCase):
+    def setUp(self):
+        self.sqlite_location = tempfile.mkstemp(prefix='hueytest.')[1]
+
+    def tearDown(self):
+        os.unlink(self.sqlite_location)
+
     def test_queues(self):
         for q in QUEUES:
             if not q:
                 continue
-            queue = q('test')
+            if issubclass(q, SqliteQueue):
+                queue = q('test', location=self.sqlite_location)
+            else:
+                queue = q('test')
             queue.write('a')
             queue.write('b')
             self.assertEqual(len(queue), 2)
@@ -51,7 +66,10 @@ class HueyBackendTestCase(unittest.TestCase):
         for d in DATA_STORES:
             if not d:
                 continue
-            data_store = d('test')
+            if issubclass(d, SqliteDataStore):
+                data_store = d('test', location=self.sqlite_location)
+            else:
+                data_store = d('test')
             data_store.put('k1', 'v1')
             data_store.put('k2', 'v2')
             data_store.put('k3', 'v3')
@@ -68,7 +86,10 @@ class HueyBackendTestCase(unittest.TestCase):
         for s in SCHEDULES:
             if not s:
                 continue
-            schedule = s('test')
+            if issubclass(s, SqliteSchedule):
+                schedule = s('test', location=self.sqlite_location)
+            else:
+                schedule = s('test')
             dt1 = datetime.datetime(2013, 1, 1, 0, 0)
             dt2 = datetime.datetime(2013, 1, 2, 0, 0)
             dt3 = datetime.datetime(2013, 1, 3, 0, 0)
@@ -101,7 +122,10 @@ class HueyBackendTestCase(unittest.TestCase):
         for e in EVENTS:
             if not e:
                 continue
-            e = e('test')
+            if issubclass(e, SqliteEventEmitter):
+                e = e('test', location=self.sqlite_location)
+            else:
+                e = e('test')
 
             messages = ['a', 'b', 'c', 'd']
             for message in messages:
