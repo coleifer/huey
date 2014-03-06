@@ -108,10 +108,10 @@ def close_db(fn):
 
 def db_task(*args, **kwargs):
     def decorator(fn):
-        return close_db(task(*args, **kwargs)(fn))
+        return task(*args, **kwargs)(close_db(fn))
     return decorator
 
 def db_periodic_task(*args, **kwargs):
     def decorator(fn):
-        return close_db(periodic_task(*args, **kwargs)(fn))
+        return periodic_task(*args, **kwargs)(close_db(fn))
     return decorator
