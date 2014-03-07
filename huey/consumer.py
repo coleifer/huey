@@ -127,7 +127,7 @@ class WorkerThread(ConsumerThread):
         if task:
             self.delay = self.default_delay
             self.handle_task(task, self.get_now())
-        elif exc_raised or self.huey.blocking:
+        elif exc_raised or not self.huey.blocking:
             self.sleep()
 
     def sleep(self):
