@@ -175,8 +175,7 @@ class WorkerThread(ConsumerThread):
 
 
 class Consumer(object):
-    def __init__(self, huey, logfile=None, loglevel=logging.INFO,
-                 workers=1, periodic=True, initial_delay=0.1,
+    def __init__(self, huey, workers=1, periodic=True, initial_delay=0.1,
                  backoff=1.15, max_delay=10.0, utc=True):
 
         self._logger = logging.getLogger('huey.consumer.ConsumerThread')
