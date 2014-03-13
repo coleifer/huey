@@ -4,6 +4,7 @@ using Django settings.  Unlike more flexible python apps, the huey django
 integration consists of a single global Huey instance configured via the
 settings module.
 """
+from functools import wraps
 import sys
 
 from django.conf import settings
@@ -99,6 +100,7 @@ periodic_task = HUEY.periodic_task
 
 def close_db(fn):
     """Decorator to be used with tasks that may operate on the database."""
+    @wraps(fn)
     def inner(*args, **kwargs):
         try:
             return fn(*args, **kwargs)
