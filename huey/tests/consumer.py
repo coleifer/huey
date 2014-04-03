@@ -12,8 +12,8 @@ from huey.backends.dummy import DummyDataStore
 from huey.backends.dummy import DummyEventEmitter
 from huey.backends.dummy import DummyQueue
 from huey.backends.dummy import DummySchedule
-from huey.bin.huey_consumer import Consumer
-from huey.bin.huey_consumer import WorkerThread
+from huey.consumer import Consumer
+from huey.consumer import WorkerThread
 from huey.registry import registry
 
 # Logger used by the consumer.
@@ -88,10 +88,11 @@ class ConsumerTestCase(unittest.TestCase):
         test_events._events = deque()
 
         self.consumer = Consumer(test_huey, workers=2)
-        self.consumer.create_threads()
+        self.consumer._create_threads()
 
         self.handler = TestLogHandler()
         logger.addHandler(self.handler)
+        logger.setLevel(logging.INFO)
 
     def tearDown(self):
         self.consumer.shutdown()
