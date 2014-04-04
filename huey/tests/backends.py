@@ -1,6 +1,7 @@
 from collections import deque
 import datetime
 import os
+import sys
 import tempfile
 import unittest
 
@@ -22,6 +23,12 @@ except ImportError:
     RedisQueue = RedisDataStore = RedisSchedule = RedisEventEmitter = None
 
 
+if sys.version_info[0] == 2:
+    redis_kwargs = {}
+else:
+    redis_kwargs = {'decode_responses': True}
+
+
 QUEUES = (DummyQueue, RedisQueue, SqliteQueue)
 DATA_STORES = (DummyDataStore, RedisDataStore, SqliteDataStore)
 SCHEDULES = (DummySchedule, RedisSchedule, SqliteSchedule)
@@ -41,8 +48,11 @@ class HueyBackendTestCase(unittest.TestCase):
                 continue
             if issubclass(q, SqliteQueue):
                 queue = q('test', location=self.sqlite_location)
+            elif issubclass(q, RedisQueue):
+                queue = q('test', **redis_kwargs)
             else:
                 queue = q('test')
+            queue.flush()
             queue.write('a')
             queue.write('b')
             self.assertEqual(len(queue), 2)
@@ -68,6 +78,8 @@ class HueyBackendTestCase(unittest.TestCase):
                 continue
             if issubclass(d, SqliteDataStore):
                 data_store = d('test', location=self.sqlite_location)
+            elif issubclass(d, RedisDataStore):
+                data_store = d('test', **redis_kwargs)
             else:
                 data_store = d('test')
             data_store.put('k1', 'v1')
@@ -88,6 +100,8 @@ class HueyBackendTestCase(unittest.TestCase):
                 continue
             if issubclass(s, SqliteSchedule):
                 schedule = s('test', location=self.sqlite_location)
+            elif issubclass(s, RedisSchedule):
+                schedule = s('test', **redis_kwargs)
             else:
                 schedule = s('test')
             dt1 = datetime.datetime(2013, 1, 1, 0, 0)
