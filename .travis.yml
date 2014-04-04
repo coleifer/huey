@@ -9,4 +9,4 @@ services:
 install: "pip install redis"
 script: "python runtests.py"
 notifications:
-  email: false
+  email: true
