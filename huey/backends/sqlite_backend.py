@@ -10,7 +10,10 @@ import time
 try:
     from thread import get_ident
 except ImportError:  # Python 3
-    from threading import get_ident
+    try:
+        from threading import get_ident
+    except ImportError:
+        from _thread import get_ident
     buffer = memoryview
 
 from huey.backends.base import BaseDataStore
