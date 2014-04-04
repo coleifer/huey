@@ -10,7 +10,7 @@ class CrontabTestCase(unittest.TestCase):
         valids = [1, 4, 7, 8, 9]
         validate_m = crontab(month='1,4,*/6,8-9')
 
-        for x in xrange(1, 13):
+        for x in range(1, 13):
             res = validate_m(datetime.datetime(2011, x, 1))
             self.assertEqual(res, x in valids)
 
@@ -19,7 +19,7 @@ class CrontabTestCase(unittest.TestCase):
         valids = [1, 4, 7, 8, 9, 13, 19, 25, 31]
         validate_d = crontab(day='*/6,1,4,8-9')
 
-        for x in xrange(1, 32):
+        for x in range(1, 32):
             res = validate_d(datetime.datetime(2011, 1, x))
             self.assertEqual(res, x in valids)
 
@@ -28,7 +28,7 @@ class CrontabTestCase(unittest.TestCase):
         valids = [0, 1, 4, 6, 8, 9, 12, 18]
         validate_h = crontab(hour='8-9,*/6,1,4')
 
-        for x in xrange(24):
+        for x in range(24):
             res = validate_h(datetime.datetime(2011, 1, 1, x))
             self.assertEqual(res, x in valids)
 
@@ -41,7 +41,7 @@ class CrontabTestCase(unittest.TestCase):
         valids = [0, 1, 4, 6, 8, 9, 12, 18, 24, 30, 36, 42, 48, 54]
         validate_m = crontab(minute='4,8-9,*/6,1')
 
-        for x in xrange(60):
+        for x in range(60):
             res = validate_m(datetime.datetime(2011, 1, 1, 1, x))
             self.assertEqual(res, x in valids)
 
@@ -51,7 +51,7 @@ class CrontabTestCase(unittest.TestCase):
         valids = [2, 4, 9, 11, 16, 18, 23, 25, 30]
         validate_dow = crontab(day_of_week='0,2')
 
-        for x in xrange(1, 32):
+        for x in range(1, 32):
             res = validate_dow(datetime.datetime(2011, 1, x))
             self.assertEqual(res, x in valids)
 

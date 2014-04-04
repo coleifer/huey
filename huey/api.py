@@ -334,6 +334,10 @@ class AsyncData(object):
         self.huey.restore(self.task)
 
 
+def with_metaclass(meta, base=object):
+    return meta("NewBase", (base,), {})
+
+
 class QueueTaskMetaClass(type):
     def __init__(cls, name, bases, attrs):
         """
@@ -342,7 +346,7 @@ class QueueTaskMetaClass(type):
         registry.register(cls)
 
 
-class QueueTask(object):
+class QueueTask(with_metaclass(QueueTaskMetaClass)):
     """
     A class that encapsulates the logic necessary to 'do something' given some
     arbitrary data.  When enqueued with the :class:`Huey`, it will be
@@ -365,8 +369,6 @@ class QueueTask(object):
         })
     )
     """
-
-    __metaclass__ = QueueTaskMetaClass
 
     def __init__(self, data=None, task_id=None, execute_time=None, retries=0,
                  retry_delay=0):
