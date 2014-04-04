@@ -13,6 +13,14 @@ def err(s):
     sys.stderr.write('\033[91m%s\033[0m\n' % s)
 
 
+def get_loglevel(verbose=None):
+    if verbose is None:
+        return logging.INFO
+    elif verbose:
+        return logging.DEBUG
+    return logging.ERROR
+
+
 def setup_logger(loglevel, logfile):
     log_format = ('%(threadName)s %(asctime)s %(name)s '
                   '%(levelname)s %(message)s')
@@ -67,14 +75,7 @@ if __name__ == '__main__':
     parser = get_option_parser()
     options, args = parser.parse_args()
 
-    if options.verbose is None:
-        loglevel = logging.INFO
-    elif options.verbose:
-        loglevel = logging.DEBUG
-    else:
-        loglevel = logging.ERROR
-
-    setup_logger(loglevel, options.logfile)
+    setup_logger(get_loglevel(options.verbose), options.logfile)
 
     if len(args) == 0:
         err('Error:   missing import path to `Huey` instance')

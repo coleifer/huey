@@ -6,7 +6,9 @@ from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.utils.importlib import import_module
 
-from huey.bin.huey_consumer import Consumer
+from huey.consumer import Consumer
+from huey.bin.huey_consumer import get_loglevel
+from huey.bin.huey_consumer import setup_logger
 
 
 class Command(BaseCommand):
@@ -85,6 +87,10 @@ class Command(BaseCommand):
             consumer_options['max_delay'] = options['max_delay']
 
         self.autodiscover()
+
+        loglevel = get_loglevel(consumer_options.pop('loglevel', None))
+        logfile = consumer_options.pop('logfile', None)
+        setup_logger(loglevel, logfile)
 
         consumer = Consumer(HUEY, **consumer_options)
         consumer.run()
