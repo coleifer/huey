@@ -35,6 +35,17 @@ Huey's API
         sync_all_data()
 
 
+Documentation
+----------------
+
+`See Huey documentation <http://huey.readthedocs.org/>`_.
+
+Project page
+---------------
+
+`See source code and issue tracker on Github <https://github.com/coleifer/huey/>`_.
+
 named after my cat:
 
 .. image:: http://media.charlesleifer.com/blog/photos/thumbnails/IMG_20130402_154858_650x650.jpg
+
