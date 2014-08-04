@@ -63,6 +63,13 @@ def get_option_parser():
                       help='amount to backoff delay when no results present '
                            '(default=1.15)',
                       default=1.15)
+    parser.add_option('-P', '--periodic-task-interval',
+                      dest='periodic_task_interval',
+                      type='float', help='Granularity of periodic tasks.',
+                      default=60.0)
+    parser.add_option('-S', '--scheduler-interval', dest='scheduler_interval',
+                      type='float', help='Granularity of scheduler.',
+                      default=1.0)
     parser.add_option('-u', '--utc', dest='utc', action='store_true',
                       help='use UTC time for all tasks (default=True)',
                       default=True)
@@ -95,5 +102,7 @@ if __name__ == '__main__':
         options.initial_delay,
         options.backoff,
         options.max_delay,
-        options.utc)
+        options.utc,
+        options.scheduler_interval,
+        options.periodic_task_interval)
     consumer.run()

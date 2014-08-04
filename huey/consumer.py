@@ -15,10 +15,11 @@ from huey.registry import registry
 
 
 class ConsumerThread(threading.Thread):
-    def __init__(self, huey, utc, shutdown):
+    def __init__(self, huey, utc, shutdown, interval=60):
         self.huey = huey
         self.utc = utc
         self.shutdown = shutdown
+        self.interval = interval
         self._logger = logging.getLogger('huey.consumer.ConsumerThread')
         super(ConsumerThread, self).__init__()
 
@@ -63,6 +64,11 @@ class ConsumerThread(threading.Thread):
             self._logger.error('Error checking if task is revoked: %s' % task)
             return True
 
+    def sleep_for_interval(self, start_ts):
+        delta = time.time() - start_ts
+        if delta < self.interval:
+            time.sleep(self.interval - (time.time() - start_ts))
+
 
 class PeriodicTaskThread(ConsumerThread):
     def loop(self, now=None):
@@ -73,7 +79,8 @@ class PeriodicTaskThread(ConsumerThread):
             if task.validate_datetime(now):
                 self._logger.info('Scheduling %s for execution' % task)
                 self.enqueue(task)
-        time.sleep(60 - (time.time() - start))
+
+        self.sleep_for_interval(start)
 
 
 class SchedulerThread(ConsumerThread):
@@ -92,9 +99,7 @@ class SchedulerThread(ConsumerThread):
             self._logger.info('Scheduling %s for execution' % task)
             self.enqueue(task)
 
-        delta = time.time() - start
-        if delta < 1:
-            time.sleep(1 - (time.time() - start))
+        self.sleep_for_interval(start)
 
 
 class WorkerThread(ConsumerThread):
@@ -176,7 +181,8 @@ class WorkerThread(ConsumerThread):
 
 class Consumer(object):
     def __init__(self, huey, workers=1, periodic=True, initial_delay=0.1,
-                 backoff=1.15, max_delay=10.0, utc=True):
+                 backoff=1.15, max_delay=10.0, utc=True, scheduler_interval=1,
+                 periodic_task_interval=60):
 
         self._logger = logging.getLogger('huey.consumer.ConsumerThread')
         self.huey = huey
@@ -186,6 +192,8 @@ class Consumer(object):
         self.backoff = backoff
         self.max_delay = max_delay
         self.utc = utc
+        self.scheduler_interval = scheduler_interval
+        self.periodic_task_interval = periodic_task_interval
 
         self.delay = self.default_delay
 
@@ -239,7 +247,11 @@ class Consumer(object):
         self._logger.info('\n'.join(msg))
 
     def _create_threads(self):
-        self.scheduler_t = SchedulerThread(self.huey, self.utc, self._shutdown)
+        self.scheduler_t = SchedulerThread(
+            self.huey,
+            self.utc,
+            self._shutdown,
+            self.scheduler_interval)
         self.scheduler_t.name = 'Scheduler'
 
         self.worker_threads = []
@@ -257,7 +269,10 @@ class Consumer(object):
 
         if self.periodic:
             self.periodic_t = PeriodicTaskThread(
-                self.huey, self.utc, self._shutdown)
+                self.huey,
+                self.utc,
+                self._shutdown,
+                self.periodic_task_interval)
             self.periodic_t.daemon = True
             self.periodic_t.name = 'Periodic Task'
         else:
