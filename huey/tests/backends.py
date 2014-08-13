@@ -5,6 +5,7 @@ import sys
 import tempfile
 import unittest
 
+from huey.api import Huey
 from huey.backends.dummy import DummyDataStore
 from huey.backends.dummy import DummyEventEmitter
 from huey.backends.dummy import DummyQueue
@@ -43,6 +44,7 @@ class HueyBackendTestCase(unittest.TestCase):
         os.unlink(self.sqlite_location)
 
     def test_queues(self):
+        result_store = DummyDataStore('dummy')
         for q in QUEUES:
             if not q:
                 continue
@@ -71,6 +73,24 @@ class HueyBackendTestCase(unittest.TestCase):
             self.assertEqual(queue.read(), 'd')
             self.assertEqual(queue.read(), 'x')
             self.assertEqual(queue.read(), 'd')
+
+            queue.flush()
+            test_huey = Huey(queue, result_store)
+
+            @test_huey.task()
+            def test_queues_add(k, v):
+                return k + v
+
+            res = test_queues_add('k', 'v')
+            self.assertEqual(len(queue), 1)
+            task = test_huey.dequeue()
+            test_huey.execute(task)
+            self.assertEqual(res.get(), 'kv')
+
+            res = test_queues_add('\xce', '\xcf')
+            task = test_huey.dequeue()
+            test_huey.execute(task)
+            self.assertEqual(res.get(), '\xce\xcf')
 
     def test_data_stores(self):
         for d in DATA_STORES:
