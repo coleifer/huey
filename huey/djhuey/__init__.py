@@ -90,9 +90,9 @@ if not isinstance(HUEY, Huey):
     always_eager = HUEY.get('always_eager', False)
     HUEY = Huey(
         Queue(name, **conn),
-        DataStore(name, **conn),
-        Schedule(name, **conn),
-        Events(name, **conn),
+        DataStore and DataStore(name, **conn) or None,
+        Schedule and Schedule(name, **conn) or None,
+        Events and Events(name, **conn) or None,
         always_eager=always_eager)
 
 task = HUEY.task

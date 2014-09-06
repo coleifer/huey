@@ -12,7 +12,6 @@ from huey.backends.dummy import DummyQueue
 from huey.backends.dummy import DummySchedule
 from huey.utils import EmptyData
 from huey.backends.sqlite_backend import SqliteDataStore
-from huey.backends.sqlite_backend import SqliteEventEmitter
 from huey.backends.sqlite_backend import SqliteQueue
 from huey.backends.sqlite_backend import SqliteSchedule
 try:
@@ -33,7 +32,7 @@ else:
 QUEUES = (DummyQueue, RedisQueue, SqliteQueue)
 DATA_STORES = (DummyDataStore, RedisDataStore, SqliteDataStore)
 SCHEDULES = (DummySchedule, RedisSchedule, SqliteSchedule)
-EVENTS = (DummyEventEmitter, RedisEventEmitter, SqliteEventEmitter)
+EVENTS = (DummyEventEmitter, RedisEventEmitter, None)
 
 
 class HueyBackendTestCase(unittest.TestCase):
@@ -156,10 +155,7 @@ class HueyBackendTestCase(unittest.TestCase):
         for e in EVENTS:
             if not e:
                 continue
-            if issubclass(e, SqliteEventEmitter):
-                e = e('test', location=self.sqlite_location)
-            else:
-                e = e('test')
+            e = e('test')
 
             messages = ['a', 'b', 'c', 'd']
             for message in messages:
