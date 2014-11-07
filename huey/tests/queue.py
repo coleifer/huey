@@ -306,10 +306,15 @@ class HueyTestCase(unittest.TestCase):
         add2('k3', 'v3')
         task3 = res_huey.dequeue()
 
+        add2.schedule(args=('k4', 'v4'), task_id='test_task_id')
+        task4 = res_huey.dequeue()
+
         # sanity check what should be run
         self.assertTrue(res_huey.ready_to_run(task1))
         self.assertFalse(res_huey.ready_to_run(task2))
         self.assertTrue(res_huey.ready_to_run(task3))
+        self.assertTrue(res_huey.ready_to_run(task4))
+        self.assertEqual('test_task_id', task4.task_id)
 
     def test_task_delay(self):
         curr = datetime.datetime.utcnow()
