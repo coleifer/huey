@@ -83,7 +83,7 @@ class Huey(object):
             klass = create_task(QueueTask, func, retries_as_argument, name)
 
             def schedule(args=None, kwargs=None, eta=None, delay=None,
-                         convert_utc=True):
+                         convert_utc=True, task_id=None):
                 if delay and eta:
                     raise ValueError('Both a delay and an eta cannot be '
                                      'specified at the same time')
@@ -96,7 +96,8 @@ class Huey(object):
                     (args or (), kwargs or {}),
                     execute_time=eta,
                     retries=retries,
-                    retry_delay=retry_delay)
+                    retry_delay=retry_delay,
+                    task_id=task_id)
                 return self.enqueue(cmd)
 
             func.schedule = schedule
