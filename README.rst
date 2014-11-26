@@ -1,7 +1,7 @@
 huey - a little task queue
 ==========================
 
-.. image:: http://i.imgur.com/2EpRs.jpg
+.. image:: http://media.charlesleifer.com/blog/photos/huey-logo.png
 
 a lightweight alternative.
 
@@ -16,6 +16,8 @@ supports:
 * periodic execution, like a crontab
 * retrying tasks that fail
 * task result storage
+
+.. image:: http://i.imgur.com/2EpRs.jpg
 
 Huey's API
 ----------

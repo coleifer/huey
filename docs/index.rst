@@ -6,6 +6,8 @@
 huey, a little task queue
 =========================
 
+.. image:: http://media.charlesleifer.com/blog/photos/huey-logo.png
+
 a lightweight alternative.
 
 * written in python
