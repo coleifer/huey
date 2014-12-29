@@ -6,7 +6,8 @@ python:
   - "3.3"
 services:
   - redis
-install: "pip install redis"
+  - rabbitmq
+install: "pip install redis pika"
 script: "python runtests.py"
 notifications:
   email: true
