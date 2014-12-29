@@ -23,14 +23,23 @@ class RabbitQueue(BaseQueue):
         """
         connection = {
             'host': 'localhost',
-            'port': 5672
+            'port': 5672,
+            'username': 'guest',
+            'password': 'guest',
+            'vhost': '/',
+            'ssl': False
         }
         """
         super(RabbitQueue, self).__init__(name, **connection)
 
         self.queue_name = 'huey.rabbit.%s' % clean_name(name)
-        self.conn = pika.BlockingConnection(pika.ConnectionParameters(connection.get('host', 'localhost'),
-                                                                      connection.get('port', 5672)))
+        credentials = pika.PlainCredentials(connection.get('username', 'guest'),
+                                            connection.get('password', 'guest'))
+        self.conn = pika.BlockingConnection(pika.ConnectionParameters(host=connection.get('host', 'localhost'),
+                                                                      port=connection.get('port', 5672),
+                                                                      credentials=credentials,
+                                                                      virtual_host=connection.get('vhost', '/'),
+                                                                      ssl=connection.get('ssl', False)))
         self.channel = self.conn.channel()
         self.channel.queue_declare(self.queue_name, durable=True)
 
@@ -44,6 +53,8 @@ class RabbitQueue(BaseQueue):
         return data
 
     def remove(self, data):
+        #This is not something you usually do in rabbit,  this is the only operation, which is not atomic, but
+        #this "hack" should do the trick
         amount = 0
         idx = 0
         qlen = len(self)
@@ -71,7 +82,7 @@ class RabbitQueue(BaseQueue):
     def get_data_from_queue(self, queue):
         data = None
         if len(self) == 0:
-            return data
+            return None
         for method_frame, properties, body in self.channel.consume(queue):
             data = body
             self.channel.basic_ack(method_frame.delivery_tag)
@@ -93,16 +104,19 @@ class RabbitBlockingQueue(RabbitQueue):
         try:
             return self.get_data_from_queue(self.queue_name)
         except AMQPConnectionError:
-            # unfortunately, there is no way to differentiate a socket timing
-            # out and a host being unreachable
             return None
 
 
 class RabbitEventEmitter(BaseEventEmitter):
     def __init__(self, channel, **connection):
         super(RabbitEventEmitter, self).__init__(channel, **connection)
-        self.conn = pika.BlockingConnection(pika.ConnectionParameters(connection.get('host', 'localhost'),
-                                                                      connection.get('port', 5672)))
+        credentials = pika.PlainCredentials(connection.get('username', 'guest'),
+                                            connection.get('password', 'guest'))
+        self.conn = pika.BlockingConnection(pika.ConnectionParameters(host=connection.get('host', 'localhost'),
+                                                                      port=connection.get('port', 5672),
+                                                                      credentials=credentials,
+                                                                      virtual_host=connection.get('vhost', '/'),
+                                                                      ssl=connection.get('ssl', False)))
         self.channel = self.conn.channel()
         self.exchange_name = 'huey.events'
         self.channel.exchange_declare(exchange=self.exchange_name,
