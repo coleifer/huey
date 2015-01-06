@@ -1,4 +1,9 @@
+__author__ = 'Charles Leifer'
+__license__ = 'MIT'
+__version__ = '0.4.3'
+
 from huey.api import Huey, crontab
+
 try:
     import redis
     from huey.backends.redis_backend import RedisBlockingQueue
@@ -32,8 +37,8 @@ try:
     from huey.backends.sqlite_backend import SqliteDataStore
     from huey.backends.sqlite_backend import SqliteEventEmitter
     from huey.backends.sqlite_backend import SqliteSchedule
-    
-    
+
+
     class SqliteHuey(Huey):
         def __init__(self, name='huey', store_none=False, always_eager=False,
                      location=None):
