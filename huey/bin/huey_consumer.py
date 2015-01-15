@@ -2,6 +2,7 @@
 
 import logging
 import optparse
+import os
 import sys
 from logging.handlers import RotatingFileHandler
 
@@ -78,6 +79,18 @@ def get_option_parser():
     return parser
 
 
+def load_huey(path):
+    try:
+        return load_class(path)
+    except:
+        cur_dir = os.getcwd()
+        if cur_dir not in sys.path:
+            sys.path.insert(0, cur_dir)
+            return load_huey(path)
+        err('Error importing %s' % path)
+        raise
+
+
 if __name__ == '__main__':
     parser = get_option_parser()
     options, args = parser.parse_args()
@@ -89,11 +102,7 @@ if __name__ == '__main__':
         err('Example: huey_consumer.py app.queue.huey_instance')
         sys.exit(1)
 
-    try:
-        huey_instance = load_class(args[0])
-    except:
-        err('Error importing %s' % args[0])
-        raise
+    huey_instance = load_huey(args[0])
 
     consumer = Consumer(
         huey_instance,
