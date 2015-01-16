@@ -2,6 +2,7 @@ import datetime
 import unittest
 
 from huey import crontab
+from huey import exceptions as huey_exceptions
 from huey import Huey
 from huey.api import QueueTask
 from huey.backends.dummy import DummyDataStore
@@ -139,6 +140,65 @@ class HueyTestCase(unittest.TestCase):
 
         # error
         self.assertRaises(BampfException, huey.execute, task)
+
+    def test_internal_error(self):
+        """
+        Verify that exceptions are wrapped with the special "huey"
+        exception classes.
+        """
+        class SpecialException(Exception):
+            pass
+
+        class BrokenQueue(DummyQueue):
+            def read(self):
+                raise SpecialException('read error')
+
+            def write(self, data):
+                raise SpecialException('write error')
+
+        class BrokenDataStore(DummyDataStore):
+            def get(self, key):
+                raise SpecialException('get error')
+
+            def put(self, key, value):
+                raise SpecialException('put error')
+
+        class BrokenSchedule(DummySchedule):
+            def add(self, data, ts):
+                raise SpecialException('add error')
+
+            def read(self, ts):
+                raise SpecialException('read error')
+
+        task = AddTask()
+        huey = Huey(
+            BrokenQueue('q'),
+            BrokenDataStore('q'),
+            BrokenSchedule('q'))
+
+        self.assertRaises(
+            huey_exceptions.QueueWriteException,
+            huey.enqueue,
+            AddTask())
+        self.assertRaises(
+            huey_exceptions.QueueReadException,
+            huey.dequeue)
+        self.assertRaises(
+            huey_exceptions.DataStorePutException,
+            huey.revoke,
+            task)
+        self.assertRaises(
+            huey_exceptions.DataStoreGetException,
+            huey.restore,
+            task)
+        self.assertRaises(
+            huey_exceptions.ScheduleAddException,
+            huey.add_schedule,
+            task)
+        self.assertRaises(
+            huey_exceptions.ScheduleReadException,
+            huey.read_schedule,
+            1)
 
     def test_dequeueing(self):
         res = huey.dequeue() # no error raised if queue is empty

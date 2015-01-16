@@ -13,9 +13,9 @@ def load_class(s):
     mod = sys.modules[path]
     return getattr(mod, klass)
 
-def wrap_exception(exc_class):
+def wrap_exception(new_exc_class):
     exc_class, exc, tb = sys.exc_info()
-    raise exc_class(exc.message)
+    raise new_exc_class(exc.message)
 
 def local_to_utc(dt):
     return datetime.datetime(*time.gmtime(time.mktime(dt.timetuple()))[:6])
