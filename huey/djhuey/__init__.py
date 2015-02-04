@@ -8,7 +8,7 @@ from functools import wraps
 import sys
 
 from django.conf import settings
-from django.db import close_connection
+from django.db import close_old_connections
 
 from huey import crontab
 from huey import Huey
@@ -105,7 +105,7 @@ def close_db(fn):
         try:
             return fn(*args, **kwargs)
         finally:
-            close_connection()
+            close_old_connections()
     return inner
 
 def db_task(*args, **kwargs):
