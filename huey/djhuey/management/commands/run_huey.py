@@ -66,7 +66,8 @@ class Command(BaseCommand):
             except ImportError:
                 continue
             else:
-                imp.load_module(module_name, fp, path, description)
+                import_path = '%s.%s' % (config.name, module_name)
+                imp.load_module(import_path, fp, path, description)
 
     def autodiscover_old(self):
         # this is to find modules named <commands.py> in a django project's
