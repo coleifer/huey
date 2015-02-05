@@ -62,9 +62,11 @@ class Command(BaseCommand):
         for config in django_apps.get_app_configs():
             app_path = config.module.__path__
             try:
-                imp.find_module(module_name, app_path)
+                fp, path, description = imp.find_module(module_name, app_path)
             except ImportError:
                 continue
+            else:
+                imp.load_module(module_name, fp, path, description)
 
     def autodiscover_old(self):
         # this is to find modules named <commands.py> in a django project's

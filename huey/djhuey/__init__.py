@@ -8,7 +8,7 @@ from functools import wraps
 import sys
 
 from django.conf import settings
-from django.db import close_connection
+#from django.db import close_connection
 
 from huey import crontab
 from huey import Huey
