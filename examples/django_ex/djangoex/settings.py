@@ -2,7 +2,7 @@ import logging
 
 INSTALLED_APPS = [
     'huey.djhuey',
-    'test_app',
+    'djangoex.test_app',
 ]
 
 HUEY = {
