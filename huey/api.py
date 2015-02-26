@@ -38,8 +38,8 @@ class Huey(object):
     :param events: channel to send events on, e.g. ``RedisEventEmitter()``
     :param store_none: Flag to indicate whether tasks that return ``None``
         should store their results in the result store.
-    :param store_registered: Flag to indicating whether "registered" message should be saved to result store
-    :param store_pending: Flag to indicating whether "pending" message should be saved to result store
+    :param store_enqueued: Flag to indicating whether "enqueued" message should be saved to result store
+    :param store_running: Flag to indicating whether "running" message should be saved to result store
     :param always_eager: Useful for testing, this will execute all tasks
         immediately, without enqueueing them.
 
@@ -67,15 +67,15 @@ class Huey(object):
             return
     """
     def __init__(self, queue, result_store=None, schedule=None, events=None,
-                 store_none=False, store_pending=False,always_eager=False):
+                 store_none=False, store_enqueued=False, store_running=False, always_eager=False):
         self.queue = queue
         self.result_store = result_store
         self.schedule = schedule or DummySchedule(self.queue.name)
         self.events = events
         self.blocking = self.queue.blocking
         self.store_none = store_none
-        self.store_registered = store_pending
-        self.store_pending = store_pending
+        self.store_enqueued = store_enqueued
+        self.store_running = store_running
         self.always_eager = always_eager
 
     def task(self, retries=0, retry_delay=0, retries_as_argument=False,
@@ -208,8 +208,8 @@ class Huey(object):
         self._write(registry.get_message_for_task(task))
 
         if self.result_store:
-            if self.store_registered and not isinstance(task, PeriodicQueueTask):
-                self._put(task.task_id, pickle.dumps('registered'))
+            if self.store_enqueued and not isinstance(task, PeriodicQueueTask):
+                self._put(task.task_id, pickle.dumps('enqueued'))
             return AsyncData(self, task)
 
     def dequeue(self):
@@ -240,8 +240,8 @@ class Huey(object):
         if not isinstance(task, QueueTask):
             raise TypeError('Unknown object: %s' % task)
 
-        if self.store_pending and self.result_store and not isinstance(task, PeriodicQueueTask):
-            self._put(task.task_id, pickle.dumps('in_progress'))
+        if self.store_running and self.result_store and not isinstance(task, PeriodicQueueTask):
+            self._put(task.task_id, pickle.dumps('running'))
 
         result = task.execute()
 
