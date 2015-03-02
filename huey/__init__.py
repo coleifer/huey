@@ -12,7 +12,7 @@ try:
     from huey.backends.redis_backend import RedisSchedule
 
     class RedisHuey(Huey):
-        def __init__(self, name='huey', store_none=False, always_eager=False,
+        def __init__(self, name='huey', store_none=False, always_eager=False, store_enqueued=False, store_running=False,
                      **conn_kwargs):
             queue = RedisBlockingQueue(name, **conn_kwargs)
             result_store = RedisDataStore(name, **conn_kwargs)
@@ -24,6 +24,8 @@ try:
                 schedule=schedule,
                 events=events,
                 store_none=store_none,
+                store_enqueued=store_enqueued,
+                store_running=store_running,
                 always_eager=always_eager)
 
 except ImportError:
