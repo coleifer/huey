@@ -67,7 +67,7 @@ class Huey(object):
             return
     """
     def __init__(self, queue, result_store=None, schedule=None, events=None,
-                 store_none=False, store_enqueued=False, store_running=False, always_eager=False):
+                 store_none=False, always_eager=False, store_enqueued=False, store_running=False):
         self.queue = queue
         self.result_store = result_store
         self.schedule = schedule or DummySchedule(self.queue.name)
