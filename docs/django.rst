@@ -41,6 +41,31 @@ All configuration is kept in ``settings.HUEY``.  Here is an example:
         'consumer_options': {'workers': 4},
     }
 
+Django DB Backend
+-----------------
+
+Huey comes with Django DB backend, that can use DB as queue storage.
+It is fine to use in dev environment, but not recommended to use in production.
+Do not forget to apply migration ``python manage.py migrate djhuey`` to use this backend.
+
+.. code-block:: python
+
+    HUEY = {
+        'backend': 'huey.backends.django_backend',
+        'name': 'default',
+        'connection': {
+            'alias': 'default',  # django db conection alias, 
+        },
+        'consumer_options': {
+            'loglevel': logging.DEBUG,
+            'workers': 2,
+            # query db every two seconds
+            'initial_delay': 2,
+            'backoff': 1,
+        }
+    }
+
+
 Running the Consumer
 --------------------
 
