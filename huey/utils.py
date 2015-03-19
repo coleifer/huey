@@ -15,7 +15,7 @@ def load_class(s):
 
 def wrap_exception(new_exc_class):
     exc_class, exc, tb = sys.exc_info()
-    raise new_exc_class(exc.message)
+    raise new_exc_class('%s: %s' % (exc_class.__name__, exc))
 
 def local_to_utc(dt):
     return datetime.datetime(*time.gmtime(time.mktime(dt.timetuple()))[:6])
