@@ -27,7 +27,9 @@ Huey Settings
     Huey settings are optional.  If not provided, Huey will default to using
     Redis running locally.
 
-All configuration is kept in ``settings.HUEY``.  Here is an example:
+All configuration is kept in ``settings.HUEY``.  Here are some examples:
+
+Using redis
 
 .. code-block:: python
 
@@ -41,6 +43,23 @@ All configuration is kept in ``settings.HUEY``.  Here is an example:
         'consumer_options': {'workers': 4},
     }
 
+Using sqlite.
+
+.. code-block:: python
+
+    HUEY = {
+        'backend': 'huey.backends.sqlite_backend',  # required.
+        'name': 'unique name',
+        'connection': {'location': 'sqlite filename'},
+        'always_eager': False, # Defaults to False when running via manage.py run_huey
+    
+        # Options to pass into the consumer when running ``manage.py run_huey``
+        'consumer_options': {'workers': 4},
+    }
+
+You can use the 'default' sqlite database by seting the filename to ``DATABASE['default']['NAME']``
+A database file will automaticly be created using the value of ```location```
+    
 Running the Consumer
 --------------------
 
