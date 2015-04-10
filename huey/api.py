@@ -416,7 +416,7 @@ def create_task(task_class, func, retries_as_argument=False, task_name=None,
             kwargs['retries'] = self.retries
         funargs, _, _, _ = getargspec(func)
         if 'self' in funargs:
-            kwargs['self'] = self.task
+            kwargs['self'] = self
         return func(*args, **kwargs)
 
     attrs = {
