@@ -6,7 +6,7 @@ import time
 import traceback
 import uuid
 from functools import wraps
-
+from inspect import getargspec
 from huey.backends.dummy import DummySchedule
 from huey.exceptions import DataStoreGetException
 from huey.exceptions import DataStorePutException
@@ -45,7 +45,6 @@ class Huey(object):
 
         from huey.api import Huey, crontab
         from huey.backends.redis_backend import RedisQueue, RedisDataStore, RedisSchedule
-
         queue = RedisQueue('my-app')
         result_store = RedisDataStore('my-app')
         schedule = RedisSchedule('my-app')
@@ -415,6 +414,9 @@ def create_task(task_class, func, retries_as_argument=False, task_name=None,
         args, kwargs = self.data or ((), {})
         if retries_as_argument:
             kwargs['retries'] = self.retries
+        funargs, _, _, _ = getargspec(func)
+        if 'self' in funargs:
+            kwargs['self'] = self.task
         return func(*args, **kwargs)
 
     attrs = {
