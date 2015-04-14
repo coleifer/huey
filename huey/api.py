@@ -6,7 +6,6 @@ import time
 import traceback
 import uuid
 from functools import wraps
-from inspect import getargspec
 from huey.backends.dummy import DummySchedule
 from huey.exceptions import DataStoreGetException
 from huey.exceptions import DataStorePutException
@@ -414,7 +413,6 @@ def create_task(task_class, func, retries_as_argument=False, task_name=None, inc
         args, kwargs = self.data or ((), {})
         if retries_as_argument:
             kwargs['retries'] = self.retries
-        funargs, _, _, _ = getargspec(func)
         if include_task:
             kwargs['task'] = self
         return func(*args, **kwargs)
