@@ -34,9 +34,9 @@ last_executed_task_class = []
 def add(key, value):
     state[key] = value
 
-@huey.task()
-def self_aware(key, value, self=None):
-    last_executed_task_class.append(self.__class__.__name__)
+@huey.task(include_task=True)
+def self_aware(key, value, task=None):
+    last_executed_task_class.append(task.__class__.__name__)
 
 # create a periodic queue command
 @huey.periodic_task(crontab(minute='0'))
