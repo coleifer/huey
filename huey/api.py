@@ -74,13 +74,18 @@ class Huey(object):
         self.store_none = store_none
         self.always_eager = always_eager
 
-    def task(self, retries=0, retry_delay=0, retries_as_argument=False, include_task=False,
-             name=None):
+    def task(self, retries=0, retry_delay=0, retries_as_argument=False,
+             include_task=False, name=None):
         def decorator(func):
             """
             Decorator to execute a function out-of-band via the consumer.
             """
-            klass = create_task(QueueTask, func, retries_as_argument, name, include_task)
+            klass = create_task(
+                QueueTask,
+                func,
+                retries_as_argument,
+                name,
+                include_task)
 
             def schedule(args=None, kwargs=None, eta=None, delay=None,
                          convert_utc=True, task_id=None):
@@ -409,8 +414,8 @@ class PeriodicQueueTask(QueueTask):
         return False
 
 
-def create_task(task_class, func, retries_as_argument=False, task_name=None, include_task=False,
-                **kwargs):
+def create_task(task_class, func, retries_as_argument=False, task_name=None,
+                include_task=False, **kwargs):
     def execute(self):
         args, kwargs = self.data or ((), {})
         if retries_as_argument:
