@@ -63,7 +63,7 @@ Function decorators and helpers
             # do a backup every day at 3am
             return
 
-    .. py:method:: task([retries=0[, retry_delay=0[, retries_as_argument=False]]])
+    .. py:method:: task([retries=0[, retry_delay=0[, retries_as_argument=False[, include_task=False]]]])
 
         Function decorator that marks the decorated function for processing by the
         consumer. Calls to the decorated function will do the following:
@@ -119,13 +119,15 @@ Function decorators and helpers
         :param int retry_delay: number of seconds to wait between retries
         :param boolean retries_as_argument: whether the number of retries should
             be passed in to the decorated function as an argument.
+        :param boolean include_task: whether the task instance itself should be
+            passed in to the decorated function as the ``task`` argument.
         :rtype: decorated function
 
-        The return value of any calls to the decorated function depends on whether the invoker
-        is configured with a ``result_store``.  If a result store is configured, the
-        decorated function will return an :py:class:`AsyncData` object which can fetch the
-        result of the call from the result store -- otherwise it will simply
-        return ``None``.
+        The return value of any calls to the decorated function depends on whether
+        the :py:class:`Huey` instance is configured with a ``result_store``.  If a
+        result store is configured, the decorated function will return
+        an :py:class:`AsyncData` object which can fetch the result of the call from
+        the result store -- otherwise it will simply return ``None``.
 
         The ``task`` decorator also does one other important thing -- it adds
         a special function **onto** the decorated function, which makes it possible
