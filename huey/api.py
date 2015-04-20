@@ -6,7 +6,6 @@ import time
 import traceback
 import uuid
 from functools import wraps
-
 from huey.backends.dummy import DummySchedule
 from huey.exceptions import DataStoreGetException
 from huey.exceptions import DataStorePutException
@@ -45,7 +44,6 @@ class Huey(object):
 
         from huey.api import Huey, crontab
         from huey.backends.redis_backend import RedisQueue, RedisDataStore, RedisSchedule
-
         queue = RedisQueue('my-app')
         result_store = RedisDataStore('my-app')
         schedule = RedisSchedule('my-app')
@@ -74,13 +72,13 @@ class Huey(object):
         self.store_none = store_none
         self.always_eager = always_eager
 
-    def task(self, retries=0, retry_delay=0, retries_as_argument=False,
+    def task(self, retries=0, retry_delay=0, retries_as_argument=False, include_task=False,
              name=None):
         def decorator(func):
             """
             Decorator to execute a function out-of-band via the consumer.
             """
-            klass = create_task(QueueTask, func, retries_as_argument, name)
+            klass = create_task(QueueTask, func, retries_as_argument, name, include_task)
 
             def schedule(args=None, kwargs=None, eta=None, delay=None,
                          convert_utc=True, task_id=None):
@@ -409,12 +407,14 @@ class PeriodicQueueTask(QueueTask):
         return False
 
 
-def create_task(task_class, func, retries_as_argument=False, task_name=None,
+def create_task(task_class, func, retries_as_argument=False, task_name=None, include_task=False,
                 **kwargs):
     def execute(self):
         args, kwargs = self.data or ((), {})
         if retries_as_argument:
             kwargs['retries'] = self.retries
+        if include_task:
+            kwargs['task'] = self
         return func(*args, **kwargs)
 
     attrs = {

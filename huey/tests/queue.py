@@ -27,11 +27,16 @@ res_huey_nones = Huey(res_queue, res_store, store_none=True)
 
 # store some global state
 state = {}
+last_executed_task_class = []
 
 # create a decorated queue command
 @huey.task()
 def add(key, value):
     state[key] = value
+
+@huey.task(include_task=True)
+def self_aware(key, value, task=None):
+    last_executed_task_class.append(task.__class__.__name__)
 
 # create a periodic queue command
 @huey.periodic_task(crontab(minute='0'))
@@ -72,10 +77,12 @@ def returns_none2():
 class HueyTestCase(unittest.TestCase):
     def setUp(self):
         global state
+        global last_executed_task_class
         queue.flush()
         res_queue.flush()
         schedule.flush()
         state = {}
+        last_executed_task_class = []
 
     def test_registration(self):
         self.assertTrue('queuecmd_add' in registry)
@@ -227,6 +234,21 @@ class HueyTestCase(unittest.TestCase):
         self.assertEqual(state['k'], 'X')
 
         self.assertRaises(TypeError, huey.execute, huey.dequeue())
+
+    def test_self_awareness(self):
+        self_aware('k', 'v')
+        task = huey.dequeue()
+        huey.execute(task)
+        self.assertEqual(last_executed_task_class.pop(), "queuecmd_self_aware")
+
+        self_aware('k', 'v')
+        huey.execute(huey.dequeue())
+        self.assertEqual(last_executed_task_class.pop(), "queuecmd_self_aware")
+
+        add('k', 'x')
+        huey.execute(huey.dequeue())
+        self.assertEqual(len(last_executed_task_class), 0)
+
 
     def test_revoke(self):
         ac = AddTask(('k', 'v'))
