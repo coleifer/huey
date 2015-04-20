@@ -6,6 +6,7 @@ import time
 import traceback
 import uuid
 from functools import wraps
+
 from huey.backends.dummy import DummySchedule
 from huey.exceptions import DataStoreGetException
 from huey.exceptions import DataStorePutException
@@ -44,6 +45,7 @@ class Huey(object):
 
         from huey.api import Huey, crontab
         from huey.backends.redis_backend import RedisQueue, RedisDataStore, RedisSchedule
+
         queue = RedisQueue('my-app')
         result_store = RedisDataStore('my-app')
         schedule = RedisSchedule('my-app')
