@@ -22,7 +22,7 @@ supports:
 Huey's API
 ----------
 
-::
+.. code-block:: python
 
     from huey import RedisHuey, crontab
 
