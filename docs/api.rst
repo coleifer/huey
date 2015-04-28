@@ -42,16 +42,15 @@ Function decorators and helpers
 
         from huey.api import Huey, crontab
         from huey.backends.redis_backend import RedisBlockingQueue, RedisDataStore,\
-            RedisSchedule, RedisEventEmitter
+            RedisSchedule
 
-        queue = RedisBlockingQueue('my-app')
-        result_store = RedisDataStore('my-app')
-        schedule = RedisSchedule('my-app')
-        events = RedisEventEmitter('my-app')
-        huey = Huey(queue, result_store, schedule, events)
+        huey = RedisHuey('my-app')
 
         # THIS IS EQUIVALENT TO ABOVE CODE:
-        # huey = RedisHuey('my-app')
+        #queue = RedisBlockingQueue('my-app')
+        #result_store = RedisDataStore('my-app')
+        #schedule = RedisSchedule('my-app')
+        #huey = Huey(queue, result_store, schedule)
 
         @huey.task()
         def slow_function(some_arg):
