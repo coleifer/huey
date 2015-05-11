@@ -115,6 +115,8 @@ class Huey(object):
                     retries=retries,
                     retry_delay=retry_delay)
                 return self.enqueue(cmd)
+
+            inner_run.call_local = func
             return inner_run
         return decorator
 
