@@ -249,6 +249,13 @@ class HueyTestCase(unittest.TestCase):
         huey.execute(huey.dequeue())
         self.assertEqual(len(last_executed_task_class), 0)
 
+    def test_call_local(self):
+        self.assertEqual(len(queue), 0)
+        self.assertEqual(state, {})
+        add.call_local('nugget', 'green')
+
+        self.assertEqual(len(queue), 0)
+        self.assertEqual(state['nugget'], 'green')
 
     def test_revoke(self):
         ac = AddTask(('k', 'v'))

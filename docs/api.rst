@@ -159,6 +159,15 @@ Function decorators and helpers
             :rtype: like calls to the decorated function, will return an :py:class:`AsyncData`
                     object if a result store is configured, otherwise returns ``None``
 
+        .. py:function:: {decorated func}.call_local
+
+            Call the ``@task``-decorated function without enqueueing the call. Or, in other words, ``call_local()`` provides access to the actual function.
+
+            .. code-block:: pycon
+
+                >>> count_some_beans.call_local(1337)
+                'Counted 1337 beans'
+
         .. py:attribute:: {decorated func}.task_class
 
             Store a reference to the task class for the decorated function.
