@@ -444,7 +444,8 @@ def create_task(task_class, func, retries_as_argument=False, task_name=None,
 dash_re = re.compile('(\d+)-(\d+)')
 every_re = re.compile('\*\/(\d+)')
 
-def crontab(month='*', day='*', day_of_week='*', hour='*', minute='*'):
+def crontab(month='*', day='*', day_of_week='*', hour='*', minute='*',
+            second='0'):
     """
     Convert a "crontab"-style set of parameters into a test function that will
     return True when the given datetime matches the parameters set forth in
@@ -461,7 +462,8 @@ def crontab(month='*', day='*', day_of_week='*', hour='*', minute='*'):
         ('d', day, range(1, 32)),
         ('w', day_of_week, range(7)),
         ('H', hour, range(24)),
-        ('M', minute, range(60))
+        ('M', minute, range(60)),
+        ('S', second, range(60))
     )
     cron_settings = []
 
@@ -499,12 +501,12 @@ def crontab(month='*', day='*', day_of_week='*', hour='*', minute='*'):
         cron_settings.append(sorted(list(settings)))
 
     def validate_date(dt):
-        _, m, d, H, M, _, w, _, _ = dt.timetuple()
+        _, m, d, H, M, S, w, _, _ = dt.timetuple()
 
         # fix the weekday to be sunday=0
         w = (w + 1) % 7
 
-        for (date_piece, selection) in zip([m, d, w, H, M], cron_settings):
+        for (date_piece, selection) in zip([m, d, w, H, M, S], cron_settings):
             if date_piece not in selection:
                 return False
 
