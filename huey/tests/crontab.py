@@ -45,6 +45,15 @@ class CrontabTestCase(unittest.TestCase):
             res = validate_m(datetime.datetime(2011, 1, 1, 1, x))
             self.assertEqual(res, x in valids)
 
+    def test_crontab_seconds(self):
+        # validates the following seconds
+        valids = [0, 1, 4, 6, 8, 9, 12, 18, 24, 30, 36, 42, 48, 54]
+        validate_m = crontab(second='4,8-9,*/6,1')
+
+        for x in range(60):
+            res = validate_m(datetime.datetime(2011, 1, 1, 1, 1, x))
+            self.assertEqual(res, x in valids)
+
     def test_crontab_day_of_week(self):
         # validates the following days of week
         # jan, 1, 2011 is a saturday
