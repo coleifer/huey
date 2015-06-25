@@ -58,8 +58,11 @@ class RedisBlockingQueue(RedisQueue):
 
     def read(self):
         try:
-            return self.conn.brpop(self.queue_name)[1]
-        except ConnectionError:
+            # don't wait forever, blocking. limit to 5 secs of waiting, max
+            # should probably connect this to max_delay but that would require
+            # bigger refactor.
+            return self.conn.brpop(self.queue_name, timeout=5)[1]
+        except (ConnectionError, TypeError, IndexError):
             # unfortunately, there is no way to differentiate a socket timing
             # out and a host being unreachable
             return None
