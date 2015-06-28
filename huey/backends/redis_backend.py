@@ -56,9 +56,22 @@ class RedisBlockingQueue(RedisQueue):
     """
     blocking = True
 
+    def __init__(self, name, read_timeout=None, **connection):
+        """
+        connection = {
+            'host': 'localhost',
+            'port': 6379,
+            'db': 0,
+        }
+        """
+        super(RedisBlockingQueue, self).__init__(name, **connection)
+        self.read_timeout = read_timeout
+
     def read(self):
         try:
-            return self.conn.brpop(self.queue_name)[1]
+            return self.conn.brpop(
+                self.queue_name,
+                timeout=self.read_timeout)[1]
         except ConnectionError:
             # unfortunately, there is no way to differentiate a socket timing
             # out and a host being unreachable
