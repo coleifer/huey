@@ -502,11 +502,12 @@ written by Andy McCurdy.
     :param name: the name of the queue to use
     :param connection: a list of values passed directly into the ``redis.Redis`` class
 
-.. py:class:: RedisBlockingQueue(name, **connection)
+.. py:class:: RedisBlockingQueue(name, read_timeout=None, **connection)
 
-    Does a ``BRPOP`` to pull messages from the queue, meaning that it blocks on reads.
+    Does a ``BRPOP`` to pull messages from the queue, meaning that it blocks on reads. By default Huey will block forever waiting for a message, but if you want, you can specify a timeout in seconds. This may prevent the consumer from getting hung waiting on tasks in the event of network disruptions or similar quirks.
 
     :param name: the name of the queue to use
+    :param int read_timeout: limit blocking pop to ``read_timeout`` seconds.
     :param connection: a list of values passed directly into the ``redis.Redis`` class
 
 .. py:class:: RedisDataStore(name, **connection)

@@ -13,8 +13,11 @@ try:
 
     class RedisHuey(Huey):
         def __init__(self, name='huey', store_none=False, always_eager=False,
-                     **conn_kwargs):
-            queue = RedisBlockingQueue(name, **conn_kwargs)
+                     read_timeout=None, **conn_kwargs):
+            queue = RedisBlockingQueue(
+                name,
+                read_timeout=read_timeout,
+                **conn_kwargs)
             result_store = RedisDataStore(name, **conn_kwargs)
             schedule = RedisSchedule(name, **conn_kwargs)
             events = RedisEventEmitter(name, **conn_kwargs)
