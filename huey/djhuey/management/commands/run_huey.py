@@ -4,7 +4,10 @@ from optparse import make_option
 
 from django.conf import settings
 from django.core.management.base import BaseCommand
-from django.utils.importlib import import_module
+try:
+    from importlib import import_module
+except ImportError:
+    from django.utils.importlib import import_module
 
 try:
     from django.apps import apps as django_apps
