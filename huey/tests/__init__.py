@@ -8,3 +8,8 @@ try:
     from huey.tests.peewee_tests import *
 except ImportError:
     pass
+
+try:
+    from huey.tests.redis_tests import *
+except ImportError:
+    pass
