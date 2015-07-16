@@ -72,7 +72,7 @@ class RedisBlockingQueue(RedisQueue):
             return self.conn.brpop(
                 self.queue_name,
                 timeout=self.read_timeout)[1]
-        except ConnectionError:
+        except (ConnectionError, TypeError, IndexError):
             # unfortunately, there is no way to differentiate a socket timing
             # out and a host being unreachable
             return None
