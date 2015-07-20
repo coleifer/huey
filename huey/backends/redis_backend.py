@@ -78,12 +78,25 @@ class RedisBlockingQueue(RedisQueue):
             return None
 
 
+# a custom lua script to pass to redis that will read tasks from the schedule
+# and atomically pop them from the sorted set and return them.
+# it won't return anything if it isn't able to remove the items it reads.
+SCHEDULE_POP_LUA = """
+local key = KEYS[1]
+local unix_ts = ARGV[1]
+local res = redis.call('zrangebyscore', key, '-inf', unix_ts)
+if #res and redis.call('zremrangebyscore', key, '-inf', unix_ts) == #res then
+    return res
+end
+"""
+
 class RedisSchedule(BaseSchedule):
     def __init__(self, name, **connection):
         super(RedisSchedule, self).__init__(name, **connection)
 
         self.key = 'huey.schedule.%s' % clean_name(name)
         self.conn = redis.Redis(**connection)
+        self._pop = self.conn.register_script(SCHEDULE_POP_LUA)
 
     def convert_ts(self, ts):
         return time.mktime(ts.timetuple())
@@ -93,10 +106,10 @@ class RedisSchedule(BaseSchedule):
 
     def read(self, ts):
         unix_ts = self.convert_ts(ts)
-        tasks = self.conn.zrangebyscore(self.key, 0, unix_ts)
-        if len(tasks):
-            self.conn.zremrangebyscore(self.key, 0, unix_ts)
-        return tasks
+        # invoke the redis lua script that will atomically pop off
+        # all the tasks older than the given timestamp
+        tasks = self._pop(keys=[self.key], args=[unix_ts])
+        return [] if tasks is None else tasks
 
     def flush(self):
         self.conn.delete(self.key)
