@@ -28,11 +28,7 @@ except ImportError:
     RabbitQueue = RabbitEventEmitter = None
 
 
-if sys.version_info[0] == 2:
-    redis_kwargs = {}
-else:
-    redis_kwargs = {'decode_responses': True}
-
+redis_kwargs = {}
 
 QUEUES = (DummyQueue, RedisQueue, SqliteQueue, RabbitQueue)
 DATA_STORES = (DummyDataStore, RedisDataStore, SqliteDataStore, None)
@@ -59,24 +55,24 @@ class HueyBackendTestCase(unittest.TestCase):
             else:
                 queue = q('test')
             queue.flush()
-            queue.write('a')
-            queue.write('b')
+            queue.write(b'a')
+            queue.write(b'b')
             self.assertEqual(len(queue), 2)
-            self.assertEqual(queue.read(), 'a')
-            self.assertEqual(queue.read(), 'b')
+            self.assertEqual(queue.read(), b'a')
+            self.assertEqual(queue.read(), b'b')
             self.assertEqual(queue.read(), None)
 
-            queue.write('c')
-            queue.write('d')
-            queue.write('c')
-            queue.write('x')
-            queue.write('d')
+            queue.write(b'c')
+            queue.write(b'd')
+            queue.write(b'c')
+            queue.write(b'x')
+            queue.write(b'd')
             self.assertEqual(len(queue), 5)
-            self.assertEqual(queue.remove('c'), 2)
+            self.assertEqual(queue.remove(b'c'), 2)
             self.assertEqual(len(queue), 3)
-            self.assertEqual(queue.read(), 'd')
-            self.assertEqual(queue.read(), 'x')
-            self.assertEqual(queue.read(), 'd')
+            self.assertEqual(queue.read(), b'd')
+            self.assertEqual(queue.read(), b'x')
+            self.assertEqual(queue.read(), b'd')
 
             queue.flush()
             test_huey = Huey(queue, result_store)
@@ -106,17 +102,17 @@ class HueyBackendTestCase(unittest.TestCase):
                 data_store = d('test', **redis_kwargs)
             else:
                 data_store = d('test')
-            data_store.put('k1', 'v1')
-            data_store.put('k2', 'v2')
-            data_store.put('k3', 'v3')
-            self.assertEqual(data_store.peek('k2'), 'v2')
-            self.assertEqual(data_store.get('k2'), 'v2')
+            data_store.put('k1', b'v1')
+            data_store.put('k2', b'v2')
+            data_store.put('k3', b'v3')
+            self.assertEqual(data_store.peek('k2'), b'v2')
+            self.assertEqual(data_store.get('k2'), b'v2')
             self.assertEqual(data_store.peek('k2'), EmptyData)
             self.assertEqual(data_store.get('k2'), EmptyData)
 
-            self.assertEqual(data_store.peek('k3'), 'v3')
-            data_store.put('k3', 'v3-2')
-            self.assertEqual(data_store.peek('k3'), 'v3-2')
+            self.assertEqual(data_store.peek('k3'), b'v3')
+            data_store.put('k3', b'v3-2')
+            self.assertEqual(data_store.peek('k3'), b'v3-2')
 
     def test_schedules(self):
         for s in SCHEDULES:
@@ -135,10 +131,10 @@ class HueyBackendTestCase(unittest.TestCase):
 
             # Add to schedule out-of-order to ensure sorting is performed by
             # the schedule.
-            schedule.add('s2', dt2)
-            schedule.add('s1', dt1)
-            schedule.add('s4', dt4)
-            schedule.add('s3', dt3)
+            schedule.add(b's2', dt2)
+            schedule.add(b's1', dt1)
+            schedule.add(b's4', dt4)
+            schedule.add(b's3', dt3)
 
             # Ensure that asking for a timestamp previous to any item in the
             # schedule returns empty list.
@@ -148,12 +144,12 @@ class HueyBackendTestCase(unittest.TestCase):
 
             # Ensure the upper boundary is inclusive of whatever timestamp
             # is passed in.
-            self.assertEqual(schedule.read(dt3), ['s1', 's2', 's3'])
+            self.assertEqual(schedule.read(dt3), [b's1', b's2', b's3'])
             self.assertEqual(schedule.read(dt3), [])
 
             # Ensure the schedule is flushed and an empty schedule returns an
             # empty list.
-            self.assertEqual(schedule.read(dt4), ['s4'])
+            self.assertEqual(schedule.read(dt4), [b's4'])
             self.assertEqual(schedule.read(dt4), [])
 
     def test_events(self):
