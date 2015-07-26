@@ -47,7 +47,7 @@ their default values.
     and verbose is set, then the consumer will log to the console.  **This is
     very useful for testing/debugging.**
 
- ``-q``, ``--quiet``
+``-q``, ``--quiet``
     Only log errors. The default loglevel for the consumer is ``INFO``.
 
 ``-w``, ``--workers``
