@@ -8,5 +8,5 @@ In another terminal:
 
 Commands to try out:
 
-    from test_app.commands import count_beans
+    from test_app.tasks import count_beans
     res = count_beans(500)
