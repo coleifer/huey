@@ -91,7 +91,7 @@ def load_huey(path):
         raise
 
 
-if __name__ == '__main__':
+def consumer_main():
     parser = get_option_parser()
     options, args = parser.parse_args()
 
@@ -115,3 +115,7 @@ if __name__ == '__main__':
         options.scheduler_interval,
         options.periodic_task_interval)
     consumer.run()
+
+
+if __name__ == '__main__':
+    consumer_main()

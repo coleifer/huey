@@ -24,5 +24,9 @@ setup(
         'Framework :: Django',
     ],
     test_suite='runtests.runtests',
-    scripts = ['huey/bin/huey_consumer.py'],
+    entry_points={
+        'console_scripts': [
+            'huey_consumer = huey.bin.huey_consumer:consumer_main'
+            ]
+        }
 )
