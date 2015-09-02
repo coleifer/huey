@@ -28,5 +28,6 @@ setup(
         'console_scripts': [
             'huey_consumer = huey.bin.huey_consumer:consumer_main'
             ]
-        }
+    }
+    scripts = ['huey/bin/huey_consumer.py'],
 )
