@@ -4,12 +4,9 @@ from functools import wraps
 def _transaction(db, fn):
     @wraps(fn)
     def inner(*args, **kwargs):
-        db.get_conn()
-        try:
-            with db.transaction():
-                return fn(*args, **kwargs)
-        finally:
-            db.close()
+        # Execute function in its own connection, in a transaction.
+        with db.execution_context(with_transaction=True):
+            return fn(*args, **kwargs)
     return inner
 
 def db_task(huey, db, *args, **kwargs):
