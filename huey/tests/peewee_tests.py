@@ -24,7 +24,7 @@ class MockSqliteDatabase(SqliteDatabase):
             return fn(*args, **kwargs)
         return inner
     connect = record_call(SqliteDatabase.connect)
-    close = record_call(SqliteDatabase.close)
+    _close = record_call(SqliteDatabase._close)
     transaction = record_call(SqliteDatabase.transaction)
 
 db = MockSqliteDatabase('test.huey.db')
@@ -58,5 +58,5 @@ class TestPeeweeHelpers(unittest.TestCase):
         test_db_task('foo')
         self.assertEqual(STATE, ['connect'])
         huey.execute(huey.dequeue())
-        self.assertEqual(STATE, ['connect', 'transaction', 'create', 'close'])
+        self.assertEqual(STATE, ['connect', 'transaction', 'create', '_close'])
         self.assertEqual(Value.select().count(), 1)
