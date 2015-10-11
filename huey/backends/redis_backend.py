@@ -15,6 +15,15 @@ def clean_name(name):
     return re.sub('[^a-z0-9]', '', name)
 
 
+def get_connection(**config):
+    try:
+        url = config.pop('url')
+    except KeyError:
+        return redis.Redis(**config)
+    else:
+        return redis.Redis.from_url(url, **config)
+
+
 class RedisQueue(BaseQueue):
     """
     A simple Queue that uses the redis to store messages
@@ -30,7 +39,7 @@ class RedisQueue(BaseQueue):
         super(RedisQueue, self).__init__(name, **connection)
 
         self.queue_name = 'huey.redis.%s' % clean_name(name)
-        self.conn = redis.Redis(**connection)
+        self.conn = get_connection(**connection)
 
     def write(self, data):
         self.conn.lpush(self.queue_name, data)
@@ -95,7 +104,7 @@ class RedisSchedule(BaseSchedule):
         super(RedisSchedule, self).__init__(name, **connection)
 
         self.key = 'huey.schedule.%s' % clean_name(name)
-        self.conn = redis.Redis(**connection)
+        self.conn = get_connection(**connection)
         self._pop = self.conn.register_script(SCHEDULE_POP_LUA)
 
     def convert_ts(self, ts):
@@ -120,7 +129,7 @@ class RedisDataStore(BaseDataStore):
         super(RedisDataStore, self).__init__(name, **connection)
 
         self.storage_name = 'huey.results.%s' % clean_name(name)
-        self.conn = redis.Redis(**connection)
+        self.conn = get_connection(**connection)
 
     def put(self, key, value):
         self.conn.hset(self.storage_name, key, value)
@@ -143,7 +152,7 @@ class RedisDataStore(BaseDataStore):
 class RedisEventEmitter(BaseEventEmitter):
     def __init__(self, channel, **connection):
         super(RedisEventEmitter, self).__init__(channel, **connection)
-        self.conn = redis.Redis(**connection)
+        self.conn = get_connection(**connection)
 
     def emit(self, message):
         self.conn.publish(self.channel, message)
