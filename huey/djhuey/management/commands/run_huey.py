@@ -57,6 +57,16 @@ class Command(BaseCommand):
             type='float',
             help='Maximum delay between polling requests'
         ),
+        make_option('--logfile', '-l',
+            dest='logfile',
+            type='string',
+            help='Logging file name'
+        ),
+        make_option('--verbose', '-v',
+            dest='verbose',
+            action='store_true',
+            help='Verbose logging'
+        ),
     )
 
     def autodiscover_appconfigs(self):
@@ -116,9 +126,15 @@ class Command(BaseCommand):
         if options['max_delay'] is not None:
             consumer_options['max_delay'] = options['max_delay']
 
+        if options['logfile'] is not None:
+            consumer_options['logfile'] = options['logfile']
+
+        if options['verbose'] is not None:
+            consumer_options['verbose'] = options['verbose']
+
         self.autodiscover()
 
-        loglevel = get_loglevel(consumer_options.pop('loglevel', None))
+        loglevel = get_loglevel(consumer_options.pop('verbose', None))
         logfile = consumer_options.pop('logfile', None)
         setup_logger(loglevel, logfile)
 
