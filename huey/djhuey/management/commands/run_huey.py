@@ -62,7 +62,7 @@ class Command(BaseCommand):
             type='string',
             help='Logging file name'
         ),
-        make_option('--verbose', '-v',
+        make_option('--verbose', '-i',
             dest='verbose',
             action='store_true',
             help='Verbose logging'
