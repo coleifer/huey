@@ -57,6 +57,17 @@ class Command(BaseCommand):
             type='float',
             help='Maximum delay between polling requests'
         ),
+        make_option('--logfile', '-l',
+            dest='logfile',
+            type='string',
+            help='Write logs to FILE',
+            metavar='FILE',
+        ),
+        make_option('--verbose', '-v',
+            dest='verbose',
+            action='store_true',
+            help='Verbose logging',
+        ),
     )
 
     def autodiscover_appconfigs(self):
