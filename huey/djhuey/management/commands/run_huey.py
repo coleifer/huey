@@ -63,7 +63,7 @@ class Command(BaseCommand):
             help='Write logs to FILE',
             metavar='FILE',
         ),
-        make_option('--verbose', '-v',
+        make_option('--verbose',
             dest='verbose',
             action='store_true',
             help='Verbose logging',
