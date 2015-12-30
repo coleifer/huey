@@ -15,7 +15,8 @@ def every_five_mins():
     print('Consumer prints this every 5 mins')
 
 @huey.task(retries=3, retry_delay=10)
-def try_thrice():
+def try_thrice(msg):
+    print '----TRY THRICE: %s----' % msg
     if random.randint(1, 3) == 1:
         print('OK')
     else:

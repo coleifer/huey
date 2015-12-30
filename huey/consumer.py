@@ -188,6 +188,11 @@ class Environment(object):
     def create_process(self, runnable, name):
         raise NotImplementedError
 
+    def wait(self, flag):
+        # it seems that calling self.stop_flag.wait() here prevents the
+        # signal handler from executing in a threaded environment.
+        while not flag.is_set():
+            flag.wait(.1)
 
 class ThreadEnvironment(Environment):
     def get_stop_flag(self):
@@ -209,6 +214,9 @@ class GreenletEnvironment(Environment):
             runnable()
             gevent.sleep()
         return Greenlet(run=run_wrapper)
+
+    def wait(self, flag):
+        flag.wait()
 
 
 class ProcessEnvironment(Environment):
@@ -296,28 +304,19 @@ class Consumer(object):
         for worker in self.worker_threads:
             worker.start()
 
-    def wait(self):
-        # it seems that calling self.stop_flag.wait() here prevents the
-        # signal handler from executing in a threaded environment.
-        try:
-            while not self.stop_flag.is_set():
-                self.stop_flag.wait(.1)
-        except:
-            pass
-        else:
-            self.scheduler.join()
-            [worker.join() for worker in self.worker_threads]
-
     def stop(self):
         self.stop_flag.set()
 
     def run(self):
+        self.start()
         try:
-            self.start()
-            self.wait()
+            self.environment.wait(self.stop_flag)
         except:
             self._logger.exception('Error in consumer.')
             self.stop()
+        else:
+            self.scheduler.join()
+            [worker.join() for worker in self.worker_threads]
 
     def _set_signal_handler(self):
         self._logger.info('Setting signal handler')
