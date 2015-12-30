@@ -185,9 +185,10 @@ class ConsumerTestCase(unittest.TestCase):
         self.assertFalse('blampf' in state)
 
         task = test_huey.dequeue()
+        original_repr = repr(task)
         self.run_worker(task)
         self.assertEqual(self.handler.messages, [
-            'Executing %s' % task,
+            'Executing %s' % original_repr,
             'Unhandled exception in worker thread',
             'Re-enqueueing task %s, 2 tries left' % task.task_id])
 
@@ -253,9 +254,11 @@ class ConsumerTestCase(unittest.TestCase):
         cur_time = datetime.datetime.utcnow()
 
         task = test_huey.dequeue()
+        orig_repr = repr(task)
+
         self.run_worker(task, ts=cur_time)
         self.assertEqual(self.handler.messages, [
-            'Executing %s' % task,
+            'Executing %s' % orig_repr,
             'Unhandled exception in worker thread',
             'Re-enqueueing task %s, 2 tries left' % task.task_id,
         ])

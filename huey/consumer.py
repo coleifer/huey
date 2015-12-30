@@ -65,10 +65,12 @@ class Worker(BaseProcess):
         exc_raised = True
         try:
             task = self.huey.dequeue()
-        except QueueReadException:
+        except QueueReadException as exc:
             self._logger.exception('Error reading from queue')
         except QueueException:
             self._logger.exception('Queue exception')
+        except KeyboardInterrupt:
+            raise
         except:
             self._logger.exception('Unknown exception')
         else:
@@ -152,6 +154,8 @@ class Scheduler(BaseProcess):
         if periodic:
             # Determine the periodic task interval.
             self._q, self._r = divmod(60, self.interval)
+            if not self._r:
+                self._q -= 1
             self._counter = 0
         self._logger = logging.getLogger('huey.consumer.Scheduler')
 
@@ -165,17 +169,18 @@ class Scheduler(BaseProcess):
 
         should_sleep = True
         if self.periodic:
-            self._counter += 1
             if self._counter == self._q:
+                if self._r:
+                    self.sleep_for_interval(start, self._r)
                 self._logger.debug('Checking periodic tasks')
                 self._counter = 0
-                self.sleep_for_interval(start, self._r)
-                start = time.time()
                 for task in self.huey.read_periodic(now):
                     self._logger.info('Scheduling periodic task %s.' % task)
                     self.enqueue(task)
                 self.sleep_for_interval(start, self.interval - self._r)
                 should_sleep = False
+            else:
+                self._counter += 1
 
         if should_sleep:
             self.sleep_for_interval(start, self.interval)
@@ -224,7 +229,10 @@ class ProcessEnvironment(Environment):
         return ProcessEvent()
 
     def create_process(self, runnable, name):
-        p = Process(target=runnable, name=name)
+        def run_wrapper():
+            signal.signal(signal.SIGTERM, signal.SIG_IGN)
+            runnable()
+        p = Process(target=run_wrapper, name=name)
         p.daemon = True
         return p
 
@@ -232,6 +240,7 @@ class ProcessEnvironment(Environment):
 worker_to_environment = {
     'thread': ThreadEnvironment,
     'greenlet': GreenletEnvironment,
+    'gevent': GreenletEnvironment,  # Same as greenlet.
     'process': ProcessEnvironment,
 }
 
@@ -288,8 +297,11 @@ class Consumer(object):
 
     def _create_runnable(self, consumer_process):
         def _run():
-            while not self.stop_flag.is_set():
-                consumer_process.loop()
+            try:
+                while not self.stop_flag.is_set():
+                    consumer_process.loop()
+            except KeyboardInterrupt:
+                pass
         return _run
 
     def start(self):
@@ -298,6 +310,9 @@ class Consumer(object):
         msg = ['Huey consumer initialized with following commands']
         for command in registry._registry:
             msg.append('+ %s' % command.replace('queuecmd_', ''))
+        msg.append('Using %s %s workers' % (self.workers, self.worker_type))
+        msg.append('Periodic tasks are %s.' % ('enabled' if self.periodic else
+                                               'disabled'))
         self._logger.info('\n'.join(msg))
 
         self.scheduler.start()
@@ -311,6 +326,8 @@ class Consumer(object):
         self.start()
         try:
             self.environment.wait(self.stop_flag)
+        except KeyboardInterrupt:
+            self.stop()
         except:
             self._logger.exception('Error in consumer.')
             self.stop()
