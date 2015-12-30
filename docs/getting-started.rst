@@ -41,7 +41,7 @@ a :py:class:`Huey` instance, which specifies which backend to use.
 
     # config.py
     from huey import Huey
-    from huey.backend import RedisBlockingQueue
+    from huey.storage import RedisBlockingQueue
 
     queue = RedisBlockingQueue('test-queue', host='localhost', port=6379)
     huey = Huey(queue)
@@ -103,8 +103,8 @@ lines to the ``config.py`` module:
 .. code-block:: python
 
     from huey import Huey
-    from huey.backend import RedisBlockingQueue
-    from huey.backend import RedisDataStore  # ADD THIS LINE
+    from huey.storage import RedisBlockingQueue
+    from huey.storage import RedisDataStore  # ADD THIS LINE
 
 
     queue = RedisBlockingQueue('test-queue', host='localhost', port=6379)
