@@ -48,6 +48,9 @@ class BaseProcess(object):
         else:
             self.huey.emit_task('enqueued', task)
 
+    def loop(self, now=None):
+        raise NotImplementedError
+
 
 class Worker(BaseProcess):
     def __init__(self, huey, default_delay, max_delay, backoff, utc):
@@ -57,7 +60,7 @@ class Worker(BaseProcess):
         self._logger = logging.getLogger('huey.consumer.Worker')
         super(Worker, self).__init__(huey, utc)
 
-    def loop(self):
+    def loop(self, now=None):
         self._logger.debug('Checking for message')
         task = None
         exc_raised = True
@@ -169,7 +172,7 @@ class Scheduler(BaseProcess):
                 self._counter = 0
                 self.sleep_for_interval(start, self._r)
                 start = time.time()
-                for task in self.read_periodic(now):
+                for task in self.huey.read_periodic(now):
                     self._logger.info('Scheduling periodic task %s.' % task)
                     self.enqueue(task)
                 self.sleep_for_interval(start, self.interval - self._r)
@@ -183,10 +186,7 @@ class Environment(object):
     def get_stop_flag(self):
         raise NotImplementedError
 
-    def create_scheduler(self, **k):
-        raise NotImplementedError
-
-    def create_worker(self, **k):
+    def create_process(self, **k):
         raise NotImplementedError
 
 
@@ -194,21 +194,8 @@ class ThreadEnvironment(Environment):
     def get_stop_flag(self):
         return threading.Event()
 
-    def create_worker(self, stop_flag, **k):
-        def target():
-            worker = Worker(**k)
-            while not stop_flag.is_set():
-                worker.loop()
-        t = threading.Thread(target=target)
-        t.daemon = True
-        return t
-
-    def create_scheduler(self, stop_flag, **k):
-        def target():
-            scheduler = Scheduler(**k)
-            while not stop_flag.is_set():
-                scheduler.loop()
-        t = threading.Thread(target=target)
+    def create_process(self, runnable):
+        t = threading.Thread(target=runnable)
         t.daemon = True
         return t
 
@@ -217,41 +204,15 @@ class GreenletEnvironment(Environment):
     def get_stop_flag(self):
         return GreenEvent()
 
-    def create_worker(self, stop_flag, **k):
-        def target():
-            worker = Worker(**k)
-            while not stop_flag.is_set():
-                worker.loop()
-                gevent.sleep()
-        return Greenlet(run=target)
-
-    def create_scheduler(self, stop_flag, **k):
-        def target():
-            scheduler = Scheduler(**k)
-            while not stop_flag.is_set():
-                scheduler.loop()
-                gevent.sleep()
-        return Greenlet(run=target)
+    def create_process(self, runnable):
+        return Greenlet(run=runnable)
 
 
 class ProcessEnvironment(Environment):
     def get_stop_flag(self):
         return ProcessEvent()
 
-    def create_worker(self, stop_flag, **k):
-        def target():
-            worker = Worker(**k)
-            while not stop_flag.is_set():
-                worker.loop()
-        p = Process(target=target)
-        p.daemon = True
-        return p
-
-    def create_scheduler(self, stop_flag, **k):
-        def target():
-            scheduler = Scheduler(**k)
-            while not stop_flag.is_set():
-                scheduler.loop()
+    def create_process(self, runnable):
         p = Process(target=target)
         p.daemon = True
         return p
@@ -285,24 +246,36 @@ class Consumer(object):
         else:
             self.environment = worker_to_environment[worker_type]()
 
-
         self.stop_flag = self.environment.get_stop_flag()
-        self.scheduler = self.environment.create_scheduler(
-            self.stop_flag,
-            huey=huey,
-            interval=scheduler_interval,
-            utc=utc,
-            periodic=periodic)
+
+        scheduler = self._create_runnable(self._create_scheduler())
+        self.scheduler = self.environment.create_process(scheduler)
 
         self.worker_threads = []
         for i in range(workers):
-            self.worker_threads.append(self.environment.create_worker(
-                self.stop_flag,
-                huey=huey,
-                default_delay=initial_delay,
-                max_delay=max_delay,
-                backoff=backoff,
-                utc=utc))
+            worker = self._create_runnable(self._create_worker())
+            self.worker_threads.append(self.environment.create_process(worker))
+
+    def _create_worker(self):
+        return Worker(
+            huey=self.huey,
+            default_delay=self.default_delay,
+            max_delay=self.max_delay,
+            backoff=self.backoff,
+            utc=self.utc)
+
+    def _create_scheduler(self):
+        return Scheduler(
+            huey=self.huey,
+            interval=self.scheduler_interval,
+            utc=self.utc,
+            periodic=self.periodic)
+
+    def _create_runnable(self, consumer_process):
+        def _run():
+            while not self.stop_flag.is_set():
+                consumer_process.loop()
+        return _run
 
     def start(self):
         self._set_signal_handler()

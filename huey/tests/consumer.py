@@ -79,7 +79,7 @@ class ConsumerTestCase(unittest.TestCase):
         test_huey.result_store.flush()
         test_huey.schedule.flush()
 
-        self.consumer = Consumer(test_huey, workers=2)
+        self.consumer = Consumer(test_huey, workers=2, scheduler_interval=60)
 
         self.handler = TestLogHandler()
         logger.addHandler(self.handler)
@@ -87,7 +87,7 @@ class ConsumerTestCase(unittest.TestCase):
 
         pubsub = test_huey.events.listener()
         self.listener = pubsub.listen()
-        next(self.listener)
+        next(self.listener)  # Consume the subscribe message.
 
     def tearDown(self):
         self.consumer.stop()
@@ -134,8 +134,8 @@ class ConsumerTestCase(unittest.TestCase):
         self.assertEqual(res.get(), 'v')
 
         self.assertStatusTask([
-            ('finished', res.task, {}),
             ('started', res.task, {}),
+            ('finished', res.task, {}),
         ])
 
     def test_worker(self):
@@ -153,8 +153,8 @@ class ConsumerTestCase(unittest.TestCase):
             'Unhandled exception in worker thread' in self.handler.messages)
 
         self.assertStatusTask([
-            ('error', task, {'error': True}),
             ('started', task, {}),
+            ('error', task, {'error': True}),
         ])
 
     def test_retries_and_logging(self):
@@ -171,16 +171,16 @@ class ConsumerTestCase(unittest.TestCase):
                     'Re-enqueueing task %s, %s tries left' % (
                         task.task_id, i - 1))
                 self.assertStatusTask([
-                    ('enqueued', task, {}),
-                    ('retrying', task, {}),
-                    ('error', task,{}),
                     ('started', task, {}),
+                    ('error', task,{}),
+                    ('retrying', task, {}),
+                    ('enqueued', task, {}),
                 ])
                 last_idx = -2
             else:
                 self.assertStatusTask([
-                    ('error', task,{}),
                     ('started', task, {}),
+                    ('error', task,{}),
                 ])
                 last_idx = -1
             self.assertEqual(self.handler.messages[last_idx],
@@ -208,22 +208,22 @@ class ConsumerTestCase(unittest.TestCase):
         self.assertEqual(test_huey.dequeue(), None)
 
         self.assertStatusTask([
-            ('finished', task, {}),
             ('started', task, {}),
-            ('enqueued', task, {'retries': 2}),
-            ('retrying', task, {'retries': 3}),
             ('error', task, {'error': True}),
+            ('retrying', task, {'retries': 3}),
+            ('enqueued', task, {'retries': 2}),
             ('started', task, {}),
+            ('finished', task, {}),
         ])
 
     def test_scheduling(self):
-        dt = datetime.datetime(2011, 1, 1, 0, 0)
-        dt2 = datetime.datetime(2037, 1, 1, 0, 0)
+        dt = datetime.datetime(2011, 1, 1, 0, 1)
+        dt2 = datetime.datetime(2037, 1, 1, 0, 1)
         ad1 = modify_state.schedule(args=('k', 'v'), eta=dt, convert_utc=False)
         ad2 = modify_state.schedule(args=('k2', 'v2'), eta=dt2, convert_utc=False)
 
         # dequeue the past-timestamped task and run it.
-        worker = self.consumer.worker_threads[0]
+        worker = self.consumer._create_worker()
         worker.loop()
 
         self.assertTrue('k' in state)
@@ -235,22 +235,23 @@ class ConsumerTestCase(unittest.TestCase):
         self.assertFalse('k2' in state)
 
         self.assertStatusTask([
-            ('scheduled', ad2.task, {}),
-            ('finished', ad1.task, {}),
             ('started', ad1.task, {}),
+            ('finished', ad1.task, {}),
+            ('scheduled', ad2.task, {}),
         ])
 
         # run through an iteration of the scheduler
-        self.consumer.scheduler_t.loop(dt)
+        scheduler = self.consumer._create_scheduler()
+        scheduler.loop(dt)
 
         # our command was not enqueued and no events were emitted.
-        self.assertEqual(len(test_queue._queue), 0)
+        self.assertEqual(len(test_queue), 0)
 
         # run through an iteration of the scheduler
-        self.consumer.scheduler_t.loop(dt2)
+        scheduler.loop(dt2)
 
         # our command was enqueued
-        self.assertEqual(len(test_queue._queue), 1)
+        self.assertEqual(len(test_queue), 1)
         self.assertStatusTask([
             ('enqueued', ad2.task, {}),
         ])
@@ -278,16 +279,16 @@ class ConsumerTestCase(unittest.TestCase):
 
         self.assertEqual((exec_time - cur_time).seconds, 10)
         self.assertStatusTask([
-            ('scheduled', task, {
-                'retries': 2,
-                'retry_delay': 10,
-                'execute_time': time.mktime(exec_time.timetuple())}),
+            ('started', task, {}),
+            ('error', task, {}),
             ('retrying', task, {
                 'retries': 3,
                 'retry_delay': 10,
                 'execute_time': None}),
-            ('error', task, {}),
-            ('started', task, {}),
+            ('scheduled', task, {
+                'retries': 2,
+                'retry_delay': 10,
+                'execute_time': time.mktime(exec_time.timetuple())}),
         ])
 
     def test_revoking_normal(self):
@@ -351,12 +352,13 @@ class ConsumerTestCase(unittest.TestCase):
             self.run_worker(task)
 
             self.assertEqual(state, estate)
-            self.assertEqual(len(test_huey.schedule._schedule), esc)
+            self.assertEqual(len(test_huey.schedule), esc)
 
         # lets pretend its 2037
         future = dt2 + datetime.timedelta(seconds=1)
-        self.consumer.scheduler_t.loop(future)
-        self.assertEqual(len(test_huey.schedule._schedule), 0)
+        scheduler = self.consumer._create_scheduler()
+        scheduler.loop(future)
+        self.assertEqual(len(test_huey.schedule), 0)
 
         # There are two tasks in the queue now (r3 and r4) -- process both.
         for i in range(2):
@@ -368,8 +370,9 @@ class ConsumerTestCase(unittest.TestCase):
     def test_revoking_periodic(self):
         global state
         def loop_periodic(ts):
-            self.consumer.periodic_t.loop(ts)
-            for i in range(len(test_queue._queue)):
+            scheduler = self.consumer._create_scheduler()
+            scheduler.loop(ts)
+            for i in range(len(test_queue)):
                 task = test_huey.dequeue()
                 self.run_worker(task, ts)
 
@@ -426,5 +429,5 @@ class ConsumerTestCase(unittest.TestCase):
 
         # our data store should reflect the delay
         task_obj = every_hour.task_class()
-        self.assertEqual(len(test_huey.result_store._results), 1)
-        self.assertTrue(task_obj.revoke_id in test_huey.result_store._results)
+        self.assertEqual(test_huey.result_store.count(), 1)
+        self.assertTrue(task_obj.revoke_id in test_huey.result_store)
