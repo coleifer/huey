@@ -7,7 +7,6 @@ import traceback
 import uuid
 from functools import wraps
 
-from huey.backends.dummy import DummySchedule
 from huey.exceptions import DataStoreGetException
 from huey.exceptions import DataStorePutException
 from huey.exceptions import DataStoreTimeout
@@ -68,7 +67,7 @@ class Huey(object):
                  store_none=False, always_eager=False):
         self.queue = queue
         self.result_store = result_store
-        self.schedule = schedule or DummySchedule(self.queue.name)
+        self.schedule = schedule
         self.events = events
         self.blocking = self.queue.blocking
         self.store_none = store_none
@@ -282,8 +281,13 @@ class Huey(object):
         self._add_schedule(msg, ex_time)
 
     def read_schedule(self, ts):
-        return [
-            registry.get_task_for_message(m) for m in self._read_schedule(ts)]
+        return [registry.get_task_for_message(m)
+                for m in self._read_schedule(ts)]
+
+    def read_periodic(self, ts):
+        periodic = registry.get_periodic_tasks()
+        return [task for task in registry.get_periodic_tasks()
+                if task.validate_datetime(ts)]
 
     def flush(self):
         self.queue.flush()

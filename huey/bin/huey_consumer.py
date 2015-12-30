@@ -47,9 +47,9 @@ def get_option_parser():
                       help='worker threads (default=1)', default=1)
     parser.add_option('-t', '--threads', dest='workers', type='int',
                       help='same as "workers"', default=1)
-    parser.add_option('-p', '--periodic', dest='periodic', default=True,
-                      help='execute periodic tasks (default=True)',
-                      action='store_true')
+    parser.add_option('-k', '--worker-type', dest='worker_type',
+                      help='worker type (thread, greenlet, process)',
+                      default='thread')
     parser.add_option('-n', '--no-periodic', dest='periodic',
                       help='do NOT execute periodic tasks',
                       action='store_false')
@@ -64,10 +64,6 @@ def get_option_parser():
                       help='amount to backoff delay when no results present '
                            '(default=1.15)',
                       default=1.15)
-    parser.add_option('-P', '--periodic-task-interval',
-                      dest='periodic_task_interval',
-                      type='float', help='Granularity of periodic tasks.',
-                      default=60.0)
     parser.add_option('-S', '--scheduler-interval', dest='scheduler_interval',
                       type='float', help='Granularity of scheduler.',
                       default=1.0)
@@ -113,7 +109,7 @@ def consumer_main():
         options.max_delay,
         options.utc,
         options.scheduler_interval,
-        options.periodic_task_interval)
+        options.worker_type)
     consumer.run()
 
 
