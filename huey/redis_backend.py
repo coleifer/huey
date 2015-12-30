@@ -4,10 +4,8 @@ import time
 import redis
 from redis.exceptions import ConnectionError
 
-from huey.backends.base import BaseDataStore
-from huey.backends.base import BaseEventEmitter
-from huey.backends.base import BaseQueue
-from huey.backends.base import BaseSchedule
+from huey.api import Huey
+from huey.registry import registry
 from huey.utils import EmptyData
 
 
@@ -15,20 +13,23 @@ def clean_name(name):
     return re.sub('[^a-z0-9]', '', name)
 
 
-def get_connection(**config):
-    try:
-        url = config.pop('url')
-    except KeyError:
-        return redis.Redis(**config)
-    else:
-        return redis.Redis.from_url(url, **config)
+class RedisComponent(object):
+    def __init__(self, name, connection_pool, **connection):
+        self.name = name
+        self.conn = redis.Redis(
+            connection_pool=connection_pool,
+            **connection)
+        self._conn_kwargs = connection
+
+    def convert_ts(self, ts):
+        return time.mktime(ts.timetuple())
 
 
-class RedisQueue(BaseQueue):
+class RedisQueue(RedisComponent):
     """
     A simple Queue that uses the redis to store messages
     """
-    def __init__(self, name, **connection):
+    def __init__(self, name, connection_pool, **connection):
         """
         connection = {
             'host': 'localhost',
@@ -36,10 +37,8 @@ class RedisQueue(BaseQueue):
             'db': 0,
         }
         """
-        super(RedisQueue, self).__init__(name, **connection)
-
+        super(RedisQueue, self).__init__(name, connection_pool, **connection)
         self.queue_name = 'huey.redis.%s' % clean_name(name)
-        self.conn = get_connection(**connection)
 
     def write(self, data):
         self.conn.lpush(self.queue_name, data)
@@ -65,7 +64,7 @@ class RedisBlockingQueue(RedisQueue):
     """
     blocking = True
 
-    def __init__(self, name, read_timeout=None, **connection):
+    def __init__(self, name, connection_pool, read_timeout=None, **connection):
         """
         connection = {
             'host': 'localhost',
@@ -73,7 +72,8 @@ class RedisBlockingQueue(RedisQueue):
             'db': 0,
         }
         """
-        super(RedisBlockingQueue, self).__init__(name, **connection)
+        super(RedisBlockingQueue, self).__init__(
+            name, connection_pool, **connection)
         self.read_timeout = read_timeout
 
     def read(self):
@@ -99,16 +99,13 @@ if #res and redis.call('zremrangebyscore', key, '-inf', unix_ts) == #res then
 end
 """
 
-class RedisSchedule(BaseSchedule):
-    def __init__(self, name, **connection):
-        super(RedisSchedule, self).__init__(name, **connection)
+class RedisSchedule(RedisComponent):
+    def __init__(self, name, connection_pool, **connection):
+        super(RedisSchedule, self).__init__(
+            name, connection_pool, **connection)
 
         self.key = 'huey.schedule.%s' % clean_name(name)
-        self.conn = get_connection(**connection)
         self._pop = self.conn.register_script(SCHEDULE_POP_LUA)
-
-    def convert_ts(self, ts):
-        return time.mktime(ts.timetuple())
 
     def add(self, data, ts):
         self.conn.zadd(self.key, data, self.convert_ts(ts))
@@ -124,12 +121,12 @@ class RedisSchedule(BaseSchedule):
         self.conn.delete(self.key)
 
 
-class RedisDataStore(BaseDataStore):
-    def __init__(self, name, **connection):
-        super(RedisDataStore, self).__init__(name, **connection)
+class RedisDataStore(RedisComponent):
+    def __init__(self, name, connection_pool, **connection):
+        super(RedisDataStore, self).__init__(
+            name, connection_pool, **connection)
 
         self.storage_name = 'huey.results.%s' % clean_name(name)
-        self.conn = get_connection(**connection)
 
     def put(self, key, value):
         self.conn.hset(self.storage_name, key, value)
@@ -149,14 +146,32 @@ class RedisDataStore(BaseDataStore):
         self.conn.delete(self.storage_name)
 
 
-class RedisEventEmitter(BaseEventEmitter):
-    def __init__(self, channel, **connection):
-        super(RedisEventEmitter, self).__init__(channel, **connection)
-        self.conn = get_connection(**connection)
+class RedisEventEmitter(RedisComponent):
+    def __init__(self, name, connection_pool, **connection):
+        super(RedisEventEmitter, self).__init__(
+            name, connection_pool, **connection)
+        self.channel = name
 
     def emit(self, message):
         self.conn.publish(self.channel, message)
 
 
-Components = (RedisBlockingQueue, RedisDataStore, RedisSchedule,
-              RedisEventEmitter)
+class RedisHuey(Huey):
+    def __init__(self, name='huey', store_none=False, always_eager=False,
+                 read_timeout=None, **conn_kwargs):
+        self._conn_kwargs = conn_kwargs
+        pool = redis.ConnectionPool(**conn_kwargs)
+        queue = RedisBlockingQueue(
+            name,
+            read_timeout=read_timeout,
+            connection_pool=pool)
+        result_store = RedisDataStore(name, connection_pool=pool)
+        schedule = RedisSchedule(name, connection_pool=pool)
+        events = RedisEventEmitter(name, connection_pool=pool)
+        super(RedisHuey, self).__init__(
+            queue=queue,
+            result_store=result_store,
+            schedule=schedule,
+            events=events,
+            store_none=store_none,
+            always_eager=always_eager)
