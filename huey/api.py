@@ -43,7 +43,7 @@ class Huey(object):
     Example usage::
 
         from huey.api import Huey, crontab
-        from huey.backends.redis_backend import RedisQueue, RedisDataStore, RedisSchedule
+        from huey.backend import RedisQueue, RedisDataStore, RedisSchedule
 
         queue = RedisQueue('my-app')
         result_store = RedisDataStore('my-app')
@@ -289,12 +289,16 @@ class Huey(object):
         return [task for task in registry.get_periodic_tasks()
                 if task.validate_datetime(ts)]
 
-    def flush(self):
-        self.queue.flush()
-
     def ready_to_run(self, cmd, dt=None):
         dt = dt or datetime.datetime.utcnow()
         return cmd.execute_time is None or cmd.execute_time <= dt
+
+    def flush(self):
+        self.queue.flush()
+        if self.result_store:
+            self.result_store.flush()
+        if self.schedule:
+            self.schedule.flush()
 
 
 class AsyncData(object):
