@@ -107,27 +107,18 @@ class ConsumerTestCase(unittest.TestCase):
                 self.assertEqual(event[k], v)
             i += 1
 
-    def spawn(self, func, *args, **kwargs):
-        t = threading.Thread(target=func, args=args, kwargs=kwargs)
-        t.start()
-        return t
-
     def run_worker(self, task, ts=None):
-        worker = Worker(
-            test_huey,
-            self.consumer.default_delay,
-            self.consumer.max_delay,
-            self.consumer.backoff,
-            self.consumer.utc)
+        worker = self.consumer._create_worker()
         ts = ts or datetime.datetime.utcnow()
         worker.handle_task(task, ts)
 
     def test_message_processing(self):
-        self.consumer.worker_threads[0].start()
+        worker = self.consumer._create_worker()
 
         self.assertFalse('k' in state)
 
         res = modify_state('k', 'v')
+        worker.loop()
         res.get(blocking=True)
 
         self.assertTrue('k' in state)
@@ -186,7 +177,7 @@ class ConsumerTestCase(unittest.TestCase):
             self.assertEqual(self.handler.messages[last_idx],
                              'Unhandled exception in worker thread')
 
-        self.assertEqual(test_huey.dequeue(), None)
+        self.assertEqual(len(test_huey.queue), 0)
 
     def test_retries_with_success(self):
         # this will fail once, then succeed
@@ -205,7 +196,7 @@ class ConsumerTestCase(unittest.TestCase):
         self.run_worker(task)
 
         self.assertEqual(state['blampf'], 'fixed')
-        self.assertEqual(test_huey.dequeue(), None)
+        self.assertEqual(len(test_huey.queue), 0)
 
         self.assertStatusTask([
             ('started', task, {}),
