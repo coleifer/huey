@@ -50,9 +50,9 @@ def get_option_parser():
     parser.add_option('-k', '--worker-type', dest='worker_type',
                       help='worker type (thread, greenlet, process)',
                       default='thread')
-    parser.add_option('-n', '--no-periodic', dest='periodic',
-                      help='do NOT execute periodic tasks',
-                      action='store_false')
+    parser.add_option('-n', '--no-periodic', action='store_false',
+                      default=True, dest='periodic',
+                      help='do NOT execute periodic tasks')
     parser.add_option('-d', '--delay', dest='initial_delay', type='float',
                       help='initial delay in seconds (default=0.1)',
                       default=0.1)

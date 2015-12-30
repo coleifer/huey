@@ -156,6 +156,8 @@ class Huey(object):
             def inner(*args, **kwargs):
                 try:
                     return fn(*args, **kwargs)
+                except (KeyboardInterrupt, RuntimeError):
+                    raise
                 except:
                     wrap_exception(exc_class)
             return inner
