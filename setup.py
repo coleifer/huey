@@ -21,7 +21,6 @@ setup(
         'License :: OSI Approved :: MIT License',
         'Operating System :: OS Independent',
         'Programming Language :: Python',
-        'Framework :: Django',
     ],
     test_suite='runtests.runtests',
     entry_points={

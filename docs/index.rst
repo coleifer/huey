@@ -11,16 +11,17 @@ huey, a little task queue
 a lightweight alternative.
 
 * written in python
-* no deps outside stdlib, except redis (or roll your own backend)
+* only dependency is the Python Redis client
 
 supports:
 
-* multi-threaded, multi-process or greenlet task execution
+* multi-process, multi-thread or greenlet task execution
 * scheduled execution at a given time
 * periodic execution, like a crontab
 * retrying tasks that fail
 * task result storage
 
+.. image:: http://i.imgur.com/2EpRs.jpg
 
 Huey's API
 ----------
@@ -39,7 +40,7 @@ Huey's API
     def nightly_backup():
         sync_all_data()
 
-To run the consume with 4 worker processes:
+To run the consumer with 4 worker processes:
 
 .. code-block:: console
 
