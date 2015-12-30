@@ -7,13 +7,9 @@ import time
 import unittest
 
 from huey import crontab
-from huey import Huey
-from huey.backends.dummy import DummyDataStore
-from huey.backends.dummy import DummyEventEmitter
-from huey.backends.dummy import DummyQueue
-from huey.backends.dummy import DummySchedule
+from huey import RedisHuey
 from huey.consumer import Consumer
-from huey.consumer import WorkerThread
+from huey.consumer import Worker
 from huey.registry import registry
 
 # Logger used by the consumer.
@@ -24,11 +20,8 @@ state = {}
 
 # Create a queue, result store, schedule and event emitter, then attach them
 # to a test-only Huey instance.
-test_queue = DummyQueue('test-queue')
-test_result_store = DummyDataStore('test-queue')
-test_schedule = DummySchedule('test-queue')
-test_events = DummyEventEmitter('test-queue')
-test_huey = Huey(test_queue, test_result_store, test_schedule, test_events)
+test_huey = RedisHuey()
+test_queue = test_huey.queue
 
 # Create some test tasks.
 @test_huey.task()
@@ -85,17 +78,19 @@ class ConsumerTestCase(unittest.TestCase):
         test_huey.queue.flush()
         test_huey.result_store.flush()
         test_huey.schedule.flush()
-        test_events._events = deque()
 
         self.consumer = Consumer(test_huey, workers=2)
-        self.consumer._create_threads()
 
         self.handler = TestLogHandler()
         logger.addHandler(self.handler)
         logger.setLevel(logging.INFO)
 
+        pubsub = test_huey.events.listener()
+        self.listener = pubsub.listen()
+        next(self.listener)
+
     def tearDown(self):
-        self.consumer.shutdown()
+        self.consumer.stop()
         logger.removeHandler(self.handler)
         registry._periodic_tasks = self.orig_pc
         time.sleep = self.orig_sleep
@@ -104,7 +99,7 @@ class ConsumerTestCase(unittest.TestCase):
         parsed = []
         i = 0
         while i < len(status_task):
-            event = json.loads(test_events._events[i])
+            event = json.loads(next(self.listener)['data'])
             status, task, extra = status_task[i]
             self.assertEqual(event['status'], status)
             self.assertEqual(event['id'], task.task_id)
@@ -118,15 +113,14 @@ class ConsumerTestCase(unittest.TestCase):
         return t
 
     def run_worker(self, task, ts=None):
-        worker_t = WorkerThread(
+        worker = Worker(
             test_huey,
             self.consumer.default_delay,
             self.consumer.max_delay,
             self.consumer.backoff,
-            self.consumer.utc,
-            self.consumer._shutdown)
+            self.consumer.utc)
         ts = ts or datetime.datetime.utcnow()
-        worker_t.handle_task(task, ts)
+        worker.handle_task(task, ts)
 
     def test_message_processing(self):
         self.consumer.worker_threads[0].start()
@@ -139,7 +133,6 @@ class ConsumerTestCase(unittest.TestCase):
         self.assertTrue('k' in state)
         self.assertEqual(res.get(), 'v')
 
-        self.assertEqual(len(test_events._events), 2)
         self.assertStatusTask([
             ('finished', res.task, {}),
             ('started', res.task, {}),
@@ -159,7 +152,6 @@ class ConsumerTestCase(unittest.TestCase):
         self.assertTrue(
             'Unhandled exception in worker thread' in self.handler.messages)
 
-        self.assertEqual(len(test_events._events), 2)
         self.assertStatusTask([
             ('error', task, {'error': True}),
             ('started', task, {}),
@@ -232,12 +224,12 @@ class ConsumerTestCase(unittest.TestCase):
 
         # dequeue the past-timestamped task and run it.
         worker = self.consumer.worker_threads[0]
-        worker.check_message()
+        worker.loop()
 
         self.assertTrue('k' in state)
 
         # dequeue the future-timestamped task.
-        worker.check_message()
+        worker.loop()
 
         # verify the task got stored in the schedule instead of executing
         self.assertFalse('k2' in state)
@@ -253,14 +245,12 @@ class ConsumerTestCase(unittest.TestCase):
 
         # our command was not enqueued and no events were emitted.
         self.assertEqual(len(test_queue._queue), 0)
-        self.assertEqual(len(test_events._events), 3)
 
         # run through an iteration of the scheduler
         self.consumer.scheduler_t.loop(dt2)
 
         # our command was enqueued
         self.assertEqual(len(test_queue._queue), 1)
-        self.assertEqual(len(test_events._events), 4)
         self.assertStatusTask([
             ('enqueued', ad2.task, {}),
         ])
@@ -314,7 +304,6 @@ class ConsumerTestCase(unittest.TestCase):
         task = test_huey.dequeue()
         self.run_worker(task)
 
-        self.assertEqual(len(test_events._events), 1)
         self.assertStatusTask([
             ('revoked', r1.task, {}),
         ])

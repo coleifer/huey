@@ -180,67 +180,33 @@ class Scheduler(BaseProcess):
 
 
 class Environment(object):
-    def __init__(self):
-        self.scheduler = None
-        self.workers = []
-        self.stop_flag = self.get_stop_flag()
+    def get_stop_flag(self):
+        raise NotImplementedError
 
     def create_scheduler(self, **k):
         raise NotImplementedError
 
     def create_worker(self, **k):
         raise NotImplementedError
-
-    def start(self, huey, workers=1, periodic=True, initial_delay=0.1,
-              backoff=1.15, max_delay=10.0, utc=True, scheduler_interval=1):
-        self.scheduler = self.create_scheduler(
-            huey=huey,
-            interval=scheduler_interval,
-            utc=utc,
-            periodic=periodic)
-
-        for i in range(workers):
-            self.workers.append(self.create_worker(
-                huey=huey,
-                default_delay=initial_delay,
-                max_delay=max_delay,
-                backoff=backoff,
-                utc=utc))
-
-        self.scheduler.start()
-        for worker in self.workers:
-            worker.start()
-
-    def wait(self):
-        # it seems that calling self.stop_flag.wait() here prevents the
-        # signal handler from executing in a threaded environment.
-        try:
-            while not self.stop_flag.is_set():
-                self.stop_flag.wait(.1)
-        except:
-            pass
-
-    def stop(self):
-        self.stop_flag.set()
 
 
 class ThreadEnvironment(Environment):
     def get_stop_flag(self):
         return threading.Event()
 
-    def create_worker(self, **k):
+    def create_worker(self, stop_flag, **k):
         def target():
             worker = Worker(**k)
-            while not self.stop_flag.is_set():
+            while not stop_flag.is_set():
                 worker.loop()
         t = threading.Thread(target=target)
         t.daemon = True
         return t
 
-    def create_scheduler(self, **k):
+    def create_scheduler(self, stop_flag, **k):
         def target():
             scheduler = Scheduler(**k)
-            while not self.stop_flag.is_set():
+            while not stop_flag.is_set():
                 scheduler.loop()
         t = threading.Thread(target=target)
         t.daemon = True
@@ -251,18 +217,18 @@ class GreenletEnvironment(Environment):
     def get_stop_flag(self):
         return GreenEvent()
 
-    def create_worker(self, **k):
+    def create_worker(self, stop_flag, **k):
         def target():
             worker = Worker(**k)
-            while not self.stop_flag.is_set():
+            while not stop_flag.is_set():
                 worker.loop()
                 gevent.sleep()
         return Greenlet(run=target)
 
-    def create_scheduler(self, **k):
+    def create_scheduler(self, stop_flag, **k):
         def target():
             scheduler = Scheduler(**k)
-            while not self.stop_flag.is_set():
+            while not stop_flag.is_set():
                 scheduler.loop()
                 gevent.sleep()
         return Greenlet(run=target)
@@ -272,19 +238,19 @@ class ProcessEnvironment(Environment):
     def get_stop_flag(self):
         return ProcessEvent()
 
-    def create_worker(self, **k):
+    def create_worker(self, stop_flag, **k):
         def target():
             worker = Worker(**k)
-            while not self.stop_flag.is_set():
+            while not stop_flag.is_set():
                 worker.loop()
         p = Process(target=target)
         p.daemon = True
         return p
 
-    def create_scheduler(self, **k):
+    def create_scheduler(self, stop_flag, **k):
         def target():
             scheduler = Scheduler(**k)
-            while not self.stop_flag.is_set():
+            while not stop_flag.is_set():
                 scheduler.loop()
         p = Process(target=target)
         p.daemon = True
@@ -319,13 +285,24 @@ class Consumer(object):
         else:
             self.environment = worker_to_environment[worker_type]()
 
-    def run(self):
-        try:
-            self.start()
-            self.environment.wait()
-        except:
-            self._logger.exception('Error in consumer.')
-            self.environment.stop()
+
+        self.stop_flag = self.environment.get_stop_flag()
+        self.scheduler = self.environment.create_scheduler(
+            self.stop_flag,
+            huey=huey,
+            interval=scheduler_interval,
+            utc=utc,
+            periodic=periodic)
+
+        self.worker_threads = []
+        for i in range(workers):
+            self.worker_threads.append(self.environment.create_worker(
+                self.stop_flag,
+                huey=huey,
+                default_delay=initial_delay,
+                max_delay=max_delay,
+                backoff=backoff,
+                utc=utc))
 
     def start(self):
         self._set_signal_handler()
@@ -335,19 +312,33 @@ class Consumer(object):
             msg.append('+ %s' % command.replace('queuecmd_', ''))
         self._logger.info('\n'.join(msg))
 
-        self.environment.start(
-            self.huey,
-            workers=self.workers,
-            periodic=self.periodic,
-            initial_delay=self.default_delay,
-            backoff=self.backoff,
-            max_delay=self.max_delay,
-            utc=self.utc,
-            scheduler_interval=self.scheduler_interval)
+        self.scheduler.start()
+        for worker in self.worker_threads:
+            worker.start()
+
+    def wait(self):
+        # it seems that calling self.stop_flag.wait() here prevents the
+        # signal handler from executing in a threaded environment.
+        try:
+            while not self.stop_flag.is_set():
+                self.stop_flag.wait(.1)
+        except:
+            pass
+
+    def stop(self):
+        self.stop_flag.set()
+
+    def run(self):
+        try:
+            self.start()
+            self.wait()
+        except:
+            self._logger.exception('Error in consumer.')
+            self.stop()
 
     def _handle_signal(self, sig_num, frame):
         self._logger.info('Received SIGTERM')
-        self.environment.stop()
+        self.stop()
 
     def _set_signal_handler(self):
         self._logger.info('Setting signal handler')
