@@ -214,8 +214,11 @@ class Environment(object):
     def wait(self):
         # it seems that calling self.stop_flag.wait() here prevents the
         # signal handler from executing in a threaded environment.
-        while not self.stop_flag.is_set():
-            self.stop_flag.wait(.1)
+        try:
+            while not self.stop_flag.is_set():
+                self.stop_flag.wait(.1)
+        except:
+            pass
 
     def stop(self):
         self.stop_flag.set()
