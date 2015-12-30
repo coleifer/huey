@@ -133,6 +133,12 @@ class RedisDataStore(RedisComponent):
 
         self.storage_name = 'huey.results.%s' % clean_name(name)
 
+    def count(self):
+        return self.conn.hlen(self.storage_name)
+
+    def __contains__(self, key):
+        return self.conn.hexists(self.storage_name, key)
+
     def put(self, key, value):
         self.conn.hset(self.storage_name, key, value)
 
