@@ -40,6 +40,14 @@ class BaseProcess(object):
         if delta < nseconds:
             time.sleep(nseconds - (time.time() - start_ts))
 
+    def enqueue(self, task):
+        try:
+            self.huey.enqueue(task)
+        except QueueWriteException:
+            self._logger.error('Error enqueueing task: %s' % task)
+        else:
+            self.huey.emit_task('enqueued', task)
+
 
 class Worker(BaseProcess):
     def __init__(self, huey, default_delay, max_delay, backoff, utc):
@@ -115,14 +123,6 @@ class Worker(BaseProcess):
         else:
             self.enqueue(task)
 
-    def enqueue(self, task):
-        try:
-            self.huey.enqueue(task)
-        except QueueWriteException:
-            self._logger.error('Error enqueueing task: %s' % task)
-        else:
-            self.huey.emit_task('enqueued', task)
-
     def add_schedule(self, task):
         try:
             self.huey.add_schedule(task)
@@ -153,23 +153,16 @@ class Scheduler(BaseProcess):
             self._counter = 0
         self._logger = logging.getLogger('huey.consumer.Scheduler')
 
-    def read_tasks(self, ts):
-        try:
-            return self.huey.read_schedule(ts)
-        except ScheduleReadException:
-            self._logger.exception('Error reading schedule')
-            return []
-
     def loop(self, now=None):
         now = now or self.get_now()
         start = time.time()
 
-        for task in self.read_schedule(now):
+        for task in self.huey.read_schedule(now):
             self._logger.info('Scheduling %s for execution' % task)
             self.enqueue(task)
 
         should_sleep = True
-        if self._periodic:
+        if self.periodic:
             self._counter += 1
             if self._counter == self._q:
                 self._logger.debug('Checking periodic tasks')
@@ -228,6 +221,29 @@ class Environment(object):
         self.stop_flag.set()
 
 
+class ThreadEnvironment(Environment):
+    def get_stop_flag(self):
+        return threading.Event()
+
+    def create_worker(self, **k):
+        def target():
+            worker = Worker(**k)
+            while not self.stop_flag.is_set():
+                worker.loop()
+        t = threading.Thread(target=target)
+        t.daemon = True
+        return t
+
+    def create_scheduler(self, **k):
+        def target():
+            scheduler = Scheduler(**k)
+            while not self.stop_flag.is_set():
+                scheduler.loop()
+        t = threading.Thread(target=target)
+        t.daemon = True
+        return t
+
+
 class GreenletEnvironment(Environment):
     def get_stop_flag(self):
         return GreenEvent()
@@ -273,7 +289,7 @@ class ProcessEnvironment(Environment):
 
 
 worker_to_environment = {
-    'thread': ThreadedEnvironment,
+    'thread': ThreadEnvironment,
     'greenlet': GreenletEnvironment,
     'process': ProcessEnvironment,
 }
@@ -302,7 +318,7 @@ class Consumer(object):
 
     def run(self):
         try:
-            self.environment.start()
+            self.start()
             self.environment.wait()
         except:
             self._logger.exception('Error in consumer.')
@@ -316,7 +332,15 @@ class Consumer(object):
             msg.append('+ %s' % command.replace('queuecmd_', ''))
         self._logger.info('\n'.join(msg))
 
-        self.environment.start()
+        self.environment.start(
+            self.huey,
+            workers=self.workers,
+            periodic=self.periodic,
+            initial_delay=self.default_delay,
+            backoff=self.backoff,
+            max_delay=self.max_delay,
+            utc=self.utc,
+            scheduler_interval=self.scheduler_interval)
 
     def _handle_signal(self, sig_num, frame):
         self._logger.info('Received SIGTERM')
