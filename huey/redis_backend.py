@@ -29,6 +29,8 @@ class RedisQueue(RedisComponent):
     """
     A simple Queue that uses the redis to store messages
     """
+    blocking = False
+
     def __init__(self, name, connection_pool, **connection):
         """
         connection = {
@@ -117,6 +119,9 @@ class RedisSchedule(RedisComponent):
         tasks = self._pop(keys=[self.key], args=[unix_ts])
         return [] if tasks is None else tasks
 
+    def __len__(self):
+        return self.conn.zcard(self.key)
+
     def flush(self):
         self.conn.delete(self.key)
 
@@ -154,6 +159,11 @@ class RedisEventEmitter(RedisComponent):
 
     def emit(self, message):
         self.conn.publish(self.channel, message)
+
+    def listener(self):
+        pubsub = self.conn.pubsub()
+        pubsub.subscribe([self.channel])
+        return pubsub
 
 
 class RedisHuey(Huey):
