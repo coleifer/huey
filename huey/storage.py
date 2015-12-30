@@ -5,7 +5,6 @@ import redis
 from redis.exceptions import ConnectionError
 
 from huey.api import Huey
-from huey.registry import registry
 from huey.utils import EmptyData
 
 
@@ -174,7 +173,7 @@ class RedisEventEmitter(RedisComponent):
 
 class RedisHuey(Huey):
     def __init__(self, name='huey', store_none=False, always_eager=False,
-                 read_timeout=None, **conn_kwargs):
+                 read_timeout=None, events=True, **conn_kwargs):
         self._conn_kwargs = conn_kwargs
         pool = redis.ConnectionPool(**conn_kwargs)
         queue = RedisBlockingQueue(
@@ -183,7 +182,10 @@ class RedisHuey(Huey):
             connection_pool=pool)
         result_store = RedisDataStore(name, connection_pool=pool)
         schedule = RedisSchedule(name, connection_pool=pool)
-        events = RedisEventEmitter(name, connection_pool=pool)
+        if events:
+            events = RedisEventEmitter(name, connection_pool=pool)
+        else:
+            events = None
         super(RedisHuey, self).__init__(
             queue=queue,
             result_store=result_store,

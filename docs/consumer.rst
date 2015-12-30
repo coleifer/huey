@@ -164,12 +164,10 @@ JSON):
 
 The following events are emitted by the consumer:
 
-* ``enqueued``: sent when a task is enqueued.
-* ``scheduled``: sent when a task is added to the schedule for execution in
-    the future.
+* ``enqueued``: sent when a task is enqueued, i.e., you call a ``task()`` decorated function.
+* ``scheduled``: sent when a task is added to the schedule for execution in the future. For instance the worker pops off a task, sees that it should be run in an hour, and therefore schedules it.
 * ``revoked``: sent when a task is not executed because it has been revoked.
-* ``started``: sent when a worker thread begins executing a task.
-* ``finished``: sent when a worker thread finishes executing a task and has
-    stored the result.
+* ``started``: sent when a worker begins executing a task.
+* ``finished``: sent when a worker finishes executing a task and has stored the result.
 * ``error``: sent when an exception occurs while executing a task.
-* ``retrying``: sent when retrying a task that failed.
+* ``retrying``: sent when task that failed will be retried.
