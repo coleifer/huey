@@ -41,7 +41,7 @@ a :py:class:`Huey` instance, which specifies which backend to use.
 
     # config.py
     from huey import Huey
-    from huey.backends.redis_backend import RedisBlockingQueue
+    from huey.backend import RedisBlockingQueue
 
     queue = RedisBlockingQueue('test-queue', host='localhost', port=6379)
     huey = Huey(queue)
@@ -103,8 +103,8 @@ lines to the ``config.py`` module:
 .. code-block:: python
 
     from huey import Huey
-    from huey.backends.redis_backend import RedisBlockingQueue
-    from huey.backends.redis_backend import RedisDataStore  # ADD THIS LINE
+    from huey.backend import RedisBlockingQueue
+    from huey.backend import RedisDataStore  # ADD THIS LINE
 
 
     queue = RedisBlockingQueue('test-queue', host='localhost', port=6379)
@@ -379,10 +379,5 @@ on other aspects of the API:
 * :py:meth:`~Huey.task` - decorator to indicate an executable task
 * :py:meth:`~Huey.periodic_task` - decorator to indicate a task that executes at periodic intervals
 * :py:func:`crontab` - a function for defining what intervals to execute a periodic command
-* :py:class:`BaseQueue` - the queue interface and writing your own backends
-* :py:class:`BaseDataStore` - the simple data store used for results and schedule serialization
 
 Also check out the :ref:`notes on running the consumer <consuming-tasks>`.
-
-.. note::
-    If you're using Django, check out the :ref:`django integration <django>`.

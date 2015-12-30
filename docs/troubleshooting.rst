@@ -15,7 +15,7 @@ Tasks not running
     that they are not being loaded, in which case you will
     see :py:class:`QueueException` "XXX not found in TaskRegistry" errors.
 
-"QueueException: XXX not found in CommandRegistry" in log file
+"QueueException: XXX not found in TaskRegistry" in log file
     Exception occurs when a task is called by a task producer, but is not imported
     by the consumer.  To fix this, ensure that by loading the :py:class:`Huey` object,
     you also import any decorated functions as well.
@@ -34,12 +34,12 @@ Tasks not returning results
     Ensure that you have specified a ``result_store`` when creating your
     :py:class:`Huey` object.
 
-Periodic tasks are being executed multiple times per-interval
-    If you are running multiple consumer processes, it means that more than one
-    of them is also enqueueing periodic tasks.  To fix, only run one consumer
-    with ``--periodic`` and run the others with ``--no-periodic``.
-
 Scheduled tasks are not being run at the correct time
     Check the time on the server the consumer is running on - if different from
     the producer this may cause problems.  By default all local times are converted
     to UTC when calling ``.schedule()``, and the consumer runs in UTC.
+
+Greenlet workers seem stuck
+    If you wish to use the Greenlet worker type, you need to be sure to monkeypatch
+    in your application's entrypoint. At the top of your ``main`` module, you can add
+    the following code: ``from gevent import monkey; monkey.patch_all()``.

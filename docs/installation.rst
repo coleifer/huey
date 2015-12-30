@@ -17,6 +17,12 @@ To use the redis backend, you will need to install the python client.
 
     pip install redis
 
+If your tasks are IO-bound rather than CPU-bound, you might consider using the ``greenlet`` worker
+type. To use the greenlet workers, you need to install ``gevent``:
+
+.. code-block:: bash
+
+    pip install gevent
 
 Using git
 ---------

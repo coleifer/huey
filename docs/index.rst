@@ -12,11 +12,10 @@ a lightweight alternative.
 
 * written in python
 * no deps outside stdlib, except redis (or roll your own backend)
-* support for django
 
 supports:
 
-* multi-threaded task execution
+* multi-threaded, multi-process or greenlet task execution
 * scheduled execution at a given time
 * periodic execution, like a crontab
 * retrying tasks that fail
@@ -40,6 +39,11 @@ Huey's API
     def nightly_backup():
         sync_all_data()
 
+To run the consume with 4 worker processes:
+
+.. code-block:: console
+
+    $ huey_consumer.py my_app.huey -k process -w 4
 
 named after my cat
 
@@ -52,12 +56,10 @@ Contents:
    :maxdepth: 2
 
    installation
-   upgrading
    getting-started
    consumer
    imports
    troubleshooting
-   django
    api
 
 
