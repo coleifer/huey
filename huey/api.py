@@ -43,7 +43,7 @@ class Huey(object):
     Example usage::
 
         from huey.api import Huey, crontab
-        from huey.backend import RedisQueue, RedisDataStore, RedisSchedule
+        from huey.storage import RedisQueue, RedisDataStore, RedisSchedule
 
         queue = RedisQueue('my-app')
         result_store = RedisDataStore('my-app')

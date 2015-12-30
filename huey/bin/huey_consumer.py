@@ -22,9 +22,14 @@ def get_loglevel(verbose=None):
     return logging.ERROR
 
 
-def setup_logger(loglevel, logfile):
-    log_format = ('%(threadName)s %(asctime)s %(name)s '
-                  '%(levelname)s %(message)s')
+def setup_logger(loglevel, logfile, worker_type):
+    if worker_type == 'process':
+        worker = '%(process)d'
+    else:
+        worker = '%(threadName)s'
+
+    log_format = ('[%(asctime)s] %(levelname)s:%(name)s:' + worker +
+                  ':%(message)s')
     logging.basicConfig(level=loglevel, format=log_format)
 
     if logfile:
@@ -91,7 +96,10 @@ def consumer_main():
     parser = get_option_parser()
     options, args = parser.parse_args()
 
-    setup_logger(get_loglevel(options.verbose), options.logfile)
+    setup_logger(
+        get_loglevel(options.verbose),
+        options.logfile,
+        options.worker_type)
 
     if len(args) == 0:
         err('Error:   missing import path to `Huey` instance')

@@ -78,7 +78,7 @@ class Worker(BaseProcess):
 
         if task:
             self.delay = self.default_delay
-            self.handle_task(task, self.get_now())
+            self.handle_task(task, now or self.get_now())
         elif exc_raised or not self.huey.blocking:
             self.sleep()
 
