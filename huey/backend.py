@@ -89,9 +89,9 @@ class RedisBlockingQueue(RedisQueue):
             return None
 
 
-# a custom lua script to pass to redis that will read tasks from the schedule
-# and atomically pop them from the sorted set and return them.
-# it won't return anything if it isn't able to remove the items it reads.
+# A custom lua script to pass to redis that will read tasks from the schedule
+# and atomically pop them from the sorted set and return them. It won't return
+# anything if it isn't able to remove the items it reads.
 SCHEDULE_POP_LUA = """
 local key = KEYS[1]
 local unix_ts = ARGV[1]

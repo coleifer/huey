@@ -29,7 +29,7 @@ setting structure.  The following example uses Redis on localhost:
 Simply point to a backend:
 
 HUEY = {
-    'backend': 'huey.backends.redis_backend',
+    'backend': 'huey.backends.backend',
     'name': 'unique name',
     'connection': {'host': 'localhost', 'port': 6379}
 

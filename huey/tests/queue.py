@@ -5,7 +5,7 @@ from huey import crontab
 from huey import exceptions as huey_exceptions
 from huey import Huey
 from huey.api import QueueTask
-from huey.redis_backend import *
+from huey.backend import *
 from huey.registry import registry
 from huey.utils import EmptyData
 from huey.utils import local_to_utc

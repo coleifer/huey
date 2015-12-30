@@ -14,7 +14,6 @@ try:
 except ImportError:
     Greenlet = GreenEvent = None
 
-
 from huey.exceptions import DataStoreGetException
 from huey.exceptions import QueueException
 from huey.exceptions import QueueReadException
@@ -186,7 +185,7 @@ class Environment(object):
     def get_stop_flag(self):
         raise NotImplementedError
 
-    def create_process(self, **k):
+    def create_process(self, runnable, name):
         raise NotImplementedError
 
 
@@ -194,8 +193,8 @@ class ThreadEnvironment(Environment):
     def get_stop_flag(self):
         return threading.Event()
 
-    def create_process(self, runnable):
-        t = threading.Thread(target=runnable)
+    def create_process(self, runnable, name):
+        t = threading.Thread(target=runnable, name=name)
         t.daemon = True
         return t
 
@@ -204,16 +203,20 @@ class GreenletEnvironment(Environment):
     def get_stop_flag(self):
         return GreenEvent()
 
-    def create_process(self, runnable):
-        return Greenlet(run=runnable)
+    def create_process(self, runnable, name):
+        def run_wrapper():
+            gevent.sleep()
+            runnable()
+            gevent.sleep()
+        return Greenlet(run=run_wrapper)
 
 
 class ProcessEnvironment(Environment):
     def get_stop_flag(self):
         return ProcessEvent()
 
-    def create_process(self, runnable):
-        p = Process(target=target)
+    def create_process(self, runnable, name):
+        p = Process(target=runnable, name=name)
         p.daemon = True
         return p
 
@@ -249,12 +252,16 @@ class Consumer(object):
         self.stop_flag = self.environment.get_stop_flag()
 
         scheduler = self._create_runnable(self._create_scheduler())
-        self.scheduler = self.environment.create_process(scheduler)
+        self.scheduler = self.environment.create_process(
+            scheduler,
+            'Scheduler')
 
         self.worker_threads = []
         for i in range(workers):
             worker = self._create_runnable(self._create_worker())
-            self.worker_threads.append(self.environment.create_process(worker))
+            self.worker_threads.append(self.environment.create_process(
+                worker,
+                'Worker-%d' % (i + 1)))
 
     def _create_worker(self):
         return Worker(
@@ -297,6 +304,9 @@ class Consumer(object):
                 self.stop_flag.wait(.1)
         except:
             pass
+        else:
+            self.scheduler.join()
+            [worker.join() for worker in self.worker_threads]
 
     def stop(self):
         self.stop_flag.set()
@@ -309,10 +319,10 @@ class Consumer(object):
             self._logger.exception('Error in consumer.')
             self.stop()
 
-    def _handle_signal(self, sig_num, frame):
-        self._logger.info('Received SIGTERM')
-        self.stop()
-
     def _set_signal_handler(self):
         self._logger.info('Setting signal handler')
         signal.signal(signal.SIGTERM, self._handle_signal)
+
+    def _handle_signal(self, sig_num, frame):
+        self._logger.info('Received SIGTERM')
+        self.stop()

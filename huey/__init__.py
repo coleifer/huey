@@ -6,7 +6,7 @@ from huey.api import crontab
 from huey.api import Huey
 
 try:
-    from huey.redis_backend import RedisHuey
+    from huey.backend import RedisHuey
 except ImportError:
     class RedisHuey(object):
         def __init__(self, *args, **kwargs):
