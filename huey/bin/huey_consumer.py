@@ -65,8 +65,8 @@ def get_option_parser():
                            '(default=1.15)',
                       default=1.15)
     parser.add_option('-S', '--scheduler-interval', dest='scheduler_interval',
-                      type='float', help='Granularity of scheduler.',
-                      default=1.0)
+                      type='int', help='Granularity of scheduler.',
+                      default=1)
     parser.add_option('-u', '--utc', dest='utc', action='store_true',
                       help='use UTC time for all tasks (default=True)',
                       default=True)
