@@ -69,7 +69,10 @@ class Huey(object):
         self.result_store = result_store
         self.schedule = schedule
         self.events = events
-        self.blocking = self.queue.blocking
+        if self.queue is not None:
+            self.blocking = self.queue.blocking
+        else:
+            self.blocking = False
         self.store_none = store_none
         self.always_eager = always_eager
 
@@ -294,6 +297,9 @@ class Huey(object):
     def ready_to_run(self, cmd, dt=None):
         dt = dt or datetime.datetime.utcnow()
         return cmd.execute_time is None or cmd.execute_time <= dt
+
+    def __len__(self):
+        return len(self.queue)
 
     def flush(self):
         self.queue.flush()

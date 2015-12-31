@@ -1,3 +1,5 @@
+import unittest
+
 from huey import RedisHuey
 
 
@@ -5,6 +7,10 @@ test_huey = RedisHuey('testing')
 
 
 class BaseTestCase(unittest.TestCase):
+    pass
+
+
+class HueyTestCase(BaseTestCase):
     def setUp(self):
         self.huey = test_huey
         self.consumer = self.get_consumer(workers=2, scheduler_interval=10)
