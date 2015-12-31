@@ -29,7 +29,5 @@ class TestRegistry(BaseTestCase):
 
     def test_periodic_tasks(self):
         periodic = registry._periodic_tasks
-        self.assertEqual(len(periodic), 1)
-
-        task_obj = periodic[0]
-        self.assertTrue(isinstance(task_obj, test_task_two.task_class))
+        task_classes = [type(task) for task in periodic]
+        self.assertTrue(test_task_two.task_class in task_classes)
