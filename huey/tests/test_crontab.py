@@ -1,10 +1,10 @@
 import datetime
-import unittest
 
 from huey import crontab
+from huey.tests.base import BaseTestCase
 
 
-class CrontabTestCase(unittest.TestCase):
+class CrontabTestCase(BaseTestCase):
     def test_crontab_month(self):
         # validates the following months, 1, 4, 7, 8, 9
         valids = [1, 4, 7, 8, 9]

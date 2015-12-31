@@ -1,5 +1,4 @@
-import unittest
-
+from huey.tests.base import BaseTestCase
 from huey.utils import wrap_exception
 
 
@@ -7,7 +6,7 @@ class MyException(Exception):
     pass
 
 
-class TestWrapException(unittest.TestCase):
+class TestWrapException(BaseTestCase):
     def test_wrap_exception(self):
         def raise_keyerror():
             try:

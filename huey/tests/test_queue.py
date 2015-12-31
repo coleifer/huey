@@ -1,154 +1,121 @@
 import datetime
-import unittest
 
 from huey import crontab
 from huey import exceptions as huey_exceptions
-from huey import Huey
+from huey import RedisHuey
+from huey.api import Huey
 from huey.api import QueueTask
 from huey.registry import registry
-from huey.storage import *
+from huey.storage import RedisDataStore
+from huey.storage import RedisQueue
+from huey.storage import RedisSchedule
+from huey.tests.base import BaseTestCase
 from huey.utils import EmptyData
 from huey.utils import local_to_utc
 
-from redis import ConnectionPool
+huey = RedisHuey(result_store=None, schedule=None, events=None, blocking=False)
+huey_results = RedisHuey(blocking=False)
+huey_store_none = RedisHuey(store_none=True, blocking=False)
 
-
-pool = ConnectionPool()
-
-queue_name = 'test-queue'
-queue = RedisQueue(queue_name, pool)
-schedule = RedisSchedule(queue_name, pool)
-huey = Huey(queue, schedule=schedule)
-
-res_queue_name = 'test-queue-2'
-res_queue = RedisQueue(res_queue_name, pool)
-res_store = RedisDataStore(res_queue_name, pool)
-
-res_huey = Huey(res_queue, res_store, schedule)
-res_huey_nones = Huey(res_queue, res_store, store_none=True)
-
-# store some global state
+# Global state.
 state = {}
-last_executed_task_class = []
 
-# create a decorated queue command
 @huey.task()
-def add(key, value):
+def put_data(key, value):
     state[key] = value
 
 @huey.task(include_task=True)
-def self_aware(key, value, task=None):
-    last_executed_task_class.append(task.__class__.__name__)
+def put_data_ctx(key, value, task=None):
+    state['last_task_class'] = type(task).__name__
 
-# create a periodic queue command
-@huey.periodic_task(crontab(minute='0'))
-def add_on_the_hour():
-    state['periodic'] = 'x'
-
-# define a command using the class
-class AddTask(QueueTask):
+class PutTask(QueueTask):
     def execute(self):
         k, v = self.data
         state[k] = v
 
-# create a command that raises an exception
-class BampfException(Exception):
+class TestException(Exception):
     pass
 
 @huey.task()
-def throw_error():
-    raise BampfException('bampf')
+def throw_error_task():
+    raise TestException('bampf')
 
-@res_huey.task()
-def add2(a, b):
+@huey_results.task()
+def add_values(a, b):
     return a + b
 
-@res_huey.periodic_task(crontab(minute='0'))
-def add_on_the_hour2():
-    state['periodic'] = 'x'
+@huey_results.periodic_task(crontab(minute='0'))
+def hourly_task2():
+    state['periodic'] = 2
 
-@res_huey.task()
+@huey_results.task()
 def returns_none():
     return None
 
-@res_huey_nones.task()
+@huey_store_none.task()
 def returns_none2():
     return None
 
 
-class HueyTestCase(unittest.TestCase):
+class TestHueyQueueAPIs(BaseTestCase):
     def setUp(self):
         global state
-        global last_executed_task_class
-        queue.flush()
-        res_queue.flush()
-        schedule.flush()
         state = {}
-        last_executed_task_class = []
-
-    def test_registration(self):
-        self.assertTrue('queuecmd_add' in registry)
-        self.assertTrue('queuecmd_add_on_the_hour' in registry)
-        self.assertTrue('AddTask' in registry)
+        huey.flush()
+        huey_results.flush()
+        huey_store_none.flush()
+        self.assertEqual(len(huey), 0)
 
     def test_enqueue(self):
-        # sanity check
-        self.assertEqual(len(queue), 0)
-
         # initializing the command does not enqueue it
-        ac = AddTask(('k', 'v'))
-        self.assertEqual(len(queue), 0)
+        task = PutTask(('k', 'v'))
+        self.assertEqual(len(huey), 0)
 
         # ok, enqueue it, then check that it was enqueued
-        huey.enqueue(ac)
-        self.assertEqual(len(queue), 1)
+        huey.enqueue(task)
+        self.assertEqual(len(huey), 1)
+        self.assertEqual(state, {})
 
         # it can be enqueued multiple times
-        huey.enqueue(ac)
-        self.assertEqual(len(queue), 2)
+        huey.enqueue(task)
+        self.assertEqual(len(huey), 2)
 
         # no changes to state
-        self.assertFalse('k' in state)
+        self.assertEqual(state, {})
 
     def test_enqueue_decorator(self):
-        # sanity check
-        self.assertEqual(len(queue), 0)
+        put_data('k', 'v')
+        self.assertEqual(len(huey), 1)
 
-        add('k', 'v')
-        self.assertEqual(len(queue), 1)
-
-        add('k', 'v')
-        self.assertEqual(len(queue), 2)
+        put_data('k', 'v')
+        self.assertEqual(len(huey), 2)
 
         # no changes to state
-        self.assertFalse('k' in state)
+        self.assertEqual(state, {})
 
-    def test_schedule(self):
-        dt = datetime.datetime(2011, 1, 1, 0, 1)
-        add('k', 'v')
-        self.assertEqual(len(queue), 1)
+    def test_scheduled_time(self):
+        put_data('k', 'v')
 
         task = huey.dequeue()
+        self.assertEqual(len(huey), 0)
         self.assertEqual(task.execute_time, None)
 
-        add.schedule(args=('k2', 'v2'), eta=dt)
-        self.assertEqual(len(queue), 1)
+        dt = datetime.datetime(2011, 1, 1, 0, 1)
+        put_data.schedule(args=('k2', 'v2'), eta=dt)
+
+        self.assertEqual(len(huey), 1)
         task = huey.dequeue()
         self.assertEqual(task.execute_time, local_to_utc(dt))
 
-        add.schedule(args=('k3', 'v3'), eta=dt, convert_utc=False)
-        self.assertEqual(len(queue), 1)
+        put_data.schedule(args=('k3', 'v3'), eta=dt, convert_utc=False)
+        self.assertEqual(len(huey), 1)
         task = huey.dequeue()
         self.assertEqual(task.execute_time, dt)
 
     def test_error_raised(self):
-        throw_error()
-
-        # no error
+        throw_error_task()
         task = huey.dequeue()
-
-        # error
-        self.assertRaises(BampfException, huey.execute, task)
+        self.assertRaises(TestException, huey.execute, task)
 
     def test_internal_error(self):
         """
@@ -179,7 +146,7 @@ class HueyTestCase(unittest.TestCase):
             def read(self, ts):
                 raise SpecialException('read error')
 
-        task = AddTask()
+        task = PutTask(('foo', 'bar'))
         huey = Huey(
             BrokenQueue('q', None),
             BrokenDataStore('q', None),
@@ -188,7 +155,7 @@ class HueyTestCase(unittest.TestCase):
         self.assertRaises(
             huey_exceptions.QueueWriteException,
             huey.enqueue,
-            AddTask())
+            task)
         self.assertRaises(
             huey_exceptions.QueueReadException,
             huey.dequeue)
@@ -213,101 +180,98 @@ class HueyTestCase(unittest.TestCase):
         res = huey.dequeue() # no error raised if queue is empty
         self.assertEqual(res, None)
 
-        add('k', 'v')
+        put_data('k', 'v')
         task = huey.dequeue()
 
         self.assertTrue(isinstance(task, QueueTask))
         self.assertEqual(task.get_data(), (('k', 'v'), {}))
 
     def test_execution(self):
-        self.assertFalse('k' in state)
-        add('k', 'v')
+        self.assertEqual(state, {})
+        put_data('k', 'v')
 
         task = huey.dequeue()
         self.assertFalse('k' in state)
 
         huey.execute(task)
-        self.assertEqual(state['k'], 'v')
+        self.assertEqual(state, {'k': 'v'})
 
-        add('k', 'X')
-        self.assertEqual(state['k'], 'v')
+        put_data('k', 'X')
+        self.assertEqual(state, {'k': 'v'})
 
         huey.execute(huey.dequeue())
-        self.assertEqual(state['k'], 'X')
+        self.assertEqual(state, {'k': 'X'})
 
         self.assertRaises(TypeError, huey.execute, huey.dequeue())
 
     def test_self_awareness(self):
-        self_aware('k', 'v')
+        put_data_ctx('k', 'v')
         task = huey.dequeue()
         huey.execute(task)
-        self.assertEqual(last_executed_task_class.pop(), "queuecmd_self_aware")
+        self.assertEqual(state['last_task_class'], 'queuecmd_put_data_ctx')
+        del state['last_task_class']
 
-        self_aware('k', 'v')
+        put_data('k', 'x')
         huey.execute(huey.dequeue())
-        self.assertEqual(last_executed_task_class.pop(), "queuecmd_self_aware")
-
-        add('k', 'x')
-        huey.execute(huey.dequeue())
-        self.assertEqual(len(last_executed_task_class), 0)
+        self.assertFalse('last_task_class' in state)
 
     def test_call_local(self):
-        self.assertEqual(len(queue), 0)
+        self.assertEqual(len(huey), 0)
         self.assertEqual(state, {})
-        add.call_local('nugget', 'green')
+        put_data.call_local('nugget', 'green')
 
-        self.assertEqual(len(queue), 0)
-        self.assertEqual(state['nugget'], 'green')
+        self.assertEqual(len(huey), 0)
+        self.assertEqual(state, {'nugget': 'green'})
 
     def test_revoke(self):
-        ac = AddTask(('k', 'v'))
-        ac2 = AddTask(('k2', 'v2'))
-        ac3 = AddTask(('k3', 'v3'))
+        ac = PutTask(('k', 'v'))
+        ac2 = PutTask(('k2', 'v2'))
+        ac3 = PutTask(('k3', 'v3'))
 
-        res_huey.enqueue(ac)
-        res_huey.enqueue(ac2)
-        res_huey.enqueue(ac3)
-        res_huey.enqueue(ac2)
-        res_huey.enqueue(ac)
+        huey_results.enqueue(ac)
+        huey_results.enqueue(ac2)
+        huey_results.enqueue(ac3)
+        huey_results.enqueue(ac2)
+        huey_results.enqueue(ac)
 
-        self.assertEqual(len(res_queue), 5)
-        res_huey.revoke(ac2)
+        self.assertEqual(len(huey_results), 5)
+        huey_results.revoke(ac2)
 
-        while res_queue:
-            task = res_huey.dequeue()
-            if not res_huey.is_revoked(task):
-                res_huey.execute(task)
+        while huey_results:
+            task = huey_results.dequeue()
+            if not huey_results.is_revoked(task):
+                huey_results.execute(task)
 
         self.assertEqual(state, {'k': 'v', 'k3': 'v3'})
 
     def test_revoke_periodic(self):
-        add_on_the_hour2.revoke()
-        self.assertTrue(add_on_the_hour2.is_revoked())
+        hourly_task2.revoke()
+        self.assertTrue(hourly_task2.is_revoked())
 
         # it is still revoked
-        self.assertTrue(add_on_the_hour2.is_revoked())
+        self.assertTrue(hourly_task2.is_revoked())
 
-        add_on_the_hour2.restore()
-        self.assertFalse(add_on_the_hour2.is_revoked())
+        hourly_task2.restore()
+        self.assertFalse(hourly_task2.is_revoked())
 
-        add_on_the_hour2.revoke(revoke_once=True)
-        self.assertTrue(add_on_the_hour2.is_revoked()) # it is revoked once, but we are preserving that state
-        self.assertTrue(add_on_the_hour2.is_revoked(peek=False)) # is revoked once, but clear state
-        self.assertFalse(add_on_the_hour2.is_revoked()) # no longer revoked
+        hourly_task2.revoke(revoke_once=True)
+        self.assertTrue(hourly_task2.is_revoked()) # it is revoked once, but we are preserving that state
+        self.assertTrue(hourly_task2.is_revoked(peek=False)) # is revoked once, but clear state
+        self.assertFalse(hourly_task2.is_revoked()) # no longer revoked
 
         d = datetime.datetime
-        add_on_the_hour2.revoke(revoke_until=d(2011, 1, 1, 11, 0))
-        self.assertTrue(add_on_the_hour2.is_revoked(dt=d(2011, 1, 1, 10, 0)))
-        self.assertTrue(add_on_the_hour2.is_revoked(dt=d(2011, 1, 1, 10, 59)))
-        self.assertFalse(add_on_the_hour2.is_revoked(dt=d(2011, 1, 1, 11, 0)))
+        hourly_task2.revoke(revoke_until=d(2011, 1, 1, 11, 0))
+        self.assertTrue(hourly_task2.is_revoked(dt=d(2011, 1, 1, 10, 0)))
+        self.assertTrue(hourly_task2.is_revoked(dt=d(2011, 1, 1, 10, 59)))
+        self.assertFalse(hourly_task2.is_revoked(dt=d(2011, 1, 1, 11, 0)))
 
-        add_on_the_hour2.restore()
-        self.assertFalse(add_on_the_hour2.is_revoked())
+        hourly_task2.restore()
+        self.assertFalse(hourly_task2.is_revoked())
 
     def test_result_store(self):
-        res = add2(1, 2)
-        res2 = add2(4, 5)
-        res3 = add2(0, 0)
+        res = add_values(1, 2)
+        res2 = add_values(4, 5)
+        res3 = add_values(0, 0)
 
         # none have been executed as yet
         self.assertEqual(res.get(), None)
@@ -315,19 +279,19 @@ class HueyTestCase(unittest.TestCase):
         self.assertEqual(res3.get(), None)
 
         # execute the first task
-        res_huey.execute(res_huey.dequeue())
+        huey_results.execute(huey_results.dequeue())
         self.assertEqual(res.get(), 3)
         self.assertEqual(res2.get(), None)
         self.assertEqual(res3.get(), None)
 
         # execute the second task
-        res_huey.execute(res_huey.dequeue())
+        huey_results.execute(huey_results.dequeue())
         self.assertEqual(res.get(), 3)
         self.assertEqual(res2.get(), 9)
         self.assertEqual(res3.get(), None)
 
         # execute the 3rd, which returns a zero value
-        res_huey.execute(res_huey.dequeue())
+        huey_results.execute(huey_results.dequeue())
         self.assertEqual(res.get(), 3)
         self.assertEqual(res2.get(), 9)
         self.assertEqual(res3.get(), 0)
@@ -338,7 +302,7 @@ class HueyTestCase(unittest.TestCase):
 
         # execute, it will still return None, but underneath it is an EmptyResult
         # indicating its actual result was not persisted
-        res_huey.execute(res_huey.dequeue())
+        huey_results.execute(huey_results.dequeue())
         self.assertEqual(res.get(), None)
         self.assertEqual(res._result, EmptyData)
 
@@ -348,7 +312,7 @@ class HueyTestCase(unittest.TestCase):
         self.assertEqual(res.get(), None)
 
         # it stores None
-        res_huey_nones.execute(res_huey_nones.dequeue())
+        huey_store_none.execute(huey_store_none.dequeue())
         self.assertEqual(res.get(), None)
         self.assertEqual(res._result, None)
 
@@ -356,55 +320,55 @@ class HueyTestCase(unittest.TestCase):
         dt1 = datetime.datetime(2011, 1, 1, 0, 0)
         dt2 = datetime.datetime(2035, 1, 1, 0, 0)
 
-        add2.schedule(args=('k', 'v'), eta=dt1, convert_utc=False)
-        task1 = res_huey.dequeue()
+        add_values.schedule(args=('k', 'v'), eta=dt1, convert_utc=False)
+        task1 = huey_results.dequeue()
 
-        add2.schedule(args=('k2', 'v2'), eta=dt2, convert_utc=False)
-        task2 = res_huey.dequeue()
+        add_values.schedule(args=('k2', 'v2'), eta=dt2, convert_utc=False)
+        task2 = huey_results.dequeue()
 
-        add2('k3', 'v3')
-        task3 = res_huey.dequeue()
+        add_values('k3', 'v3')
+        task3 = huey_results.dequeue()
 
         # add the command to the schedule
-        res_huey.add_schedule(task1)
-        self.assertEqual(len(res_huey.schedule), 1)
+        huey_results.add_schedule(task1)
+        self.assertEqual(len(huey_results.schedule), 1)
 
         # add a future-dated command
-        res_huey.add_schedule(task2)
-        self.assertEqual(len(res_huey.schedule), 2)
+        huey_results.add_schedule(task2)
+        self.assertEqual(len(huey_results.schedule), 2)
 
-        res_huey.add_schedule(task3)
+        huey_results.add_schedule(task3)
 
-        tasks = res_huey.read_schedule(dt1)
+        tasks = huey_results.read_schedule(dt1)
         self.assertEqual(tasks, [task3, task1])
 
-        tasks = res_huey.read_schedule(dt1)
+        tasks = huey_results.read_schedule(dt1)
         self.assertEqual(tasks, [])
 
-        tasks = res_huey.read_schedule(dt2)
+        tasks = huey_results.read_schedule(dt2)
         self.assertEqual(tasks, [task2])
 
     def test_ready_to_run_method(self):
         dt1 = datetime.datetime(2011, 1, 1, 0, 0)
         dt2 = datetime.datetime(2035, 1, 1, 0, 0)
 
-        add2.schedule(args=('k', 'v'), eta=dt1)
-        task1 = res_huey.dequeue()
+        add_values.schedule(args=('k', 'v'), eta=dt1)
+        task1 = huey_results.dequeue()
 
-        add2.schedule(args=('k2', 'v2'), eta=dt2)
-        task2 = res_huey.dequeue()
+        add_values.schedule(args=('k2', 'v2'), eta=dt2)
+        task2 = huey_results.dequeue()
 
-        add2('k3', 'v3')
-        task3 = res_huey.dequeue()
+        add_values('k3', 'v3')
+        task3 = huey_results.dequeue()
 
-        add2.schedule(args=('k4', 'v4'), task_id='test_task_id')
-        task4 = res_huey.dequeue()
+        add_values.schedule(args=('k4', 'v4'), task_id='test_task_id')
+        task4 = huey_results.dequeue()
 
         # sanity check what should be run
-        self.assertTrue(res_huey.ready_to_run(task1))
-        self.assertFalse(res_huey.ready_to_run(task2))
-        self.assertTrue(res_huey.ready_to_run(task3))
-        self.assertTrue(res_huey.ready_to_run(task4))
+        self.assertTrue(huey_results.ready_to_run(task1))
+        self.assertFalse(huey_results.ready_to_run(task2))
+        self.assertTrue(huey_results.ready_to_run(task3))
+        self.assertTrue(huey_results.ready_to_run(task4))
         self.assertEqual('test_task_id', task4.task_id)
 
     def test_task_delay(self):
@@ -412,29 +376,29 @@ class HueyTestCase(unittest.TestCase):
         curr50 = curr + datetime.timedelta(seconds=50)
         curr70 = curr + datetime.timedelta(seconds=70)
 
-        add2.schedule(args=('k', 'v'), delay=60)
-        task1 = res_huey.dequeue()
+        add_values.schedule(args=('k', 'v'), delay=60)
+        task1 = huey_results.dequeue()
 
-        add2.schedule(args=('k2', 'v2'), delay=600)
-        task2 = res_huey.dequeue()
+        add_values.schedule(args=('k2', 'v2'), delay=600)
+        task2 = huey_results.dequeue()
 
-        add2('k3', 'v3')
-        task3 = res_huey.dequeue()
+        add_values('k3', 'v3')
+        task3 = huey_results.dequeue()
 
         # add the command to the schedule
-        res_huey.add_schedule(task1)
-        res_huey.add_schedule(task2)
-        res_huey.add_schedule(task3)
+        huey_results.add_schedule(task1)
+        huey_results.add_schedule(task2)
+        huey_results.add_schedule(task3)
 
         # sanity check what should be run
-        self.assertFalse(res_huey.ready_to_run(task1))
-        self.assertFalse(res_huey.ready_to_run(task2))
-        self.assertTrue(res_huey.ready_to_run(task3))
+        self.assertFalse(huey_results.ready_to_run(task1))
+        self.assertFalse(huey_results.ready_to_run(task2))
+        self.assertTrue(huey_results.ready_to_run(task3))
 
-        self.assertFalse(res_huey.ready_to_run(task1, curr50))
-        self.assertFalse(res_huey.ready_to_run(task2, curr50))
-        self.assertTrue(res_huey.ready_to_run(task3, curr50))
+        self.assertFalse(huey_results.ready_to_run(task1, curr50))
+        self.assertFalse(huey_results.ready_to_run(task2, curr50))
+        self.assertTrue(huey_results.ready_to_run(task3, curr50))
 
-        self.assertTrue(res_huey.ready_to_run(task1, curr70))
-        self.assertFalse(res_huey.ready_to_run(task2, curr70))
-        self.assertTrue(res_huey.ready_to_run(task3, curr70))
+        self.assertTrue(huey_results.ready_to_run(task1, curr70))
+        self.assertFalse(huey_results.ready_to_run(task2, curr70))
+        self.assertTrue(huey_results.ready_to_run(task3, curr70))

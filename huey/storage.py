@@ -173,15 +173,28 @@ class RedisEventEmitter(RedisComponent):
 
 class RedisHuey(Huey):
     def __init__(self, name='huey', store_none=False, always_eager=False,
-                 read_timeout=None, events=True, **conn_kwargs):
+                 read_timeout=None, result_store=True, schedule=True,
+                 events=True, blocking=True, **conn_kwargs):
         self._conn_kwargs = conn_kwargs
         pool = redis.ConnectionPool(**conn_kwargs)
-        queue = RedisBlockingQueue(
+        if blocking:
+            queue_class = RedisBlockingQueue
+            queue_args = {'read_timeout': read_timeout}
+        else:
+            queue_class = RedisQueue
+            queue_args = {}
+        queue = queue_class(
             name,
-            read_timeout=read_timeout,
-            connection_pool=pool)
-        result_store = RedisDataStore(name, connection_pool=pool)
-        schedule = RedisSchedule(name, connection_pool=pool)
+            connection_pool=pool,
+            **queue_args)
+        if result_store:
+            result_store = RedisDataStore(name, connection_pool=pool)
+        else:
+            result_store = None
+        if schedule:
+            schedule = RedisSchedule(name, connection_pool=pool)
+        else:
+            schedule = None
         if events:
             events = RedisEventEmitter(name, connection_pool=pool)
         else:
