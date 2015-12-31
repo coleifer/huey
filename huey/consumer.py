@@ -321,6 +321,11 @@ class Consumer(object):
 
     def stop(self):
         self.stop_flag.set()
+        self._logger.info('Shutting down')
+
+    def wait_finished(self):
+        self.scheduler.join()
+        [worker.join() for worker in self.worker_threads]
 
     def run(self):
         self.start()
@@ -332,8 +337,7 @@ class Consumer(object):
             self._logger.exception('Error in consumer.')
             self.stop()
         else:
-            self.scheduler.join()
-            [worker.join() for worker in self.worker_threads]
+            self.wait_finished()
 
     def _set_signal_handler(self):
         self._logger.info('Setting signal handler')

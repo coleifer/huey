@@ -9,7 +9,7 @@ from huey.consumer import Consumer
 from huey.registry import registry
 
 
-test_huey = RedisHuey('testing')
+test_huey = RedisHuey('testing', blocking=False, read_timeout=0.1)
 
 # Logger used by the consumer.
 logger = logging.getLogger('huey.consumer')

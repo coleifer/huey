@@ -1,6 +1,9 @@
 import datetime
+import threading
+import time
 
 from huey import crontab
+from huey.consumer import Consumer
 from huey.consumer import Scheduler
 from huey.consumer import Worker
 from huey.tests.base import CaptureLogs
@@ -11,10 +14,13 @@ from huey.tests.base import test_huey
 # Store some global state.
 state = {}
 
+lock = threading.Lock()
+
 # Create some test tasks.
 @test_huey.task()
 def modify_state(k, v):
-    state[k] = v
+    with lock:
+        state[k] = v
     return v
 
 @test_huey.task()
@@ -42,9 +48,34 @@ def hourly_task():
     state['p'] = 'y'
 
 
+class TestExecution(HueyTestCase):
+    def create_consumer(self, worker_type='thread'):
+        return Consumer(
+            self.huey,
+            max_delay=0.1,
+            workers=2,
+            worker_type=worker_type)
+
+    def test_threaded_execution(self):
+        consumer = self.create_consumer()
+        r1 = modify_state('k1', 'v1')
+        r2 = modify_state('k2', 'v2')
+        r3 = modify_state('k3', 'v3')
+
+        with CaptureLogs() as capture:
+            consumer.start()
+            while r1.get() != 'v1' and r2.get() != 'v2' and r3.get() != 'v3':
+                time.sleep(.05)
+
+            consumer.stop()
+            consumer.wait_finished()
+
+        self.assertEqual(state, {'k1': 'v1', 'k2': 'v2', 'k3': 'v3'})
+
+
 class TestConsumerAPIs(HueyTestCase):
     def setUp(self):
-        super(TestConsumer, self).setUp()
+        super(TestConsumerAPIs, self).setUp()
         global state
         state = {}
 
