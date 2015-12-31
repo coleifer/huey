@@ -1,25 +1,12 @@
-from collections import deque
 import datetime
-import os
-import sys
-import tempfile
-import unittest
 
-from huey import RedisHuey
+from huey.tests.base import HueyTestCase
 from huey.utils import EmptyData
 
 
-if sys.version_info[0] == 2:
-    redis_kwargs = {}
-else:
-    redis_kwargs = {'decode_responses': True}
-
-huey = RedisHuey()
-
-
-class HueyBackendTestCase(unittest.TestCase):
+class TestRedisStorage(HueyTestCase):
     def test_queues(self):
-        queue = huey.queue
+        queue = self.huey.queue
         queue.flush()
         queue.write('a')
         queue.write('b')
@@ -41,23 +28,23 @@ class HueyBackendTestCase(unittest.TestCase):
 
         queue.flush()
 
-        @huey.task()
+        @self.huey.task()
         def test_queues_add(k, v):
             return k + v
 
         res = test_queues_add('k', 'v')
         self.assertEqual(len(queue), 1)
-        task = huey.dequeue()
-        huey.execute(task)
+        task = self.huey.dequeue()
+        self.huey.execute(task)
         self.assertEqual(res.get(), 'kv')
 
         res = test_queues_add('\xce', '\xcf')
-        task = huey.dequeue()
-        huey.execute(task)
+        task = self.huey.dequeue()
+        self.huey.execute(task)
         self.assertEqual(res.get(), '\xce\xcf')
 
     def test_data_stores(self):
-        data_store = huey.result_store
+        data_store = self.huey.result_store
         data_store.put('k1', 'v1')
         data_store.put('k2', 'v2')
         data_store.put('k3', 'v3')
@@ -71,7 +58,7 @@ class HueyBackendTestCase(unittest.TestCase):
         self.assertEqual(data_store.peek('k3'), 'v3-2')
 
     def test_schedules(self):
-        schedule = huey.schedule
+        schedule = self.huey.schedule
         dt1 = datetime.datetime(2013, 1, 1, 0, 0)
         dt2 = datetime.datetime(2013, 1, 2, 0, 0)
         dt3 = datetime.datetime(2013, 1, 3, 0, 0)
@@ -101,7 +88,7 @@ class HueyBackendTestCase(unittest.TestCase):
         self.assertEqual(schedule.read(dt4), [])
 
     def test_events(self):
-        e = huey.events
+        e = self.huey.events
         ps = e.listener()
 
         messages = ['a', 'b', 'c']

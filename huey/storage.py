@@ -176,7 +176,7 @@ class RedisHuey(Huey):
                  read_timeout=None, result_store=True, schedule=True,
                  events=True, blocking=True, **conn_kwargs):
         self._conn_kwargs = conn_kwargs
-        pool = redis.ConnectionPool(**conn_kwargs)
+        self.pool = redis.ConnectionPool(**conn_kwargs)
         if blocking:
             queue_class = RedisBlockingQueue
             queue_args = {'read_timeout': read_timeout}
@@ -185,18 +185,18 @@ class RedisHuey(Huey):
             queue_args = {}
         queue = queue_class(
             name,
-            connection_pool=pool,
+            connection_pool=self.pool,
             **queue_args)
         if result_store:
-            result_store = RedisDataStore(name, connection_pool=pool)
+            result_store = RedisDataStore(name, connection_pool=self.pool)
         else:
             result_store = None
         if schedule:
-            schedule = RedisSchedule(name, connection_pool=pool)
+            schedule = RedisSchedule(name, connection_pool=self.pool)
         else:
             schedule = None
         if events:
-            events = RedisEventEmitter(name, connection_pool=pool)
+            events = RedisEventEmitter(name, connection_pool=self.pool)
         else:
             events = None
         super(RedisHuey, self).__init__(
