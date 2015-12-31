@@ -1,4 +1,3 @@
-from gevent import monkey; monkey.patch_all()
 from config import huey
 from tasks import count_beans
 
