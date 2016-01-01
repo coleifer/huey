@@ -9,7 +9,7 @@ class TaskRegistry(object):
     purpose of this registry is to allow translation from queue messages to
     task classes, and vice-versa.
     """
-    _ignore = ['QueueTask', 'PeriodicQueueTask']
+    _ignore = ['QueueTask', 'PeriodicQueueTask', 'NewBase']
 
     _registry = {}
     _periodic_tasks = []
