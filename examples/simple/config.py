@@ -1,3 +1,3 @@
 from huey import RedisHuey
 
-huey = RedisHuey('testing')
+huey = RedisHuey('simple.test')

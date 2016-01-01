@@ -5,3 +5,9 @@ In one terminal, run:
 In another terminal:
 
     python main.py
+
+To try out the various worker classes, you can run:
+
+* ./cons.sh thread
+* ./cons.sh greenlet
+* ./cons.sh process
