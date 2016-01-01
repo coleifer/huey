@@ -1,3 +1,8 @@
+import os
+if os.environ.get('WORKER_CLASS') == 'greenlet':
+    print 'Monkey-patching for gevent.'
+    from gevent import monkey; monkey.patch_all()
+
 from config import huey
 from tasks import count_beans
 
