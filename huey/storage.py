@@ -65,7 +65,7 @@ class RedisBlockingQueue(RedisQueue):
     """
     blocking = True
 
-    def __init__(self, name, connection_pool, read_timeout=None, **connection):
+    def __init__(self, name, connection_pool, read_timeout=1, **connection):
         """
         connection = {
             'host': 'localhost',
@@ -173,7 +173,7 @@ class RedisEventEmitter(RedisComponent):
 
 class RedisHuey(Huey):
     def __init__(self, name='huey', store_none=False, always_eager=False,
-                 read_timeout=None, result_store=True, schedule=True,
+                 read_timeout=1, result_store=True, schedule=True,
                  events=True, blocking=True, **conn_kwargs):
         self._conn_kwargs = conn_kwargs
         self.pool = redis.ConnectionPool(**conn_kwargs)
