@@ -1,5 +1,6 @@
 import datetime
 import logging
+import os
 import signal
 import threading
 import time
@@ -295,15 +296,20 @@ class Consumer(object):
         return _run
 
     def start(self):
+        self._logger.info('Huey consumer started with %s %s, PID %s' % (
+            self.workers,
+            self.worker_type,
+            os.getpid()))
         self._set_signal_handler()
 
-        msg = ['Huey consumer initialized with following commands']
+        msg = ['The following commands are available:']
         for command in registry._registry:
             msg.append('+ %s' % command.replace('queuecmd_', ''))
-        msg.append('Using %s %s workers' % (self.workers, self.worker_type))
-        msg.append('Periodic tasks are %s.' % ('enabled' if self.periodic else
-                                               'disabled'))
         self._logger.info('\n'.join(msg))
+        self._logger.info('Scheduler runs every %s seconds.' % (
+            self.scheduler_interval))
+        self._logger.info('Periodic tasks are %s.' % (
+            'enabled' if self.periodic else 'disabled'))
 
         self.scheduler.start()
         for worker in self.worker_threads:
@@ -312,10 +318,6 @@ class Consumer(object):
     def stop(self):
         self.stop_flag.set()
         self._logger.info('Shutting down')
-
-    def wait_finished(self):
-        self.scheduler.join()
-        [worker.join() for worker in self.worker_threads]
 
     def run(self):
         self.start()
@@ -332,11 +334,10 @@ class Consumer(object):
                 if self._received_signal:
                     self.stop()
                 if self.stop_flag.is_set():
-                    #self.wait_finished()
                     break
+        self._logger.info('Consumer exiting.')
 
     def _set_signal_handler(self):
-        self._logger.info('Setting signal handler')
         signal.signal(signal.SIGTERM, self._handle_signal)
 
     def _handle_signal(self, sig_num, frame):
