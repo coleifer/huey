@@ -193,11 +193,6 @@ class Environment(object):
     def create_process(self, runnable, name):
         raise NotImplementedError
 
-    def wait(self, flag):
-        # it seems that calling self.stop_flag.wait() here prevents the
-        # signal handler from executing in a threaded environment.
-        while not flag.is_set():
-            flag.wait(.1)
 
 class ThreadEnvironment(Environment):
     def get_stop_flag(self):
@@ -220,19 +215,13 @@ class GreenletEnvironment(Environment):
             gevent.sleep()
         return Greenlet(run=run_wrapper)
 
-    def wait(self, flag):
-        flag.wait()
-
 
 class ProcessEnvironment(Environment):
     def get_stop_flag(self):
         return ProcessEvent()
 
     def create_process(self, runnable, name):
-        def run_wrapper():
-            signal.signal(signal.SIGTERM, signal.SIG_IGN)
-            runnable()
-        p = Process(target=run_wrapper, name=name)
+        p = Process(target=runnable, name=name)
         p.daemon = True
         return p
 
@@ -266,6 +255,7 @@ class Consumer(object):
         else:
             self.environment = worker_to_environment[worker_type]()
 
+        self._received_signal = False
         self.stop_flag = self.environment.get_stop_flag()
 
         scheduler = self._create_runnable(self._create_scheduler())
@@ -329,15 +319,21 @@ class Consumer(object):
 
     def run(self):
         self.start()
-        try:
-            self.environment.wait(self.stop_flag)
-        except KeyboardInterrupt:
-            self.stop()
-        except:
-            self._logger.exception('Error in consumer.')
-            self.stop()
-        else:
-            self.wait_finished()
+        while True:
+            try:
+                is_set = self.stop_flag.wait(timeout=0.1)
+                time.sleep(0.1)
+            except KeyboardInterrupt:
+                self.stop()
+            except:
+                self._logger.exception('Error in consumer.')
+                self.stop()
+            else:
+                if self._received_signal:
+                    self.stop()
+                if self.stop_flag.is_set():
+                    #self.wait_finished()
+                    break
 
     def _set_signal_handler(self):
         self._logger.info('Setting signal handler')
@@ -345,4 +341,4 @@ class Consumer(object):
 
     def _handle_signal(self, sig_num, frame):
         self._logger.info('Received SIGTERM')
-        self.stop()
+        self._received_signal = True
