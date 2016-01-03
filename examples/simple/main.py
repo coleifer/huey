@@ -1,5 +1,5 @@
 import os
-if os.environ.get('WORKER_CLASS') == 'greenlet':
+if os.environ.get('WORKER_CLASS') in ('greenlet', 'gevent'):
     print 'Monkey-patching for gevent.'
     from gevent import monkey; monkey.patch_all()
 
