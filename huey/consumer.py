@@ -300,16 +300,17 @@ class Consumer(object):
             self.workers,
             self.worker_type,
             os.getpid()))
+        self._logger.info('Scheduler runs every %s seconds.' % (
+            self.scheduler_interval))
+        self._logger.info('Periodic tasks are %s.' % (
+            'enabled' if self.periodic else 'disabled'))
+
         self._set_signal_handler()
 
         msg = ['The following commands are available:']
         for command in registry._registry:
             msg.append('+ %s' % command.replace('queuecmd_', ''))
         self._logger.info('\n'.join(msg))
-        self._logger.info('Scheduler runs every %s seconds.' % (
-            self.scheduler_interval))
-        self._logger.info('Periodic tasks are %s.' % (
-            'enabled' if self.periodic else 'disabled'))
 
         self.scheduler.start()
         for worker in self.worker_threads:
