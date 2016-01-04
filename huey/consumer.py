@@ -248,7 +248,7 @@ class Consumer(object):
         self.backoff = backoff
         self.max_delay = max_delay
         self.utc = utc
-        self.scheduler_interval = scheduler_interval
+        self.scheduler_interval = max(min(scheduler_interval, 60), 1)
         self.worker_type = worker_type
         if worker_type not in worker_to_environment:
             raise ValueError('worker_type must be one of %s.' %
