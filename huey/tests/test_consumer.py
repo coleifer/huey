@@ -64,13 +64,14 @@ class TestExecution(HueyTestCase):
 
         with CaptureLogs() as capture:
             consumer.start()
-            while r1.get() != 'v1' and r2.get() != 'v2' and r3.get() != 'v3':
-                time.sleep(.05)
+
+            r1.get(blocking=True)
+            r2.get(blocking=True)
+            r3.get(blocking=True)
 
             consumer.stop()
             for worker in consumer.worker_threads:
                 worker.join()
-            #consumer.wait_finished()
 
         self.assertEqual(state, {'k1': 'v1', 'k2': 'v2', 'k3': 'v3'})
 
@@ -83,6 +84,16 @@ class TestConsumerAPIs(HueyTestCase):
 
     def get_periodic_tasks(self):
         return [hourly_task.task_class()]
+
+    def test_scheduler_interval(self):
+        consumer = self.get_consumer(scheduler_interval=0.1)
+        self.assertEqual(consumer.scheduler_interval, 1)
+
+        consumer = self.get_consumer(scheduler_interval=120)
+        self.assertEqual(consumer.scheduler_interval, 60)
+
+        consumer = self.get_consumer(scheduler_interval=10)
+        self.assertEqual(consumer.scheduler_interval, 10)
 
     def test_message_processing(self):
         worker = self.consumer._create_worker()
