@@ -280,6 +280,17 @@ class Huey(object):
             return True
         return revoke_until is None or revoke_until > dt
 
+    def pending(self, limit=None):
+        return [registry.get_task_for_message(m)
+                for m in self.queue.items(limit)]
+
+    def scheduled(self, limit=None):
+        return [registry.get_task_for_message(m)
+                for m in self.schedule.items(limit)]
+
+    def all_results(self):
+        return self.result_store.items()
+
     def add_schedule(self, task):
         msg = registry.get_message_for_task(task)
         ex_time = task.execute_time or datetime.datetime.fromtimestamp(0)
