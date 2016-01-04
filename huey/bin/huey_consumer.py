@@ -74,12 +74,6 @@ def get_option_parser():
        help='worker execution model (thread, greenlet, process).',
        default='thread',
        choices=['greenlet', 'thread', 'process', 'gevent'])
-    worker_opts.add_option('-r', '--read-timeout',
-       dest='read_timeout',
-       type='float',
-       help=('read timeout used for queues that block rather than poll '
-             '(default=1)'),
-       default=1.0)
     worker_opts.add_option('-d', '--delay',
        dest='initial_delay',
        type='float',
