@@ -40,18 +40,16 @@ a :py:class:`Huey` instance, which specifies which backend to use.
 .. code-block:: python
 
     # config.py
-    from huey import Huey
-    from huey.storage import RedisBlockingQueue
+    from huey import RedisHuey
 
-    queue = RedisBlockingQueue('test-queue', host='localhost', port=6379)
-    huey = Huey(queue)
+    huey = RedisHuey()
 
 
-The interesting parts of this configuration module are the :py:class:`Huey` object
-and the :py:class:`RedisBlockingQueue` object.  The ``queue`` is responsible for
-storing and retrieving messages, and the ``huey`` is used by your application
-code to coordinate function calls with a queue backend.  We'll see how the ``huey``
-is used when looking at the actual function responsible for counting beans:
+The ``huey`` object encapsulates a queue. The queue is responsible for
+storing and retrieving messages, and the ``huey`` instance is used by your
+application code to coordinate function calls with a queue backend.  We'll
+see how the ``huey`` object is used when looking at the actual function
+responsible for counting beans:
 
 .. code-block:: python
 
@@ -66,9 +64,10 @@ is used when looking at the actual function responsible for counting beans:
 The above example shows the API for writing "tasks" that are executed by the
 queue consumer -- simply decorate the code you want executed by the consumer
 with the :py:meth:`~Huey.task` decorator and when it is called, the main
-process will return *immediately* after enqueueing the function call.
+process will return *immediately* after enqueueing the function call. In a
+separate process, the consumer will see the new message and run the function.
 
-The main executable is very simple.  It imports both the configuration **and**
+Our main executable is very simple.  It imports both the configuration **and**
 the tasks - this is to ensure that when we run the consumer by pointing it
 at the configuration, the tasks are also imported and loaded into memory.
 
