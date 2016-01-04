@@ -57,7 +57,7 @@ def returns_none2():
     return None
 
 
-class TestHueyQueueAPIs(BaseTestCase):
+class BaseQueueTestCase(BaseTestCase):
     def setUp(self):
         global state
         state = {}
@@ -66,6 +66,51 @@ class TestHueyQueueAPIs(BaseTestCase):
         huey_store_none.flush()
         self.assertEqual(len(huey), 0)
 
+    def tearDown(self):
+        huey.flush()
+        huey_results.flush()
+        huey_store_none.flush()
+
+
+class TestHueyQueueMetadataAPIs(BaseQueueTestCase):
+    def test_queue_metadata(self):
+        put_data('k1', 'v1')
+        put_data('k2', 'v2')
+        cmd2, cmd1 = huey.pending()
+        self.assertEqual(cmd2.data, (('k2', 'v2'), {}))
+        self.assertEqual(cmd1.data, (('k1', 'v1'), {}))
+
+        huey.dequeue()
+        cmd1, = huey.pending()
+        self.assertEqual(cmd1.data, (('k2', 'v2'), {}))
+
+    def test_schedule_metadata(self):
+        add_values.schedule((1, 2), delay=10)
+        add_values.schedule((3, 4), delay=5)
+        self.assertEqual(len(huey_results), 2)
+        huey_results.add_schedule(huey.dequeue())
+        huey_results.add_schedule(huey.dequeue())
+
+        cmd2, cmd1 = huey_results.scheduled()
+        self.assertEqual(cmd1.data, ((1, 2), {}))
+        self.assertEqual(cmd2.data, ((3, 4), {}))
+
+    def test_results_metadata(self):
+        add_values(1, 2)
+        add_values(3, 4)
+        t1 = huey_results.dequeue()
+        t2 = huey_results.dequeue()
+        self.assertEqual(huey_results.all_results(), {})
+
+        huey_results.execute(t1)
+        self.assertEqual(huey_results.all_results().keys(), [t1.task_id])
+
+        huey_results.execute(t2)
+        self.assertEqual(sorted(huey_results.all_results().keys()),
+                         sorted([t1.task_id, t2.task_id]))
+
+
+class TestHueyQueueAPIs(BaseQueueTestCase):
     def test_enqueue(self):
         # initializing the command does not enqueue it
         task = PutTask(('k', 'v'))

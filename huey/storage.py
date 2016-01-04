@@ -56,6 +56,10 @@ class RedisQueue(RedisComponent):
     def __len__(self):
         return self.conn.llen(self.queue_name)
 
+    def items(self, limit=None):
+        limit = limit or -1
+        return self.conn.lrange(self.queue_name, 0, limit)
+
 
 class RedisBlockingQueue(RedisQueue):
     """
@@ -124,6 +128,10 @@ class RedisSchedule(RedisComponent):
     def flush(self):
         self.conn.delete(self.key)
 
+    def items(self, limit=None):
+        limit = limit or -1
+        return self.conn.zrange(self.key, 0, limit, withscores=False)
+
 
 class RedisDataStore(RedisComponent):
     def __init__(self, name, connection_pool, **connection):
@@ -154,6 +162,9 @@ class RedisDataStore(RedisComponent):
 
     def flush(self):
         self.conn.delete(self.storage_name)
+
+    def items(self):
+        return self.conn.hgetall(self.storage_name)
 
 
 class RedisEventEmitter(RedisComponent):

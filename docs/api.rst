@@ -271,6 +271,18 @@ Function decorators and helpers
 
             Store a reference to the task class for the decorated function.
 
+    .. py:method:: pending([limit=None])
+
+        Return all unexecuted tasks currently in the queue.
+
+    .. py:method:: scheduled([limit=None])
+
+        Return all unexecuted tasks currently in the schedule.
+
+    .. py:method:: all_results()
+
+        Return a mapping of task-id to pickled result data for all executed tasks whose return values have not been automatically removed.
+
 
 .. py:function:: crontab(month='*', day='*', day_of_week='*', hour='*', minute='*')
 
