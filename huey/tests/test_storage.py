@@ -1,31 +1,12 @@
 import datetime
 
+from huey.tests.base import b
 from huey.tests.base import HueyTestCase
 from huey.utils import EmptyData
-
 
 class TestRedisStorage(HueyTestCase):
     def test_queues(self):
         queue = self.huey.queue
-        queue.flush()
-        queue.write('a')
-        queue.write('b')
-        self.assertEqual(len(queue), 2)
-        self.assertEqual(queue.read(), 'a')
-        self.assertEqual(queue.read(), 'b')
-
-        queue.write('c')
-        queue.write('d')
-        queue.write('c')
-        queue.write('x')
-        queue.write('d')
-        self.assertEqual(len(queue), 5)
-        self.assertEqual(queue.remove('c'), 2)
-        self.assertEqual(len(queue), 3)
-        self.assertEqual(queue.read(), 'd')
-        self.assertEqual(queue.read(), 'x')
-        self.assertEqual(queue.read(), 'd')
-
         queue.flush()
 
         @self.huey.task()
@@ -48,14 +29,14 @@ class TestRedisStorage(HueyTestCase):
         data_store.put('k1', 'v1')
         data_store.put('k2', 'v2')
         data_store.put('k3', 'v3')
-        self.assertEqual(data_store.peek('k2'), 'v2')
-        self.assertEqual(data_store.get('k2'), 'v2')
+        self.assertEqual(data_store.peek('k2'), b('v2'))
+        self.assertEqual(data_store.get('k2'), b('v2'))
         self.assertEqual(data_store.peek('k2'), EmptyData)
         self.assertEqual(data_store.get('k2'), EmptyData)
 
-        self.assertEqual(data_store.peek('k3'), 'v3')
+        self.assertEqual(data_store.peek('k3'), b('v3'))
         data_store.put('k3', 'v3-2')
-        self.assertEqual(data_store.peek('k3'), 'v3-2')
+        self.assertEqual(data_store.peek('k3'), b('v3-2'))
 
     def test_schedules(self):
         schedule = self.huey.schedule
@@ -79,12 +60,12 @@ class TestRedisStorage(HueyTestCase):
 
         # Ensure the upper boundary is inclusive of whatever timestamp
         # is passed in.
-        self.assertEqual(schedule.read(dt3), ['s1', 's2', 's3'])
+        self.assertEqual(schedule.read(dt3), [b('s1'), b('s2'), b('s3')])
         self.assertEqual(schedule.read(dt3), [])
 
         # Ensure the schedule is flushed and an empty schedule returns an
         # empty list.
-        self.assertEqual(schedule.read(dt4), ['s4'])
+        self.assertEqual(schedule.read(dt4), [b('s4')])
         self.assertEqual(schedule.read(dt4), [])
 
     def test_events(self):
@@ -97,6 +78,6 @@ class TestRedisStorage(HueyTestCase):
 
         g = ps.listen()
         next(g)
-        self.assertEqual(next(g)['data'], 'a')
-        self.assertEqual(next(g)['data'], 'b')
-        self.assertEqual(next(g)['data'], 'c')
+        self.assertEqual(next(g)['data'], b('a'))
+        self.assertEqual(next(g)['data'], b('b'))
+        self.assertEqual(next(g)['data'], b('c'))
