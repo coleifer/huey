@@ -9,6 +9,7 @@ from huey.registry import registry
 from huey.storage import RedisDataStore
 from huey.storage import RedisQueue
 from huey.storage import RedisSchedule
+from huey.tests.base import b
 from huey.tests.base import BaseTestCase
 from huey.utils import EmptyData
 from huey.utils import local_to_utc
@@ -103,11 +104,11 @@ class TestHueyQueueMetadataAPIs(BaseQueueTestCase):
         self.assertEqual(huey_results.all_results(), {})
 
         huey_results.execute(t1)
-        self.assertEqual(huey_results.all_results().keys(), [t1.task_id])
+        self.assertEqual(list(huey_results.all_results()), [b(t1.task_id)])
 
         huey_results.execute(t2)
         self.assertEqual(sorted(huey_results.all_results().keys()),
-                         sorted([t1.task_id, t2.task_id]))
+                         sorted([b(t1.task_id), b(t2.task_id)]))
 
 
 class TestHueyQueueAPIs(BaseQueueTestCase):

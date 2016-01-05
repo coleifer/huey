@@ -1,12 +1,19 @@
 import datetime
 import json
 import logging
+import sys
 import time
 import unittest
 
 from huey import RedisHuey
 from huey.consumer import Consumer
 from huey.registry import registry
+
+
+def b(s):
+    if sys.version_info[0] == 3:
+        return s.encode('utf-8')
+    return s
 
 
 test_huey = RedisHuey('testing', blocking=False, read_timeout=0.1)
@@ -68,7 +75,7 @@ class HueyTestCase(BaseTestCase):
     def assertTaskEvents(self, *states):
         for (status, task) in states:
             raw_event = next(self.events)
-            event_data = json.loads(raw_event['data'])
+            event_data = json.loads(raw_event['data'].decode('utf-8'))
             self.assertEqual(event_data['status'], status)
             self.assertEqual(event_data['id'], task.task_id)
 
