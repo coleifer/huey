@@ -1,8 +1,35 @@
 Changelog
 =========
 
-Jan 7, 2012 v0.1.1
-------------------
+v1.0.0
+------
 
-* added some logic that will try once to dynamically import commands that are
-  not found in the command registry once before throwing a ``QueueException``
+What follows is a description of the changes between 0.4.9 and 1.0.0. There are
+some backwards-incompatible changes to be aware of as well as new options for
+the consumer. Most APIs are the same, however.
+
+
+Backwards incompatible changes:
+
+* ``huey.djhuey`` moved to ``huey.contrib.djhuey``. You will need to update
+  any import statements as well as your Django ``INSTALLED_APPS`` setting to
+  reflect the new module path.
+* Redis backend is now the only one available, and the corresponding code moved
+  from ``huey.backends.redis_backend`` to ``huey.storage``.
+* Removed the "RabbitMQ" and "SQLite" queue backends.
+* Removed the ``-t`` and ``--threads`` option from the consumer. You should now
+  use ``-w`` or ``--workers``.
+* Removed the ``-p`` and ``--periodic`` no-op options from the consumer. These
+  are enabled by default so the option had no meaning.
+* The ``scheduler-interval`` option is configured using ``-s`` when previously
+  it was ``-S``. Furthermore, this must be a value between 1 and 60.
+* Removed the ``peewee_helpers`` module.
+
+
+New features:
+
+* The queue consumer now supports multi-process or multi-greenlet execution
+  models (in addition to multi-threaded, which previously was the only option).
+* Added `pending()`, `scheduled()` and `all_results()` methods to the `Huey`
+  class to allow introspection of the Queue's state at the current moment in
+  time.

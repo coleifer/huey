@@ -73,7 +73,7 @@ their default values.
     The amount to back-off when polling for results.  Must be greater than
     one.  Default is 1.15.
 
-``-S``, ``--scheduler-interval``
+``-s``, ``--scheduler-interval``
     The frequency with which the scheduler should run. By default this will run
     every second, but you can increase the interval to as much as 60 seconds.
 
