@@ -51,6 +51,7 @@ class Huey(object):
         huey = Huey(queue, result_store, schedule)
 
         # This is equivalent to the previous 4 lines:
+        # from huey import RedisHuey
         # huey = RedisHuey('my-app', {'host': 'localhost', 'port': 6379})
 
         @huey.task()
