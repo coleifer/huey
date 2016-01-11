@@ -43,3 +43,7 @@ Greenlet workers seem stuck
     If you wish to use the Greenlet worker type, you need to be sure to monkeypatch
     in your application's entrypoint. At the top of your ``main`` module, you can add
     the following code: ``from gevent import monkey; monkey.patch_all()``.
+
+Testing projects using Huey
+    If you don't have, or want, a redis server for running tests you can set
+    ``always_eager`` to ``True`` at your Huey settings.
