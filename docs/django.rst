@@ -47,7 +47,7 @@ Using redis on a network host with 16 worker greenlets.
         'connection': {'host': '192.168.1.123', 'port': 6379},
 
         # Options to pass into the consumer when running ``manage.py run_huey``
-        'consumer_options': {'workers': 16, 'worker_type': 'greenlet'},
+        'consumer': {'workers': 16, 'worker_type': 'greenlet'},
     }
 
 Alternatively, you can just assign a :py:class:`Huey` instance to the ``HUEY`` setting:
