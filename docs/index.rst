@@ -59,6 +59,7 @@ Contents:
    installation
    getting-started
    consumer
+   events
    imports
    troubleshooting
    api
