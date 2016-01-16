@@ -227,19 +227,23 @@ class Huey(object):
             return None
         return time.mktime(dt.timetuple())
 
+    def _get_task_metadata(self, task, error=False):
+        metadata = {
+            'id': task.task_id,
+            'task': type(task).__name__,
+            'retries': task.retries,
+            'retry_delay': task.retry_delay,
+            'execute_time': self._format_time(task.execute_time),
+            'error': error}
+        if error:
+            metadata['traceback'] = traceback.format_exc()
+        return metadata
+
     def emit_task(self, status, task, error=False):
         if self.events:
-            message_data = {'status': status}
-            message_data.update({
-                'id': task.task_id,
-                'task': type(task).__name__,
-                'retries': task.retries,
-                'retry_delay': task.retry_delay,
-                'execute_time': self._format_time(task.execute_time),
-                'error': error})
-            if error:
-                message_data['traceback'] = traceback.format_exc()
-            self.emit(json.dumps(message_data))
+            metadata = self._get_task_metadata(task, error)
+            metadata['status'] = status
+            self.emit(json.dumps(metadata))
 
     def execute(self, task):
         if not isinstance(task, QueueTask):

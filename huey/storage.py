@@ -9,17 +9,16 @@ from huey.api import Huey
 from huey.utils import EmptyData
 
 
-def clean_name(name):
-    return re.sub('[^a-z0-9]', '', name)
-
-
 class RedisComponent(object):
     def __init__(self, name, connection_pool, **connection):
-        self.name = name
+        self.name = self.clean_name(name)
         self.conn = redis.Redis(
             connection_pool=connection_pool,
             **connection)
         self._conn_kwargs = connection
+
+    def clean_name(self, name):
+        return re.sub('[^a-z0-9]', '', name)
 
     def convert_ts(self, ts):
         return time.mktime(ts.timetuple())
@@ -40,7 +39,7 @@ class RedisQueue(RedisComponent):
         }
         """
         super(RedisQueue, self).__init__(name, connection_pool, **connection)
-        self.queue_name = 'huey.redis.%s' % clean_name(name)
+        self.queue_name = 'huey.redis.%s' % self.name
 
     def write(self, data):
         self.conn.lpush(self.queue_name, data)
@@ -110,7 +109,7 @@ class RedisSchedule(RedisComponent):
         super(RedisSchedule, self).__init__(
             name, connection_pool, **connection)
 
-        self.key = 'huey.schedule.%s' % clean_name(name)
+        self.key = 'huey.schedule.%s' % self.name
         self._pop = self.conn.register_script(SCHEDULE_POP_LUA)
 
     def add(self, data, ts):
@@ -139,7 +138,7 @@ class RedisDataStore(RedisComponent):
         super(RedisDataStore, self).__init__(
             name, connection_pool, **connection)
 
-        self.storage_name = 'huey.results.%s' % clean_name(name)
+        self.storage_name = 'huey.results.%s' % self.name
 
     def count(self):
         return self.conn.hlen(self.storage_name)
@@ -169,18 +168,27 @@ class RedisDataStore(RedisComponent):
 
 
 class RedisEventEmitter(RedisComponent):
-    def __init__(self, name, connection_pool, **connection):
-        super(RedisEventEmitter, self).__init__(
-            name, connection_pool, **connection)
-        self.channel = name
-
     def emit(self, message):
-        self.conn.publish(self.channel, message)
+        self.conn.publish(self.name, message)
 
     def listener(self):
         pubsub = self.conn.pubsub()
-        pubsub.subscribe([self.channel])
+        pubsub.subscribe([self.name])
         return pubsub
+
+    def __iter__(self):
+        return _EventIterator(self.listener())
+
+
+class _EventIterator(object):
+    def __init__(self, pubsub):
+        self.listener = pubsub.listen()
+        next(self.listener)
+
+    def next(self):
+        return next(self.listener)['data']
+
+    __next__ = next
 
 
 class RedisHuey(Huey):
