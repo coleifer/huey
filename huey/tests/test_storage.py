@@ -81,3 +81,15 @@ class TestRedisStorage(HueyTestCase):
         self.assertEqual(next(g)['data'], b('a'))
         self.assertEqual(next(g)['data'], b('b'))
         self.assertEqual(next(g)['data'], b('c'))
+
+    def test_event_iterator(self):
+        e = self.huey.events
+        i = iter(e)
+
+        e.emit('a')
+        e.emit('b')
+
+        res = next(i)
+        self.assertEqual(res, 'a')
+        res = next(i)
+        self.assertEqual(res, 'b')
