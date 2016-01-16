@@ -91,6 +91,6 @@ class TestRedisStorage(HueyTestCase):
         self.huey.storage.emit('b')
 
         res = next(i)
-        self.assertEqual(res, 'a')
+        self.assertEqual(res, b('a'))
         res = next(i)
-        self.assertEqual(res, 'b')
+        self.assertEqual(res, b('b'))
