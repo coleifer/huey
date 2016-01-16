@@ -165,7 +165,7 @@ class TestConsumerAPIs(HueyTestCase):
                     ('started', task),
                     ('error', task))
 
-        self.assertEqual(len(test_huey.queue), 0)
+        self.assertEqual(len(test_huey), 0)
 
     def test_retries_with_success(self):
         # this will fail once, then succeed
@@ -186,7 +186,7 @@ class TestConsumerAPIs(HueyTestCase):
         self.worker(task)
 
         self.assertEqual(state['blampf'], 'fixed')
-        self.assertEqual(len(test_huey.queue), 0)
+        self.assertEqual(len(test_huey), 0)
 
         self.assertTaskEvents(
             ('started', task),
@@ -325,12 +325,12 @@ class TestConsumerAPIs(HueyTestCase):
             self.worker(task)
 
             self.assertEqual(state, curr_state)
-            self.assertEqual(len(test_huey.schedule), curr_sched)
+            self.assertEqual(test_huey.scheduled_count(), curr_sched)
 
         # lets pretend its 2037
         future = dt2 + datetime.timedelta(seconds=1)
         self.scheduler(future)
-        self.assertEqual(len(test_huey.schedule), 0)
+        self.assertEqual(test_huey.scheduled_count(), 0)
 
         # There are two tasks in the queue now (r3 and r4) -- process both.
         for i in range(2):
@@ -352,7 +352,7 @@ class TestConsumerAPIs(HueyTestCase):
         self.assertEqual(sched._q, 5)
         self.assertEqual(state, {})
 
-        for i in range(len(self.huey.queue)):
+        for i in range(len(self.huey)):
             task = test_huey.dequeue()
             self.worker(task, dt)
 
@@ -363,7 +363,7 @@ class TestConsumerAPIs(HueyTestCase):
 
         def loop_periodic(ts):
             self.scheduler(ts, True)
-            for i in range(len(self.huey.queue)):
+            for i in range(len(self.huey)):
                 task = test_huey.dequeue()
                 self.worker(task, ts)
 
@@ -421,8 +421,8 @@ class TestConsumerAPIs(HueyTestCase):
 
         # our data store should reflect the delay
         task_obj = hourly_task.task_class()
-        self.assertEqual(test_huey.result_store.count(), 1)
-        self.assertTrue(task_obj.revoke_id in test_huey.result_store)
+        self.assertEqual(test_huey.result_count(), 1)
+        self.assertTrue(test_huey.storage.has_data_for_key(task_obj.revoke_id))
 
     def test_odd_scheduler_interval(self):
         self.consumer.stop()

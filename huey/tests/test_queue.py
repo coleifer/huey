@@ -7,15 +7,13 @@ from huey import RedisHuey
 from huey.api import Huey
 from huey.api import QueueTask
 from huey.registry import registry
-from huey.storage import RedisDataStore
-from huey.storage import RedisQueue
-from huey.storage import RedisSchedule
+from huey.storage import RedisStorage
 from huey.tests.base import b
 from huey.tests.base import BaseTestCase
 from huey.utils import EmptyData
 from huey.utils import local_to_utc
 
-huey = RedisHuey(result_store=None, schedule=None, events=None, blocking=False)
+huey = RedisHuey(result_store=False, events=False, blocking=False)
 huey_results = RedisHuey(blocking=False, max_errors=10)
 huey_store_none = RedisHuey(store_none=True, blocking=False)
 
@@ -207,32 +205,34 @@ class TestHueyQueueAPIs(BaseQueueTestCase):
         class SpecialException(Exception):
             pass
 
-        class BrokenQueue(RedisQueue):
-            def read(self):
+        class BrokenStorage(RedisStorage):
+            def enqueue(self):
                 raise SpecialException('read error')
 
-            def write(self, data):
+            def dequeue(self, data):
                 raise SpecialException('write error')
 
-        class BrokenDataStore(RedisDataStore):
-            def get(self, key):
+            def pop_data(self, key):
                 raise SpecialException('get error')
 
-            def put(self, key, value):
+            def peek_data(self, key):
+                raise SpecialException('get error')
+
+            def put_data(self, key, value):
                 raise SpecialException('put error')
 
-        class BrokenSchedule(RedisSchedule):
-            def add(self, data, ts):
+            def add_to_schedule(self, data, ts):
                 raise SpecialException('add error')
 
-            def read(self, ts):
+            def read_schedule(self, ts):
                 raise SpecialException('read error')
 
+        class BrokenHuey(RedisHuey):
+            def get_storage(self, **kwargs):
+                return BrokenStorage(self.name)
+
         task = PutTask(('foo', 'bar'))
-        huey = Huey(
-            BrokenQueue('q', None),
-            BrokenDataStore('q', None),
-            BrokenSchedule('q', None))
+        huey = BrokenHuey()
 
         self.assertRaises(
             huey_exceptions.QueueWriteException,
@@ -413,11 +413,11 @@ class TestHueyQueueAPIs(BaseQueueTestCase):
 
         # add the command to the schedule
         huey_results.add_schedule(task1)
-        self.assertEqual(len(huey_results.schedule), 1)
+        self.assertEqual(huey_results.scheduled_count(), 1)
 
         # add a future-dated command
         huey_results.add_schedule(task2)
-        self.assertEqual(len(huey_results.schedule), 2)
+        self.assertEqual(huey_results.scheduled_count(), 2)
 
         huey_results.add_schedule(task3)
 

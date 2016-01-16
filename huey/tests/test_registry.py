@@ -1,11 +1,11 @@
 from huey.api import crontab
-from huey.api import Huey
 from huey.api import QueueTask
 from huey.registry import registry
 from huey.tests.base import BaseTestCase
+from huey.tests.base import DummyHuey
 
 
-huey = Huey(None)
+huey = DummyHuey(None)
 
 @huey.task()
 def test_task_one(x, y):

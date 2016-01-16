@@ -6,8 +6,10 @@ import time
 import unittest
 
 from huey import RedisHuey
+from huey.api import Huey
 from huey.consumer import Consumer
 from huey.registry import registry
+from huey.storage import BaseStorage
 
 
 def b(s):
@@ -16,6 +18,11 @@ def b(s):
     return s
 
 
+class DummyHuey(Huey):
+    def get_storage(self, **kwargs):
+        return BaseStorage()
+
+dummy_huey = DummyHuey()
 test_huey = RedisHuey('testing', blocking=False, read_timeout=0.1)
 
 # Logger used by the consumer.
@@ -48,9 +55,7 @@ class HueyTestCase(BaseTestCase):
         self.huey = test_huey
         self.consumer = self.get_consumer(workers=2, scheduler_interval=10)
 
-        pubsub = self.huey.events.listener()
-        self.events = pubsub.listen()
-        next(self.events)  # Consume the "subscribe" event.
+        self.events = iter(self.huey.storage)
 
         self._periodic_tasks = registry._periodic_tasks
         registry._periodic_tasks = self.get_periodic_tasks()
@@ -61,7 +66,6 @@ class HueyTestCase(BaseTestCase):
     def tearDown(self):
         if self.consumer is not None:
             self.consumer.stop()
-        self.events.close()
         self.huey.flush()
         registry._periodic_tasks = self._periodic_tasks
         time.sleep = self._sleep
@@ -74,8 +78,8 @@ class HueyTestCase(BaseTestCase):
 
     def assertTaskEvents(self, *states):
         for (status, task) in states:
-            raw_event = next(self.events)
-            event_data = json.loads(raw_event['data'].decode('utf-8'))
+            event_json = next(self.events)
+            event_data = json.loads(event_json.decode('utf-8'))
             self.assertEqual(event_data['status'], status)
             self.assertEqual(event_data['id'], task.task_id)
 
