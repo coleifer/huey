@@ -10,6 +10,7 @@ from functools import wraps
 from huey.exceptions import DataStoreGetException
 from huey.exceptions import DataStorePutException
 from huey.exceptions import DataStoreTimeout
+from huey.exceptions import MetadataException
 from huey.exceptions import QueueException
 from huey.exceptions import QueueReadException
 from huey.exceptions import QueueRemoveException
@@ -250,6 +251,17 @@ class Huey(object):
             metadata['status'] = status
             self.emit(json.dumps(metadata))
 
+    @_wrapped_operation(MetadataException)
+    def write_metadata(self, key, value):
+        self.storage.write_metadata(key, value)
+
+    @_wrapped_operation(MetadataException)
+    def incr_metadata(self, key):
+        return self.storage.incr_metadata(key)
+
+    def read_metadata(self, key):
+        return self.storage.read_metadata(key)
+
     def execute(self, task):
         if not isinstance(task, QueueTask):
             raise TypeError('Unknown object: %s' % task)
@@ -332,6 +344,9 @@ class Huey(object):
         return [
             pickle.loads(error)
             for error in self.storage.get_errors(limit, offset)]
+
+    def metadata(self):
+        return self.storage.metadata_values()
 
     def __len__(self):
         return self.pending_count()
