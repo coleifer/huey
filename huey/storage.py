@@ -134,11 +134,13 @@ class RedisSchedule(RedisComponent):
 
 
 class RedisDataStore(RedisComponent):
-    def __init__(self, name, connection_pool, **connection):
+    def __init__(self, name, connection_pool, max_errors=1000, **connection):
         super(RedisDataStore, self).__init__(
             name, connection_pool, **connection)
 
         self.storage_name = 'huey.results.%s' % self.name
+        self.error_key = 'huey.errors.%s' % self.name
+        self.max_errors = max_errors
 
     def count(self):
         return self.conn.hlen(self.storage_name)
@@ -162,9 +164,20 @@ class RedisDataStore(RedisComponent):
 
     def flush(self):
         self.conn.delete(self.storage_name)
+        self.conn.delete(self.error_key)
 
     def items(self):
         return self.conn.hgetall(self.storage_name)
+
+    def put_error(self, metadata):
+        self.conn.lpush(self.error_key, metadata)
+        if self.conn.llen(self.error_key) > self.max_errors:
+            self.conn.ltrim(self.error_key, 0, int(self.max_errors * .9))
+
+    def get_errors(self, limit=None, offset=0):
+        if limit is None:
+            limit = -1
+        return self.conn.lrange(self.error_key, offset, limit)
 
 
 class RedisEventEmitter(RedisComponent):
@@ -194,7 +207,7 @@ class _EventIterator(object):
 class RedisHuey(Huey):
     def __init__(self, name='huey', store_none=False, always_eager=False,
                  read_timeout=1, result_store=True, schedule=True,
-                 events=True, blocking=True, **conn_kwargs):
+                 events=True, blocking=True, max_errors=1000, **conn_kwargs):
         self._conn_kwargs = conn_kwargs
         self.pool = redis.ConnectionPool(**conn_kwargs)
         if blocking:
@@ -208,7 +221,10 @@ class RedisHuey(Huey):
             connection_pool=self.pool,
             **queue_args)
         if result_store:
-            result_store = RedisDataStore(name, connection_pool=self.pool)
+            result_store = RedisDataStore(
+                name,
+                connection_pool=self.pool,
+                max_errors=max_errors)
         else:
             result_store = None
         if schedule:
