@@ -1,4 +1,5 @@
 import datetime
+import pickle
 
 from huey import crontab
 from huey import exceptions as huey_exceptions
@@ -15,7 +16,7 @@ from huey.utils import EmptyData
 from huey.utils import local_to_utc
 
 huey = RedisHuey(result_store=None, schedule=None, events=None, blocking=False)
-huey_results = RedisHuey(blocking=False)
+huey_results = RedisHuey(blocking=False, max_errors=10)
 huey_store_none = RedisHuey(store_none=True, blocking=False)
 
 # Global state.
@@ -38,8 +39,11 @@ class TestException(Exception):
     pass
 
 @huey.task()
-def throw_error_task():
-    raise TestException('bampf')
+def _throw_error_task(message=None):
+    raise TestException(message or 'bampf')
+
+throw_error_task = huey.task()(_throw_error_task)
+throw_error_task_res = huey_results.task()(_throw_error_task)
 
 @huey_results.task()
 def add_values(a, b):
@@ -162,6 +166,38 @@ class TestHueyQueueAPIs(BaseQueueTestCase):
         throw_error_task()
         task = huey.dequeue()
         self.assertRaises(TestException, huey.execute, task)
+
+    def test_error_logging(self):
+        def call_task():
+            throw_error_task_res('nuggie')
+            task = huey_results.dequeue()
+            self.assertRaises(TestException, huey_results.execute, task)
+            return task
+
+        hr = huey_results
+        self.assertEqual(len(hr.errors()), 0)
+
+        task = call_task()
+        errors = hr.errors()
+        self.assertEqual(len(errors), 1)
+        error = errors[0]
+
+        self.assertTrue(isinstance(error['error'], TestException))
+        self.assertEqual(error['id'], task.task_id)
+
+        for i in range(9):
+            call_task()
+            self.assertEqual(len(hr.errors()), i + 2)
+
+        self.assertEqual(len(hr.errors()), 10)  # Just to be clear.
+
+        # When we run the task again, the queue will have been trimmed.
+        task = call_task()
+        self.assertEqual(len(hr.errors()), 10)
+
+        # The first item in the queue is the most recently executed task.
+        most_recent_error = hr.errors()[0]
+        self.assertEqual(most_recent_error['id'], task.task_id)
 
     def test_internal_error(self):
         """

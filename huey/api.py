@@ -64,7 +64,7 @@ class Huey(object):
             return
     """
     def __init__(self, queue, result_store=None, schedule=None, events=None,
-                 store_none=False, always_eager=False):
+                 store_none=False, always_eager=False, store_errors=True):
         self.queue = queue
         self.result_store = result_store
         self.schedule = schedule
@@ -75,6 +75,7 @@ class Huey(object):
             self.blocking = False
         self.store_none = store_none
         self.always_eager = always_eager
+        self.store_errors = store_errors
 
     def task(self, retries=0, retry_delay=0, retries_as_argument=False,
              include_task=False, name=None):
@@ -227,7 +228,7 @@ class Huey(object):
             return None
         return time.mktime(dt.timetuple())
 
-    def _get_task_metadata(self, task, error=False):
+    def _get_task_metadata(self, task, error=False, include_data=False):
         metadata = {
             'id': task.task_id,
             'task': type(task).__name__,
@@ -237,6 +238,8 @@ class Huey(object):
             'error': error}
         if error:
             metadata['traceback'] = traceback.format_exc()
+        if include_data:
+            metadata['data'] = task.get_data()
         return metadata
 
     def emit_task(self, status, task, error=False):
@@ -249,7 +252,13 @@ class Huey(object):
         if not isinstance(task, QueueTask):
             raise TypeError('Unknown object: %s' % task)
 
-        result = task.execute()
+        try:
+            result = task.execute()
+        except Exception as exc:
+            if self.result_store and self.store_errors:
+                metadata = self._get_task_metadata(task, exc, True)
+                self.result_store.put_error(pickle.dumps(metadata))
+            raise
 
         if result is None and not self.store_none:
             return
@@ -294,6 +303,11 @@ class Huey(object):
 
     def all_results(self):
         return self.result_store.items()
+
+    def errors(self, limit=None, offset=0):
+        return [
+            pickle.loads(error)
+            for error in self.result_store.get_errors(limit, offset)]
 
     def add_schedule(self, task):
         msg = registry.get_message_for_task(task)
