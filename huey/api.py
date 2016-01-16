@@ -245,10 +245,11 @@ class Huey(object):
             metadata['data'] = task.get_data()
         return metadata
 
-    def emit_task(self, status, task, error=False):
+    def emit_task(self, status, task, error=False, **data):
         if self.events:
             metadata = self._get_task_metadata(task, error)
             metadata['status'] = status
+            metadata.update(data)
             self.emit(json.dumps(metadata))
 
     @_wrapped_operation(MetadataException)
@@ -448,9 +449,10 @@ class QueueTask(with_metaclass(QueueTaskMetaClass)):
         self.execute_time = execute_time
         self.retries = retries
         self.retry_delay = retry_delay
+        self.name = type(self).__name__
 
     def __repr__(self):
-        rep = '%s: %s' % (type(self).__name__, self.task_id)
+        rep = '%s: %s' % (self.name, self.task_id)
         if self.execute_time:
             rep += ' @%s' % self.execute_time
         if self.retries:
