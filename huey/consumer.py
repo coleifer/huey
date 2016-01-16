@@ -4,6 +4,7 @@ import os
 import signal
 import threading
 import time
+from collections import defaultdict
 
 from multiprocessing import Event as ProcessEvent
 from multiprocessing import Process
@@ -25,6 +26,25 @@ from huey.exceptions import ScheduleReadException
 from huey.registry import registry
 
 
+EVENT_ENQUEUED = 'enqueued'
+EVENT_ERROR_DEQUEUEING = 'error-dequeueing'
+EVENT_ERROR_ENQUEUEING = 'error-enqueueing'
+EVENT_ERROR_INTERNAL = 'error-internal'
+EVENT_ERROR_SCHEDULING = 'error-scheduling'
+EVENT_ERROR_STORING_RESULT = 'error-storing-result'
+EVENT_ERROR_TASK = 'error-task'
+EVENT_FINISHED = 'finished'
+EVENT_RETRYING = 'retrying'
+EVENT_REVOKED = 'revoked'
+EVENT_SCHEDULED = 'scheduled'
+EVENT_SCHEDULING_PERIODIC = 'scheduling-periodic'
+EVENT_STARTED = 'started'
+
+
+def to_timestamp(dt):
+    if dt:
+        return time.mktime(dt.timetuple())
+
 class BaseProcess(object):
     def __init__(self, huey, utc):
         self.huey = huey
@@ -35,18 +55,27 @@ class BaseProcess(object):
             return datetime.datetime.utcnow()
         return datetime.datetime.now()
 
+    def get_timestamp(self):
+        return time.mktime(self.get_now().timetuple())
+
     def sleep_for_interval(self, start_ts, nseconds):
         delta = time.time() - start_ts
         if delta < nseconds:
+            seconds = nseconds - (time.time() - start_ts)
+            self._logger.debug('Sleeping for %s' % seconds)
             time.sleep(nseconds - (time.time() - start_ts))
 
     def enqueue(self, task):
         try:
             self.huey.enqueue(task)
         except QueueWriteException:
+            self.huey.emit_task(EVENT_ERROR_ENQUEUEING, task, error=True)
             self._logger.error('Error enqueueing task: %s' % task)
         else:
-            self.huey.emit_task('enqueued', task)
+            self.huey.emit_task(
+                EVENT_ENQUEUED,
+                task,
+                timestamp=self.get_timestamp())
 
     def loop(self, now=None):
         raise NotImplementedError
@@ -61,18 +90,20 @@ class Worker(BaseProcess):
         super(Worker, self).__init__(huey, utc)
 
     def loop(self, now=None):
-        self._logger.debug('Checking for message')
         task = None
         exc_raised = True
         try:
             task = self.huey.dequeue()
         except QueueReadException as exc:
+            self.huey.emit_task(EVENT_ERROR_DEQUEUEING, task, error=True)
             self._logger.exception('Error reading from queue')
         except QueueException:
+            self.huey.emit_task(EVENT_ERROR_INTERNAL, task, error=True)
             self._logger.exception('Queue exception')
         except KeyboardInterrupt:
             raise
         except:
+            self.huey.emit_task(EVENT_ERROR_INTERNAL, task, error=True)
             self._logger.exception('Unknown exception')
         else:
             exc_raised = False
@@ -93,56 +124,73 @@ class Worker(BaseProcess):
 
     def handle_task(self, task, ts):
         if not self.huey.ready_to_run(task, ts):
-            self._logger.info('Adding %s to schedule' % task)
             self.add_schedule(task)
         elif not self.is_revoked(task, ts):
             self.process_task(task, ts)
         else:
+            self.huey.emit_task(
+                EVENT_REVOKED,
+                task,
+                timestamp=to_timestamp(ts))
             self._logger.debug('Task %s was revoked, not running' % task)
 
     def process_task(self, task, ts):
+        self.huey.emit_task(EVENT_STARTED, task, timestamp=to_timestamp(ts))
         self._logger.info('Executing %s' % task)
-        self.huey.emit_task('started', task)
         try:
             self.huey.execute(task)
         except DataStorePutException:
+            self.huey.emit_task(EVENT_ERROR_STORING_RESULT, task, error=True)
             self._logger.exception('Error storing result')
         except:
+            self.huey.emit_task(EVENT_ERROR_TASK, task, error=True)
+            self.huey.incr_metadata(task.name + '_errors')
+            self.huey.incr_metadata('task_errors')
             self._logger.exception('Unhandled exception in worker thread')
-            self.huey.emit_task('error', task, error=True)
             if task.retries:
-                self.huey.emit_task('retrying', task)
                 self.requeue_task(task, self.get_now())
         else:
-            self.huey.emit_task('finished', task)
+            self.huey.emit_task(
+                EVENT_FINISHED,
+                task,
+                timestamp=self.get_timestamp())
+            self.huey.incr_metadata(task.name + '_executed')
+            self.huey.incr_metadata('tasks_executed')
 
     def requeue_task(self, task, ts):
         task.retries -= 1
+        self.huey.emit_task(EVENT_RETRYING, task)
         self._logger.info('Re-enqueueing task %s, %s tries left' %
                           (task.task_id, task.retries))
         if task.retry_delay:
             delay = datetime.timedelta(seconds=task.retry_delay)
             task.execute_time = ts + delay
-            self._logger.debug('Execute %s at: %s' % (task, task.execute_time))
             self.add_schedule(task)
         else:
             self.enqueue(task)
 
     def add_schedule(self, task):
+        self._logger.info('Adding %s to schedule' % task)
         try:
             self.huey.add_schedule(task)
         except ScheduleAddException:
+            self.huey.emit_task(EVENT_ERROR_SCHEDULING, task, error=True)
             self._logger.error('Error adding task to schedule: %s' % task)
         else:
-            self.huey.emit_task('scheduled', task)
+            self.huey.emit_task(EVENT_SCHEDULED, task)
+            self.huey.incr_metadata('tasks_scheduled')
 
     def is_revoked(self, task, ts):
         try:
             if self.huey.is_revoked(task, ts, peek=False):
-                self.huey.emit_task('revoked', task)
+                self.huey.emit_task(
+                    EVENT_REVOKED,
+                    task,
+                    timestamp=to_timestamp(ts))
                 return True
             return False
         except DataStoreGetException:
+            self.huey.emit_task(EVENT_ERROR_INTERNAL, task, error=True)
             self._logger.error('Error checking if task is revoked: %s' % task)
             return True
 
@@ -176,6 +224,10 @@ class Scheduler(BaseProcess):
                 self._logger.debug('Checking periodic tasks')
                 self._counter = 0
                 for task in self.huey.read_periodic(now):
+                    self.huey.emit_task(
+                        EVENT_SCHEDULING_PERIODIC,
+                        task,
+                        timestamp=self.get_timestamp())
                     self._logger.info('Scheduling periodic task %s.' % task)
                     self.enqueue(task)
                 self.sleep_for_interval(start, self.interval - self._r)
@@ -295,7 +347,12 @@ class Consumer(object):
                 pass
         return _run
 
+    def metadata(self, **kwargs):
+        for key, value in kwargs.items():
+            self.huey.write_metadata(key, value)
+
     def start(self):
+        # Log startup message.
         self._logger.info('Huey consumer started with %s %s, PID %s' % (
             self.workers,
             self.worker_type,
@@ -305,11 +362,27 @@ class Consumer(object):
         self._logger.info('Periodic tasks are %s.' % (
             'enabled' if self.periodic else 'disabled'))
 
+        # Set metadata.
+        self.metadata(
+            periodic_tasks='enabled' if self.periodic else 'disabled',
+            periodic_tasks_executed=0,
+            scheduler_interval=self.scheduler_interval,
+            task_errors=0,
+            tasks_executed=0,
+            tasks_scheduled=0,
+            workers=self.workers,
+            worker_type=self.worker_type,
+        )
+
         self._set_signal_handler()
 
         msg = ['The following commands are available:']
         for command in registry._registry:
             msg.append('+ %s' % command.replace('queuecmd_', ''))
+            self.metadata(**{
+                command + '_errors': 0,
+                command + '_executed': 0})
+
         self._logger.info('\n'.join(msg))
 
         self.scheduler.start()

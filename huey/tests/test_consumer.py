@@ -135,7 +135,7 @@ class TestConsumerAPIs(HueyTestCase):
 
         self.assertTaskEvents(
             ('started', task),
-            ('error', task))
+            ('error-task', task))
 
     def test_retries_and_logging(self):
         # This will continually fail.
@@ -154,7 +154,7 @@ class TestConsumerAPIs(HueyTestCase):
                     'Re-enqueueing'])
                 self.assertTaskEvents(
                     ('started', task),
-                    ('error', task),
+                    ('error-task', task),
                     ('retrying', task),
                     ('enqueued', task))
             else:
@@ -163,7 +163,7 @@ class TestConsumerAPIs(HueyTestCase):
                     'Unhandled'])
                 self.assertTaskEvents(
                     ('started', task),
-                    ('error', task))
+                    ('error-task', task))
 
         self.assertEqual(len(test_huey), 0)
 
@@ -190,7 +190,7 @@ class TestConsumerAPIs(HueyTestCase):
 
         self.assertTaskEvents(
             ('started', task),
-            ('error', task),
+            ('error-task', task),
             ('retrying', task),
             ('enqueued', task),
             ('started', task),
@@ -245,7 +245,8 @@ class TestConsumerAPIs(HueyTestCase):
         self.assertLogs(capture, [
             'Executing',
             'Unhandled exception',
-            'Re-enqueueing task'])
+            'Re-enqueueing task',
+            'Adding'])
 
         in_8 = cur_time + datetime.timedelta(seconds=8)
         tasks_from_sched = self.huey.read_schedule(in_8)
@@ -262,7 +263,7 @@ class TestConsumerAPIs(HueyTestCase):
         self.assertEqual((exec_time - cur_time).seconds, 10)
         self.assertTaskEvents(
             ('started', task),
-            ('error', task),
+            ('error-task', task),
             ('retrying', task),
             ('scheduled', task))
 
