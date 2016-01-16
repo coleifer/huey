@@ -24,3 +24,6 @@ class ScheduleAddException(QueueException):
 
 class ScheduleReadException(QueueException):
     pass
+
+class MetadataException(QueueException):
+    pass

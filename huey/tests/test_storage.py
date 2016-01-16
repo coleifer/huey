@@ -94,3 +94,13 @@ class TestRedisStorage(HueyTestCase):
         self.assertEqual(res, b('a'))
         res = next(i)
         self.assertEqual(res, b('b'))
+
+    def test_metadata(self):
+        s = self.huey.storage
+        s.write_metadata('k1', 'v1')
+        self.assertEqual(s.read_metadata('k1'), b('v1'))
+        self.assertEqual(s.read_metadata('kx'), None)
+
+        s.write_metadata('k2', 'v2')
+        vals = s.metadata_values()
+        self.assertEqual(vals, {'k1': 'v1', 'k2': 'v2'})
