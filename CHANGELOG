@@ -1,6 +1,23 @@
 Changelog
 =========
 
+v1.1.0
+------
+
+* Big changes to simplify the way ``Huey`` is instantiated. No changes should
+  be necessary if already using ``RedisHuey``.
+* Refactored the storage APIs and simplified the public interface. There is
+  now a single object, whereas before there were 4 components (queue, result
+  store, scheduler and event emitter).
+* Added methods for retrieving and introspecting the pending task queue, the
+  schedule, results, and errors.
+* Errors can now be stored, in addition to regular task results.
+* Added metadata methods for tracking task execution, errors, task duration,
+  and more. These will be the building blocks for tools to provide some
+  insight into the inner-workings of your consumers and producers.
+* Many new events are emitted by the consumer, and some have parameters. These
+  are documented [here](http://huey.readthedocs.org/en/latest/events.html).
+
 v1.0.0
 ------
 
