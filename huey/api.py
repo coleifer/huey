@@ -245,20 +245,25 @@ class Huey(object):
             metadata['data'] = task.get_data()
         return metadata
 
+    def emit_status(self, status, **data):
+        if self.events:
+            metadata = {'status': status}
+            metadata.update(data)
+            self.emit(json.dumps(metadata))
+
     def emit_task(self, status, task, error=False, **data):
         if self.events:
             metadata = self._get_task_metadata(task, error)
-            metadata['status'] = status
             metadata.update(data)
-            self.emit(json.dumps(metadata))
+            self.emit_status(status, **metadata)
 
     @_wrapped_operation(MetadataException)
     def write_metadata(self, key, value):
         self.storage.write_metadata(key, value)
 
     @_wrapped_operation(MetadataException)
-    def incr_metadata(self, key):
-        return self.storage.incr_metadata(key)
+    def incr_metadata(self, key, value=1):
+        return self.storage.incr_metadata(key, value)
 
     def read_metadata(self, key):
         return self.storage.read_metadata(key)
