@@ -271,7 +271,7 @@ class _EventIterator(object):
         next(self.listener)
 
     def next(self):
-        return json.loads(next(self.listener)['data'])
+        return json.loads(next(self.listener)['data'].decode('utf-8'))
 
     __next__ = next
 

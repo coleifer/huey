@@ -155,8 +155,7 @@ class TestConsumerAPIs(HueyTestCase):
                 self.assertTaskEvents(
                     ('started', task),
                     ('error-task', task),
-                    ('retrying', task),
-                    ('enqueued', task))
+                    ('retrying', task))
             else:
                 self.assertLogs(capture, [
                     'Executing',
@@ -192,7 +191,6 @@ class TestConsumerAPIs(HueyTestCase):
             ('started', task),
             ('error-task', task),
             ('retrying', task),
-            ('enqueued', task),
             ('started', task),
             ('finished', task))
 
@@ -230,7 +228,6 @@ class TestConsumerAPIs(HueyTestCase):
 
         # our command was enqueued
         self.assertEqual(len(self.huey), 1)
-        self.assertTaskEvents(('enqueued', ad2.task))
 
     def test_retry_scheduling(self):
         # this will continually fail
