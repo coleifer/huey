@@ -1,3 +1,4 @@
+import json
 import re
 import sys
 import time
@@ -270,7 +271,7 @@ class _EventIterator(object):
         next(self.listener)
 
     def next(self):
-        return next(self.listener)['data']
+        return json.loads(next(self.listener)['data'])
 
     __next__ = next
 

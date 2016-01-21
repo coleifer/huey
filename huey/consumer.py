@@ -27,7 +27,6 @@ from huey.registry import registry
 
 
 EVENT_CHECKING_PERIODIC = 'checking-periodic'
-EVENT_ENQUEUED = 'enqueued'
 EVENT_ERROR_DEQUEUEING = 'error-dequeueing'
 EVENT_ERROR_ENQUEUEING = 'error-enqueueing'
 EVENT_ERROR_INTERNAL = 'error-internal'
@@ -39,7 +38,6 @@ EVENT_RETRYING = 'retrying'
 EVENT_REVOKED = 'revoked'
 EVENT_SCHEDULED = 'scheduled'
 EVENT_SCHEDULING_PERIODIC = 'scheduling-periodic'
-EVENT_SLEEPING = 'sleeping'
 EVENT_STARTED = 'started'
 
 
@@ -74,10 +72,6 @@ class BaseProcess(object):
             self.huey.emit_task(EVENT_ERROR_ENQUEUEING, task, error=True)
             self._logger.error('Error enqueueing task: %s' % task)
         else:
-            self.huey.emit_task(
-                EVENT_ENQUEUED,
-                task,
-                timestamp=self.get_timestamp())
             self._logger.debug('Enqueued task: %s' % task)
 
     def loop(self, now=None):
@@ -121,7 +115,6 @@ class Worker(BaseProcess):
         if self.delay > self.max_delay:
             self.delay = self.max_delay
 
-        self.huey.emit_status(EVENT_SLEEPING, seconds=self.delay)
         self._logger.debug('No messages, sleeping for: %s' % self.delay)
         time.sleep(self.delay)
         self.delay *= self.backoff
@@ -157,14 +150,14 @@ class Worker(BaseProcess):
                 EVENT_ERROR_STORING_RESULT,
                 task,
                 error=True,
-                seconds=duration)
+                duration=duration)
             self._logger.exception('Error storing result')
         except:
             self.huey.emit_task(
                 EVENT_ERROR_TASK,
                 task,
                 error=True,
-                seconds=duration)
+                duration=duration)
             self._incr_metadata(task, 'errors')
             self._logger.exception('Unhandled exception in worker thread')
             if task.retries:
@@ -173,7 +166,7 @@ class Worker(BaseProcess):
             self.huey.emit_task(
                 EVENT_FINISHED,
                 task,
-                seconds=duration,
+                duration=duration,
                 timestamp=self.get_timestamp())
             self._incr_metadata(task, 'executed')
 
@@ -205,10 +198,6 @@ class Worker(BaseProcess):
     def is_revoked(self, task, ts):
         try:
             if self.huey.is_revoked(task, ts, peek=False):
-                self.huey.emit_task(
-                    EVENT_REVOKED,
-                    task,
-                    timestamp=to_timestamp(ts))
                 return True
             return False
         except DataStoreGetException:
