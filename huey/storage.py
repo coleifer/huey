@@ -1,3 +1,4 @@
+import json
 import re
 import sys
 import time
@@ -240,8 +241,11 @@ class RedisStorage(BaseStorage):
     def read_metadata(self, key):
         return self.conn.hget(self.metadata_key, key)
 
-    def incr_metadata(self, key):
-        return self.conn.hincrby(self.metadata_key, key, 1)
+    def incr_metadata(self, key, value=1):
+        if isinstance(value, float):
+            return self.conn.hincrbyfloat(self.metadata_key, key, value)
+        else:
+            return self.conn.hincrby(self.metadata_key, key, value)
 
     def metadata_values(self):
         return self.conn.hgetall(self.metadata_key)
@@ -267,7 +271,7 @@ class _EventIterator(object):
         next(self.listener)
 
     def next(self):
-        return next(self.listener)['data']
+        return json.loads(next(self.listener)['data'])
 
     __next__ = next
 
