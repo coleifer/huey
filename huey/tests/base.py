@@ -1,5 +1,4 @@
 import datetime
-import json
 import logging
 import sys
 import time
@@ -78,8 +77,7 @@ class HueyTestCase(BaseTestCase):
 
     def assertTaskEvents(self, *states):
         for (status, task) in states:
-            event_json = next(self.events)
-            event_data = json.loads(event_json.decode('utf-8'))
+            event_data = next(self.events)
             self.assertEqual(event_data['status'], status)
             self.assertEqual(event_data['id'], task.task_id)
 

@@ -87,13 +87,13 @@ class TestRedisStorage(HueyTestCase):
     def test_event_iterator(self):
         i = iter(self.huey.storage)
 
-        self.huey.storage.emit('a')
-        self.huey.storage.emit('b')
+        self.huey.storage.emit('"a"')
+        self.huey.storage.emit('"b"')
 
         res = next(i)
-        self.assertEqual(res, b('a'))
+        self.assertEqual(res, 'a')
         res = next(i)
-        self.assertEqual(res, b('b'))
+        self.assertEqual(res, 'b')
 
     def test_metadata(self):
         s = self.huey.storage
