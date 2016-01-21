@@ -26,6 +26,7 @@ from huey.exceptions import ScheduleReadException
 from huey.registry import registry
 
 
+EVENT_CHECKING_PERIODIC = 'checking-periodic'
 EVENT_ENQUEUED = 'enqueued'
 EVENT_ERROR_DEQUEUEING = 'error-dequeueing'
 EVENT_ERROR_ENQUEUEING = 'error-enqueueing'
@@ -38,6 +39,7 @@ EVENT_RETRYING = 'retrying'
 EVENT_REVOKED = 'revoked'
 EVENT_SCHEDULED = 'scheduled'
 EVENT_SCHEDULING_PERIODIC = 'scheduling-periodic'
+EVENT_SLEEPING = 'sleeping'
 EVENT_STARTED = 'started'
 
 
@@ -76,6 +78,7 @@ class BaseProcess(object):
                 EVENT_ENQUEUED,
                 task,
                 timestamp=self.get_timestamp())
+            self._logger.debug('Enqueued task: %s' % task)
 
     def loop(self, now=None):
         raise NotImplementedError
@@ -103,8 +106,8 @@ class Worker(BaseProcess):
         except KeyboardInterrupt:
             raise
         except:
-            self.huey.emit_task(EVENT_ERROR_INTERNAL, task, error=True)
-            self._logger.exception('Unknown exception')
+            self.huey.emit_task(EVENT_ERROR_DEQUEUEING, task, error=True)
+            self._logger.exception('Unknown exception dequeueing task.')
         else:
             exc_raised = False
 
@@ -118,6 +121,7 @@ class Worker(BaseProcess):
         if self.delay > self.max_delay:
             self.delay = self.max_delay
 
+        self.huey.emit_status(EVENT_SLEEPING, seconds=self.delay)
         self._logger.debug('No messages, sleeping for: %s' % self.delay)
         time.sleep(self.delay)
         self.delay *= self.backoff
@@ -134,18 +138,34 @@ class Worker(BaseProcess):
                 timestamp=to_timestamp(ts))
             self._logger.debug('Task %s was revoked, not running' % task)
 
+    def _incr_metadata(self, task, key, value=1):
+        self.huey.incr_metadata('_'.join((task.name, key)), value)
+        self.huey.incr_metadata('_'.join(('tasks', key)), value)
+
     def process_task(self, task, ts):
         self.huey.emit_task(EVENT_STARTED, task, timestamp=to_timestamp(ts))
         self._logger.info('Executing %s' % task)
+        start = time.time()
         try:
-            self.huey.execute(task)
+            try:
+                self.huey.execute(task)
+            finally:
+                duration = time.time() - start
+                self._logger.debug('Task %s ran in %0.3fs' % (task, duration))
         except DataStorePutException:
-            self.huey.emit_task(EVENT_ERROR_STORING_RESULT, task, error=True)
+            self.huey.emit_task(
+                EVENT_ERROR_STORING_RESULT,
+                task,
+                error=True,
+                seconds=duration)
             self._logger.exception('Error storing result')
         except:
-            self.huey.emit_task(EVENT_ERROR_TASK, task, error=True)
-            self.huey.incr_metadata(task.name + '_errors')
-            self.huey.incr_metadata('task_errors')
+            self.huey.emit_task(
+                EVENT_ERROR_TASK,
+                task,
+                error=True,
+                seconds=duration)
+            self._incr_metadata(task, 'errors')
             self._logger.exception('Unhandled exception in worker thread')
             if task.retries:
                 self.requeue_task(task, self.get_now())
@@ -153,9 +173,11 @@ class Worker(BaseProcess):
             self.huey.emit_task(
                 EVENT_FINISHED,
                 task,
+                seconds=duration,
                 timestamp=self.get_timestamp())
-            self.huey.incr_metadata(task.name + '_executed')
-            self.huey.incr_metadata('tasks_executed')
+            self._incr_metadata(task, 'executed')
+
+        self._incr_metadata(task, 'duration', duration)
 
     def requeue_task(self, task, ts):
         task.retries -= 1
@@ -178,7 +200,7 @@ class Worker(BaseProcess):
             self._logger.error('Error adding task to schedule: %s' % task)
         else:
             self.huey.emit_task(EVENT_SCHEDULED, task)
-            self.huey.incr_metadata('tasks_scheduled')
+            self._incr_metadata(task, 'scheduled')
 
     def is_revoked(self, task, ts):
         try:
@@ -221,6 +243,9 @@ class Scheduler(BaseProcess):
             if self._counter == self._q:
                 if self._r:
                     self.sleep_for_interval(start, self._r)
+                self.huey.emit_status(
+                    EVENT_CHECKING_PERIODIC,
+                    timestamp=self.get_timestamp())
                 self._logger.debug('Checking periodic tasks')
                 self._counter = 0
                 for task in self.huey.read_periodic(now):
@@ -351,6 +376,47 @@ class Consumer(object):
         for key, value in kwargs.items():
             self.huey.write_metadata(key, value)
 
+    def initialize_metadata(self):
+        # Set metadata.
+        self.metadata(
+            periodic_tasks='enabled' if self.periodic else 'disabled',
+            scheduler_interval=self.scheduler_interval,
+            tasks_duration=0.0,
+            tasks_errors=0,
+            tasks_executed=0,
+            tasks_scheduled=0,
+            workers=self.workers,
+            worker_type=self.worker_type,
+        )
+        for command in registry._registry:
+            self.metadata(**{
+                command + '_duration': 0,
+                command + '_errors': 0,
+                command + '_executed': 0,
+                command + '_scheduled': 0})
+
+    def read_metadata(self):
+        keys = [
+            'periodic_tasks',
+            'scheduler_interval',
+            'tasks_duration',
+            'tasks_errors',
+            'tasks_executed',
+            'tasks_scheduled',
+            'workers',
+            'worker_type',
+        ]
+        for command in registry._registry:
+            keys.extend([
+                command + '_duration',
+                command + '_errors',
+                command + '_executed',
+                command + '_scheduled'])
+
+        data = {}
+        for key in keys:
+            data[key] = self.huey.read_metadata(key)
+
     def start(self):
         # Log startup message.
         self._logger.info('Huey consumer started with %s %s, PID %s' % (
@@ -362,26 +428,11 @@ class Consumer(object):
         self._logger.info('Periodic tasks are %s.' % (
             'enabled' if self.periodic else 'disabled'))
 
-        # Set metadata.
-        self.metadata(
-            periodic_tasks='enabled' if self.periodic else 'disabled',
-            periodic_tasks_executed=0,
-            scheduler_interval=self.scheduler_interval,
-            task_errors=0,
-            tasks_executed=0,
-            tasks_scheduled=0,
-            workers=self.workers,
-            worker_type=self.worker_type,
-        )
-
         self._set_signal_handler()
 
         msg = ['The following commands are available:']
         for command in registry._registry:
             msg.append('+ %s' % command.replace('queuecmd_', ''))
-            self.metadata(**{
-                command + '_errors': 0,
-                command + '_executed': 0})
 
         self._logger.info('\n'.join(msg))
 
