@@ -17,7 +17,7 @@ lowest-level interfaces, the :py:class:`BaseQueue` and :py:class:`BaseDataStore`
 Function decorators and helpers
 -------------------------------
 
-.. py:class:: Huey(queue[, result_store=None[, schedule=None[, events=None[, store_none=False[, always_eager=False]]]]])
+.. py:class:: Huey(name[, result_store=True[, events=True[, store_none=False[, always_eager=False[, store_errors=True[, blocking=False[, **storage_kwargs]]]]]]])
 
     Huey executes tasks by exposing function decorators that cause the function
     call to be enqueued for execution by the consumer.
@@ -26,15 +26,16 @@ Function decorators and helpers
     have as many as you like -- the only caveat is that one consumer process
     must be executed for each Huey instance.
 
-    :param queue: a queue instance, e.g. :py:class:`RedisQueue`.
-    :param result_store: a place to store results and the task schedule,
-        e.g. :py:class:`RedisDataStore`.
-    :param schedule: scheduler implementation, e.g. an instance of :py:class:`RedisSchedule`.
-    :param events: event emitter implementation, e.g. an instance of :py:class:`RedisEventEmitter`.
-    :param boolean store_none: Flag to indicate whether tasks that return ``None``
+    :param name: the name of the huey instance or application.
+    :param bool result_store: whether the results of tasks should be stored.
+    :param bool events: whether events should be emitted by the consumer.
+    :param bool store_none: Flag to indicate whether tasks that return ``None``
         should store their results in the result store.
-    :param always_eager: Useful for testing, this will execute all tasks
+    :param bool always_eager: Useful for testing, this will execute all tasks
         immediately, without enqueueing them.
+    :param bool store_errors: whether task errors should be stored.
+    :param bool blocking: whether the queue will block (if False, then the queue will poll).
+    :param storage_kwargs: arbitrary kwargs to pass to the storage implementation.
 
     Example usage:
 
@@ -43,12 +44,6 @@ Function decorators and helpers
         from huey import RedisHuey, crontab
 
         huey = RedisHuey('my-app')
-
-        # THIS IS EQUIVALENT TO ABOVE CODE:
-        #queue = RedisBlockingQueue('my-app')
-        #result_store = RedisDataStore('my-app')
-        #schedule = RedisSchedule('my-app')
-        #huey = Huey(queue, result_store, schedule)
 
         @huey.task()
         def slow_function(some_arg):
