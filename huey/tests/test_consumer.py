@@ -157,11 +157,13 @@ class TestConsumerAPIs(HueyTestCase):
         self.assertEqual(int(metadata['queuecmd_blow_up_errors']), 1)
         self.assertFalse('queuecmd_blow_up_executed' in metadata)
         self.assertEqual(int(metadata['tasks_executed']), 2)
+        self.assertEqual(int(metadata['tasks_errors']), 1)
 
         metadata = run_task(retry_task, ('test', False))
         self.assertEqual(int(metadata['queuecmd_retry_task_errors']), 1)
         self.assertFalse('queuecmd_retry_task_executed' in metadata)
         self.assertEqual(int(metadata['tasks_executed']), 2)
+        self.assertEqual(int(metadata['tasks_errors']), 2)
         # Duration is recorded for errors.
         duration = metadata['queuecmd_retry_task_duration']
 
@@ -170,6 +172,7 @@ class TestConsumerAPIs(HueyTestCase):
         self.assertEqual(int(metadata['queuecmd_retry_task_errors']), 1)
         self.assertEqual(int(metadata['queuecmd_retry_task_executed']), 1)
         self.assertEqual(int(metadata['tasks_executed']), 3)
+        self.assertEqual(int(metadata['tasks_errors']), 2)
         self.assertNotEqual(metadata['queuecmd_retry_task_duration'], duration)
 
         # Scheduled, ready to run when dequeued -- runs like normal.

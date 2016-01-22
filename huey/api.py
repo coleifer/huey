@@ -360,6 +360,17 @@ class Huey(object):
     def flush(self):
         self.storage.flush_all()
 
+    def get_tasks(self):
+        return sorted(registry._registry.keys())
+
+    def get_periodic_tasks(self):
+        return [task_name for task_name, task in registry._registry.items()
+                if hasattr(task, 'validate_datetime')]
+
+    def get_regular_tasks(self):
+        periodic = set(self.get_periodic_tasks())
+        return [task for task in self.get_tasks() if task not in periodic]
+
 
 class AsyncData(object):
     def __init__(self, huey, task):
