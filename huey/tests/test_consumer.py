@@ -6,6 +6,7 @@ from huey import crontab
 from huey.consumer import Consumer
 from huey.consumer import Scheduler
 from huey.consumer import Worker
+from huey.tests.base import b
 from huey.tests.base import CaptureLogs
 from huey.tests.base import HueyTestCase
 from huey.tests.base import test_huey
@@ -144,52 +145,52 @@ class TestConsumerAPIs(HueyTestCase):
             return test_huey.metadata()
 
         metadata = run_task(modify_state, ('k1', 'v1'))
-        self.assertEqual(int(metadata['queuecmd_modify_state_executed']), 1)
-        self.assertEqual(int(metadata['tasks_executed']), 1)
-        self.assertEqual(metadata['queuecmd_modify_state_duration'],
-                         metadata['tasks_duration'])
+        self.assertEqual(int(metadata[b('queuecmd_modify_state_executed')]), 1)
+        self.assertEqual(int(metadata[b('tasks_executed')]), 1)
+        self.assertEqual(metadata[b('queuecmd_modify_state_duration')],
+                         metadata[b('tasks_duration')])
 
         metadata = run_task(modify_state, ('k1', 'v2'))
-        self.assertEqual(int(metadata['queuecmd_modify_state_executed']), 2)
-        self.assertEqual(int(metadata['tasks_executed']), 2)
+        self.assertEqual(int(metadata[b('queuecmd_modify_state_executed')]), 2)
+        self.assertEqual(int(metadata[b('tasks_executed')]), 2)
 
         metadata = run_task(blow_up)
-        self.assertEqual(int(metadata['queuecmd_blow_up_errors']), 1)
-        self.assertFalse('queuecmd_blow_up_executed' in metadata)
-        self.assertEqual(int(metadata['tasks_executed']), 2)
-        self.assertEqual(int(metadata['tasks_errors']), 1)
+        self.assertEqual(int(metadata[b('queuecmd_blow_up_errors')]), 1)
+        self.assertFalse(b('queuecmd_blow_up_executed') in metadata)
+        self.assertEqual(int(metadata[b('tasks_executed')]), 2)
+        self.assertEqual(int(metadata[b('tasks_errors')]), 1)
 
         metadata = run_task(retry_task, ('test', False))
-        self.assertEqual(int(metadata['queuecmd_retry_task_errors']), 1)
-        self.assertFalse('queuecmd_retry_task_executed' in metadata)
-        self.assertEqual(int(metadata['tasks_executed']), 2)
-        self.assertEqual(int(metadata['tasks_errors']), 2)
+        self.assertEqual(int(metadata[b('queuecmd_retry_task_errors')]), 1)
+        self.assertFalse(b('queuecmd_retry_task_executed') in metadata)
+        self.assertEqual(int(metadata[b('tasks_executed')]), 2)
+        self.assertEqual(int(metadata[b('tasks_errors')]), 2)
         # Duration is recorded for errors.
-        duration = metadata['queuecmd_retry_task_duration']
+        duration = metadata[b('queuecmd_retry_task_duration')]
 
         self.worker(test_huey.dequeue())
         metadata = test_huey.metadata()
-        self.assertEqual(int(metadata['queuecmd_retry_task_errors']), 1)
-        self.assertEqual(int(metadata['queuecmd_retry_task_executed']), 1)
-        self.assertEqual(int(metadata['tasks_executed']), 3)
-        self.assertEqual(int(metadata['tasks_errors']), 2)
-        self.assertNotEqual(metadata['queuecmd_retry_task_duration'], duration)
+        self.assertEqual(int(metadata[b('queuecmd_retry_task_errors')]), 1)
+        self.assertEqual(int(metadata[b('queuecmd_retry_task_executed')]), 1)
+        self.assertEqual(int(metadata[b('tasks_executed')]), 3)
+        self.assertEqual(int(metadata[b('tasks_errors')]), 2)
+        self.assertNotEqual(metadata[b('queuecmd_retry_task_duration')], duration)
 
         # Scheduled, ready to run when dequeued -- runs like normal.
         modify_state.schedule(args=('k1', 'v3'), eta=datetime.date(2015, 1, 1))
         self.worker(test_huey.dequeue())
         metadata = test_huey.metadata()
-        self.assertEqual(int(metadata['queuecmd_modify_state_executed']), 3)
-        self.assertEqual(int(metadata['tasks_executed']), 4)
+        self.assertEqual(int(metadata[b('queuecmd_modify_state_executed')]), 3)
+        self.assertEqual(int(metadata[b('tasks_executed')]), 4)
 
         # When task is put on schedule and not executed immediately, then
         # the `scheduled` metadata count is incremented.
         modify_state.schedule(args=('k1', 'v3'), eta=datetime.date(2030, 1, 1))
         self.worker(test_huey.dequeue())
         metadata = test_huey.metadata()
-        self.assertEqual(int(metadata['queuecmd_modify_state_executed']), 3)
-        self.assertEqual(int(metadata['queuecmd_modify_state_scheduled']), 1)
-        self.assertEqual(int(metadata['tasks_executed']), 4)
+        self.assertEqual(int(metadata[b('queuecmd_modify_state_executed')]), 3)
+        self.assertEqual(int(metadata[b('queuecmd_modify_state_scheduled')]), 1)
+        self.assertEqual(int(metadata[b('tasks_executed')]), 4)
 
     def test_retries_and_logging(self):
         # This will continually fail.
