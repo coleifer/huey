@@ -48,8 +48,7 @@ To run the consumer with 4 worker processes:
 
 Huey is named in honor of my cat
 
-.. image:: http://media.charlesleifer.com/blog/photos/thumbnails/IMG_20130402_154858_650x650.jpg
-
+.. image:: http://m.charlesleifer.com/t/650x650/blog/photos/IMG_20130402_154858.jpg?key=dwGB5XTKyBRRnh-ie1qHlw
 
 Contents:
 
