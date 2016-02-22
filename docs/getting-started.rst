@@ -96,28 +96,10 @@ Getting results from jobs
 
 The above example illustrates a "send and forget" approach, but what if your
 application needs to do something with the results of a task?  To get results
-from your tasks, we'll set up the ``RedisDataStore`` by adding the following
-lines to the ``config.py`` module:
+from your tasks, just return a value in your task function.
 
-.. code-block:: python
-
-    from huey import Huey
-    from huey.storage import RedisBlockingQueue
-    from huey.storage import RedisDataStore  # ADD THIS LINE
-
-
-    queue = RedisBlockingQueue('test-queue', host='localhost', port=6379)
-    result_store = RedisDataStore('results', host='localhost', port=6379)  # ADDED
-
-    huey = Huey(queue, result_store=result_store) # ADDED result store
-
-We can actually shorten this code to:
-
-.. code-block:: python
-
-    from huey import RedisHuey
-
-    huey = RedisHuey('test-queue', host='localhost', port=6379)
+.. note::
+    If you are storing results but are not using them, that can waste significant space, especially if your task volume is high. To disable result storage, you can either return ``None`` or specify ``result_store=False`` when initializing your :py:class:`Huey` instance.
 
 To better illustrate getting results, we'll also modify the ``tasks.py``
 module to return a string rather in addition to printing to stdout:
