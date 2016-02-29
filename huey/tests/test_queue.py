@@ -28,6 +28,11 @@ def put_data(key, value):
 def put_data_ctx(key, value, task=None):
     state['last_task_class'] = type(task).__name__
 
+@huey_results.task(include_task=True)
+def error_testing_task_with_ctx(key, value, task=None):
+    bad = 1/0
+    state['last_task_class'] = type(task).__name__
+
 class PutTask(QueueTask):
     def execute(self):
         k, v = self.data
@@ -296,6 +301,12 @@ class TestHueyQueueAPIs(BaseQueueTestCase):
         put_data('k', 'x')
         huey.execute(huey.dequeue())
         self.assertFalse('last_task_class' in state)
+
+    def test_self_aware_error_handler(self):
+        error_testing_task_with_ctx('k', 'v')
+        task = huey_results.dequeue()
+        self.assertRaises(ZeroDivisionError, huey_results.execute, task)
+
 
     def test_call_local(self):
         self.assertEqual(len(huey), 0)
