@@ -242,7 +242,11 @@ class Huey(object):
         if error:
             metadata['traceback'] = traceback.format_exc()
         if include_data:
-            metadata['data'] = task.get_data()
+            targs, tkwargs = task.get_data()
+            if tkwargs.get("task") and isinstance(tkwargs["task"], QueueTask):
+                del(tkwargs['task'])
+            metadata['data'] = (targs, tkwargs)
+
         return metadata
 
     def emit_status(self, status, **data):
@@ -319,7 +323,7 @@ class Huey(object):
 
     def read_periodic(self, ts):
         periodic = registry.get_periodic_tasks()
-        return [task for task in registry.get_periodic_tasks()
+        return [task for task in periodic
                 if task.validate_datetime(ts)]
 
     def ready_to_run(self, cmd, dt=None):
