@@ -147,8 +147,7 @@ Function decorators and helpers
             :param kwargs: keyword arguments to call the decorated function with
             :param datetime eta: the time at which the function should be executed
             :param int delay: number of seconds to wait before executing function
-            :param convert_utc: whether the ``eta`` should be converted from local
-                                time to UTC, defaults to ``True``
+            :param convert_utc: whether the ``eta`` or ``delay`` should be converted from local time to UTC, defaults to ``True``. If you are running your consumer in ``localtime`` mode, you should probably specify ``False`` here.
             :rtype: like calls to the decorated function, will return an :py:class:`AsyncData`
                     object if a result store is configured, otherwise returns ``None``
 
