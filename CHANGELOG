@@ -1,6 +1,18 @@
 Changelog
 =========
 
+v1.1.1
+------
+
+This is a small release with a couple minor bugfixes.
+
+* Fixed task metadata serialization bug. #140
+* Small cleanup to event iterator storage implementation.
+* Updated [getting started documentation](http://huey.readthedocs.org/en/latest/getting-started.html)
+  to reflect changes in the 1.x APIs.
+
+[View changes](https://github.com/coleifer/huey/compare/1.1.0...1.1.1)
+
 v1.1.0
 ------
 
