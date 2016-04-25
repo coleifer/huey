@@ -90,7 +90,8 @@ def close_db(fn):
         try:
             return fn(*args, **kwargs)
         finally:
-            connection.close()
+            if not HUEY.always_eager:
+                connection.close()
     return inner
 
 def db_task(*args, **kwargs):
