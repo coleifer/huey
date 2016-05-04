@@ -4,7 +4,7 @@ import logging
 import optparse
 import os
 import sys
-from logging.handlers import RotatingFileHandler
+from logging.handlers import FileHandler
 
 from huey.consumer import Consumer
 from huey.utils import load_class
@@ -33,8 +33,7 @@ def setup_logger(loglevel, logfile, worker_type):
     logging.basicConfig(level=loglevel, format=log_format)
 
     if logfile:
-        handler = RotatingFileHandler(
-            logfile, maxBytes=1024*1024, backupCount=3)
+        handler = FileHandler(logfile)
         handler.setFormatter(logging.Formatter(log_format))
         logging.getLogger().addHandler(handler)
 

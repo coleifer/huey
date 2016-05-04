@@ -38,17 +38,19 @@ their default values.
 
 ``-l``, ``--logfile``
     Path to file used for logging.  When a file is specified, by default Huey
-    will use a rotating file handler (1MB / chunk) with a maximum of 3 backups.
-    You can attach your own handler (``huey.logger``) as well.  The default
-    loglevel is ``INFO``.
+    the logfile will grow indefinitely, so you may wish to configure a tool
+    like ``logrotate``.
+
+    Alternatively, you can attach your own handler to ``huey.logger`` as well.
+
+    The default loglevel is ``INFO``.
 
 ``-v``, ``--verbose``
-    Verbose logging (equates to ``DEBUG`` level).  If no logfile is specified
-    and verbose is set, then the consumer will log to the console.  **This is
-    very useful for testing/debugging.**
+    Verbose logging (loglevel=``DEBUG``). If no logfile is specified and
+    verbose is set, then the consumer will log to the console.
 
 ``-q``, ``--quiet``
-    Only log errors. The default loglevel for the consumer is ``INFO``.
+    Only log errors.
 
 ``-w``, ``--workers``
     Number of worker threads/processes/greenlets, the default is ``1`` but
@@ -112,9 +114,11 @@ Using multi-processing to run 4 worker processes:
 Consumer Internals
 ------------------
 
-The consumer is composed of a master process, the scheduler, and the worker(s). Depending on the worker type chosen, these will be either threads, processes or greenlets.
+The consumer is composed of a master process, the scheduler, and the worker(s).
+Depending on the worker type chosen, the scheduler and workers will be run in
+their threads, processes or greenlets.
 
-These threads coordinate the receipt, execution and scheduling of various
+These components coordinate the receipt, execution and scheduling of various
 tasks.  What happens when you call a decorated function in your application?
 
 1. You call a function -- huey has decorated it, which triggers a message being
