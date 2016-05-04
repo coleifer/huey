@@ -1,6 +1,19 @@
 Changelog
 =========
 
+v1.1.2
+------
+
+I've added a new API for fetching a task's result given on the task's ID. You
+can now call `huey.result(task_id)` and retrieve the result if the task has
+finished executing. Additionally, the [Huey.result](http://huey.readthedocs.io/en/latest/api.html#Huey.result) 
+method accepts the same parameters as [AsyncData.get](http://huey.readthedocs.io/en/latest/api.html#AsyncData.get),
+allowing you to block for results, specify a timeout, etc.
+
+There is also a new parameter on the above methods, ``preserve=False``. By
+default, the result store will delete a task result once it has been read. Specifying
+``preserve=True`` ensures the data is not removed.
+
 v1.1.1
 ------
 
