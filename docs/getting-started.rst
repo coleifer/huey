@@ -121,9 +121,10 @@ program, though, we'll start an interpreter and run the following:
 
     >>> from main import count_beans
     >>> res = count_beans(100)
-    >>> res  # what is "res" ?
+    >>> print res                      # What is "res" ?
     <huey.api.AsyncData object at 0xb7471a4c>
-    >>> res.get()  # get the result of this task
+
+    >>> res()                          # Get the result of this task
     'Counted 100 beans'
 
 Following the same layout as our last example, here is a screenshot of the three
@@ -151,11 +152,14 @@ and see how huey handles it.  Execute the following:
 
     >>> import datetime
     >>> res = count_beans.schedule(args=(100,), delay=60)
-    >>> res
+    >>> print res
     <huey.api.AsyncData object at 0xb72915ec>
-    >>> res.get()  # this returns None, no data is ready
-    >>> res.get()  # still no data...
-    >>> res.get(blocking=True)  # ok, let's just block until its ready
+
+    >>> res()  # This returns None, no data is ready.
+
+    >>> res()  # A couple seconds later.
+
+    >>> res(blocking=True)  # OK, let's just block until its ready
     'Counted 100 beans'
 
 You can specify an "estimated time of arrival" as well using datetimes:
@@ -356,9 +360,10 @@ Reading more
 That sums up the basic usage patterns of huey.  Below are links for details
 on other aspects of the API:
 
-* :py:class:`~Huey` - responsible for coordinating executable tasks and queue backends
-* :py:meth:`~Huey.task` - decorator to indicate an executable task
-* :py:meth:`~Huey.periodic_task` - decorator to indicate a task that executes at periodic intervals
+* :py:class:`Huey` - responsible for coordinating executable tasks and queue backends
+* :py:meth:`Huey.task` - decorator to indicate an executable task
+* :py:meth:`Huey.periodic_task` - decorator to indicate a task that executes at periodic intervals
+* :py:meth:`AsyncData.get` - get the return value from a task
 * :py:func:`crontab` - a function for defining what intervals to execute a periodic command
 
 Also check out the :ref:`notes on running the consumer <consuming-tasks>`.

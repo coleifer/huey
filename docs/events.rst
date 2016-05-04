@@ -48,9 +48,13 @@ The easiest way to listen for events is by iterating over the ``huey.storage`` o
 
 .. code-block:: python
 
+    from huey.consumer import EVENT_FINISHED
+
     for event in huey.storage:
-        # Do something with the event object.
-        process_event(event)
+        # Do something with the result of the task.
+        if event['status'] == EVENT_FINISHED:
+            result = huey.result(event['id'])
+            process_result(event, result)
 
 You can also achieve the same result with a simple loop like this:
 
