@@ -104,7 +104,7 @@ Function decorators and helpers
             >>> res = count_some_beans(1000000)
             >>> res
             <huey.api.AsyncData object at 0xb7471a4c>
-            >>> res.get()
+            >>> res()
             'Counted 1000000 beans'
 
         :param int retries: number of times to retry the task if an exception occurs
@@ -265,6 +265,34 @@ Function decorators and helpers
 
             Store a reference to the task class for the decorated function.
 
+    .. py:method:: result(task_id[, blocking=False[, timeout=None[, backoff=1.15[, max_delay=1.0[, revoke_on_timeout=False[, preserve=False]]]]]])
+
+        Attempt to retrieve the return value of a task.  By default, :py:meth:`~Huey.result`
+        will simply check for the value, returning ``None`` if it is not ready yet.
+        If you want to wait for a value, you can specify ``blocking=True``.
+        This will loop, backing off up to the provided ``max_delay``, until the
+        value is ready or the ``timeout`` is reached. If the ``timeout``
+        is reached before the result is ready, a :py:class:`DataStoreTimeout`
+        exception will be raised.
+
+        .. warning:: By default the result store will delete a task's return
+            value after the value has been successfully read (by a successful
+            call to the :py:meth:`~Huey.result` or :py:meth:`AsyncData.get`
+            methods). If you need to use the task result multiple times, you
+            must specify ``preserve=True`` when calling these methods.
+
+        :param task_id: the task's unique identifier.
+        :param bool blocking: whether to block while waiting for task result
+        :param timeout: number of seconds to block (if ``blocking=True``)
+        :param backoff: amount to backoff delay each iteration of loop
+        :param max_delay: maximum amount of time to wait between iterations when
+            attempting to fetch result.
+        :param bool revoke_on_timeout: if a timeout occurs, revoke the task,
+            thereby preventing it from running if it is has not started yet.
+        :param bool preserve: see the above warning. When set to ``True``, this
+            parameter ensures that the task result should be preserved after
+            having been successfully retrieved.
+
     .. py:method:: pending([limit=None])
 
         Return all unexecuted tasks currently in the queue.
@@ -300,12 +328,16 @@ AsyncData
 
     Although you will probably never instantiate an ``AsyncData`` object yourself,
     they are returned by any calls to :py:meth:`~Huey.task` decorated functions
-    (provided that "huey" is configured with a result store).  The ``AsyncData``
+    (provided that *huey* is configured with a result store).  The ``AsyncData``
     talks to the result store and is responsible for fetching results from tasks.
+
     Once the consumer finishes executing a task, the return value is placed in the
     result store, allowing the producer to retrieve it.
 
-    Working with the ``AsyncData`` class is very simple:
+    .. note:: By default, the data is removed from the result store after
+        being read, but this behavior can be disabled.
+
+    Getting results from tasks is very simple:
 
     .. code-block:: python
 
@@ -314,7 +346,7 @@ AsyncData
         >>> res  # what is "res" ?
         <huey.queue.AsyncData object at 0xb7471a4c>
 
-        >>> res.get()  # get the result of this task, assuming it executed
+        >>> res()  # Fetch the result of this task.
         'Counted 100 beans'
 
     What happens when data isn't available yet?  Let's assume the next call takes
@@ -323,36 +355,56 @@ AsyncData
     .. code-block:: python
 
         >>> res = count_some_beans(10000000) # let's pretend this is slow
-        >>> res.get()  # data is not ready, so returns None
+        >>> res.get()  # Data is not ready, so None is returned.
 
-        >>> res.get() is None  # data still not ready
+        >>> res() is None  # We can omit ".get", it works the same way.
         True
 
-        >>> res.get(blocking=True, timeout=5)  # block for 5 seconds
+        >>> res(blocking=True, timeout=5)  # Block for up to 5 seconds
         Traceback (most recent call last):
           File "<stdin>", line 1, in <module>
           File "/home/charles/tmp/huey/src/huey/huey/queue.py", line 46, in get
             raise DataStoreTimeout
         huey.exceptions.DataStoreTimeout
 
-        >>> res.get(blocking=True)  # no timeout, will block until it gets data
+        >>> res(blocking=True)  # No timeout, will block until it gets data.
         'Counted 10000000 beans'
 
-    .. py:method:: get([blocking=False[, timeout=None[, backoff=1.15[, max_delay=1.0[, revoke_on_timeout=False]]]]])
+    .. py:method:: get([blocking=False[, timeout=None[, backoff=1.15[, max_delay=1.0[, revoke_on_timeout=False[, preserve=False]]]]]])
 
-        Attempt to retrieve the return value of a task.  By default, it will simply
-        ask for the value, returning ``None`` if it is not ready yet.  If you want
-        to wait for a value, you can specify ``blocking = True`` -- this will loop,
-        backing off up to the provided ``max_delay`` until the value is ready or
-        until the ``timeout`` is reached.  If the ``timeout`` is reached before the
-        result is ready, a :py:class:`DataStoreTimeout` exception will be raised.
+        Attempt to retrieve the return value of a task.  By default, :py:meth:`~AsyncData.get`
+        will simply check for the value, returning ``None`` if it is not ready yet.
+        If you want to wait for a value, you can specify ``blocking=True``.
+        This will loop, backing off up to the provided ``max_delay``, until the
+        value is ready or the ``timeout`` is reached. If the ``timeout``
+        is reached before the result is ready, a :py:class:`DataStoreTimeout`
+        exception will be raised.
 
-        :param blocking: boolean, whether to block while waiting for task result
-        :param timeout: number of seconds to block for (used with `blocking=True`)
-        :param backoff: amount to backoff delay each time no result is found
+        .. warning:: By default the result store will delete a task's return
+            value after the value has been successfully read (by a successful
+            call to the :py:meth:`~Huey.result` or :py:meth:`AsyncData.get`
+            methods). If you need to use the task result multiple times, you
+            must specify ``preserve=True`` when calling these methods.
+
+        .. note:: Instead of calling ``.get()``, you can simply call the
+            :py:class:`AsyncData` object directly. Both methods accept the
+            same parameters.
+
+        :param bool blocking: whether to block while waiting for task result
+        :param timeout: number of seconds to block (if ``blocking=True``)
+        :param backoff: amount to backoff delay each iteration of loop
         :param max_delay: maximum amount of time to wait between iterations when
             attempting to fetch result.
-        :param bool revoke_on_timeout: if a timeout occurs, revoke the task
+        :param bool revoke_on_timeout: if a timeout occurs, revoke the task,
+            thereby preventing it from running if it is has not started yet.
+        :param bool preserve: see the above warning. When set to ``True``, this
+            parameter ensures that the task result should be preserved after
+            having been successfully retrieved.
+
+    .. py:method:: __call__(**kwargs)
+
+        Identical to the :py:meth:`~AsyncData.get` method, provided as a
+        shortcut.
 
     .. py:method:: revoke()
 

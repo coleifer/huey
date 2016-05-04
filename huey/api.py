@@ -375,6 +375,27 @@ class Huey(object):
         periodic = set(self.get_periodic_tasks())
         return [task for task in self.get_tasks() if task not in periodic]
 
+    def result(self, task_id, blocking=False, timeout=None, backoff=1.15,
+               max_delay=1.0, revoke_on_timeout=False, preserve=False):
+        """
+        Retrieve the results of a task, given the task's ID. This
+        method accepts the same parameters and has the same behavior
+        as the :py:class:`AsyncData` object.
+        """
+        if not blocking:
+            result = self._get_data(task_id, peek=preserve)
+            if result is not EmptyData:
+                return pickle.loads(result)
+        else:
+            async_data = AsyncData(self, QueueTask(task_id=task_id))
+            return async_data.get(
+                blocking=blocking,
+                timeout=timeout,
+                backoff=backoff,
+                max_delay=max_delay,
+                revoke_on_timeout=revoke_on_timeout,
+                preserve=preserve)
+
 
 class AsyncData(object):
     def __init__(self, huey, task):
@@ -382,6 +403,9 @@ class AsyncData(object):
         self.task = task
 
         self._result = EmptyData
+
+    def __call__(self, *args, **kwargs):
+        return self.get(*args, **kwargs)
 
     def _get(self):
         task_id = self.task.task_id
@@ -397,7 +421,7 @@ class AsyncData(object):
             return self._result
 
     def get(self, blocking=False, timeout=None, backoff=1.15, max_delay=1.0,
-            revoke_on_timeout=False):
+            revoke_on_timeout=False, preserve=False):
         if not blocking:
             res = self._get()
             if res is not EmptyData:

@@ -307,7 +307,6 @@ class TestHueyQueueAPIs(BaseQueueTestCase):
         task = huey_results.dequeue()
         self.assertRaises(ZeroDivisionError, huey_results.execute, task)
 
-
     def test_call_local(self):
         self.assertEqual(len(huey), 0)
         self.assertEqual(state, {})
@@ -377,6 +376,10 @@ class TestHueyQueueAPIs(BaseQueueTestCase):
         self.assertEqual(res2.get(), None)
         self.assertEqual(res3.get(), None)
 
+        # We can also call the result object.
+        self.assertEqual(res(), 3)
+        self.assertEqual(res2(), None)
+
         # execute the second task
         huey_results.execute(huey_results.dequeue())
         self.assertEqual(res.get(), 3)
@@ -408,6 +411,25 @@ class TestHueyQueueAPIs(BaseQueueTestCase):
         huey_store_none.execute(huey_store_none.dequeue())
         self.assertEqual(res.get(), None)
         self.assertEqual(res._result, None)
+
+    def test_huey_result_method(self):
+        res = add_values(1, 2)
+        tid = res.task.task_id
+
+        res2 = add_values(0, 0)
+        tid2 = res2.task.task_id
+
+        self.assertTrue(huey_results.result(tid) is None)
+        self.assertTrue(huey_results.result(tid2) is None)
+
+        # Execute the first task
+        huey_results.execute(huey_results.dequeue())
+        self.assertEqual(huey_results.result(tid), 3)
+        self.assertTrue(huey_results.result(tid2) is None)
+
+        # Execute the second task, which returns a zero value.
+        huey_results.execute(huey_results.dequeue())
+        self.assertEqual(huey_results.result(tid2), 0)
 
     def test_task_store(self):
         dt1 = datetime.datetime(2011, 1, 1, 0, 0)
