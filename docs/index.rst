@@ -8,18 +8,20 @@ huey, a little task queue
 
 .. image:: http://media.charlesleifer.com/blog/photos/huey-logo.png
 
-a lightweight alternative.
+a lightweight alternative, huey is:
 
 * written in python
 * only dependency is the Python Redis client
+* clean and simple APIs
 
-supports:
+huey supports:
 
 * multi-process, multi-thread or greenlet task execution models
 * schedule tasks to execute at a given time, or after a given delay
 * schedule recurring tasks, like a crontab
 * retry tasks that fail automatically
 * task result storage
+* consumer event streaming
 
 .. image:: http://i.imgur.com/2EpRs.jpg
 
@@ -57,6 +59,7 @@ Contents:
 
    installation
    getting-started
+   tasks
    consumer
    events
    imports

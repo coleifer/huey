@@ -10,7 +10,7 @@ fuss as possible.
 .. _getting-started-python:
 
 General guide
--------------
+^^^^^^^^^^^^^
 
 There are three main components (or processes) to consider when running huey:
 
@@ -29,7 +29,7 @@ enqueued (``LPUSH``) and read (``BRPOP``) from the database.
 
 
 Trying it out yourself
-^^^^^^^^^^^^^^^^^^^^^^
+----------------------
 
 Assuming you've got :ref:`huey installed <installation>`, let's look at the code
 from this example.
@@ -92,7 +92,7 @@ To run these scripts, follow these steps:
 4. Run the main program: ``python main.py``
 
 Getting results from jobs
-^^^^^^^^^^^^^^^^^^^^^^^^^
+-------------------------
 
 The above example illustrates a "send and forget" approach, but what if your
 application needs to do something with the results of a task?  To get results
@@ -139,7 +139,7 @@ main processes at work:
 
 
 Executing tasks in the future
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+------------------------------
 
 It is often useful to enqueue a particular task to execute at some arbitrary time
 in the future, for example, mark a blog entry as published at a certain time.
@@ -183,7 +183,7 @@ Here is a screenshot showing the same:
 
 
 Retrying tasks that fail
-^^^^^^^^^^^^^^^^^^^^^^^^
+------------------------
 
 Huey supports retrying tasks a finite number of times.  If an exception is raised
 during the execution of the task and ``retries`` have been specified, the task
@@ -237,7 +237,7 @@ also "counted some beans" -- that gets executed normally, in between retries.
 
 
 Executing tasks at regular intervals
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+------------------------------------
 
 The final usage pattern supported by huey is the execution of tasks at regular
 intervals.  This is modeled after ``crontab`` behavior, and even follows similar
@@ -265,17 +265,14 @@ Now, when we run the consumer it will start printing the time every minute:
 .. image:: crontab.png
 
 
-Preventing tasks from executing
--------------------------------
+Canceling or pausing tasks
+--------------------------
 
 It is possible to prevent tasks from executing.  This applies to normal tasks,
 tasks scheduled in the future, and periodic tasks.
 
 .. note:: In order to "revoke" tasks you will need to specify a ``result_store``
     when instantiating your :py:class:`Huey` object.
-
-Canceling a normal task or one scheduled in the future
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 You can cancel a normal task provided the task has not started execution by
 the consumer:
@@ -301,9 +298,8 @@ The same applies to tasks that are scheduled in the future:
     # it has not already been "skipped" by the consumer
     res.restore()
 
-
-Canceling tasks that execute periodically
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Canceling or pausing periodic tasks
+-----------------------------------
 
 When we start dealing with periodic tasks, the options for revoking get
 a bit more interesting.
@@ -353,9 +349,8 @@ execution:
 
     print_time.restore()
 
-
 Reading more
-^^^^^^^^^^^^
+------------
 
 That sums up the basic usage patterns of huey.  Below are links for details
 on other aspects of the API:
