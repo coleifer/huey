@@ -44,11 +44,11 @@ Error events:
 Listening to events
 ^^^^^^^^^^^^^^^^^^^
 
-The easiest way to listen for events is by iterating over the ``huey.events`` object.
+The easiest way to listen for events is by iterating over the ``huey.storage`` object.
 
 .. code-block:: python
 
-    for event in huey.events:
+    for event in huey.storage:
         # Do something with the event object.
         process_event(event)
 
@@ -56,7 +56,7 @@ You can also achieve the same result with a simple loop like this:
 
 .. code-block:: python
 
-    pubsub = huey.events.listener()
+    pubsub = huey.storage.listener()
     for message in pubsub.listen():
         event = message['data']  # Actual event data is stored in 'data' key.
         # Do something with `event` object.
