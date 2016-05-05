@@ -123,7 +123,7 @@ tasks.  What happens when you call a decorated function in your application?
 
 1. You call a function -- huey has decorated it, which triggers a message being
    put into the queue.  At this point your application returns.  If you are using
-   a "data store", then you will be return an :py:class:`AsyncData` object.
+   a "data store", then you will be return an :py:class:`TaskResultWrapper` object.
 2. In a separate process, a worker will be listening for new messages --
    one of the workers will pull down the message.
 3. The worker looks at the message and checks to see if it can be
