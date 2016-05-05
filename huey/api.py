@@ -219,7 +219,7 @@ class Huey(object):
         self._enqueue(registry.get_message_for_task(task))
 
         if self.result_store:
-            return AsyncData(self, task)
+            return TaskResultWrapper(self, task)
 
     def dequeue(self):
         message = self._dequeue()
@@ -380,15 +380,15 @@ class Huey(object):
         """
         Retrieve the results of a task, given the task's ID. This
         method accepts the same parameters and has the same behavior
-        as the :py:class:`AsyncData` object.
+        as the :py:class:`TaskResultWrapper` object.
         """
         if not blocking:
             result = self._get_data(task_id, peek=preserve)
             if result is not EmptyData:
                 return pickle.loads(result)
         else:
-            async_data = AsyncData(self, QueueTask(task_id=task_id))
-            return async_data.get(
+            task_result = TaskResultWrapper(self, QueueTask(task_id=task_id))
+            return task_result.get(
                 blocking=blocking,
                 timeout=timeout,
                 backoff=backoff,
@@ -397,7 +397,29 @@ class Huey(object):
                 preserve=preserve)
 
 
-class AsyncData(object):
+class TaskResultWrapper(object):
+    """
+    Wrapper around task result data. When a task is executed, an instance of
+    ``TaskResultWrapper`` is returned to provide access to the return value.
+
+    To retrieve the task's result value, you can simply call the wrapper::
+
+        @huey.task()
+        def my_task(a, b):
+            return a + b
+
+        result = my_task(1, 2)
+
+        # After a moment, when the consumer has executed the task and put
+        # the result in the result storage, we can retrieve the value.
+        print result()  # Prints 3
+
+        # If you want to block until the result is ready, you can pass
+        # block=True. We'll also specify a 4 second timeout so we don't
+        # block forever if the consumer goes down:
+        result2 = my_task(2, 3)
+        print result(block=True, timeout=4)
+    """
     def __init__(self, huey, task):
         self.huey = huey
         self.task = task

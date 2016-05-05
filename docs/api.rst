@@ -62,7 +62,7 @@ Function decorators and helpers
 
         1. Serialize the function call into a message suitable for storing in the queue
         2. Enqueue the message for execution by the consumer
-        3. If a ``result_store`` has been configured, return an :py:class:`AsyncData`
+        3. If a ``result_store`` has been configured, return an :py:class:`TaskResultWrapper`
            instance which can retrieve the result of the function, or ``None`` if not
            using a result store.
 
@@ -103,7 +103,7 @@ Function decorators and helpers
 
             >>> res = count_some_beans(1000000)
             >>> res
-            <huey.api.AsyncData object at 0xb7471a4c>
+            <huey.api.TaskResultWrapper object at 0xb7471a4c>
             >>> res()
             'Counted 1000000 beans'
 
@@ -118,7 +118,7 @@ Function decorators and helpers
         The return value of any calls to the decorated function depends on whether
         the :py:class:`Huey` instance is configured with a ``result_store``.  If a
         result store is configured, the decorated function will return
-        an :py:class:`AsyncData` object which can fetch the result of the call from
+        an :py:class:`TaskResultWrapper` object which can fetch the result of the call from
         the result store -- otherwise it will simply return ``None``.
 
         The ``task`` decorator also does one other important thing -- it adds
@@ -148,7 +148,7 @@ Function decorators and helpers
             :param datetime eta: the time at which the function should be executed
             :param int delay: number of seconds to wait before executing function
             :param convert_utc: whether the ``eta`` or ``delay`` should be converted from local time to UTC, defaults to ``True``. If you are running your consumer in ``localtime`` mode, you should probably specify ``False`` here.
-            :rtype: like calls to the decorated function, will return an :py:class:`AsyncData`
+            :rtype: like calls to the decorated function, will return an :py:class:`TaskResultWrapper`
                     object if a result store is configured, otherwise returns ``None``
 
         .. py:function:: {decorated func}.call_local
@@ -277,7 +277,7 @@ Function decorators and helpers
 
         .. warning:: By default the result store will delete a task's return
             value after the value has been successfully read (by a successful
-            call to the :py:meth:`~Huey.result` or :py:meth:`AsyncData.get`
+            call to the :py:meth:`~Huey.result` or :py:meth:`TaskResultWrapper.get`
             methods). If you need to use the task result multiple times, you
             must specify ``preserve=True`` when calling these methods.
 
@@ -321,14 +321,14 @@ Function decorators and helpers
 
     :rtype: a test function that takes a ``datetime`` and returns a boolean
 
-AsyncData
+TaskResultWrapper
 ---------
 
-.. py:class:: AsyncData(huey, task)
+.. py:class:: TaskResultWrapper(huey, task)
 
-    Although you will probably never instantiate an ``AsyncData`` object yourself,
+    Although you will probably never instantiate an ``TaskResultWrapper`` object yourself,
     they are returned by any calls to :py:meth:`~Huey.task` decorated functions
-    (provided that *huey* is configured with a result store).  The ``AsyncData``
+    (provided that *huey* is configured with a result store).  The ``TaskResultWrapper``
     talks to the result store and is responsible for fetching results from tasks.
 
     Once the consumer finishes executing a task, the return value is placed in the
@@ -344,7 +344,7 @@ AsyncData
         >>> from main import count_some_beans
         >>> res = count_some_beans(100)
         >>> res  # what is "res" ?
-        <huey.queue.AsyncData object at 0xb7471a4c>
+        <huey.queue.TaskResultWrapper object at 0xb7471a4c>
 
         >>> res()  # Fetch the result of this task.
         'Counted 100 beans'
@@ -372,7 +372,7 @@ AsyncData
 
     .. py:method:: get([blocking=False[, timeout=None[, backoff=1.15[, max_delay=1.0[, revoke_on_timeout=False[, preserve=False]]]]]])
 
-        Attempt to retrieve the return value of a task.  By default, :py:meth:`~AsyncData.get`
+        Attempt to retrieve the return value of a task.  By default, :py:meth:`~TaskResultWrapper.get`
         will simply check for the value, returning ``None`` if it is not ready yet.
         If you want to wait for a value, you can specify ``blocking=True``.
         This will loop, backing off up to the provided ``max_delay``, until the
@@ -382,12 +382,12 @@ AsyncData
 
         .. warning:: By default the result store will delete a task's return
             value after the value has been successfully read (by a successful
-            call to the :py:meth:`~Huey.result` or :py:meth:`AsyncData.get`
+            call to the :py:meth:`~Huey.result` or :py:meth:`TaskResultWrapper.get`
             methods). If you need to use the task result multiple times, you
             must specify ``preserve=True`` when calling these methods.
 
         .. note:: Instead of calling ``.get()``, you can simply call the
-            :py:class:`AsyncData` object directly. Both methods accept the
+            :py:class:`TaskResultWrapper` object directly. Both methods accept the
             same parameters.
 
         :param bool blocking: whether to block while waiting for task result
@@ -403,7 +403,7 @@ AsyncData
 
     .. py:method:: __call__(**kwargs)
 
-        Identical to the :py:meth:`~AsyncData.get` method, provided as a
+        Identical to the :py:meth:`~TaskResultWrapper.get` method, provided as a
         shortcut.
 
     .. py:method:: revoke()
