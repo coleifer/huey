@@ -4,7 +4,7 @@ import logging
 import optparse
 import os
 import sys
-from logging.handlers import FileHandler
+from logging import FileHandler
 
 from huey.consumer import Consumer
 from huey.utils import load_class
