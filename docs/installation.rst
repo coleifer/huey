@@ -27,8 +27,8 @@ type. To use the greenlet workers, you need to install ``gevent``:
 Using git
 ---------
 
-If you want to run the very latest, you can clone the [source
-repo](https://github.com/coleifer/huey) and install the library:
+If you want to run the very latest, you can clone the `source
+repo <https://github.com/coleifer/huey>`_ and install the library:
 
 .. code-block:: bash
 
