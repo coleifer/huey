@@ -42,6 +42,7 @@ class Command(BaseCommand):
     help = "Run the queue consumer"
 
     def __init__(self, *args, **kwargs):
+        super(Command, self).__init__(*args, **kwargs)
         if django.VERSION < (1, 8):
             self.option_list = BaseCommand.option_list
             parser = CompatParser(self)
