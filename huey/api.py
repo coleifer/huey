@@ -241,7 +241,7 @@ class Huey(object):
             'error': error}
         if error:
             metadata['traceback'] = traceback.format_exc()
-        if include_data:
+        if include_data and not isinstance(task, PeriodicQueueTask):
             targs, tkwargs = task.get_data()
             if tkwargs.get("task") and isinstance(tkwargs["task"], QueueTask):
                 del(tkwargs['task'])
