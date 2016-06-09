@@ -91,12 +91,12 @@ The task decorators are available in the ``huey.contrib.djhuey`` module. Here is
 
     @task()
     def count_beans(number):
-        print '-- counted %s beans --' % number
+        print('-- counted %s beans --' % number)
         return 'Counted %s beans' % number
 
     @periodic_task(crontab(minute='*/5'))
     def every_five_mins():
-        print 'Every five minutes this will be printed by the consumer'
+        print('Every five minutes this will be printed by the consumer')
 
 Tasks that execute queries
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
