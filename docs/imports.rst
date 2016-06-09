@@ -45,7 +45,7 @@ the project is laid out in the :ref:`getting started <getting-started>` guide.
 
       @huey.task()
       def count_beans(num):
-          print 'Counted %s beans' % num
+          print('Counted %s beans' % num)
 
 * ``main.py`` / ``app.py``, the "main" module.  Imports both the ``config.py``
   module **and** the ``tasks.py`` module.
@@ -60,7 +60,7 @@ the project is laid out in the :ref:`getting started <getting-started>` guide.
       if __name__ == '__main__':
           beans = raw_input('How many beans? ')
           count_beans(int(beans))
-          print 'Enqueued job to count %s beans' % beans
+          print('Enqueued job to count %s beans' % beans)
 
 To run the consumer, point it at ``main.huey``, in this way everything
 gets imported correctly:

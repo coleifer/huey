@@ -206,7 +206,7 @@ Function decorators and helpers
             @huey.periodic_task(crontab(minute='*/5'))
             def every_five_minutes():
                 # this function gets executed every 5 minutes by the consumer
-                print "It's been five minutes"
+                print("It's been five minutes")
 
         .. note::
             Because functions decorated with ``periodic_task`` are meant to be
