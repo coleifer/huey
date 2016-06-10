@@ -59,7 +59,7 @@ responsible for counting beans:
 
     @huey.task()
     def count_beans(num):
-        print '-- counted %s beans --' % num
+        print('-- counted %s beans --' % num)
 
 The above example shows the API for writing "tasks" that are executed by the
 queue consumer -- simply decorate the code you want executed by the consumer
@@ -81,7 +81,7 @@ at the configuration, the tasks are also imported and loaded into memory.
     if __name__ == '__main__':
         beans = raw_input('How many beans? ')
         count_beans(int(beans))
-        print 'Enqueued job to count %s beans' % beans
+        print('Enqueued job to count %s beans' % beans)
 
 To run these scripts, follow these steps:
 
@@ -111,7 +111,7 @@ module to return a string rather in addition to printing to stdout:
 
     @huey.task()
     def count_beans(num):
-        print '-- counted %s beans --' % num
+        print('-- counted %s beans --' % num)
         return 'Counted %s beans' % num
 
 We're ready to fire up the consumer.  Instead of simply executing the main
@@ -121,7 +121,7 @@ program, though, we'll start an interpreter and run the following:
 
     >>> from main import count_beans
     >>> res = count_beans(100)
-    >>> print res                      # What is "res" ?
+    >>> print(res)                      # What is "res" ?
     <huey.api.TaskResultWrapper object at 0xb7471a4c>
 
     >>> res()                          # Get the result of this task
@@ -152,7 +152,7 @@ and see how huey handles it.  Execute the following:
 
     >>> import datetime
     >>> res = count_beans.schedule(args=(100,), delay=60)
-    >>> print res
+    >>> print(res)
     <huey.api.TaskResultWrapper object at 0xb72915ec>
 
     >>> res()  # This returns None, no data is ready.
@@ -199,12 +199,12 @@ Here is a task that will be retried 3 times and will blow up every time:
 
     @huey.task()
     def count_beans(num):
-        print '-- counted %s beans --' % num
+        print('-- counted %s beans --' % num)
         return 'Counted %s beans' % num
 
     @huey.task(retries=3)
     def try_thrice():
-        print 'trying....'
+        print('trying....')
         raise Exception('nope')
 
 The console output shows our task being called in the main interpreter session,
@@ -227,7 +227,7 @@ delay, and also to print the current time to show that its working.
 
     @huey.task(retries=3, retry_delay=10)
     def try_thrice():
-        print 'trying....%s' % datetime.now()
+        print('trying....%s' % datetime.now())
         raise Exception('nope')
 
 The console output below shows the task being retried, but in between retries I've
@@ -257,7 +257,7 @@ test that the consumer is executing the tasks on schedule.
 
     @huey.periodic_task(crontab(minute='*'))
     def print_time():
-        print datetime.now()
+        print(datetime.now())
 
 
 Now, when we run the consumer it will start printing the time every minute:
@@ -310,7 +310,7 @@ We'll be using the print time command as an example:
 
     @huey.task(crontab(minute='*'))
     def print_time():
-        print datetime.now()
+        print(datetime.now())
 
 We can prevent a periodic task from executing on the next go-round:
 
