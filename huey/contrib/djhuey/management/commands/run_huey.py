@@ -15,8 +15,10 @@ except ImportError:
     HAS_DJANGO_APPS = False
 
 from huey.consumer import Consumer
-from huey.bin.huey_consumer import get_loglevel
+from huey.bin.huey_consumer import get_loglevel, list_registered
 from huey.bin.huey_consumer import setup_logger
+from huey.registry import registry
+
 
 class CompatParser(object):
     """Converts argeparse arguments to optparse for Django < 1.8 compatibility."""
@@ -76,6 +78,12 @@ class Command(BaseCommand):
             dest='periodic',
             action='store_false',
             help='Do not enqueue periodic commands')
+        parser.add_argument(
+            '--list-registered', '-L',
+            default=True,
+            dest='list_registered',
+            action='store_false',
+            help='List registered tasks')
 
     def autodiscover_appconfigs(self):
         """Use Django app registry to pull out potential apps with tasks.py module."""
@@ -137,7 +145,13 @@ class Command(BaseCommand):
         if options['max_delay'] is not None:
             consumer_options['max_delay'] = options['max_delay']
 
+        if options['max_delay'] is not None:
+            consumer_options['max_delay'] = options['max_delay']
+
         self.autodiscover()
+
+        if options['list_registered'] is not None:
+            list_registered()
 
         loglevel = get_loglevel(consumer_options.pop('loglevel', None))
         logfile = consumer_options.pop('logfile', None)
