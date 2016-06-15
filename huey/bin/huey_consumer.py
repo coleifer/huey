@@ -7,6 +7,7 @@ import sys
 from logging import FileHandler
 
 from huey.consumer import Consumer
+from huey.registry import registry
 from huey.utils import load_class
 
 
@@ -38,6 +39,12 @@ def setup_logger(loglevel, logfile, worker_type):
         logging.getLogger().addHandler(handler)
 
 
+def list_registered():
+    print("- Registered tasks")
+    for task in registry.get_periodic_tasks():
+        print("-> {}".format(task.name))
+
+
 def get_option_parser():
     parser = optparse.OptionParser(
         'Usage: %prog [options] path.to.huey_instance')
@@ -57,6 +64,14 @@ def get_option_parser():
        action='store_false',
        dest='verbose',
        help='only log exceptions')
+
+    inspect_opts = parser.add_option_group(
+        'Inspect',
+        'Inspect tasks and show informations.')
+    inspect_opts.add_option('-L', '--list-registered',
+       action='store_true',
+       dest='list_registered',
+       help='list registered tasks')
 
     worker_opts = parser.add_option_group(
         'Workers',
@@ -146,6 +161,9 @@ def consumer_main():
     if options.workers < 1:
         err('You must have at least one worker.')
         sys.exit(1)
+
+    if options.list_registered:
+        list_registered()
 
     huey_instance = load_huey(args[0])
 
