@@ -45,7 +45,7 @@ To run the consumer with 4 worker processes:
 Documentation
 ----------------
 
-`See Huey documentation <http://huey.readthedocs.org/>`_.
+`See Huey documentation <https://huey.readthedocs.io/>`_.
 
 Project page
 ---------------
