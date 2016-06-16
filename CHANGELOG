@@ -6,8 +6,8 @@ v1.1.2
 
 I've added a new API for fetching a task's result given on the task's ID. You
 can now call `huey.result(task_id)` and retrieve the result if the task has
-finished executing. Additionally, the [Huey.result](http://huey.readthedocs.io/en/latest/api.html#Huey.result) 
-method accepts the same parameters as [AsyncData.get](http://huey.readthedocs.io/en/latest/api.html#AsyncData.get),
+finished executing. Additionally, the [Huey.result](https://huey.readthedocs.io/en/latest/api.html#Huey.result) 
+method accepts the same parameters as [AsyncData.get](https://huey.readthedocs.io/en/latest/api.html#AsyncData.get),
 allowing you to block for results, specify a timeout, etc.
 
 There is also a new parameter on the above methods, ``preserve=False``. By
@@ -21,7 +21,7 @@ This is a small release with a couple minor bugfixes.
 
 * Fixed task metadata serialization bug. #140
 * Small cleanup to event iterator storage implementation.
-* Updated [getting started documentation](http://huey.readthedocs.org/en/latest/getting-started.html)
+* Updated [getting started documentation](https://huey.readthedocs.io/en/latest/getting-started.html)
   to reflect changes in the 1.x APIs.
 
 [View changes](https://github.com/coleifer/huey/compare/1.1.0...1.1.1)
@@ -41,7 +41,7 @@ v1.1.0
   and more. These will be the building blocks for tools to provide some
   insight into the inner-workings of your consumers and producers.
 * Many new events are emitted by the consumer, and some have parameters. These
-  are documented [here](http://huey.readthedocs.org/en/latest/events.html).
+  are documented [here](https://huey.readthedocs.io/en/latest/events.html).
 
 v1.0.0
 ------
