@@ -6,6 +6,7 @@ import os
 import sys
 from logging import FileHandler
 
+from huey.constants import VALID_WORKER_TYPES
 from huey.consumer import Consumer
 from huey.utils import load_class
 
@@ -70,9 +71,9 @@ def get_option_parser():
        default=1)
     worker_opts.add_option('-k', '--worker-type',
        dest='worker_type',
-       help='worker execution model (thread, greenlet, process).',
+       help='worker execution model (%s).' % ', '.join(VALID_WORKER_TYPES),
        default='thread',
-       choices=['greenlet', 'thread', 'process', 'gevent'])
+       choices=list(VALID_WORKER_TYPES))
     worker_opts.add_option('-d', '--delay',
        dest='initial_delay',
        type='float',

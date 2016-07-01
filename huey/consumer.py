@@ -16,6 +16,11 @@ try:
 except ImportError:
     Greenlet = GreenEvent = None
 
+from huey.constants import VALID_WORKER_TYPES
+from huey.constants import WORKER_ALIAS
+from huey.constants import WORKER_GEVENT
+from huey.constants import WORKER_PROCESS
+from huey.constants import WORKER_THREAD
 from huey.exceptions import DataStoreGetException
 from huey.exceptions import QueueException
 from huey.exceptions import QueueReadException
@@ -294,17 +299,22 @@ class ProcessEnvironment(Environment):
 
 
 worker_to_environment = {
-    'thread': ThreadEnvironment,
-    'greenlet': GreenletEnvironment,
-    'gevent': GreenletEnvironment,  # Same as greenlet.
-    'process': ProcessEnvironment,
+    WORKER_THREAD: ThreadEnvironment,
+    WORKER_GEVENT: GreenletEnvironment,
+    WORKER_PROCESS: ProcessEnvironment,
 }
 
 
 class Consumer(object):
     def __init__(self, huey, workers=1, periodic=True, initial_delay=0.1,
                  backoff=1.15, max_delay=10.0, utc=True, scheduler_interval=1,
-                 worker_type='thread'):
+                 worker_type=WORKER_THREAD):
+
+        if worker_type in WORKER_ALIAS:
+            worker_type = WORKER_ALIAS[worker_type]
+        if worker_type not in VALID_WORKER_TYPES:
+            raise ValueError('Unrecognized worker type: "%s". Please use one '
+                             'of: %s.' % (worker_type, VALID_WORKER_TYPES))
 
         self._logger = logging.getLogger('huey.consumer')
         self.huey = huey
@@ -316,11 +326,7 @@ class Consumer(object):
         self.utc = utc
         self.scheduler_interval = max(min(scheduler_interval, 60), 1)
         self.worker_type = worker_type
-        if worker_type not in worker_to_environment:
-            raise ValueError('worker_type must be one of %s.' %
-                             ', '.join(worker_to_environment))
-        else:
-            self.environment = worker_to_environment[worker_type]()
+        self.environment = worker_to_environment[worker_type]()
 
         self._received_signal = False
         self.stop_flag = self.environment.get_stop_flag()

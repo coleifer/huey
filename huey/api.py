@@ -76,17 +76,17 @@ class Huey(object):
                                   'Huey class. Use `RedisHuey` instead.')
 
     def task(self, retries=0, retry_delay=0, retries_as_argument=False,
-             include_task=False, name=None):
+             include_task=False, name=None, timeout=None):
         def decorator(func):
             """
             Decorator to execute a function out-of-band via the consumer.
             """
             klass = create_task(
                 QueueTask,
-                func,
-                retries_as_argument,
-                name,
-                include_task)
+                func=func,
+                retries_as_argument=retries_as_argument,
+                task_name=name,
+                include_task=include_task)
 
             def schedule(args=None, kwargs=None, eta=None, delay=None,
                          convert_utc=True, task_id=None):
@@ -131,10 +131,9 @@ class Huey(object):
 
             klass = create_task(
                 PeriodicQueueTask,
-                func,
+                func=func,
                 task_name=name,
-                validate_datetime=method_validate,
-            )
+                validate_datetime=method_validate)
 
             func.task_class = klass
 
