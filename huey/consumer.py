@@ -39,6 +39,7 @@ EVENT_REVOKED = 'revoked'
 EVENT_SCHEDULED = 'scheduled'
 EVENT_SCHEDULING_PERIODIC = 'scheduling-periodic'
 EVENT_STARTED = 'started'
+EVENT_TIMEOUT = 'timeout'
 
 
 def to_timestamp(dt):
@@ -92,15 +93,15 @@ class Worker(BaseProcess):
         try:
             task = self.huey.dequeue()
         except QueueReadException as exc:
-            self.huey.emit_task(EVENT_ERROR_DEQUEUEING, task, error=True)
+            self.huey.emit_status(EVENT_ERROR_DEQUEUEING, error=True)
             self._logger.exception('Error reading from queue')
         except QueueException:
-            self.huey.emit_task(EVENT_ERROR_INTERNAL, task, error=True)
+            self.huey.emit_status(EVENT_ERROR_INTERNAL, error=True)
             self._logger.exception('Queue exception')
         except KeyboardInterrupt:
             raise
         except:
-            self.huey.emit_task(EVENT_ERROR_DEQUEUEING, task, error=True)
+            self.huey.emit_status(EVENT_ERROR_DEQUEUEING, error=True)
             self._logger.exception('Unknown exception dequeueing task.')
         else:
             exc_raised = False

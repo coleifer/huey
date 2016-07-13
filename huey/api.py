@@ -237,10 +237,7 @@ class Huey(object):
             'task': type(task).__name__,
             'retries': task.retries,
             'retry_delay': task.retry_delay,
-            'execute_time': self._format_time(task.execute_time),
-            'error': error}
-        if error:
-            metadata['traceback'] = traceback.format_exc()
+            'execute_time': self._format_time(task.execute_time)}
         if include_data and not isinstance(task, PeriodicQueueTask):
             targs, tkwargs = task.get_data()
             if tkwargs.get("task") and isinstance(tkwargs["task"], QueueTask):
@@ -249,17 +246,19 @@ class Huey(object):
 
         return metadata
 
-    def emit_status(self, status, **data):
+    def emit_status(self, status, error=False, **data):
         if self.events:
-            metadata = {'status': status}
+            metadata = {'status': status, 'error': error}
+            if error:
+                metadata['traceback'] = traceback.format_exc()
             metadata.update(data)
             self.emit(json.dumps(metadata))
 
     def emit_task(self, status, task, error=False, **data):
         if self.events:
-            metadata = self._get_task_metadata(task, error)
+            metadata = self._get_task_metadata(task)
             metadata.update(data)
-            self.emit_status(status, **metadata)
+            self.emit_status(status, error=error, **metadata)
 
     @_wrapped_operation(MetadataException)
     def write_metadata(self, key, value):
@@ -280,7 +279,9 @@ class Huey(object):
             result = task.execute()
         except Exception as exc:
             if self.result_store and self.store_errors:
-                metadata = self._get_task_metadata(task, exc, True)
+                metadata = self._get_task_metadata(task, True)
+                metadata['error'] = exc
+                metadata['traceback'] = traceback.format_exc()
                 self._put_error(pickle.dumps(metadata))
             raise
 
