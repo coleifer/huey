@@ -7,6 +7,7 @@ from huey.consumer import Consumer
 from huey.consumer import Scheduler
 from huey.consumer import Worker
 from huey.tests.base import b
+from huey.tests.base import BrokenHuey
 from huey.tests.base import CaptureLogs
 from huey.tests.base import HueyTestCase
 from huey.tests.base import test_huey
@@ -85,6 +86,25 @@ class TestConsumerAPIs(HueyTestCase):
 
     def get_periodic_tasks(self):
         return [hourly_task.task_class()]
+
+    def test_dequeue_errors(self):
+        huey = BrokenHuey()
+        consumer = Consumer(huey, max_delay=0.1, workers=2,
+                            worker_type='thread')
+
+        worker = consumer._create_worker()
+        state = {}
+
+        @huey.task()
+        def modify_broken(k, v):
+            state[k] = v
+
+        with CaptureLogs() as capture:
+            res = modify_broken('k', 'v')
+            worker.loop()
+
+        self.assertEqual(capture.messages, ['Error reading from queue'])
+        self.assertEqual(state, {})
 
     def test_scheduler_interval(self):
         consumer = self.get_consumer(scheduler_interval=0.1)
