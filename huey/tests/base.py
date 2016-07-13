@@ -9,6 +9,7 @@ from huey.api import Huey
 from huey.consumer import Consumer
 from huey.registry import registry
 from huey.storage import BaseStorage
+from huey.storage import RedisStorage
 
 
 def b(s):
@@ -20,6 +21,17 @@ def b(s):
 class DummyHuey(Huey):
     def get_storage(self, **kwargs):
         return BaseStorage()
+
+class BrokenRedisStorage(RedisStorage):
+    def dequeue(self):
+        raise ValueError('broken redis dequeue')
+
+broken_redis_storage = BrokenRedisStorage()
+
+class BrokenHuey(Huey):
+    def get_storage(self):
+        return broken_redis_storage
+
 
 dummy_huey = DummyHuey()
 test_huey = RedisHuey('testing', blocking=False, read_timeout=0.1)
