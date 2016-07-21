@@ -183,15 +183,19 @@ class RedisStorage(BaseStorage):
         self.conn.hset(self.result_key, key, value)
 
     def peek_data(self, key):
-        if self.conn.hexists(self.result_key, key):
-            return self.conn.hget(self.result_key, key)
-        return EmptyData
+        pipe = self.conn.pipeline()
+        pipe.hexists(self.result_key, key)
+        pipe.hget(self.result_key, key)
+        exists, val = pipe.execute()
+        return EmptyData if not exists else val
 
     def pop_data(self, key):
-        val = self.peek_data(key)
-        if val is not EmptyData:
-            self.conn.hdel(self.result_key, key)
-        return val
+        pipe = self.conn.pipeline()
+        pipe.hexists(self.result_key, key)
+        pipe.hget(self.result_key, key)
+        pipe.hdel(self.result_key, key)
+        exists, val, n = pipe.execute()
+        return EmptyData if not exists else val
 
     def has_data_for_key(self, key):
         return self.conn.hexists(self.result_key, key)
