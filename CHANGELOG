@@ -1,6 +1,21 @@
 Changelog
 =========
 
+v1.2.0
+------
+
+Removed the metadata APIs added in 1.1.0, as they seemed poorly-designed and 
+altogether a decent idea terribly implemented. Perhaps something I'll revisit, 
+but which should be easy to implement as a third-party library using the events
+APIs.
+
+* `AsyncData` is renamed to `TaskResultWrapper`.
+* `Huey.result()` is a new method that provides the result of a task, given a
+  task ID.
+* Fixed a handful of bugs related to the error serialization.
+* Change the default consumer log handler from RotatingFileHandler to the
+  vanilla FileHandler class.
+
 v1.1.2
 ------
 
