@@ -132,10 +132,6 @@ class Worker(BaseProcess):
                 timestamp=to_timestamp(ts))
             self._logger.debug('Task %s was revoked, not running' % task)
 
-    def _incr_metadata(self, task, key, value=1):
-        self.huey.incr_metadata('_'.join((task.name, key)), value)
-        self.huey.incr_metadata('_'.join(('tasks', key)), value)
-
     def process_task(self, task, ts):
         self.huey.emit_task(EVENT_STARTED, task, timestamp=to_timestamp(ts))
         self._logger.info('Executing %s' % task)
@@ -159,7 +155,6 @@ class Worker(BaseProcess):
                 task,
                 error=True,
                 duration=duration)
-            self._incr_metadata(task, 'errors')
             self._logger.exception('Unhandled exception in worker thread')
             if task.retries:
                 self.requeue_task(task, self.get_now())
@@ -169,9 +164,6 @@ class Worker(BaseProcess):
                 task,
                 duration=duration,
                 timestamp=self.get_timestamp())
-            self._incr_metadata(task, 'executed')
-
-        self._incr_metadata(task, 'duration', duration)
 
     def requeue_task(self, task, ts):
         task.retries -= 1
@@ -194,7 +186,6 @@ class Worker(BaseProcess):
             self._logger.error('Error adding task to schedule: %s' % task)
         else:
             self.huey.emit_task(EVENT_SCHEDULED, task)
-            self._incr_metadata(task, 'scheduled')
 
     def is_revoked(self, task, ts):
         try:
@@ -361,51 +352,6 @@ class Consumer(object):
             except KeyboardInterrupt:
                 pass
         return _run
-
-    def metadata(self, **kwargs):
-        for key, value in kwargs.items():
-            self.huey.write_metadata(key, value)
-
-    def initialize_metadata(self):
-        # Set metadata.
-        self.metadata(
-            periodic_tasks='enabled' if self.periodic else 'disabled',
-            scheduler_interval=self.scheduler_interval,
-            tasks_duration=0.0,
-            tasks_errors=0,
-            tasks_executed=0,
-            tasks_scheduled=0,
-            workers=self.workers,
-            worker_type=self.worker_type,
-        )
-        for command in registry._registry:
-            self.metadata(**{
-                command + '_duration': 0,
-                command + '_errors': 0,
-                command + '_executed': 0,
-                command + '_scheduled': 0})
-
-    def read_metadata(self):
-        keys = [
-            'periodic_tasks',
-            'scheduler_interval',
-            'tasks_duration',
-            'tasks_errors',
-            'tasks_executed',
-            'tasks_scheduled',
-            'workers',
-            'worker_type',
-        ]
-        for command in registry._registry:
-            keys.extend([
-                command + '_duration',
-                command + '_errors',
-                command + '_executed',
-                command + '_scheduled'])
-
-        data = {}
-        for key in keys:
-            data[key] = self.huey.read_metadata(key)
 
     def start(self):
         # Log startup message.
