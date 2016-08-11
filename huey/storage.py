@@ -104,17 +104,18 @@ end"""
 
 
 class RedisStorage(BaseStorage):
-    def __init__(self, name='huey', blocking=False, read_timeout=1, max_errors=1000,
-            connection_pool=None, url=None, **connection_params):
-        if len([x for x in (url, connection_pool, connection_params) if x]) > 1:
+    def __init__(self, name='huey', blocking=False, read_timeout=1,
+                 max_errors=1000, connection_pool=None, url=None,
+                 **connection_params):
+        if sum(1 for p in (url, connection_pool, connection_params) if p) > 1:
             raise ValueError(
                 'The connection configuration is over-determined. '
                 'Please specify only one of the the following: '
-                '"url", "connection_pool", or "connection_params"'
-            )
+                '"url", "connection_pool", or "connection_params"')
 
         if url:
-            connection_pool = redis.ConnectionPool.from_url(url, decode_components=True)
+            connection_pool = redis.ConnectionPool.from_url(
+                url, decode_components=True)
         elif connection_pool is None:
             connection_pool = redis.ConnectionPool(**connection_params)
 
@@ -256,11 +257,12 @@ class _EventIterator(object):
 
 class RedisHuey(Huey):
     def get_storage(self, read_timeout=1, max_errors=1000,
-                    connection_pool=None, **connection_params):
+                    connection_pool=None, url=None, **connection_params):
         return RedisStorage(
             name=self.name,
             blocking=self.blocking,
             read_timeout=read_timeout,
             max_errors=max_errors,
             connection_pool=connection_pool,
+            url=url,
             **connection_params)

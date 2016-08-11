@@ -3,6 +3,7 @@ import itertools
 
 from redis.connection import ConnectionPool
 
+from huey.storage import RedisHuey
 from huey.storage import RedisStorage
 from huey.tests.base import b
 from huey.tests.base import HueyTestCase
@@ -121,3 +122,10 @@ class TestRedisStorage(HueyTestCase):
         args = s.pool.connection_kwargs
         self.assertEqual(args['host'], 'example.org')
         self.assertEqual(args['port'], 1234)
+
+    def test_init_huey(self):
+        huey = RedisHuey(url='redis://example.org:31337/?db=7')
+        conn = huey.storage.pool.connection_kwargs
+        self.assertEqual(conn['host'], 'example.org')
+        self.assertEqual(conn['port'], 31337)
+        self.assertEqual(conn['db'], 7)
