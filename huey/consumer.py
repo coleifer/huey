@@ -220,31 +220,36 @@ class Scheduler(BaseProcess):
             self._logger.info('Scheduling %s for execution' % task)
             self.enqueue(task)
 
-
-        should_sleep = True
-        if self.periodic:
-            if self._counter == self._q:
-                if self._r:
-                    self.sleep_for_interval(start, self._r)
-                self.huey.emit_status(
-                    EVENT_CHECKING_PERIODIC,
-                    timestamp=self.get_timestamp())
-                self._logger.debug('Checking periodic tasks')
-                self._counter = 0
-                for task in self.huey.read_periodic(now):
-                    self.huey.emit_task(
-                        EVENT_SCHEDULING_PERIODIC,
-                        task,
-                        timestamp=self.get_timestamp())
-                    self._logger.info('Scheduling periodic task %s.' % task)
-                    self.enqueue(task)
-                self.sleep_for_interval(start, self.interval - self._r)
-                should_sleep = False
-            else:
+        if self.periodic and self._counter == self._q:
+            self.enqueue_periodic_tasks(now, start)
+        else:
+            if self.periodic:
                 self._counter += 1
-
-        if should_sleep:
             self.sleep_for_interval(start, self.interval)
+
+    def enqueue_periodic_tasks(self, now, start):
+        # Sleep the remainder of 60 % Interval so we check the periodic
+        # tasks consistently every 60 seconds.
+        if self._r:
+            self.sleep_for_interval(start, self._r)
+
+        self.huey.emit_status(
+            EVENT_CHECKING_PERIODIC,
+            timestamp=self.get_timestamp())
+        self._logger.debug('Checking periodic tasks')
+        self._counter = 0
+        for task in self.huey.read_periodic(now):
+            self.huey.emit_task(
+                EVENT_SCHEDULING_PERIODIC,
+                task,
+                timestamp=self.get_timestamp())
+            self._logger.info('Scheduling periodic task %s.' % task)
+            self.enqueue(task)
+
+        # Because we only slept for part of the user-defined interval, now
+        # sleep the remainder.
+        self.sleep_for_interval(start, self.interval - self._r)
+        return True
 
 
 class Environment(object):
