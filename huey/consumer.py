@@ -16,6 +16,7 @@ try:
 except ImportError:
     Greenlet = GreenEvent = None
 
+from huey.exceptions import ConfigurationError
 from huey.exceptions import DataStoreGetException
 from huey.exceptions import QueueException
 from huey.exceptions import QueueReadException
@@ -219,6 +220,7 @@ class Scheduler(BaseProcess):
             self._logger.info('Scheduling %s for execution' % task)
             self.enqueue(task)
 
+
         should_sleep = True
         if self.periodic:
             if self._counter == self._q:
@@ -299,6 +301,11 @@ class Consumer(object):
                  worker_type='thread'):
 
         self._logger = logging.getLogger('huey.consumer')
+        if huey.always_eager:
+            self._logger.warning('Consumer initialized with Huey instance '
+                                 'that has "always_eager" mode enabled. This '
+                                 'must be disabled before the consumer can '
+                                 'be run.')
         self.huey = huey
         self.workers = workers
         self.periodic = periodic
@@ -354,6 +361,11 @@ class Consumer(object):
         return _run
 
     def start(self):
+        if self.huey.always_eager:
+            raise ConfigurationError(
+                'Consumer cannot be run with Huey instances where always_eager'
+                ' is enabled. Please check your configuration and ensure that'
+                ' "huey.always_eager = False".')
         # Log startup message.
         self._logger.info('Huey consumer started with %s %s, PID %s' % (
             self.workers,

@@ -25,5 +25,5 @@ class ScheduleAddException(QueueException):
 class ScheduleReadException(QueueException):
     pass
 
-class MetadataException(QueueException):
+class ConfigurationError(QueueException):
     pass
