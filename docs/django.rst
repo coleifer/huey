@@ -50,6 +50,16 @@ Using redis on a network host with 16 worker greenlets.
         'consumer': {'workers': 16, 'worker_type': 'greenlet'},
     }
 
+It is also possible to specify the connection using a Redis URL, making it easy to configure this
+setting using a single environment variable:
+
+.. code-block:: python
+
+    HUEY = {
+        'name': 'my-app',
+        'url': os.environ.get('REDIS_URL', 'redis://localhost:6379/?db=1')
+    }
+
 Alternatively, you can just assign a :py:class:`Huey` instance to the ``HUEY`` setting:
 
 .. code-block:: python

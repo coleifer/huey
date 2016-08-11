@@ -1,5 +1,9 @@
 import datetime
+import itertools
 
+from redis.connection import ConnectionPool
+
+from huey.storage import RedisStorage
 from huey.tests.base import b
 from huey.tests.base import HueyTestCase
 from huey.utils import EmptyData
@@ -94,3 +98,26 @@ class TestRedisStorage(HueyTestCase):
         self.assertEqual(res, 'a')
         res = next(i)
         self.assertEqual(res, 'b')
+
+    def test_conflicting_init_args(self):
+        options = {
+            'host': 'localhost',
+            'url': 'redis://localhost',
+            'connection_pool': ConnectionPool()
+        }
+        combinations = itertools.combinations(options.items(), 2)
+
+        for kwargs in (dict(item) for item in combinations):
+            self.assertRaises(ValueError, lambda: RedisStorage(**kwargs))
+
+    def test_init_with_url(self):
+        s = RedisStorage(url='redis://example.org:1234')
+        args = s.pool.connection_kwargs
+        self.assertEqual(args['host'], 'example.org')
+        self.assertEqual(args['port'], 1234)
+
+    def test_init_with_kwargs(self):
+        s = RedisStorage(host='example.org', port=1234)
+        args = s.pool.connection_kwargs
+        self.assertEqual(args['host'], 'example.org')
+        self.assertEqual(args['port'], 1234)

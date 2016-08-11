@@ -104,9 +104,18 @@ end"""
 
 
 class RedisStorage(BaseStorage):
-    def __init__(self, name='huey', blocking=False, read_timeout=1,
-                 max_errors=1000, connection_pool=None, **connection_params):
-        if connection_pool is None:
+    def __init__(self, name='huey', blocking=False, read_timeout=1, max_errors=1000,
+            connection_pool=None, url=None, **connection_params):
+        if len([x for x in (url, connection_pool, connection_params) if x]) > 1:
+            raise ValueError(
+                'The connection configuration is over-determined. '
+                'Please specify only one of the the following: '
+                '"url", "connection_pool", or "connection_params"'
+            )
+
+        if url:
+            connection_pool = redis.ConnectionPool.from_url(url, decode_components=True)
+        elif connection_pool is None:
             connection_pool = redis.ConnectionPool(**connection_params)
 
         self.pool = connection_pool
