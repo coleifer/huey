@@ -142,11 +142,15 @@ class Command(BaseCommand):
 
         verbose = None
         if 'verbose' in consumer_options:
-            verbose = consumer_options['verbose']
+            verbose = consumer_options.pop('verbose')
         elif 'quiet' in consumer_options:
-            verbose = not consumer_options['quiet']
+            verbose = not consumer_options.pop('quiet')
 
-        loglevel = get_loglevel(verbose)
+        if 'loglevel' in consumer_options:
+            loglevel = consumer_options.pop('loglevel')
+        else:
+            loglevel = get_loglevel(verbose)
+
         logfile = consumer_options.pop('logfile', None)
         setup_logger(loglevel, logfile, consumer_options['worker_type'])
 
