@@ -268,6 +268,9 @@ class Environment(object):
     def create_process(self, runnable, name):
         raise NotImplementedError
 
+    def is_alive(self, proc):
+        raise NotImplementedError
+
 
 class ThreadEnvironment(Environment):
     def get_stop_flag(self):
@@ -299,6 +302,9 @@ class ProcessEnvironment(Environment):
         p = Process(target=runnable, name=name)
         p.daemon = True
         return p
+
+    def is_alive(self, proc):
+        return proc.is_alive()
 
 
 worker_to_environment = {
