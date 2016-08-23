@@ -46,7 +46,7 @@ their default values.
     The default loglevel is ``INFO``.
 
 ``-v``, ``--verbose``
-    Verbose logging (loglevel=``DEBUG``). If no logfile is specified and
+    Verbose logging (loglevel=DEBUG). If no logfile is specified and
     verbose is set, then the consumer will log to the console.
 
 ``-q``, ``--quiet``

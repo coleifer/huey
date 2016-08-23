@@ -58,7 +58,6 @@ class Command(BaseCommand):
             '--worker-type', '-k',
             dest='worker_type',
             help='worker execution model (thread, greenlet, process).',
-            default='thread',
             choices=['greenlet', 'thread', 'process', 'gevent'])
         parser.add_argument(
             '--delay', '-d',
@@ -72,10 +71,19 @@ class Command(BaseCommand):
             help='Maximum delay between polling requests')
         parser.add_argument(
             '--no-periodic', '-n',
-            default=True,
             dest='periodic',
             action='store_false',
             help='Do not enqueue periodic commands')
+        parser.add_argument(
+            '--verbose', '-V',
+            dest='verbose',
+            action='store_true',
+            help='log debugging statements')
+        parser.add_argument(
+            '--quiet', '-q',
+            dest='verbose',
+            action='store_false',
+            help='only log exceptions')
 
     def autodiscover_appconfigs(self):
         """Use Django app registry to pull out potential apps with tasks.py module."""
@@ -118,28 +126,27 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         from huey.contrib.djhuey import HUEY
 
-        consumer_options = {}
+        consumer_options = {
+            'workers': 1,
+            'worker_type': 'thread'}
+
         if isinstance(settings.HUEY, dict):
             consumer_options.update(settings.HUEY.get('consumer', {}))
 
-        if options['workers'] is not None:
-            consumer_options['workers'] = options['workers']
-
-        if options['worker_type'] is not None:
-            consumer_options['worker_type'] = options['worker_type']
-
-        if options['periodic'] is not None:
-            consumer_options['periodic'] = options['periodic']
-
-        if options['initial_delay'] is not None:
-            consumer_options['initial_delay'] = options['initial_delay']
-
-        if options['max_delay'] is not None:
-            consumer_options['max_delay'] = options['max_delay']
+        for k in ('workers', 'worker_type', 'periodic', 'initial_delay',
+                  'max_delay'):
+            if options[k] is not None:
+                consumer_options[k] = options[k]
 
         self.autodiscover()
 
-        loglevel = get_loglevel(consumer_options.pop('loglevel', None))
+        verbose = None
+        if 'verbose' in consumer_options:
+            verbose = consumer_options['verbose']
+        elif 'quiet' in consumer_options:
+            verbose = not consumer_options['quiet']
+
+        loglevel = get_loglevel(verbose)
         logfile = consumer_options.pop('logfile', None)
         setup_logger(loglevel, logfile, consumer_options['worker_type'])
 
