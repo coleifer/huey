@@ -1,10 +1,12 @@
 import datetime
 import logging
+import operator
 import os
 import signal
 import threading
 import time
 from collections import defaultdict
+from collections import namedtuple
 
 from multiprocessing import Event as ProcessEvent
 from multiprocessing import Process
@@ -307,12 +309,38 @@ class ProcessEnvironment(Environment):
         return proc.is_alive()
 
 
+WORKER_THREAD = 'thread'
+WORKER_GREENLET = 'greenlet'
+WORKER_PROCESS = 'process'
+
+
 worker_to_environment = {
-    'thread': ThreadEnvironment,
-    'greenlet': GreenletEnvironment,
+    WORKER_THREAD: ThreadEnvironment,
+    WORKER_GREENLET: GreenletEnvironment,
     'gevent': GreenletEnvironment,  # Same as greenlet.
-    'process': ProcessEnvironment,
+    WORKER_PROCESS: ProcessEnvironment,
 }
+
+
+config_defaults = (
+    ('workers', 1),
+    ('periodic', True),
+    ('initial_delay', 0.1),
+    ('backoff', 1.15),
+    ('max_delay', 10.0),
+    ('utc', True),
+    ('scheduler_interval', 1),
+    ('worker_type', WORKER_THREAD),
+)
+config_keys = [param for param, _ in config_defaults]
+
+
+class ConsumerConfig(namedtuple('_ConsumerConfig', config_keys)):
+    def __new__(cls, **kwargs):
+        config = dict(config_defaults)
+        config.update(kwargs)
+        args = [config[key] for key in config_keys]
+        return super(ConsumerConfig, cls).__new__(cls, *args)
 
 
 class Consumer(object):
