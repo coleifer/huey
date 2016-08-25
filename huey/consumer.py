@@ -342,6 +342,11 @@ class ConsumerConfig(namedtuple('_ConsumerConfig', config_keys)):
         args = [config[key] for key in config_keys]
         return super(ConsumerConfig, cls).__new__(cls, *args)
 
+    def get_options(self):
+        return (
+            ('-w', '--workers', {}),
+        )
+
 
 class Consumer(object):
     def __init__(self, huey, workers=1, periodic=True, initial_delay=0.1,
