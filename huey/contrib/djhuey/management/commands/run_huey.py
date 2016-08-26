@@ -15,8 +15,9 @@ except ImportError:
     HAS_DJANGO_APPS = False
 
 from huey.consumer import Consumer
-from huey.bin.huey_consumer import get_loglevel
-from huey.bin.huey_consumer import setup_logger
+from huey.consumer import ConsumerConfig
+from huey.consumer import OptionParserHandler
+
 
 class CompatParser(object):
     """Converts argeparse arguments to optparse for Django < 1.8 compatibility."""
@@ -28,7 +29,7 @@ class CompatParser(object):
         if 'type' in kwargs:
             # Convert `type=int` to `type="int"`, etc.
             kwargs['type'] = kwargs['type'].__name__
-        self.command.option_list +=  (make_option(*args, **kwargs),)
+        self.command.option_list += (make_option(*args, **kwargs),)
 
 
 class Command(BaseCommand):
@@ -40,6 +41,7 @@ class Command(BaseCommand):
     django-admin.py run_huey
     """
     help = "Run the queue consumer"
+    _type_map = {'int': int, 'float': float}
 
     def __init__(self, *args, **kwargs):
         super(Command, self).__init__(*args, **kwargs)
@@ -49,41 +51,19 @@ class Command(BaseCommand):
             self.add_arguments(parser)
 
     def add_arguments(self, parser):
-        parser.add_argument(
-            '--workers', '-w',
-            dest='workers',
-            type=int,
-            help='Number of worker threads/processes/greenlets')
-        parser.add_argument(
-            '--worker-type', '-k',
-            dest='worker_type',
-            help='worker execution model (thread, greenlet, process).',
-            choices=['greenlet', 'thread', 'process', 'gevent'])
-        parser.add_argument(
-            '--delay', '-d',
-            dest='initial_delay',
-            type=float,
-            help='Delay between polling requests')
-        parser.add_argument(
-            '--max_delay', '-m',
-            dest='max_delay',
-            type=float,
-            help='Maximum delay between polling requests')
-        parser.add_argument(
-            '--no-periodic', '-n',
-            dest='periodic',
-            action='store_false',
-            help='Do not enqueue periodic commands')
-        parser.add_argument(
-            '--verbose', '-V',
-            dest='verbose',
-            action='store_true',
-            help='log debugging statements')
-        parser.add_argument(
-            '--quiet', '-q',
-            dest='verbose',
-            action='store_false',
-            help='only log exceptions')
+        option_handler = OptionParserHandler()
+        groups = (
+            option_handler.get_logging_options(),
+            option_handler.get_worker_options(),
+            option_handler.get_scheduler_options(),
+        )
+        for option_list in groups:
+            for short, full, kwargs in option_list:
+                if short == '-v':
+                    continue
+                if 'type' in kwargs:
+                    kwargs['type'] = self._type_map[kwargs['type']]
+                parser.add_argument(full, short, **kwargs)
 
     def autodiscover_appconfigs(self):
         """Use Django app registry to pull out potential apps with tasks.py module."""
@@ -126,33 +106,23 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         from huey.contrib.djhuey import HUEY
 
-        consumer_options = {
-            'workers': 1,
-            'worker_type': 'thread'}
-
+        consumer_options = {}
         if isinstance(settings.HUEY, dict):
             consumer_options.update(settings.HUEY.get('consumer', {}))
 
-        for k in ('workers', 'worker_type', 'periodic', 'initial_delay',
-                  'max_delay'):
-            if options[k] is not None:
-                consumer_options[k] = options[k]
+        for key, value in options.items():
+            if value is not None:
+                consumer_options[key] = value
+
+        verbosity = consumer_options.pop('verbosity', 1)
+        # 0 = False, 1 = None, 2-3 = True
+        verbose = True if verbosity > 1 else (None if verbosity else False)
+        consumer_options['verbose'] = verbose
 
         self.autodiscover()
 
-        verbose = None
-        if 'verbose' in consumer_options:
-            verbose = consumer_options.pop('verbose')
-        elif 'quiet' in consumer_options:
-            verbose = not consumer_options.pop('quiet')
+        config = ConsumerConfig(**consumer_options)
+        config.validate()
 
-        if 'loglevel' in consumer_options:
-            loglevel = consumer_options.pop('loglevel')
-        else:
-            loglevel = get_loglevel(verbose)
-
-        logfile = consumer_options.pop('logfile', None)
-        setup_logger(loglevel, logfile, consumer_options['worker_type'])
-
-        consumer = Consumer(HUEY, **consumer_options)
+        consumer = Consumer(HUEY, **config.values)
         consumer.run()
