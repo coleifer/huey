@@ -41,7 +41,7 @@ their default values.
     the logfile will grow indefinitely, so you may wish to configure a tool
     like ``logrotate``.
 
-    Alternatively, you can attach your own handler to ``huey.logger`` as well.
+    Alternatively, you can attach your own handler to ``huey.consumer``.
 
     The default loglevel is ``INFO``.
 
@@ -50,7 +50,7 @@ their default values.
     verbose is set, then the consumer will log to the console.
 
 ``-q``, ``--quiet``
-    Only log errors.
+    Minimal logging, only errors and their tracebacks will be logged.
 
 ``-w``, ``--workers``
     Number of worker threads/processes/greenlets, the default is ``1`` but
@@ -59,6 +59,21 @@ their default values.
 ``-k``, ``--worker-type``
     Choose the worker type, ``thread``, ``process`` or ``greenlet``. The default
     is ``thread``.
+
+    Depending on your workload, one worker type may perform better than the
+    others:
+
+    * CPU heavy loads: use "process". Python's global interpreter lock prevents
+      multiple threads from running simultaneously, so to leverage multiple CPU
+      cores (and reduce thread contention) run each worker as a separate
+      process.
+    * IO heavy loads: use "greenlet". For example, tasks that crawl websites or
+      which spend a lot of time waiting to read/write to a socket, will get a
+      huge boost from using the greenlet worker model. Because greenlets are so
+      cheap in terms of memory, you can easily run tens or hundreds of them.
+    * Anything else: use "thread". You get the benefits of pre-emptive
+      multi-tasking without the overhead of multiple processes. A safe choice
+      and the default.
 
 ``-n``, ``--no-periodic``
     Indicate that this consumer process should *not* enqueue periodic tasks.
