@@ -343,8 +343,9 @@ class TestHueyQueueAPIs(BaseQueueTestCase):
         # it is still revoked
         self.assertTrue(hourly_task2.is_revoked())
 
-        hourly_task2.restore()
+        self.assertTrue(hourly_task2.restore())
         self.assertFalse(hourly_task2.is_revoked())
+        self.assertFalse(hourly_task2.restore())  # It is not revoked.
 
         hourly_task2.revoke(revoke_once=True)
         self.assertTrue(hourly_task2.is_revoked()) # it is revoked once, but we are preserving that state

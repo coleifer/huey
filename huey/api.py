@@ -285,7 +285,8 @@ class Huey(object):
         self._put_data(task.revoke_id, serialized)
 
     def restore(self, task):
-        self._get_data(task.revoke_id)  # simply get and delete if there
+        # Return value indicates whether the task was in fact revoked.
+        return self._get_data(task.revoke_id) is not EmptyData
 
     def is_revoked(self, task, dt=None, peek=True):
         res = self._get_data(task.revoke_id, peek=True)
