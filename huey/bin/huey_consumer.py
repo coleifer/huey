@@ -39,9 +39,9 @@ def consumer_main():
     config.validate()
 
     huey_instance = load_huey(args[0])
-
     config.setup_logger()
-    consumer = config.create_consumer(huey_instance)
+
+    consumer = Consumer(huey_instance, **config.values)
     consumer.run()
 
 

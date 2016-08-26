@@ -401,20 +401,20 @@ class OptionParserHandler(object):
                 group.add_option(abbrev, name, **kwargs)
 
         add_group('Logging', 'The following options pertain to logging.',
-                  ConsumerConfig.get_log_options())
+                  self.get_logging_options())
 
         add_group('Workers', (
             'By default huey uses a single worker thread. To specify a '
             'different number of workers, or a different execution model (such'
             ' as multiple processes or greenlets), use the options below.'),
-            ConsumerConfig.get_worker_options())
+            self.get_worker_options())
 
         add_group('Scheduler', (
             'By default Huey will run the scheduler once every second to check'
             ' for tasks scheduled in the future, or tasks set to run at '
             'specfic intervals (periodic tasks). Use the options below to '
             'configure the scheduler or to disable periodic task scheduling.'),
-            ConsumerConfig.get_scheduler_options())
+            self.get_scheduler_options())
 
         return parser
 
@@ -459,15 +459,10 @@ class ConsumerConfig(namedtuple('_ConsumerConfig', config_keys)):
             handler.setFormatter(logging.Formatter(logformat))
             logger.addHandler(handler)
 
-    def create_consumer(self, huey, **overrides):
-        options = {}
-        for key in config_keys:
-            if key in ('logfile', 'verbose'):
-                continue
-            options[key] = getattr(self, key)
-
-        options.update(overrides)
-        return Consumer(huey, **options)
+    @property
+    def values(self):
+        return dict((key, getattr(self, key)) for key in config_keys
+                    if key not in ('logfile', 'verbose'))
 
 
 class Consumer(object):
