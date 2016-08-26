@@ -1,11 +1,14 @@
+import contextlib
 import datetime
 import threading
 import time
+from functools import wraps
 
 from huey import crontab
 from huey.consumer import Consumer
 from huey.consumer import Scheduler
 from huey.consumer import Worker
+from huey.exceptions import DataStoreTimeout
 from huey.tests.base import b
 from huey.tests.base import BrokenHuey
 from huey.tests.base import CaptureLogs
@@ -50,40 +53,151 @@ def hourly_task():
     state['p'] = 'y'
 
 
-class TestExecution(HueyTestCase):
+class CrashableWorker(Worker):
+    def __init__(self, *args, **kwargs):
+        super(CrashableWorker, self).__init__(*args, **kwargs)
+        self._crash = threading.Event()
+        self._crashed = threading.Event()
+
+    def crash(self):
+        self._crash.set()
+
+    def crashed(self, blocking=True):
+        if blocking:
+            self._crashed.wait()
+            return True
+        else:
+            return self._crashed.is_set()
+
+    def loop(self, now=None):
+        if self._crash.is_set() and not self._crashed.is_set():
+            self._crashed.set()
+            raise KeyboardInterrupt
+        elif self._crashed.is_set():
+            return
+        super(CrashableWorker, self).loop(now=now)
+
+
+class CrashableConsumer(Consumer):
+    def _create_worker(self):
+        return CrashableWorker(
+            huey=self.huey,
+            default_delay=self.default_delay,
+            max_delay=self.max_delay,
+            backoff=self.backoff,
+            utc=self.utc)
+
+    def is_crashed(self, worker=1, blocking=True):
+        worker, _ = self.worker_threads[worker - 1]
+        return worker.crashed(blocking=blocking)
+
+    def crash(self, worker=1):
+        worker, process = self.worker_threads[worker - 1]
+        worker.crash()
+
+
+class ConsumerTestCase(HueyTestCase):
+    def setUp(self):
+        super(ConsumerTestCase, self).setUp()
+        global state
+        state = {}
+
+
+def consumer_test(method):
+    @wraps(method)
+    def inner(self):
+        consumer = self.create_consumer()
+        with CaptureLogs() as capture:
+            consumer.start()
+            try:
+                return method(self, consumer, capture)
+            finally:
+                consumer.stop()
+                for _, worker in consumer.worker_threads:
+                    worker.join()
+    return inner
+
+
+class TestExecution(ConsumerTestCase):
     def create_consumer(self, worker_type='thread'):
-        return Consumer(
+        consumer = CrashableConsumer(
             self.huey,
             max_delay=0.1,
             workers=2,
-            worker_type=worker_type)
+            worker_type=worker_type,
+            health_check_interval=0.01)
+        consumer._stop_flag_timeout = 0.01
+        return consumer
 
-    def test_threaded_execution(self):
-        consumer = self.create_consumer()
+    @consumer_test
+    def test_health_check(self, consumer, capture):
+        modify_state('ka', 'va').get(blocking=True)
+        self.assertEqual(state, {'ka': 'va'})
+
+        consumer.crash(1)
+        self.assertTrue(consumer.is_crashed(1))
+
+        # One worker still alive.
+        modify_state('ka', 'vx').get(blocking=True)
+        self.assertEqual(state, {'ka': 'vx'})
+
+        consumer.crash(2)
+        self.assertTrue(consumer.is_crashed(2))
+
+        self.assertEqual(self.huey.pending_count(), 0)
+        result = modify_state('ka', 'vz')
+
+        wt1, wt2 = consumer.worker_threads
+        w1, w2 = wt1[0], wt2[0]
+        w1.loop()
+        w2.loop()
+        self.assertEqual(self.huey.pending_count(), 1)
+
+        consumer.check_worker_health()
+        result.get(blocking=True)
+        self.assertEqual(state, {'ka': 'vz'})
+
+    @consumer_test
+    def test_worker_health_logging(self, consumer, capture):
+        w1_1 = consumer.worker_threads[0][0]
+        w2_1 = consumer.worker_threads[1][0]
+
+        modify_state('k', '1').get(blocking=True)
+        self.assertEqual(state, {'k': '1'})
+
+        consumer.crash(2)
+        self.assertTrue(consumer.is_crashed(2))
+        self.assertFalse(consumer.is_crashed(1, blocking=False))
+
+        consumer.check_worker_health()
+        self.assertFalse(consumer.is_crashed(2, blocking=False))
+
+        w1_2 = consumer.worker_threads[0][0]
+        w2_2 = consumer.worker_threads[1][0]
+        self.assertTrue(w1_1 is w1_2)
+        self.assertFalse(w1_2 is w2_2)
+
+        task_exec, worker_restart = capture.messages[-2:]
+        self.assertTrue(task_exec.startswith('Executing queuecmd_modify'))
+        self.assertEqual(worker_restart, 'Worker 2 died, restarting.')
+
+    @consumer_test
+    def test_threaded_execution(self, consumer, capture):
         r1 = modify_state('k1', 'v1')
         r2 = modify_state('k2', 'v2')
         r3 = modify_state('k3', 'v3')
 
-        with CaptureLogs() as capture:
-            consumer.start()
-
-            r1.get(blocking=True)
-            r2.get(blocking=True)
-            r3.get(blocking=True)
-
-            consumer.stop()
-            for worker in consumer.worker_threads:
-                worker.join()
+        try:
+            r2.get(blocking=True, timeout=5)
+            r3.get(blocking=True, timeout=5)
+            r1.get(blocking=True, timeout=5)
+        except DataStoreTimeout:
+            assert False, 'Timeout. Consumer/workers running correctly?'
 
         self.assertEqual(state, {'k1': 'v1', 'k2': 'v2', 'k3': 'v3'})
 
 
-class TestConsumerAPIs(HueyTestCase):
-    def setUp(self):
-        super(TestConsumerAPIs, self).setUp()
-        global state
-        state = {}
-
+class TestConsumerAPIs(ConsumerTestCase):
     def get_periodic_tasks(self):
         return [hourly_task.task_class()]
 

@@ -285,6 +285,9 @@ class ThreadEnvironment(Environment):
         t.daemon = True
         return t
 
+    def is_alive(self, proc):
+        return proc.isAlive()
+
 
 class GreenletEnvironment(Environment):
     def get_stop_flag(self):
@@ -296,6 +299,9 @@ class GreenletEnvironment(Environment):
             runnable()
             gevent.sleep()
         return Greenlet(run=run_wrapper)
+
+    def is_alive(self, proc):
+        return not proc.dead
 
 
 class ProcessEnvironment(Environment):
@@ -317,7 +323,7 @@ WORKER_PROCESS = 'process'
 WORKER_TYPES = (WORKER_THREAD, WORKER_GREENLET, WORKER_PROCESS)
 
 
-worker_to_environment = {
+WORKER_TO_ENVIRONMENT = {
     WORKER_THREAD: ThreadEnvironment,
     WORKER_GREENLET: GreenletEnvironment,
     'gevent': GreenletEnvironment,  # Preserved for backwards-compat.
@@ -331,6 +337,8 @@ config_defaults = (
     ('initial_delay', 0.1),
     ('backoff', 1.15),
     ('max_delay', 10.0),
+    ('check_worker_health', True),
+    ('health_check_interval', 1),
     ('scheduler_interval', 1),
     ('periodic', True),
     ('utc', True),
@@ -353,25 +361,39 @@ def option(name, **options):
 class OptionParserHandler(object):
     def get_worker_options(self):
         return (
+            # -w, -k, -d, -m, -b, -c, -C
             option('workers', default=1, type='int',
                    help='number of worker threads/processes (default=1)'),
             option(('k', 'worker-type'), choices=WORKER_TYPES,
                    default=WORKER_THREAD, dest='worker_type',
                    help=('worker execution model (thread, greenlet, '
-                         'process)')),
+                         'process). Use process for CPU-intensive workloads, '
+                         'and greenlet for IO-heavy workloads. When in doubt, '
+                         'thread is the safest choice.')),
             option('delay', default=0.1, dest='initial_delay',
-                   help='minimum delay polling queue (default=0.1)',
+                   help='minimum time to wait when polling queue (default=.1)',
                    metavar='SECONDS', type='float'),
             option('max_delay', default=10, metavar='SECONDS',
-                   help='maximum delay polling queue (default=10)',
+                   help='maximum time to wait when polling queue (default=10)',
                    type='float'),
             option('backoff', default=1.15, metavar='SECONDS',
-                   help='amount to back-off delay when queue is empty',
+                   help=('factor used to back-off polling interval when queue '
+                         'is empty (default=1.15, must be >= 1)'),
                    type='float'),
+            option(('c', 'health_check_interval'), default=1.0, type='float',
+                   dest='health_check_interval', metavar='SECONDS',
+                   help=('minimum time to wait between worker health checks '
+                         '(default=1.0)')),
+            option(('C', 'disable_health_check'), action='store_false',
+                   default=True, dest='check_worker_health',
+                   help=('disable health check that monitors worker health, '
+                         'restarting any worker that crashes unexpectedly.')),
+
         )
 
     def get_scheduler_options(self):
         return (
+            # -s, -n, -u, -o
             option('scheduler_interval', default=1, type='int',
                    help='Granularity of scheduler in seconds.'),
             option('no_periodic', action='store_false', default=True,
@@ -384,6 +406,7 @@ class OptionParserHandler(object):
 
     def get_logging_options(self):
         return (
+            # -l, -v, -q
             option('logfile', metavar='FILE'),
             option('verbose', action='store_true',
                    help='verbose logging (includes DEBUG statements)'),
@@ -468,7 +491,8 @@ class ConsumerConfig(namedtuple('_ConsumerConfig', config_keys)):
 class Consumer(object):
     def __init__(self, huey, workers=1, periodic=True, initial_delay=0.1,
                  backoff=1.15, max_delay=10.0, utc=True, scheduler_interval=1,
-                 worker_type='thread'):
+                 worker_type='thread', check_worker_health=True,
+                 health_check_interval=1):
 
         self._logger = logging.getLogger('huey.consumer')
         if huey.always_eager:
@@ -485,26 +509,37 @@ class Consumer(object):
         self.utc = utc
         self.scheduler_interval = max(min(scheduler_interval, 60), 1)
         self.worker_type = worker_type
-        if worker_type not in worker_to_environment:
-            raise ValueError('worker_type must be one of %s.' %
-                             ', '.join(worker_to_environment))
-        else:
-            self.environment = worker_to_environment[worker_type]()
 
+        # Configure health-check and consumer main-loop attributes.
+        self._stop_flag_timeout = 0.1
+        self._health_check = check_worker_health
+        self._health_check_interval = (float(health_check_interval) /
+                                       self._stop_flag_timeout)
+        self.__health_check_counter = 0
+
+        # Create the execution environment helper.
+        self.environment = self.get_environment(self.worker_type)
+
+        # Create the event used to signal the process should exit.
         self._received_signal = False
         self.stop_flag = self.environment.get_stop_flag()
 
-        scheduler = self._create_runnable(self._create_scheduler())
-        self.scheduler = self.environment.create_process(
-            scheduler,
-            'Scheduler')
+        # Create the scheduler process (but don't start it yet).
+        scheduler = self._create_scheduler()
+        self.scheduler = self._create_process(scheduler, 'Scheduler')
 
+        # Create the worker process(es) (also not started yet).
         self.worker_threads = []
         for i in range(workers):
-            worker = self._create_runnable(self._create_worker())
-            self.worker_threads.append(self.environment.create_process(
-                worker,
-                'Worker-%d' % (i + 1)))
+            worker = self._create_worker()
+            process = self._create_process(worker, 'Worker-%d' % (i + 1))
+            self.worker_threads.append((worker, process))
+
+    def get_environment(self, worker_type):
+        if worker_type not in WORKER_TO_ENVIRONMENT:
+            raise ValueError('worker_type must be one of %s.' %
+                             ', '.join(WORKER_TYPES))
+        return WORKER_TO_ENVIRONMENT[worker_type]()
 
     def _create_worker(self):
         return Worker(
@@ -521,14 +556,16 @@ class Consumer(object):
             utc=self.utc,
             periodic=self.periodic)
 
-    def _create_runnable(self, consumer_process):
+    def _create_process(self, process, name):
         def _run():
             try:
                 while not self.stop_flag.is_set():
-                    consumer_process.loop()
+                    process.loop()
             except KeyboardInterrupt:
                 pass
-        return _run
+            except:
+                self._logger.exception('Process %s died!' % name)
+        return self.environment.create_process(_run, name)
 
     def start(self):
         if self.huey.always_eager:
@@ -555,8 +592,8 @@ class Consumer(object):
         self._logger.info('\n'.join(msg))
 
         self.scheduler.start()
-        for worker in self.worker_threads:
-            worker.start()
+        for _, worker_process in self.worker_threads:
+            worker_process.start()
 
     def stop(self):
         self.stop_flag.set()
@@ -564,10 +601,11 @@ class Consumer(object):
 
     def run(self):
         self.start()
+        timeout = self._stop_flag_timeout
         while True:
             try:
-                is_set = self.stop_flag.wait(timeout=0.1)
-                time.sleep(0.1)
+                is_set = self.stop_flag.wait(timeout=timeout)
+                time.sleep(timeout)
             except KeyboardInterrupt:
                 self.stop()
             except:
@@ -576,9 +614,37 @@ class Consumer(object):
             else:
                 if self._received_signal:
                     self.stop()
-                if self.stop_flag.is_set():
-                    break
+
+            if self.stop_flag.is_set():
+                break
+
+            if self._health_check:
+                self.__health_check_counter += 1
+                if self.__health_check_counter == self._health_check_interval:
+                    self.__health_check_counter = 0
+                    self.check_worker_health()
+
         self._logger.info('Consumer exiting.')
+
+    def check_worker_health(self):
+        self._logger.debug('Checking worker health.')
+        workers = []
+        restart_occurred = False
+        for i, (worker, worker_t) in enumerate(self.worker_threads):
+            if not self.environment.is_alive(worker_t):
+                self._logger.warning('Worker %d died, restarting.' % (i + 1))
+                worker = self._create_worker()
+                worker_t = self._create_process(worker, 'Worker-%d' % (i + 1))
+                worker_t.start()
+                restart_occurred = True
+            workers.append((worker, worker_t))
+
+        if restart_occurred:
+            self.worker_threads = workers
+        else:
+            self._logger.debug('Workers are up and running.')
+
+        return not restart_occurred
 
     def _set_signal_handler(self):
         signal.signal(signal.SIGTERM, self._handle_signal)
