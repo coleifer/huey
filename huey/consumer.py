@@ -1,12 +1,14 @@
 import datetime
 import logging
 import operator
+import optparse
 import os
 import signal
 import threading
 import time
 from collections import defaultdict
 from collections import namedtuple
+from logging import FileHandler
 
 from multiprocessing import Event as ProcessEvent
 from multiprocessing import Process
@@ -312,27 +314,109 @@ class ProcessEnvironment(Environment):
 WORKER_THREAD = 'thread'
 WORKER_GREENLET = 'greenlet'
 WORKER_PROCESS = 'process'
+WORKER_TYPES = (WORKER_THREAD, WORKER_GREENLET, WORKER_PROCESS)
 
 
 worker_to_environment = {
     WORKER_THREAD: ThreadEnvironment,
     WORKER_GREENLET: GreenletEnvironment,
-    'gevent': GreenletEnvironment,  # Same as greenlet.
+    'gevent': GreenletEnvironment,  # Preserved for backwards-compat.
     WORKER_PROCESS: ProcessEnvironment,
 }
 
 
 config_defaults = (
     ('workers', 1),
-    ('periodic', True),
+    ('worker_type', WORKER_THREAD),
     ('initial_delay', 0.1),
     ('backoff', 1.15),
     ('max_delay', 10.0),
-    ('utc', True),
     ('scheduler_interval', 1),
-    ('worker_type', WORKER_THREAD),
+    ('periodic', True),
+    ('utc', True),
+    ('logfile', None),
+    ('verbose', None),
 )
 config_keys = [param for param, _ in config_defaults]
+
+
+def option(name, **options):
+    if isinstance(name, tuple):
+        letter, opt_name = name
+    else:
+        opt_name = name.replace('_', '-')
+        letter = name[0]
+        options.setdefault('dest', name)
+    return ('-' + letter, '--' + opt_name, options)
+
+
+class OptionParserHandler(object):
+    def get_worker_options(self):
+        return (
+            option('workers', default=1, type='int',
+                   help='number of worker threads/processes (default=1)'),
+            option(('k', 'worker-type'), choices=WORKER_TYPES,
+                   default=WORKER_THREAD, dest='worker_type',
+                   help=('worker execution model (thread, greenlet, '
+                         'process)')),
+            option('delay', default=0.1, dest='initial_delay',
+                   help='minimum delay polling queue (default=0.1)',
+                   metavar='SECONDS', type='float'),
+            option('max_delay', default=10, metavar='SECONDS',
+                   help='maximum delay polling queue (default=10)',
+                   type='float'),
+            option('backoff', default=1.15, metavar='SECONDS',
+                   help='amount to back-off delay when queue is empty',
+                   type='float'),
+        )
+
+    def get_scheduler_options(self):
+        return (
+            option('scheduler_interval', default=1, type='int',
+                   help='Granularity of scheduler in seconds.'),
+            option('no_periodic', action='store_false', default=True,
+                   dest='periodic', help='do NOT enqueue periodic tasks'),
+            option('utc', action='store_true', default=True,
+                   help='use UTC time for all tasks (default=True)'),
+            option(('o', 'localtime'), action='store_false', dest='utc',
+                   help='use local time for all tasks'),
+        )
+
+    def get_logging_options(self):
+        return (
+            option('logfile', metavar='FILE'),
+            option('verbose', action='store_true',
+                   help='verbose logging (includes DEBUG statements)'),
+            option('quiet', action='store_false', dest='verbose',
+                   help='minimal logging (only exceptions/errors)'),
+        )
+
+    def get_option_parser(self):
+        parser = optparse.OptionParser('Usage: %prog [options] '
+                                       'path.to.huey_instance')
+
+        def add_group(name, description, options):
+            group = parser.add_option_group(name, description)
+            for abbrev, name, kwargs in options:
+                group.add_option(abbrev, name, **kwargs)
+
+        add_group('Logging', 'The following options pertain to logging.',
+                  ConsumerConfig.get_log_options())
+
+        add_group('Workers', (
+            'By default huey uses a single worker thread. To specify a '
+            'different number of workers, or a different execution model (such'
+            ' as multiple processes or greenlets), use the options below.'),
+            ConsumerConfig.get_worker_options())
+
+        add_group('Scheduler', (
+            'By default Huey will run the scheduler once every second to check'
+            ' for tasks scheduled in the future, or tasks set to run at '
+            'specfic intervals (periodic tasks). Use the options below to '
+            'configure the scheduler or to disable periodic task scheduling.'),
+            ConsumerConfig.get_scheduler_options())
+
+        return parser
 
 
 class ConsumerConfig(namedtuple('_ConsumerConfig', config_keys)):
@@ -342,10 +426,48 @@ class ConsumerConfig(namedtuple('_ConsumerConfig', config_keys)):
         args = [config[key] for key in config_keys]
         return super(ConsumerConfig, cls).__new__(cls, *args)
 
-    def get_options(self):
-        return (
-            ('-w', '--workers', {}),
-        )
+    def validate(self):
+        if self.backoff < 1:
+            raise ValueError('The backoff must be greater than 1.')
+        if not (0 < self.scheduler_interval <= 60):
+            raise ValueError('The scheduler must run at least once per '
+                             'minute, and at most once per second (1-60).')
+
+    @property
+    def loglevel(self):
+        if self.verbose is None:
+            return logging.INFO
+        return logging.DEBUG if self.verbose else logging.ERROR
+
+    def setup_logger(self, logger=None):
+        if self.worker_type == 'process':
+            worker = '%(process)d'
+        else:
+            worker = '%(threadName)s'
+
+        logformat = ('[%(asctime)s] %(levelname)s:%(name)s:' + worker +
+                     ':%(message)s')
+        loglevel = self.loglevel
+        if logger is None:
+            logging.basicConfig(level=loglevel, format=logformat)
+            logger = logging.getLogger()
+        else:
+            logger.setLevel(loglevel)
+
+        if self.logfile:
+            handler = FileHandler(self.logfile)
+            handler.setFormatter(logging.Formatter(logformat))
+            logger.addHandler(handler)
+
+    def create_consumer(self, huey, **overrides):
+        options = {}
+        for key in config_keys:
+            if key in ('logfile', 'verbose'):
+                continue
+            options[key] = getattr(self, key)
+
+        options.update(overrides)
+        return Consumer(huey, **options)
 
 
 class Consumer(object):
