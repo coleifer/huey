@@ -31,18 +31,22 @@ Tasks not running
     Example syntax: ``huey_consumer.py main_module.huey``
 
 Tasks not returning results
-    Ensure that you have specified a ``result_store`` when creating your
-    :py:class:`Huey` object.
+    Ensure that you have not accidentally specified ``result_store=False`` when
+    instantiating your :py:class:`Huey` object.
 
 Scheduled tasks are not being run at the correct time
     Check the time on the server the consumer is running on - if different from
-    the producer this may cause problems.  By default all local times are converted
-    to UTC when calling ``.schedule()``, and the consumer runs in UTC.
+    the producer this may cause problems.  By default all local times are
+    converted to UTC when calling ``.schedule()``, and the consumer itself runs
+    in UTC.
 
 Greenlet workers seem stuck
     If you wish to use the Greenlet worker type, you need to be sure to monkeypatch
     in your application's entrypoint. At the top of your ``main`` module, you can add
     the following code: ``from gevent import monkey; monkey.patch_all()``.
+    Furthermore, if your tasks are CPU-bound, ``gevent`` can appear to lock up
+    because it only supports cooperative multi-tasking (as opposed to
+    pre-emptive multi-tasking when using threads).
 
 Testing projects using Huey
     If you don't have, or want, a redis server for running tests you can set

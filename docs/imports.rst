@@ -6,10 +6,10 @@ Understanding how tasks are imported
 Behind-the-scenes when you decorate a function with :py:meth:`~Huey.task` or
 :py:meth:`~Huey.periodic_task`, the function registers itself with a centralized
 in-memory registry.  When that function is called, a reference is put into the
-queue (among other things), and when that message is consumed
-the function is then looked-up in the consumer's registry.  Because of the way this
-works, it is strongly recommended that **all decorated functions be imported when
-the consumer starts up**.
+queue (along with the arguments the function was called with, etc), and when
+that message is consumed, the function is then looked-up in the consumer's
+registry.  Because of the way this works, it is strongly recommended
+that **all decorated functions be imported when the consumer starts up**.
 
 .. note::
     If a task is not recognized, the consumer will throw a :py:class:`QueueException`
@@ -62,8 +62,8 @@ the project is laid out in the :ref:`getting started <getting-started>` guide.
           count_beans(int(beans))
           print('Enqueued job to count %s beans' % beans)
 
-To run the consumer, point it at ``main.huey``, in this way everything
-gets imported correctly:
+To run the consumer, point it at ``main.huey``, in this way, both the ``huey``
+instance **and** the task functions are imported in a centralized location.
 
 .. code-block:: console
 

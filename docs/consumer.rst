@@ -55,6 +55,12 @@ their default values.
 ``-w``, ``--workers``
     Number of worker threads/processes/greenlets, the default is ``1`` but
     some applications may want to increase this number for greater throughput.
+    Even if you have a small workload, you will typically want to increase this
+    number to at least 2 just in case one worker gets tied up on a slow task.
+    If you have a CPU-intensive workload, you may want to increase the number
+    of workers to the number of CPU cores (or 2x CPU cores). Lastly, if you are
+    using the ``greenlet`` worker type, you can easily run tens or hundreds of
+    workers as they are extremely lightweight.
 
 ``-k``, ``--worker-type``
     Choose the worker type, ``thread``, ``process`` or ``greenlet``. The default
@@ -77,18 +83,46 @@ their default values.
 
 ``-n``, ``--no-periodic``
     Indicate that this consumer process should *not* enqueue periodic tasks.
+    If you do not plan on using the periodic task feature, feel free to use
+    this option to save a few CPU cycles.
 
 ``-d``, ``--delay``
     When using a "polling"-type queue backend, the amount of time to wait
-    between polling the backend.  Default is 0.1 seconds.
+    between polling the backend.  Default is 0.1 seconds. For example, when the
+    consumer starts up it will begin polling every 0.1 seconds. If no tasks are
+    found in the queue, it will multiply the current delay (0.1) by the backoff
+    parameter. When a task is received, the polling interval will reset back to
+    this value.
 
 ``-m``, ``--max-delay``
     The maximum amount of time to wait between polling, if using weighted
-    backoff.  Default is 10 seconds.
+    backoff.  Default is 10 seconds. If your huey consumer doesn't see a lot of
+    action, you can increase this number to reduce CPU usage and Redis traffic.
 
 ``-b``, ``--backoff``
     The amount to back-off when polling for results.  Must be greater than
-    one.  Default is 1.15.
+    one.  Default is 1.15. This parameter controls the rate at which the
+    interval increases after successive attempts return no tasks. Here is how
+    the defaults, 0.1 initial and 1.15 backoff, look:
+
+    .. image:: http://media.charlesleifer.com/blog/photos/p1472257818.22.png
+
+``-c``, ``--health-check-interval`` (added in v1.3.0)
+    This parameter specifies how often huey should check on the status of the
+    workers, restarting any that died for some reason. I personally run a dozen
+    or so huey consumers at any given time and have never encountered an issue
+    with the workers, but I suppose anything's possible and better safe than
+    sorry.
+
+``-C``, ``--disable-health-check`` (added in v1.3.0)
+    This option disables the worker health checks.
+
+    Until version 1.3.0, huey had no concept of a "worker health check" because
+    in my experience the workers simply always stayed up and responsive. But if
+    you are using huey for critical tasks, you may want the insurance of having
+    additional monitoring to make sure your workers stay up and running. At any
+    rate, I feel comfortable saying that it's perfectly fine to use this option
+    and disable worker health checks.
 
 ``-s``, ``--scheduler-interval``
     The frequency with which the scheduler should run. By default this will run
@@ -96,12 +130,12 @@ their default values.
 
 ``-u``, ``--utc``
     Indicates that the consumer should use UTC time for all tasks, crontabs
-    and scheduling.  Default is True, so in practice you should not need to
-    specify this option.
+    and scheduling.  Default is True, so it is not actually necessary to use
+    this option.
 
 ``--localtime``
-    Indicates that the consumer should use localtime for all tasks, crontabs
-    and scheduling.  Default is False.
+    Indicates that the consumer should use localtime for all tasks. The default
+    behavior is to use UTC everywhere.
 
 Examples
 ^^^^^^^^
@@ -111,7 +145,7 @@ short polling interval:
 
 .. code-block:: bash
 
-  huey_consumer.py my.app.huey -l /var/log/app.huey.log -w 8 -b 1.1 -m 1.0
+  huey_consumer.py my.app.huey -l /var/log/app.huey.log -w 8 -b 1.05 -m 1.0
 
 Running single-threaded without a crontab and logging to stdout:
 
@@ -125,42 +159,60 @@ Using multi-processing to run 4 worker processes:
 
     huey_consumer.py my.app.huey -w 4 -k process
 
+Using greenlets to run 100 workers, with no health checking and a scheduler
+granularity of 60 seconds:
+
+.. code-block:: bash
+
+    huey_consumer.py my.app.huey -w 100 -k greenlet -C -s 60
+
 
 Consumer Internals
 ------------------
+This section will attempt to explain what happens when you call a
+``task``-decorated function in your application. To do this, we will go into
+the implementation of the consumer. The `code for the consumer <https://github.com/coleifer/huey/blob/master/huey/consumer.py>`_
+itself is actually quite short (couple hundred lines), and I encourage you to
+check it out.
 
-The consumer is composed of a master process, the scheduler, and the worker(s).
-Depending on the worker type chosen, the scheduler and workers will be run in
-their threads, processes or greenlets.
+The consumer is composed of three components: a master process, the scheduler,
+and the worker(s). Depending on the worker type chosen, the scheduler and
+workers will be run in their threads, processes or greenlets.
 
-These components coordinate the receipt, execution and scheduling of various
-tasks.  What happens when you call a decorated function in your application?
+These components coordinate the receipt, execution and scheduling of your
+tasks.
 
 1. You call a function -- huey has decorated it, which triggers a message being
-   put into the queue.  At this point your application returns.  If you are using
-   a "data store", then you will be return an :py:class:`TaskResultWrapper` object.
-2. In a separate process, a worker will be listening for new messages --
-   one of the workers will pull down the message.
+   put into the queue (Redis by default). At this point your application
+   returns immediately, returning a :py:class:`TaskResultWrapper` object.
+2. In the consumer process, the worker(s) will be listening for new messages
+   and one of the workers will receive your message indicating which task to
+   run, when to run it, and with what parameters.
 3. The worker looks at the message and checks to see if it can be
    run (i.e., was this message "revoked"?  Is it scheduled to actually run
    later?).  If it is revoked, the message is thrown out.  If it is scheduled
    to run later, it gets added to the schedule.  Otherwise, it is executed.
 4. The worker thread executes the task.  If the task finishes, any results are
-   published to the result store (if one is configured).  If the task fails and
-   can be retried, it is either enqueued or added to the schedule (which happens
-   if a delay is specified between retries).
+   published to the result store (provided you have not disabled the result
+   store). If the task fails, the consumer checks to see if the task can be
+   retried. Then, if the task is to be retried, the consumer checks to see if
+   the task is configured to wait a number of seconds before retrying.
+   Depending on the configuration, huey will either re-enqueue the task for
+   execution, or tell the scheduler when to re-enqueue it based on the delay.
 
-While all this is going on, the Scheduler is looking at its schedule to see
-if any tasks are ready to be executed.  If a task is ready to run, it is
-enqueued and will be processed by a worker.
+While all the above is going on with the Worker(s), the Scheduler is looking at
+its schedule to see if any tasks are ready to be executed.  If a task is ready
+to run, it is enqueued and will be processed by the next available worker.
 
 If you are using the Periodic Task feature (cron), then every minute, the
 scheduler will check through the various periodic tasks to see if any should
 be run. If so, these tasks are enqueued.
 
-When the consumer is shut-down cleanly (SIGTERM), any workers still involved in the execution of a task will complete their work.
+When the consumer is shut-down cleanly (SIGTERM), any workers still involved in
+the execution of a task will complete their work.
 
 Events
 ------
 
-As the consumer processes tasks, it can be configured to emit events. For information on consumer-sent events, check out the :ref:`events` documentation.
+As the consumer processes tasks, it can be configured to emit events. For
+information on consumer-sent events, check out the :ref:`events` documentation.
