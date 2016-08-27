@@ -15,8 +15,8 @@ except ImportError:
     HAS_DJANGO_APPS = False
 
 from huey.consumer import Consumer
-from huey.consumer import ConsumerConfig
-from huey.consumer import OptionParserHandler
+from huey.consumer_options import ConsumerConfig
+from huey.consumer_options import OptionParserHandler
 
 
 class CompatParser(object):

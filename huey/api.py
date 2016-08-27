@@ -7,6 +7,7 @@ import traceback
 import uuid
 from functools import wraps
 
+from huey.constants import EmptyData
 from huey.exceptions import DataStoreGetException
 from huey.exceptions import DataStorePutException
 from huey.exceptions import DataStoreTimeout
@@ -17,7 +18,6 @@ from huey.exceptions import QueueWriteException
 from huey.exceptions import ScheduleAddException
 from huey.exceptions import ScheduleReadException
 from huey.registry import registry
-from huey.utils import EmptyData
 from huey.utils import local_to_utc
 from huey.utils import wrap_exception
 

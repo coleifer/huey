@@ -7,7 +7,7 @@ import redis
 from redis.exceptions import ConnectionError
 
 from huey.api import Huey
-from huey.utils import EmptyData
+from huey.constants import EmptyData
 
 
 class BaseStorage(object):

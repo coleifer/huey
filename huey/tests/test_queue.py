@@ -6,11 +6,11 @@ from huey import exceptions as huey_exceptions
 from huey import RedisHuey
 from huey.api import Huey
 from huey.api import QueueTask
+from huey.constants import EmptyData
 from huey.registry import registry
 from huey.storage import RedisStorage
 from huey.tests.base import b
 from huey.tests.base import BaseTestCase
-from huey.utils import EmptyData
 from huey.utils import local_to_utc
 
 huey = RedisHuey(result_store=False, events=False, blocking=False)

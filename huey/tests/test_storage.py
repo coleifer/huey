@@ -3,11 +3,11 @@ import itertools
 
 from redis.connection import ConnectionPool
 
+from huey.constants import EmptyData
 from huey.storage import RedisHuey
 from huey.storage import RedisStorage
 from huey.tests.base import b
 from huey.tests.base import HueyTestCase
-from huey.utils import EmptyData
 
 class TestRedisStorage(HueyTestCase):
     def test_queues(self):
