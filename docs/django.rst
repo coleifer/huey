@@ -69,6 +69,25 @@ Alternatively, you can just assign a :py:class:`Huey` instance to the ``HUEY`` s
     HUEY = RedisHuey('my-app')
 
 
+DEBUG and Synchronous Execution
+-------------------------------
+
+When ``settings.DEBUG = True``, tasks will be executed **synchronously** just like
+regular function calls. The purpose of this is to avoid running both Redis and
+an additional consumer process while developing or running tests. If, however,
+you would like to enqueue tasks regardless of whether ``DEBUG = True``, then
+explicitly specify ``always_eager=False`` in your huey settings:
+
+.. code-block:: python
+
+    # settings.py
+    HUEY = {
+        'name': 'my-app',
+        # Other settings ...
+        'always_eager': False,
+    }
+
+
 Running the Consumer
 --------------------
 
