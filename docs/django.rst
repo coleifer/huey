@@ -3,116 +3,137 @@
 Using Huey with Django
 ======================
 
-Huey comes with special integration for use with the Django framework. This is to accomodate:
+Huey comes with special integration for use with the Django framework. The
+integration provides:
 
-1. Configuring Huey via the Django settings module.
-2. Running the consumer as a management command.
+1. Configuration of huey via the Django settings module.
+2. Running the consumer as a Django management command.
+3. Auto-discovery of ``tasks.py`` modules to simplify task importing.
+4. Properly manage database connections.
 
-Apps
-----
+Setting things up
+-----------------
 
-``huey.contrib.djhuey`` must be included in the ``INSTALLED_APPS`` within the Django settings.py file.
+To use huey with Django, the first step is to add an entry to your project's
+``settings.INSTALLED_APPS``:
 
 .. code-block:: python
 
+    # settings.py
+    # ...
     INSTALLED_APPS = (
-        'huey.contrib.djhuey',
-        ...
+        # ...
+        'huey.contrib.djhuey',  # Add this to the list.
+        # ...
+    )
 
-Huey Settings
--------------
+The above is the bare minimum needed to start using huey's Django integration.
+If you like, though, you can also configure both Huey and the *consumer* using
+the settings module.
 
 .. note::
-    Huey settings are optional. If not provided, Huey will default to using Redis running locally.
+    Huey settings are optional. If not provided, Huey will default to using
+    Redis running on localhost:6379 (standard setup).
 
-All configuration is kept in ``settings.HUEY``.  Here are some examples:
-
-Using redis running locally with four worker threads.
-
-.. code-block:: python
-
-    HUEY = {
-        'name': 'my-app',
-
-        # Options to pass into the consumer when running ``manage.py run_huey``
-        'consumer': {'workers': 4, 'worker_type': 'thread'},
-    }
-
-Using redis on a network host with 16 worker greenlets.
-
-.. code-block:: python
-
-    HUEY = {
-        'name': 'my-app',
-        'connection': {'host': '192.168.1.123', 'port': 6379},
-
-        # Options to pass into the consumer when running ``manage.py run_huey``
-        'consumer': {'workers': 16, 'worker_type': 'greenlet'},
-    }
-
-It is also possible to specify the connection using a Redis URL, making it easy to configure this
-setting using a single environment variable:
-
-.. code-block:: python
-
-    HUEY = {
-        'name': 'my-app',
-        'url': os.environ.get('REDIS_URL', 'redis://localhost:6379/?db=1')
-    }
-
-Alternatively, you can just assign a :py:class:`Huey` instance to the ``HUEY`` setting:
-
-.. code-block:: python
-
-    from huey import RedisHuey
-
-    HUEY = RedisHuey('my-app')
-
-
-DEBUG and Synchronous Execution
--------------------------------
-
-When ``settings.DEBUG = True``, tasks will be executed **synchronously** just like
-regular function calls. The purpose of this is to avoid running both Redis and
-an additional consumer process while developing or running tests. If, however,
-you would like to enqueue tasks regardless of whether ``DEBUG = True``, then
-explicitly specify ``always_eager=False`` in your huey settings:
+Configuration is kept in ``settings.HUEY``, which can be either a dictionary or
+a :py:class:`Huey` instance. Here is an example that shows all of the supported
+options with their default values:
 
 .. code-block:: python
 
     # settings.py
     HUEY = {
-        'name': 'my-app',
-        # Other settings ...
-        'always_eager': False,
+        'name': settings.DATABASES['default']['name'],  # Use db name for huey.
+        'result_store': True,  # Store return values of tasks.
+        'events': True,  # Consumer emits events allowing real-time monitoring.
+        'store_none': False,  # If a task returns None, do not save to results.
+        'always_eager': settings.DEBUG,  # If DEBUG=True, run synchronously.
+        'store_errors': True,  # Store error info if task throws exception.
+        'blocking': False,  # Poll the queue rather than do blocking pop.
+        'connection': {
+            'host': 'localhost',
+            'port': 6379,
+            'db': 0,
+            'connection_pool': None,  # Definitely you should use pooling!
+            # ... shitload of other options, see redis-py for details.
+
+            # huey-specific connection parameters.
+            'read_timeout': 1,  # If not polling (blocking pop), use timeout.
+            'max_errors': 1000,  # Only store the 1000 most recent errors.
+            'url': None,  # Allow Redis config via a DSN.
+        },
+        'consumer': {
+            'workers': 1,
+            'worker_type': 'thread',
+            'initial_delay': 0.1,  # Smallest polling interval.
+            'backoff': 1.15,  # Exponential backoff using this rate.
+            'max_delay': 10.0,  # Max possible polling interval.
+            'utc': True,  # Treat ETAs and schedules as UTC datetimes.
+            'scheduler_interval': 1,  # Check schedule every second.
+            'periodic': True,  # Enable crontab feature.
+            'check_worker_health': True,  # Enable worker health checks.
+            'health_check_interval': 1,  # Check worker health every second.
+        },
     }
 
+Alternatively, you can simply set ``settings.HUEY`` to a :py:class:`Huey`
+instance and do your configuration directly. In the example below, I've also
+shown how you can create a connection pool:
+
+.. code-block:: python
+
+    # settings.py -- alternative configuration method
+    from huey import RedisHuey
+    from redis import ConnectionPool
+
+    pool = ConnectionPool(host='my.redis.host', port=6379, max_connections=20)
+    HUEY = RedisHuey('my-app', connection_pool=pool)
 
 Running the Consumer
 --------------------
 
 To run the consumer, use the ``run_huey`` management command.  This command
 will automatically import any modules in your ``INSTALLED_APPS`` named
-"tasks.py".  The consumer can be configured by the ``consumer`` setting dictionary.
+*tasks.py*.  The consumer can be configured using both the django settings
+module and/or by specifying options from the command-line.
 
-In addition to the ``consumer`` settings, you can also pass some options to the
-consumer at run-time.
+.. note::
+    Options specified on the command line take precedence over those specified
+    in the settings module.
+
+To start the consumer, you simply run:
+
+.. code-block:: console
+    $ ./manage.py run_huey
+
+In addition to the ``HUEY.consumer`` setting dictionary, the management command
+supports all the same options as the standalone consumer. These options are
+listed and described in the :ref:`Options for the consumer <consumer-options>`
+section.
+
+For quick reference, the most important command-line options are briefly
+listed here.
 
 ``-w``, ``--workers``
-    Number of worker threads/processes/greenlets.
+    Number of worker threads/processes/greenlets. Default is 1, but most
+    applications should use at least 2.
 
 ``-k``, ``--worker-type``
-    Worker type, must be "thread", "process" or "greenlet".
+    Worker type, must be "thread", "process" or "greenlet". The default is
+    *thread*, which provides good all-around performance. For CPU-intensive
+    workloads, *process* is likely to be more performant. The *greenlet* worker
+    type is suited for IO-heavy workloads. When using *greenlet* you can
+    specify tens or hundreds of workers since they are extremely lightweight
+    compared to threads/processes.
 
-``-n``, ``--no-periodic``
-    Indicate that this consumer process should *not* enqueue periodic tasks.
+For more information, read the :ref:`Options for the consumer <consumer-options>` section.
 
-For more information, check the :ref:`consumer docs <consuming-tasks>`.
+How to create tasks
+-------------------
 
-Task API
---------
-
-The task decorators are available in the ``huey.contrib.djhuey`` module. Here is how you might create two tasks:
+The :py:meth:`~Huey.task` and :py:meth:`~Huey.periodic_task` decorators can be
+imported from the ``huey.contrib.djhuey`` module. Here is how you might define
+two tasks:
 
 .. code-block:: python
 
@@ -126,6 +147,7 @@ The task decorators are available in the ``huey.contrib.djhuey`` module. Here is
     @periodic_task(crontab(minute='*/5'))
     def every_five_mins():
         print('Every five minutes this will be printed by the consumer')
+
 
 Tasks that execute queries
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -147,3 +169,71 @@ automatically close the connection for you.
     @db_periodic_task(crontab(minute='*/5'))
     def every_five_mins():
         # This is a periodic task that executes queries.
+
+DEBUG and Synchronous Execution
+-------------------------------
+
+When ``settings.DEBUG = True``, tasks will be executed **synchronously** just like
+regular function calls. The purpose of this is to avoid running both Redis and
+an additional consumer process while developing or running tests. If, however,
+you would like to enqueue tasks regardless of whether ``DEBUG = True``, then
+explicitly specify ``always_eager=False`` in your huey settings:
+
+.. code-block:: python
+
+    # settings.py
+    HUEY = {
+        'name': 'my-app',
+        # Other settings ...
+        'always_eager': False,
+    }
+
+Configuration Examples
+----------------------
+
+This section contains example ``HUEY`` configurations.
+
+
+.. code-block:: python
+
+    # Redis running locally with four worker threads.
+    HUEY = {
+        'name': 'my-app',
+        'consumer': {'workers': 4, 'worker_type': 'thread'},
+    }
+
+
+.. code-block:: python
+
+    # Redis on network host with 64 worker greenlets and connection pool
+    # supporting up to 100 connections.
+    from redis import ConnectionPool
+
+    pool = ConnectionPool(
+        host='192.168.1.123',
+        port=6379,
+        max_connections=100)
+
+    HUEY = {
+        'name': 'my-app',
+        'connection': {'connection_pool': pool},
+        'consumer': {'workers': 64, 'worker_type': 'greenlet'},
+    }
+
+It is also possible to specify the connection using a Redis URL, making it easy
+to configure this setting using a single environment variable:
+
+.. code-block:: python
+
+    HUEY = {
+        'name': 'my-app',
+        'url': os.environ.get('REDIS_URL', 'redis://localhost:6379/?db=1')
+    }
+
+Alternatively, you can just assign a :py:class:`Huey` instance to the ``HUEY`` setting:
+
+.. code-block:: python
+
+    from huey import RedisHuey
+
+    HUEY = RedisHuey('my-app')
