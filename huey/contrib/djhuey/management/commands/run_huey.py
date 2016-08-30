@@ -1,4 +1,5 @@
 import imp
+import logging
 import sys
 from importlib import import_module
 from optparse import make_option
@@ -60,7 +61,8 @@ class Command(BaseCommand):
         for option_list in groups:
             for short, full, kwargs in option_list:
                 if short == '-v':
-                    continue
+                    full = '--huey-verbose'
+                    short = '-V'
                 if 'type' in kwargs:
                     kwargs['type'] = self._type_map[kwargs['type']]
                 parser.add_argument(full, short, **kwargs)
@@ -114,15 +116,13 @@ class Command(BaseCommand):
             if value is not None:
                 consumer_options[key] = value
 
-        verbosity = consumer_options.pop('verbosity', 1)
-        # 0 = False, 1 = None, 2-3 = True
-        verbose = True if verbosity > 1 else (None if verbosity else False)
-        consumer_options['verbose'] = verbose
-
+        consumer_options.setdefault('verbose',
+                                    consumer_options.pop('huey_verbose', None))
         self.autodiscover()
 
         config = ConsumerConfig(**consumer_options)
         config.validate()
+        config.setup_logger()
 
         consumer = Consumer(HUEY, **config.values)
         consumer.run()

@@ -51,6 +51,9 @@ their default values.
     Verbose logging (loglevel=DEBUG). If no logfile is specified and
     verbose is set, then the consumer will log to the console.
 
+    **Note:** due to conflicts, when using Django this option is renamed to
+    use ``-V``, ``--huey-verbose``.
+
 ``-q``, ``--quiet``
     Minimal logging, only errors and their tracebacks will be logged.
 

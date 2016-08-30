@@ -126,6 +126,11 @@ listed here.
     specify tens or hundreds of workers since they are extremely lightweight
     compared to threads/processes.
 
+.. note::
+    Due to a conflict with Django's base option list, the "verbose" option is
+    set using ``-V`` or ``--huey-verbose``. When enabled, huey logs at the
+    DEBUG level.
+
 For more information, read the :ref:`Options for the consumer <consumer-options>` section.
 
 How to create tasks
