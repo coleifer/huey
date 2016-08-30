@@ -164,6 +164,9 @@ class Worker(BaseProcess):
                 error=True,
                 duration=duration)
             self._logger.exception('Error storing result')
+        except KeyboardInterrupt:
+            self._logger.info('Received exit signal, task %s did not finish.' %
+                              (task.task_id))
         except:
             self.huey.emit_task(
                 EVENT_ERROR_TASK,

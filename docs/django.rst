@@ -55,7 +55,7 @@ options with their default values:
             'port': 6379,
             'db': 0,
             'connection_pool': None,  # Definitely you should use pooling!
-            # ... shitload of other options, see redis-py for details.
+            # ... tons of other options, see redis-py for details.
 
             # huey-specific connection parameters.
             'read_timeout': 1,  # If not polling (blocking pop), use timeout.
@@ -65,11 +65,11 @@ options with their default values:
         'consumer': {
             'workers': 1,
             'worker_type': 'thread',
-            'initial_delay': 0.1,  # Smallest polling interval.
-            'backoff': 1.15,  # Exponential backoff using this rate.
-            'max_delay': 10.0,  # Max possible polling interval.
+            'initial_delay': 0.1,  # Smallest polling interval, same as -d.
+            'backoff': 1.15,  # Exponential backoff using this rate, -b.
+            'max_delay': 10.0,  # Max possible polling interval, -m.
             'utc': True,  # Treat ETAs and schedules as UTC datetimes.
-            'scheduler_interval': 1,  # Check schedule every second.
+            'scheduler_interval': 1,  # Check schedule every second, -s.
             'periodic': True,  # Enable crontab feature.
             'check_worker_health': True,  # Enable worker health checks.
             'health_check_interval': 1,  # Check worker health every second.

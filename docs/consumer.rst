@@ -109,22 +109,21 @@ their default values.
 
     .. image:: http://media.charlesleifer.com/blog/photos/p1472257818.22.png
 
-``-c``, ``--health-check-interval`` (added in v1.3.0)
+``-c``, ``--health-check-interval``
     This parameter specifies how often huey should check on the status of the
     workers, restarting any that died for some reason. I personally run a dozen
     or so huey consumers at any given time and have never encountered an issue
     with the workers, but I suppose anything's possible and better safe than
     sorry.
 
-``-C``, ``--disable-health-check`` (added in v1.3.0)
-    This option disables the worker health checks.
-
-    Until version 1.3.0, huey had no concept of a "worker health check" because
-    in my experience the workers simply always stayed up and responsive. But if
-    you are using huey for critical tasks, you may want the insurance of having
-    additional monitoring to make sure your workers stay up and running. At any
-    rate, I feel comfortable saying that it's perfectly fine to use this option
-    and disable worker health checks.
+``-C``, ``--disable-health-check``
+    This option **disables** the worker health checks. Until version 1.3.0,
+    huey had no concept of a "worker health check" because in my experience the
+    workers simply always stayed up and responsive. But if you are using huey
+    for critical tasks, you may want the insurance of having additional
+    monitoring to make sure your workers stay up and running. At any rate, I
+    feel comfortable saying that it's perfectly fine to use this option and
+    disable worker health checks.
 
 ``-s``, ``--scheduler-interval``
     The frequency with which the scheduler should run. By default this will run
@@ -149,20 +148,21 @@ short polling interval:
 
   huey_consumer.py my.app.huey -l /var/log/app.huey.log -w 8 -b 1.05 -m 1.0
 
-Running single-threaded without a crontab and logging to stdout:
+Running single-threaded with periodict task support disabled. Additionally,
+logging records are written to stdout.
 
 .. code-block:: bash
 
     huey_consumer.py my.app.huey -v -n
 
-Using multi-processing to run 4 worker processes:
+Using multi-processing to run 4 worker processes.
 
 .. code-block:: bash
 
     huey_consumer.py my.app.huey -w 4 -k process
 
 Using greenlets to run 100 workers, with no health checking and a scheduler
-granularity of 60 seconds:
+granularity of 60 seconds.
 
 .. code-block:: bash
 
@@ -181,8 +181,8 @@ The consumer is composed of three components: a master process, the scheduler,
 and the worker(s). Depending on the worker type chosen, the scheduler and
 workers will be run in their threads, processes or greenlets.
 
-These components coordinate the receipt, execution and scheduling of your
-tasks.
+These three components coordinate the receipt, scheduling, and execution of
+your tasks, respectively.
 
 1. You call a function -- huey has decorated it, which triggers a message being
    put into the queue (Redis by default). At this point your application
@@ -190,11 +190,11 @@ tasks.
 2. In the consumer process, the worker(s) will be listening for new messages
    and one of the workers will receive your message indicating which task to
    run, when to run it, and with what parameters.
-3. The worker looks at the message and checks to see if it can be
-   run (i.e., was this message "revoked"?  Is it scheduled to actually run
-   later?).  If it is revoked, the message is thrown out.  If it is scheduled
-   to run later, it gets added to the schedule.  Otherwise, it is executed.
-4. The worker thread executes the task.  If the task finishes, any results are
+3. The worker looks at the message and checks to see if it can be run (i.e.,
+   was this message "revoked"? Is it scheduled to actually run later?).  If it
+   is revoked, the message is thrown out. If it is scheduled to run later, it
+   gets added to the schedule. Otherwise, it is executed.
+4. The worker thread executes the task. If the task finishes, any results are
    published to the result store (provided you have not disabled the result
    store). If the task fails, the consumer checks to see if the task can be
    retried. Then, if the task is to be retried, the consumer checks to see if
@@ -210,8 +210,9 @@ If you are using the Periodic Task feature (cron), then every minute, the
 scheduler will check through the various periodic tasks to see if any should
 be run. If so, these tasks are enqueued.
 
-When the consumer is shut-down cleanly (SIGTERM), any workers still involved in
-the execution of a task will complete their work.
+.. warning::
+    When the consumer is shut-down cleanly (SIGTERM), any workers still
+    involved in the execution of a task will be interrupted mid-task.
 
 Events
 ------
