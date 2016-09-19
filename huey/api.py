@@ -288,8 +288,9 @@ class Huey(object):
         # Return value indicates whether the task was in fact revoked.
         return self._get_data(task.revoke_id) is not EmptyData
 
-    def revoke_by_id(self, task_id):
-        return self.revoke(QueueTask(task_id=task_id))
+    def revoke_by_id(self, task_id, revoke_until=None, revoke_once=False):
+        return self.revoke(QueueTask(task_id=task_id), revoke_until,
+                           revoke_once)
 
     def restore_by_id(self, task_id):
         return self.restore(QueueTask(task_id=task_id))

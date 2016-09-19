@@ -265,6 +265,57 @@ Function decorators and helpers
 
             Store a reference to the task class for the decorated function.
 
+    .. py:method:: revoke(task[, revoke_until=None[, revoke_once=False]])
+
+        Prevent the given task from being executed by the consumer after it has
+        been enqueued. To understand this method, you need to know a bit about
+        how the consumer works. When you call a function decorated by the
+        :py:meth:`Huey.task` method, calls to that function will enqueue a
+        message to the consumer indicating which task to execute, what the
+        parameters are, etc. If the task is not scheduled to execute in the
+        future, and there is a free worker available, the task starts executing
+        immediately. Otherwise if workers are busy, it will wait in line for
+        the next free worker.
+
+        When you revoke a task, when the worker picks up the revoked task to
+        start executing it, it will instead just throw it away and get the next
+        available task. So, revoking a task only has affect between the time
+        you call the task and the time the worker actually starts executing the
+        task.
+
+        .. note::
+            When the revoked task is a periodic task, this affects the task as
+            a whole. When the task is a normal task, the revocation action only
+            applies to the given task instance.
+
+        This function can be called multiple times, but each call will overwrite
+        any previous revoke settings.
+
+        :param datetime revoke_until: Prevent the execution of the task until the
+            given datetime.  If ``None`` it will prevent execution indefinitely.
+        :param bool revoke_once: If ``True`` will only prevent execution the
+            next time it would normally execute.
+
+    .. py:method:: restore(task)
+
+        Takes a previously revoked task and un-revokes it.
+
+    .. py:method:: revoke_by_id(task_id[, revoke_until=None[, revoke_once=False]])
+
+        Exactly the same as :py:meth:`Huey.revoke`, except it accepts a task ID
+        instead of the task instance itself.
+
+    .. py:method:: restore_by_id(task_id)
+
+        Exactly the same as :py:meth:`Huey.restore`, except it accepts a task ID
+        instead of the task instance itself.
+
+    .. py:method:: is_revoked(task[, dt=None])
+
+        Returns a boolean indicating whether the given task is revoked. If the
+        ``dt`` parameter is specified, then the result will indicate whether
+        the task is revoked at that particular datetime.
+
     .. py:method:: result(task_id[, blocking=False[, timeout=None[, backoff=1.15[, max_delay=1.0[, revoke_on_timeout=False[, preserve=False]]]]]])
 
         Attempt to retrieve the return value of a task.  By default, :py:meth:`~Huey.result`
