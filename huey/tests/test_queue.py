@@ -336,6 +336,21 @@ class TestHueyQueueAPIs(BaseQueueTestCase):
 
         self.assertEqual(state, {'k': 'v', 'k3': 'v3'})
 
+    def test_revoke_restore_by_id(self):
+        t1 = PutTask(('k1', 'v1'))
+        t2 = PutTask(('k2', 'v2'))
+        t3 = PutTask(('k3', 'v3'))
+        for task in (t1, t2, t3):
+            huey_results.enqueue(task)
+
+        huey_results.revoke_by_id(t3.task_id)
+        huey_results.revoke_by_id(t2.task_id)
+        huey_results.restore_by_id(t3.task_id)
+
+        self.assertFalse(huey_results.is_revoked(huey_results.dequeue()))
+        self.assertTrue(huey_results.is_revoked(huey_results.dequeue()))
+        self.assertFalse(huey_results.is_revoked(huey_results.dequeue()))
+
     def test_revoke_periodic(self):
         hourly_task2.revoke()
         self.assertTrue(hourly_task2.is_revoked())
