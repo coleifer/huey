@@ -77,7 +77,6 @@ For the execution of a simple task, the events emitted would be:
 If a task was scheduled to be executed in the future, the events would be:
 
 * ``EVENT_SCHEDULED``
-* ``EVENT_ENQUEUED``
 * ``EVENT_STARTED``
 * ``EVENT_FINISHED``
 
@@ -87,6 +86,5 @@ If an error occurs and the task is configured to be retried, the events would be
 * ``EVENT_ERROR_TASK`` (includes traceback)
 * ``EVENT_RETRYING``
 * ``EVENT_SCHEDULED`` (if there is a retry delay, it will go onto the schedule)
-* ``EVENT_ENQUEUED`` (pulled off schedule and sent to a worker)
 * ``EVENT_STARTED``
 * ``EVENT_FINISHED`` if task succeeds, otherwise go back to ``EVENT_ERROR_TASK``.
