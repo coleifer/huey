@@ -1,6 +1,12 @@
 Changelog
 =========
 
+v1.2.2
+------
+
+Contains small bugfix for an earlier bugfix meant to prevent time.sleep() from
+being called with a negative time interval.
+
 v1.2.0
 ------
 
