@@ -70,16 +70,11 @@ class BaseProcess(object):
         if sleep_time <= 0:
             return
         self._logger.debug('Sleeping for %s' % sleep_time)
-        try:
-            # Calculate sleep time inline to try to
-            # improve accuracy and not sleep if the
-            # kernel preempted us during logging
-            time.sleep(nseconds - (time.time() - start_ts))
-        except IOError:
-            # Time moved forward and we provided
-            # a negative value to time.sleep()
-            self._logger.debug('Aborted sleeping '
-                               'as time moved forward')
+        # Recompute time to sleep to improve accuracy in case the process was
+        # pre-empted by the kernel while logging.
+        sleep_time = nseconds - (time.time() - start_ts)
+        if sleep_time > 0:
+            time.sleep(sleep_time)
 
     def enqueue(self, task):
         try:
