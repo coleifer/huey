@@ -30,6 +30,8 @@ class CompatParser(object):
         if 'type' in kwargs:
             # Convert `type=int` to `type="int"`, etc.
             kwargs['type'] = kwargs['type'].__name__
+        if kwargs.get('default') is not True:
+            kwargs.pop('default', None)
         self.command.option_list += (make_option(*args, **kwargs),)
 
 
