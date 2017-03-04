@@ -1,4 +1,3 @@
-import os
 from setuptools import setup, find_packages
 
 
@@ -10,7 +9,7 @@ setup(
     author_email='coleifer@gmail.com',
     url='http://github.com/coleifer/huey/',
     packages=find_packages(),
-    package_data = {
+    package_data={
         'huey': [
         ],
     },
@@ -26,7 +25,7 @@ setup(
     entry_points={
         'console_scripts': [
             'huey_consumer = huey.bin.huey_consumer:consumer_main'
-            ]
+        ]
     },
-    scripts = ['huey/bin/huey_consumer.py'],
+    scripts=['huey/bin/huey_consumer.py'],
 )

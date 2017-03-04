@@ -1,11 +1,9 @@
 import datetime
 import logging
-import operator
 import os
 import signal
 import threading
 import time
-from collections import defaultdict
 
 from multiprocessing import Event as ProcessEvent
 from multiprocessing import Process
@@ -51,6 +49,7 @@ EVENT_TIMEOUT = 'timeout'
 def to_timestamp(dt):
     if dt:
         return time.mktime(dt.timetuple())
+
 
 class BaseProcess(object):
     def __init__(self, huey, utc):
@@ -102,7 +101,7 @@ class Worker(BaseProcess):
         exc_raised = True
         try:
             task = self.huey.dequeue()
-        except QueueReadException as exc:
+        except QueueReadException:
             self.huey.emit_status(EVENT_ERROR_DEQUEUEING, error=True)
             self._logger.exception('Error reading from queue')
         except QueueException:

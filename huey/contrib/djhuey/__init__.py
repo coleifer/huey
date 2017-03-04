@@ -4,9 +4,7 @@ import sys
 from django.conf import settings
 from django.db import connection
 
-from huey import crontab
 from huey import RedisHuey
-from huey.utils import load_class
 
 
 configuration_message = """
@@ -42,6 +40,7 @@ from huey import RedisHuey
 HUEY = RedisHuey('my-app')
 """
 
+
 def default_queue_name():
     try:
         return settings.DATABASE_NAME
@@ -51,11 +50,13 @@ def default_queue_name():
         except KeyError:
             return 'huey'
 
+
 def config_error(msg):
     print(configuration_message)
     print('\n\n')
     print(msg)
     sys.exit(1)
+
 
 HUEY = getattr(settings, 'HUEY', None)
 if HUEY is None:
@@ -83,6 +84,7 @@ if isinstance(HUEY, dict):
 task = HUEY.task
 periodic_task = HUEY.periodic_task
 
+
 def close_db(fn):
     """Decorator to be used with tasks that may operate on the database."""
     @wraps(fn)
@@ -94,10 +96,12 @@ def close_db(fn):
                 connection.close()
     return inner
 
+
 def db_task(*args, **kwargs):
     def decorator(fn):
         return task(*args, **kwargs)(close_db(fn))
     return decorator
+
 
 def db_periodic_task(*args, **kwargs):
     def decorator(fn):
