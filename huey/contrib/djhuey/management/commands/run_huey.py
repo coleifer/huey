@@ -113,12 +113,12 @@ class Command(BaseCommand):
         from huey.contrib.djhuey import HUEY
 
         consumer_options = {}
-        if isinstance(settings.HUEY, dict):
-            consumer_options.update(settings.HUEY.get('consumer', {}))
-
         for key, value in options.items():
             if value is not None:
                 consumer_options[key] = value
+
+        if isinstance(settings.HUEY, dict):
+            consumer_options.update(settings.HUEY.get('consumer', {}))
 
         consumer_options.setdefault('verbose',
                                     consumer_options.pop('huey_verbose', None))
