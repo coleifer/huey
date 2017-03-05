@@ -574,8 +574,10 @@ def create_task(task_class, func, retries_as_argument=False, task_name=None,
 
     return klass
 
+
 dash_re = re.compile('(\d+)-(\d+)')
 every_re = re.compile('\*\/(\d+)')
+
 
 def crontab(month='*', day='*', day_of_week='*', hour='*', minute='*'):
     """
@@ -621,7 +623,7 @@ def crontab(month='*', day='*', day_of_week='*', hour='*', minute='*'):
                     lhs, rhs = map(int, dash_match.groups())
                     if lhs not in acceptable or rhs not in acceptable:
                         raise ValueError('%s is not a valid input' % piece)
-                    settings.update(range(lhs, rhs+1))
+                    settings.update(range(lhs, rhs + 1))
                     continue
 
                 every_match = every_re.match(piece)
