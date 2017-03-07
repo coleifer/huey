@@ -5,3 +5,10 @@ from huey.tests.test_registry import *
 from huey.tests.test_storage import *
 from huey.tests.test_utils import *
 from huey.tests.test_wrapper import *
+
+try:
+    import peewee
+except ImportError:
+    pass
+else:
+    from huey.tests.test_sqlite import *

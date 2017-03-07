@@ -63,7 +63,7 @@ class BaseTestCase(unittest.TestCase):
 
 class HueyTestCase(BaseTestCase):
     def setUp(self):
-        self.huey = test_huey
+        self.huey = self.get_huey()
         self.consumer = self.get_consumer(workers=2, scheduler_interval=10)
 
         self.events = iter(self.huey.storage)
@@ -80,6 +80,9 @@ class HueyTestCase(BaseTestCase):
         self.huey.flush()
         registry._periodic_tasks = self._periodic_tasks
         time.sleep = self._sleep
+
+    def get_huey(self):
+        return test_huey
 
     def get_consumer(self, **kwargs):
         return Consumer(self.huey, **kwargs)
