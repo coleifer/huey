@@ -1,8 +1,11 @@
 import datetime
+import threading
 
 from huey.constants import EmptyData
+from huey.consumer import Consumer
 from huey.contrib.sqlitedb import SqliteHuey
 from huey.contrib.sqlitedb import SqliteStorage
+from huey.tests.base import CaptureLogs
 from huey.tests.base import HueyTestCase
 
 
@@ -35,33 +38,60 @@ class TestSqliteStorage(HueyTestCase):
         dt1 = datetime.datetime(2013, 1, 1, 0, 0)
         dt2 = datetime.datetime(2013, 1, 2, 0, 0)
         dt3 = datetime.datetime(2013, 1, 3, 0, 0)
-        dt4 = datetime.datetime(2013, 1, 4, 0, 0)
 
         @self.huey.task()
         def test_task(k, v):
             return k + v
 
         test_task.schedule((1, 2), eta=dt1, convert_utc=False)
-        test_task.schedule((4, 5), eta=dt4, convert_utc=False)
         test_task.schedule((3, 4), eta=dt3, convert_utc=False)
         test_task.schedule((2, 3), eta=dt2, convert_utc=False)
-        self.assertEqual(len(self.huey), 4)
+        self.assertEqual(len(self.huey), 3)
 
-        for i in range(4):
+        for i in range(3):
             self.huey.add_schedule(self.huey.dequeue())
 
         tasks = self.huey.scheduled()
-        self.assertEqual(len(tasks), 4)
+        self.assertEqual(len(tasks), 3)
 
-        c1, c2, c3, c4 = tasks
+        c1, c2, c3 = tasks
         self.assertEqual(c1.data, ((1, 2), {}))
         self.assertEqual(c2.data, ((2, 3), {}))
         self.assertEqual(c3.data, ((3, 4), {}))
-        self.assertEqual(c4.data, ((4, 5), {}))
 
         storage = self.huey.storage
         self.assertEqual(len(storage.read_schedule(dt2)), 2)
         self.assertEqual(len(storage.read_schedule(dt2)), 0)
 
-        self.assertEqual(len(storage.read_schedule(dt4)), 2)
-        self.assertEqual(len(storage.read_schedule(dt4)), 0)
+        self.assertEqual(len(storage.read_schedule(dt3)), 1)
+        self.assertEqual(len(storage.read_schedule(dt3)), 0)
+
+    def test_consumer_integration(self):
+        lock = threading.Lock()
+
+        @self.huey.task()
+        def add_values(a, b):
+            return a + b
+
+        consumer = Consumer(self.huey, max_delay=0.1, workers=2,
+                            worker_type='thread', health_check_interval=0.01)
+
+        with CaptureLogs() as capture:
+            consumer.start()
+            try:
+                r1 = add_values(1, 2)
+                r2 = add_values(2, 3)
+                r3 = add_values(3, 5)
+
+                self.assertEqual(r1.get(blocking=True, timeout=3), 3)
+                self.assertEqual(r2.get(blocking=True, timeout=3), 5)
+                self.assertEqual(r3.get(blocking=True, timeout=3), 8)
+            finally:
+                consumer.stop()
+                for _, worker in consumer.worker_threads:
+                    worker.join()
+
+        messages = capture.messages[-4:-1]
+        for message in messages:
+            self.assertTrue(message.startswith('Executing queuecmd_add'))
+        self.assertTrue(capture.messages[-1].startswith('Shutting down'))
