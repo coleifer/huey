@@ -133,13 +133,12 @@ their default values.
     every second, but you can increase the interval to as much as 60 seconds.
 
 ``-u``, ``--utc``
-    Indicates that the consumer should use UTC time for all tasks, crontabs
-    and scheduling.  Default is True, so it is not actually necessary to use
-    this option.
+    Indicates that the consumer should use UTC time for crontabs.
+    Default is True, so it is not actually necessary to use this option.
 
-``--localtime``
-    Indicates that the consumer should use localtime for all tasks. The default
-    behavior is to use UTC everywhere.
+``-o``, ``--localtime``
+    Indicates that the consumer should use localtime for crontabs.
+    The default behavior is to use UTC everywhere.
 
 Examples
 ^^^^^^^^
