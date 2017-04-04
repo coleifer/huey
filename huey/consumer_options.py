@@ -38,30 +38,30 @@ class OptionParserHandler(object):
     def get_worker_options(self):
         return (
             # -w, -k, -d, -m, -b, -c, -C
-            option('workers', default=1, type='int',
+            option('workers', type='int',
                    help='number of worker threads/processes (default=1)'),
             option(('k', 'worker-type'), choices=WORKER_TYPES,
-                   default=WORKER_THREAD, dest='worker_type',
+                   dest='worker_type',
                    help=('worker execution model (thread, greenlet, '
                          'process). Use process for CPU-intensive workloads, '
                          'and greenlet for IO-heavy workloads. When in doubt, '
                          'thread is the safest choice.')),
-            option('delay', default=0.1, dest='initial_delay',
+            option('delay', dest='initial_delay',
                    help='minimum time to wait when polling queue (default=.1)',
                    metavar='SECONDS', type='float'),
-            option('max_delay', default=10, metavar='SECONDS',
+            option('max_delay', metavar='SECONDS',
                    help='maximum time to wait when polling queue (default=10)',
                    type='float'),
-            option('backoff', default=1.15, metavar='SECONDS',
+            option('backoff', metavar='SECONDS',
                    help=('factor used to back-off polling interval when queue '
                          'is empty (default=1.15, must be >= 1)'),
                    type='float'),
-            option(('c', 'health_check_interval'), default=1.0, type='float',
+            option(('c', 'health_check_interval'), type='float',
                    dest='health_check_interval', metavar='SECONDS',
                    help=('minimum time to wait between worker health checks '
                          '(default=1.0)')),
             option(('C', 'disable_health_check'), action='store_false',
-                   default=True, dest='check_worker_health',
+                   dest='check_worker_health',
                    help=('disable health check that monitors worker health, '
                          'restarting any worker that crashes unexpectedly.')),
 
@@ -70,11 +70,11 @@ class OptionParserHandler(object):
     def get_scheduler_options(self):
         return (
             # -s, -n, -u, -o
-            option('scheduler_interval', default=1, type='int',
+            option('scheduler_interval', type='int',
                    help='Granularity of scheduler in seconds.'),
-            option('no_periodic', action='store_false', default=True,
+            option('no_periodic', action='store_false',
                    dest='periodic', help='do NOT enqueue periodic tasks'),
-            option('utc', action='store_true', default=True,
+            option('utc', action='store_true',
                    help='use UTC time for all tasks (default=True)'),
             option(('o', 'localtime'), action='store_false', dest='utc',
                    help='use local time for all tasks'),
