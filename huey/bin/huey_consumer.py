@@ -35,7 +35,9 @@ def consumer_main():
         err('Example: huey_consumer.py app.queue.huey_instance')
         sys.exit(1)
 
-    config = ConsumerConfig(**options.__dict__)
+    options = {k: v for k, v in options.__dict__.items()
+               if v is not None}
+    config = ConsumerConfig(**options)
     config.validate()
 
     huey_instance = load_huey(args[0])
