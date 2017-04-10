@@ -447,6 +447,16 @@ class TestHueyQueueAPIs(BaseQueueTestCase):
         huey_results.execute(huey_results.dequeue())
         self.assertEqual(huey_results.result(tid2), 0)
 
+    def test_result_preserve(self):
+        res = add_values(1, 2)
+        tid = res.task.task_id
+        huey_results.execute(huey_results.dequeue())
+
+        self.assertEqual(res.get(preserve=True), 3)
+        self.assertEqual(huey_results.result(tid, preserve=True), 3)
+        self.assertEqual(huey_results.result(tid, preserve=False), 3)
+        self.assertEqual(huey_results.result(tid), None)
+
     def test_task_store(self):
         dt1 = datetime.datetime(2011, 1, 1, 0, 0)
         dt2 = datetime.datetime(2035, 1, 1, 0, 0)

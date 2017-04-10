@@ -11,6 +11,8 @@ integration provides:
 3. Auto-discovery of ``tasks.py`` modules to simplify task importing.
 4. Properly manage database connections.
 
+Supported Django versions are the officially supported at https://www.djangoproject.com/download/#supported-versions
+
 Setting things up
 -----------------
 

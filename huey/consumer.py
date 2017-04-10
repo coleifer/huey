@@ -419,6 +419,8 @@ class Consumer(object):
             self.scheduler_interval))
         self._logger.info('Periodic tasks are %s.' % (
             'enabled' if self.periodic else 'disabled'))
+        self._logger.info('UTC is %s.' % (
+            'enabled' if self.utc else 'disabled'))
 
         self._set_signal_handler()
 

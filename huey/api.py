@@ -429,10 +429,10 @@ class TaskResultWrapper(object):
     def __call__(self, *args, **kwargs):
         return self.get(*args, **kwargs)
 
-    def _get(self):
+    def _get(self, preserve=False):
         task_id = self.task.task_id
         if self._result is EmptyData:
-            res = self.huey._get_data(task_id)
+            res = self.huey._get_data(task_id, peek=preserve)
 
             if res is not EmptyData:
                 self._result = pickle.loads(res)
@@ -445,7 +445,7 @@ class TaskResultWrapper(object):
     def get(self, blocking=False, timeout=None, backoff=1.15, max_delay=1.0,
             revoke_on_timeout=False, preserve=False):
         if not blocking:
-            res = self._get()
+            res = self._get(preserve)
             if res is not EmptyData:
                 return res
         else:
@@ -458,7 +458,7 @@ class TaskResultWrapper(object):
                     raise DataStoreTimeout
                 if delay > max_delay:
                     delay = max_delay
-                if self._get() is EmptyData:
+                if self._get(preserve) is EmptyData:
                     time.sleep(delay)
                     delay *= backoff
 
