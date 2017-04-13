@@ -144,7 +144,8 @@ two tasks:
 
 .. code-block:: python
 
-    from huey.contrib.djhuey import crontab, periodic_task, task
+    from huey import crontab
+    from huey.contrib.djhuey import periodic_task, task
 
     @task()
     def count_beans(number):
@@ -166,7 +167,8 @@ automatically close the connection for you.
 
 .. code-block:: python
 
-    from huey.contrib.djhuey import crontab, db_periodic_task, db_task
+    from huey import crontab
+    from huey.contrib.djhuey import db_periodic_task, db_task
 
     @db_task()
     def do_some_queries():
