@@ -105,7 +105,7 @@ end"""
 class RedisStorage(BaseStorage):
     def __init__(self, name='huey', blocking=False, read_timeout=1,
                  max_errors=1000, connection_pool=None, url=None,
-                 **connection_params):
+                 client_name=None, **connection_params):
         if sum(1 for p in (url, connection_pool, connection_params) if p) > 1:
             raise ValueError(
                 'The connection configuration is over-determined. '
@@ -128,6 +128,9 @@ class RedisStorage(BaseStorage):
         self.schedule_key = 'huey.schedule.%s' % self.name
         self.result_key = 'huey.results.%s' % self.name
         self.error_key = 'huey.errors.%s' % self.name
+
+        client_name = client_name or 'huey.%s.%s' % (os.getpid(), name)
+        self.conn.client_setname(client_name)
 
         self.blocking = blocking
         self.read_timeout = read_timeout
