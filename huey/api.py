@@ -308,7 +308,10 @@ class Huey(object):
             if not peek:
                 self.restore(task)
             return True
-        return revoke_until is None or revoke_until > dt
+        if revoke_until and dt:
+            return revoke_until > dt
+        else:
+            return True
 
     def add_schedule(self, task):
         msg = registry.get_message_for_task(task)
