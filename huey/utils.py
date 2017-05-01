@@ -1,9 +1,12 @@
-import datetime
+import os
 import sys
 import time
-
+import datetime
 
 def load_class(s):
+    ldir = os.getcwd()
+    if ldir not in sys.path:
+        sys.path.insert(0, ldir)
     path, klass = s.rsplit('.', 1)
     __import__(path)
     mod = sys.modules[path]
