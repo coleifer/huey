@@ -61,8 +61,11 @@ class BaseProcess(object):
             return datetime.datetime.utcnow()
         return datetime.datetime.now()
 
+    def get_utcnow(self):
+        return datetime.datetime.utcnow()
+
     def get_timestamp(self):
-        return time.mktime(self.get_now().timetuple())
+        return time.mktime(self.get_utcnow().timetuple())
 
     def sleep_for_interval(self, start_ts, nseconds):
         sleep_time = nseconds - (time.time() - start_ts)
@@ -117,7 +120,7 @@ class Worker(BaseProcess):
 
         if task:
             self.delay = self.default_delay
-            self.handle_task(task, now or self.get_now())
+            self.handle_task(task, now or self.get_utcnow())
         elif exc_raised or not self.huey.blocking:
             self.sleep()
 
@@ -169,7 +172,7 @@ class Worker(BaseProcess):
                 duration=duration)
             self._logger.exception('Unhandled exception in worker thread')
             if task.retries:
-                self.requeue_task(task, self.get_now())
+                self.requeue_task(task, self.get_utcnow())
         else:
             self.huey.emit_task(
                 EVENT_FINISHED,
@@ -224,15 +227,14 @@ class Scheduler(BaseProcess):
         self._logger = logging.getLogger('huey.consumer.Scheduler')
 
     def loop(self, now=None):
-        now = now or self.get_now()
         start = time.time()
 
-        for task in self.huey.read_schedule(now):
+        for task in self.huey.read_schedule(now or self.get_utcnow()):
             self._logger.info('Scheduling %s for execution' % task)
             self.enqueue(task)
 
         if self.periodic and self._counter == self._q:
-            self.enqueue_periodic_tasks(now, start)
+            self.enqueue_periodic_tasks(now or self.get_now(), start)
         else:
             if self.periodic:
                 self._counter += 1

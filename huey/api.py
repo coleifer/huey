@@ -18,7 +18,7 @@ from huey.exceptions import QueueWriteException
 from huey.exceptions import ScheduleAddException
 from huey.exceptions import ScheduleReadException
 from huey.registry import registry
-from huey.utils import local_to_utc
+from huey.utils import local_to_utc, is_naive, aware_to_utc, make_naive, is_aware
 from huey.utils import wrap_exception
 
 
@@ -94,8 +94,13 @@ class Huey(object):
                 if delay:
                     eta = (datetime.datetime.now() +
                            datetime.timedelta(seconds=delay))
-                if convert_utc and eta:
-                    eta = local_to_utc(eta)
+                if eta:
+                    if is_naive(eta) and convert_utc:
+                        eta = local_to_utc(eta)
+                    elif is_aware(eta) and convert_utc:
+                        eta = aware_to_utc(eta)
+                    elif is_aware(eta) and not convert_utc:
+                        eta = make_naive(eta)
                 cmd = klass(
                     (args or (), kwargs or {}),
                     execute_time=eta,
