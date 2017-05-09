@@ -1,7 +1,7 @@
 .. _django:
 
-Using Huey with Django
-======================
+Django
+------
 
 Huey comes with special integration for use with the Django framework. The
 integration provides:
@@ -14,7 +14,7 @@ integration provides:
 Supported Django versions are the officially supported at https://www.djangoproject.com/download/#supported-versions
 
 Setting things up
------------------
+^^^^^^^^^^^^^^^^^
 
 To use huey with Django, the first step is to add an entry to your project's
 ``settings.INSTALLED_APPS``:
@@ -92,7 +92,7 @@ shown how you can create a connection pool:
     HUEY = RedisHuey('my-app', connection_pool=pool)
 
 Running the Consumer
---------------------
+^^^^^^^^^^^^^^^^^^^^
 
 To run the consumer, use the ``run_huey`` management command.  This command
 will automatically import any modules in your ``INSTALLED_APPS`` named
@@ -106,6 +106,7 @@ module and/or by specifying options from the command-line.
 To start the consumer, you simply run:
 
 .. code-block:: console
+
     $ ./manage.py run_huey
 
 In addition to the ``HUEY.consumer`` setting dictionary, the management command
@@ -136,7 +137,7 @@ listed here.
 For more information, read the :ref:`Options for the consumer <consumer-options>` section.
 
 How to create tasks
--------------------
+^^^^^^^^^^^^^^^^^^^
 
 The :py:meth:`~Huey.task` and :py:meth:`~Huey.periodic_task` decorators can be
 imported from the ``huey.contrib.djhuey`` module. Here is how you might define
@@ -180,7 +181,7 @@ automatically close the connection for you.
         # This is a periodic task that executes queries.
 
 DEBUG and Synchronous Execution
--------------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 When ``settings.DEBUG = True``, tasks will be executed **synchronously** just like
 regular function calls. The purpose of this is to avoid running both Redis and
@@ -198,7 +199,7 @@ explicitly specify ``always_eager=False`` in your huey settings:
     }
 
 Configuration Examples
-----------------------
+^^^^^^^^^^^^^^^^^^^^^^
 
 This section contains example ``HUEY`` configurations.
 

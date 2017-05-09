@@ -373,7 +373,7 @@ Function decorators and helpers
     :rtype: a test function that takes a ``datetime`` and returns a boolean
 
 TaskResultWrapper
----------
+-----------------
 
 .. py:class:: TaskResultWrapper(huey, task)
 
@@ -401,9 +401,7 @@ TaskResultWrapper
         'Counted 100 beans'
 
     What happens when data isn't available yet?  Let's assume the next call takes
-    about a minute to calculate:
-
-    .. code-block:: python
+    about a minute to calculate::
 
         >>> res = count_some_beans(10000000) # let's pretend this is slow
         >>> res.get()  # Data is not ready, so None is returned.

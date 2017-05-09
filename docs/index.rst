@@ -19,14 +19,17 @@ huey supports:
 * multi-process, multi-thread or greenlet task execution models
 * schedule tasks to execute at a given time, or after a given delay
 * schedule recurring tasks, like a crontab
-* retry tasks that fail automatically
+* automatically retry tasks that fail
 * task result storage
-* consumer event streaming
+* consumer publishes event stream, allowing high-fidelity monitoring
 
 .. image:: http://i.imgur.com/2EpRs.jpg
 
-Huey's API
-----------
+At a glance
+-----------
+
+Use the :py:meth:`~Huey.task` and :py:meth:`~Huey.periodic_task` decorators to
+turn functions into tasks that will be run by the consumer:
 
 .. code-block:: python
 
@@ -42,31 +45,53 @@ Huey's API
     def nightly_backup():
         sync_all_data()
 
-To run the consumer with 4 worker processes:
+Here's how to run the consumer with four worker processes (good setup for
+CPU-intensive processing):
 
 .. code-block:: console
 
     $ huey_consumer.py my_app.huey -k process -w 4
 
-Huey is named in honor of my cat
+If your work-loads are mostly IO-bound, you can run the consumer with threads
+or greenlets instead. Because greenlets are so lightweight, you can run quite a
+few of them efficiently:
 
-.. image:: http://m.charlesleifer.com/t/800x-/blog/photos/p1473037658.76.jpg?key=mD9_qMaKBAuGPi95KzXYqg
+.. code-block:: console
 
-Contents:
+    $ huey_consumer.py my_app.huey -k greenlet -w 32
+
+Redis
+-----
+
+Huey's design and feature-set are, to a large extent, informed by the
+capabilities of the `Redis <https://redis.io>`_ database. Redis is a fantastic
+fit for a lightweight task queueing library like Huey: it's self-contained,
+versatile, and can be a multi-purpose solution for other web-application tasks
+like caching, event publishing, analytics, rate-limiting, and more.
+
+Although Huey was designed with Redis in mind, the storage system implements a
+simple API and many other tools could be used instead of Redis if that's your
+preference. Huey ships with an alternative storage implementation that uses
+:ref:`sqlite`.
+
+Table of contents
+-----------------
 
 .. toctree::
    :maxdepth: 2
 
    installation
    getting-started
-   tasks
    consumer
    events
    imports
    troubleshooting
    api
-   django
+   contrib
 
+Huey is named in honor of my cat
+
+.. image:: http://m.charlesleifer.com/t/800x-/blog/photos/p1473037658.76.jpg?key=mD9_qMaKBAuGPi95KzXYqg
 
 
 Indices and tables
