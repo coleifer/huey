@@ -1,4 +1,5 @@
 import json
+import os
 import re
 import time
 
@@ -130,7 +131,7 @@ class RedisStorage(BaseStorage):
         self.error_key = 'huey.errors.%s' % self.name
 
         client_name = client_name or 'huey.%s.%s' % (os.getpid(), name)
-        self.conn.client_setname(client_name)
+        #self.conn.client_setname(client_name)
 
         self.blocking = blocking
         self.read_timeout = read_timeout
