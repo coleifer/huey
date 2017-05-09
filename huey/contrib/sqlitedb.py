@@ -99,10 +99,11 @@ class SqliteStorage(BaseStorage):
         for task_id, task_data in tasks:
             id_list.append(task_id)
             data.append(task_data)
-        (Schedule
-         .delete()
-         .where(Schedule.id << id_list)
-         .execute())
+        if id_list:
+            (Schedule
+             .delete()
+             .where(Schedule.id << id_list)
+             .execute())
         return data
 
     def schedule_size(self):
