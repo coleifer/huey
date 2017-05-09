@@ -474,3 +474,57 @@ TaskResultWrapper
 
         Restore the given task.  Unless it has already been skipped over, it
         will be restored and run as scheduled.
+
+
+Storage
+-------
+
+Huey
+
+.. py:class:: BaseStorage([name='huey'[, **storage_kwargs]])
+
+    .. py:meth:: enqueue(data)
+
+    .. py:meth:: dequeue(data)
+
+    .. py:meth:: unqueue(data)
+
+    .. py:meth:: queue_size()
+
+    .. py:meth:: enqueued_items([limit=None])
+
+    .. py:meth:: flush_queue()
+
+    .. py:meth:: add_to_schedule(data, timestamp)
+
+    .. py:meth:: read_schedule(timestamp)
+
+    .. py:meth:: schedule_size()
+
+    .. py:meth:: scheduled_items([limit=None])
+
+    .. py:meth:: flush_schedule()
+
+    .. py:meth:: put_data(key, value)
+
+    .. py:meth:: peek_data(key)
+
+    .. py:meth:: pop_data(key)
+
+    .. py:meth:: has_data_for_key(key)
+
+    .. py:meth:: result_store_size()
+
+    .. py:meth:: result_items()
+
+    .. py:meth:: flush_results()
+
+    .. py:meth:: put_error(metadata)
+
+    .. py:meth:: get_errors([limit=None[, offset=0]])
+
+    .. py:meth:: flush_errors()
+
+    .. py:meth:: emit(message)
+
+    .. py:meth:: __iter__()
