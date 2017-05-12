@@ -1,4 +1,5 @@
 import logging
+import logging.config
 import optparse
 from collections import namedtuple
 from logging import FileHandler
@@ -19,6 +20,7 @@ config_defaults = (
     ('periodic', True),
     ('utc', True),
     ('logfile', None),
+    ('logconf', None),
     ('verbose', None),
 )
 config_keys = [param for param, _ in config_defaults]
@@ -148,7 +150,10 @@ class ConsumerConfig(namedtuple('_ConsumerConfig', config_keys)):
                      ':%(message)s')
         loglevel = self.loglevel
         if logger is None:
-            logging.basicConfig(level=loglevel, format=logformat)
+            if self.logconf:
+                logging.config.dictConfig(self.logconf)
+            else:
+                logging.basicConfig(level=loglevel, format=logformat)
             logger = logging.getLogger()
         else:
             logger.setLevel(loglevel)
@@ -161,4 +166,4 @@ class ConsumerConfig(namedtuple('_ConsumerConfig', config_keys)):
     @property
     def values(self):
         return dict((key, getattr(self, key)) for key in config_keys
-                    if key not in ('logfile', 'verbose'))
+                    if key not in ('logfile', 'logconf', 'verbose'))
