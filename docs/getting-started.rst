@@ -308,7 +308,7 @@ We'll be using the print time command as an example:
 
 .. code-block:: python
 
-    @huey.task(crontab(minute='*'))
+    @huey.periodic_task(crontab(minute='*'))
     def print_time():
         print(datetime.now())
 
