@@ -20,7 +20,7 @@ def hardtask():
         datetime.datetime.strftime(now, '%Y-%d-%m %H:%M:%S')
 
     finished_tasks.append(msg)  # This list works only when
-    # 'always_eager' is False ( run synchronously )
+    # 'always_eager' is False ( run synchronously is on )
 
     print '[DEBUG] Hardtask finished'
     return msg
