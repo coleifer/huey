@@ -45,37 +45,39 @@ options with their default values:
 
     # settings.py
     HUEY = {
-        'name': settings.DATABASES['default']['name'],  # Use db name for huey.
-        'result_store': True,  # Store return values of tasks.
-        'events': True,  # Consumer emits events allowing real-time monitoring.
-        'store_none': False,  # If a task returns None, do not save to results.
-        'always_eager': settings.DEBUG,  # If DEBUG=True, run synchronously.
-        'store_errors': True,  # Store error info if task throws exception.
-        'blocking': False,  # Poll the queue rather than do blocking pop.
-        'connection': {
-            'host': 'localhost',
-            'port': 6379,
-            'db': 0,
-            'connection_pool': None,  # Definitely you should use pooling!
-            # ... tons of other options, see redis-py for details.
+            'my-app': { # name of the huey queue (just use your app name)
+                'result_store': True,  # Store return values of tasks.
+                'events': True,  # Consumer emits events allowing real-time monitoring.
+                'store_none': False,  # If a task returns None, do not save to results.
+                'always_eager': settings.DEBUG,  # If DEBUG=True, run synchronously.
+                'store_errors': True,  # Store error info if task throws exception.
+                'blocking': False,  # Poll the queue rather than do blocking pop.
+                'default': False,  # Indicates the default app. Only useful if you have several huey instances configured.
+                'connection': {
+                    'host': 'localhost',
+                    'port': 6379,
+                    'db': 0,
+                    'connection_pool': None,  # Definitely you should use pooling!
+                    # ... tons of other options, see redis-py for details.
 
-            # huey-specific connection parameters.
-            'read_timeout': 1,  # If not polling (blocking pop), use timeout.
-            'max_errors': 1000,  # Only store the 1000 most recent errors.
-            'url': None,  # Allow Redis config via a DSN.
-        },
-        'consumer': {
-            'workers': 1,
-            'worker_type': 'thread',
-            'initial_delay': 0.1,  # Smallest polling interval, same as -d.
-            'backoff': 1.15,  # Exponential backoff using this rate, -b.
-            'max_delay': 10.0,  # Max possible polling interval, -m.
-            'utc': True,  # Treat ETAs and schedules as UTC datetimes.
-            'scheduler_interval': 1,  # Check schedule every second, -s.
-            'periodic': True,  # Enable crontab feature.
-            'check_worker_health': True,  # Enable worker health checks.
-            'health_check_interval': 1,  # Check worker health every second.
-        },
+                    # huey-specific connection parameters.
+                    'read_timeout': 1,  # If not polling (blocking pop), use timeout.
+                    'max_errors': 1000,  # Only store the 1000 most recent errors.
+                    'url': None,  # Allow Redis config via a DSN.
+                },
+                'consumer': {
+                    'workers': 1,
+                    'worker_type': 'thread',
+                    'initial_delay': 0.1,  # Smallest polling interval, same as -d.
+                    'backoff': 1.15,  # Exponential backoff using this rate, -b.
+                    'max_delay': 10.0,  # Max possible polling interval, -m.
+                    'utc': True,  # Treat ETAs and schedules as UTC datetimes.
+                    'scheduler_interval': 1,  # Check schedule every second, -s.
+                    'periodic': True,  # Enable crontab feature.
+                    'check_worker_health': True,  # Enable worker health checks.
+                    'health_check_interval': 1,  # Check worker health every second.
+                },
+            }
     }
 
 Alternatively, you can simply set ``settings.HUEY`` to a :py:class:`Huey`
@@ -128,6 +130,11 @@ listed here.
     type is suited for IO-heavy workloads. When using *greenlet* you can
     specify tens or hundreds of workers since they are extremely lightweight
     compared to threads/processes.
+
+``-qu``, ``--queue``
+    Indicate the huey queue you want to listen on. For example "-qu my-app".
+    You only need this option if you configured several huey instances in
+    your settings.
 
 .. note::
     Due to a conflict with Django's base option list, the "verbose" option is
@@ -208,8 +215,9 @@ This section contains example ``HUEY`` configurations.
 
     # Redis running locally with four worker threads.
     HUEY = {
-        'name': 'my-app',
-        'consumer': {'workers': 4, 'worker_type': 'thread'},
+        'my-app': {
+            'consumer': {'workers': 4, 'worker_type': 'thread'},
+        }
     }
 
 
@@ -247,3 +255,53 @@ Alternatively, you can just assign a :py:class:`Huey` instance to the ``HUEY`` s
     from huey import RedisHuey
 
     HUEY = RedisHuey('my-app')
+
+
+Several queues
+^^^^^^^^^^^^^^^^^^^^^^
+You can even use huey to distribute your tasks to several queues which are processed independently.
+
+.. code-block:: python
+
+    # settings.py
+    HUEY = {
+        'first_queue': {
+            'default': True,
+            'consumer': {
+                'worker_type': 'thread'
+                'workers': 2,
+            },
+        },
+        'second_queue': {
+            'consumer': {
+                'worker_type': 'thread'
+                'workers': 2,
+            },
+        }
+    }
+
+    # tasks.py
+    @task('first-queue')
+    def count_beans(number):
+        print('-- counted %s beans --' % number)
+        return 'Counted %s beans' % number
+
+    @periodic_task(crontab(minute='*/5'))  # If no queue is given, the default queue is used.
+    def every_five_mins():
+        print('Every five minutes this will be printed by the consumer')
+
+    @task('second-queue', retries=3, retry_delay=10)
+    def try_thrice():
+        if random.randint(1, 3) == 1:
+            print('OK')
+        else:
+            print('About to fail, will retry in 10 seconds')
+            raise Exception('Crap something went wrong')
+
+As soon as you have configured your queues, you can start workers for each queue:
+
+.. code-block:: console
+
+    // Create worker for each queue.
+    $ ./manage.py run_huey --queue first_queue
+    $ ./manage.py run_huey --queue second_queue

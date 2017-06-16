@@ -1,11 +1,9 @@
 from functools import wraps
-import sys
 
 from django.conf import settings
 from django.db import connection
 
-from huey import RedisHuey
-
+from huey.contrib.djhuey.configuration import HueySettingsReader
 
 configuration_message = """
 Configuring Huey for use with Django
@@ -20,6 +18,28 @@ setting structure.
 
 The following example uses Redis on localhost, and will run four worker
 processes:
+
+HUEY = {
+    'my-app': {
+        'default': True,
+        'backend': 'huey.backends.redis_backend',
+        'connection': {'host': 'localhost', 'port': 6379},
+            'consumer': {
+                'workers': 4,
+                'worker_type': 'process',
+        }
+    },
+    'my-app2': {
+        'backend': 'huey.backends.sqlite_backend',
+        'connection': {'location': 'sqlite filename'},
+            'consumer': {
+                'workers': 4,
+                'worker_type': 'process',
+        }
+    },
+}
+
+Additionally the old configuration variant is still usable:
 
 HUEY = {
     'name': 'my-app',
@@ -40,53 +60,24 @@ from huey import RedisHuey
 HUEY = RedisHuey('my-app')
 """
 
+_huey_settings = getattr(settings, 'HUEY', None)
 
-def default_queue_name():
-    try:
-        return settings.DATABASE_NAME
-    except AttributeError:
-        try:
-            return settings.DATABASES['default']['NAME']
-        except KeyError:
-            return 'huey'
+_django_huey = HueySettingsReader(_huey_settings)
+_django_huey.start()
 
+HUEY = _django_huey.huey
+hueys = _django_huey.hueys
 
-def config_error(msg):
-    print(configuration_message)
-    print('\n\n')
-    print(msg)
-    sys.exit(1)
+consumer = _django_huey.consumer
+consumers = _django_huey.consumers
 
-
-HUEY = getattr(settings, 'HUEY', None)
-if HUEY is None:
-    try:
-        from huey import RedisHuey
-    except ImportError:
-        config_error('Error: Huey could not import the redis backend. '
-                     'Install `redis-py`.')
-    else:
-        HUEY = RedisHuey(default_queue_name())
-
-if isinstance(HUEY, dict):
-    huey_config = HUEY.copy()  # Operate on a copy.
-    name = huey_config.pop('name', default_queue_name())
-    conn_kwargs = huey_config.pop('connection', {})
-    try:
-        del huey_config['consumer']  # Don't need consumer opts here.
-    except KeyError:
-        pass
-    if 'always_eager' not in huey_config:
-        huey_config['always_eager'] = settings.DEBUG
-    huey_config.update(conn_kwargs)
-    HUEY = RedisHuey(name, **huey_config)
-
-task = HUEY.task
-periodic_task = HUEY.periodic_task
+task = _django_huey.task
+periodic_task = _django_huey.periodic_task
 
 
 def close_db(fn):
     """Decorator to be used with tasks that may operate on the database."""
+
     @wraps(fn)
     def inner(*args, **kwargs):
         try:
@@ -94,16 +85,19 @@ def close_db(fn):
         finally:
             if not HUEY.always_eager:
                 connection.close()
+
     return inner
 
 
 def db_task(*args, **kwargs):
     def decorator(fn):
         return task(*args, **kwargs)(close_db(fn))
+
     return decorator
 
 
 def db_periodic_task(*args, **kwargs):
     def decorator(fn):
         return periodic_task(*args, **kwargs)(close_db(fn))
+
     return decorator

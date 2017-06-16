@@ -6,7 +6,7 @@ python:
   - "3.6"
 services:
   - redis
-install: "pip install redis"
+install: "pip install -r test_requirements.txt"
 script: "python runtests.py"
 notifications:
   email: true
