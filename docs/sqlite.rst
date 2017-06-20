@@ -17,3 +17,9 @@ Begin by instantiating the ``Huey`` object, passing in the name of the queue
     from huey.contrib.sqlitedb import SqliteHuey
 
     huey = SqliteHuey('my_app', filename='/var/www/my_app/huey.db')
+
+.. note::
+    The SQLite storage engine depends on `peewee <http://docs.peewee-orm.com>`_.
+    For information on installing peewee, see the
+    `peewee installation documentation <http://docs.peewee-orm.com/en/latest/peewee/installation.html>`_,
+    or simply run: ``pip install peewee``.
