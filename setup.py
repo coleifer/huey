@@ -1,6 +1,10 @@
 from setuptools import setup, find_packages
 
 
+extras_require = {
+    'backends': ('peewee', "redis"),
+}
+
 setup(
     name='huey',
     version=__import__('huey').__version__,
@@ -9,6 +13,7 @@ setup(
     author_email='coleifer@gmail.com',
     url='http://github.com/coleifer/huey/',
     packages=find_packages(),
+    extras_require=extras_require,
     package_data={
         'huey': [
         ],
