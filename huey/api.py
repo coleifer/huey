@@ -18,6 +18,7 @@ from huey.exceptions import QueueWriteException
 from huey.exceptions import ScheduleAddException
 from huey.exceptions import ScheduleReadException
 from huey.registry import registry
+from huey.registry import TaskRegistry
 from huey.utils import local_to_utc, is_naive, aware_to_utc, make_naive, is_aware
 from huey.utils import wrap_exception
 
@@ -39,6 +40,7 @@ class Huey(object):
     :param always_eager: Useful for testing, this will execute all tasks
         immediately, without enqueueing them.
     :param store_errors: Flag to indicate whether task errors should be stored.
+    :param global_registry: Use a global registry for tasks.
 
     Example usage::
 
@@ -59,7 +61,7 @@ class Huey(object):
     """
     def __init__(self, name='huey', result_store=True, events=True,
                  store_none=False, always_eager=False, store_errors=True,
-                 blocking=False, **storage_kwargs):
+                 blocking=False, global_registry=True, **storage_kwargs):
         self.name = name
         self.result_store = result_store
         self.events = events
@@ -68,6 +70,10 @@ class Huey(object):
         self.store_errors = store_errors
         self.blocking = blocking
         self.storage = self.get_storage(**storage_kwargs)
+        if global_registry:
+            self.registry = registry
+        else:
+            self.registry = TaskRegistry()
 
     def get_storage(self, **kwargs):
         raise NotImplementedError('Storage API not implemented in the base '
@@ -85,6 +91,7 @@ class Huey(object):
                 retries_as_argument,
                 name,
                 include_task)
+            self.registry.register(klass)
 
             def schedule(args=None, kwargs=None, eta=None, delay=None,
                          convert_utc=True, task_id=None):
@@ -138,6 +145,7 @@ class Huey(object):
                 task_name=name,
                 validate_datetime=method_validate,
             )
+            self.registry.register(klass)
 
             func.task_class = klass
 
@@ -219,7 +227,7 @@ class Huey(object):
         if self.always_eager:
             return task.execute()
 
-        self._enqueue(registry.get_message_for_task(task))
+        self._enqueue(self.registry.get_message_for_task(task))
 
         if self.result_store:
             return TaskResultWrapper(self, task)
@@ -227,7 +235,7 @@ class Huey(object):
     def dequeue(self):
         message = self._dequeue()
         if message:
-            return registry.get_task_for_message(message)
+            return self.registry.get_task_for_message(message)
 
     def _format_time(self, dt):
         if dt is None:
@@ -316,16 +324,16 @@ class Huey(object):
         return revoke_until is None or revoke_until > dt
 
     def add_schedule(self, task):
-        msg = registry.get_message_for_task(task)
+        msg = self.registry.get_message_for_task(task)
         ex_time = task.execute_time or datetime.datetime.fromtimestamp(0)
         self._add_to_schedule(msg, ex_time)
 
     def read_schedule(self, ts):
-        return [registry.get_task_for_message(m)
+        return [self.registry.get_task_for_message(m)
                 for m in self._read_schedule(ts)]
 
     def read_periodic(self, ts):
-        periodic = registry.get_periodic_tasks()
+        periodic = self.registry.get_periodic_tasks()
         return [task for task in periodic
                 if task.validate_datetime(ts)]
 
@@ -334,14 +342,14 @@ class Huey(object):
         return cmd.execute_time is None or cmd.execute_time <= dt
 
     def pending(self, limit=None):
-        return [registry.get_task_for_message(m)
+        return [self.registry.get_task_for_message(m)
                 for m in self.storage.enqueued_items(limit)]
 
     def pending_count(self):
         return self.storage.queue_size()
 
     def scheduled(self, limit=None):
-        return [registry.get_task_for_message(m)
+        return [self.registry.get_task_for_message(m)
                 for m in self.storage.scheduled_items(limit)]
 
     def scheduled_count(self):
@@ -365,10 +373,10 @@ class Huey(object):
         self.storage.flush_all()
 
     def get_tasks(self):
-        return sorted(registry._registry.keys())
+        return sorted(self.registry._registry.keys())
 
     def get_periodic_tasks(self):
-        return [task_name for task_name, task in registry._registry.items()
+        return [name for name, task in self.registry._registry.items()
                 if hasattr(task, 'validate_datetime')]
 
     def get_regular_tasks(self):
@@ -475,15 +483,7 @@ def with_metaclass(meta, base=object):
     return meta("NewBase", (base,), {})
 
 
-class QueueTaskMetaClass(type):
-    def __init__(cls, name, bases, attrs):
-        """
-        Metaclass to ensure that all task classes are registered
-        """
-        registry.register(cls)
-
-
-class QueueTask(with_metaclass(QueueTaskMetaClass)):
+class QueueTask(object):
     """
     A class that encapsulates the logic necessary to 'do something' given some
     arbitrary data.  When enqueued with the :class:`Huey`, it will be
@@ -547,7 +547,7 @@ class QueueTask(with_metaclass(QueueTaskMetaClass)):
 
 class PeriodicQueueTask(QueueTask):
     def create_id(self):
-        return registry.task_to_string(type(self))
+        return type(self).__name__
 
     def validate_datetime(self, dt):
         """Validate that the task should execute at the given datetime"""

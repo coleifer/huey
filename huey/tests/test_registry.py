@@ -24,7 +24,11 @@ class TestRegistry(BaseTestCase):
     def test_registry(self):
         self.assertTrue('queuecmd_test_task_one' in registry)
         self.assertTrue('queuecmd_test_task_two' in registry)
+        self.assertFalse('MyTaskClass' in registry)
+
+        registry.register(MyTaskClass)
         self.assertTrue('MyTaskClass' in registry)
+
         self.assertFalse('another' in registry)
 
     def test_periodic_tasks(self):

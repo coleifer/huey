@@ -38,6 +38,8 @@ class PutTask(QueueTask):
         k, v = self.data
         state[k] = v
 
+registry.register(PutTask)
+
 class TestException(Exception):
     pass
 
