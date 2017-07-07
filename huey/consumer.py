@@ -430,13 +430,30 @@ class Consumer(object):
 
         self._logger.info('\n'.join(msg))
 
+        # We'll temporarily ignore SIGINT (so that it is inherited by the
+        # child-processes). Once the child processes are created, we restore
+        # the handler.
+        original_sigint_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
+
         self.scheduler.start()
         for _, worker_process in self.worker_threads:
             worker_process.start()
 
-    def stop(self):
+        signal.signal(signal.SIGINT, original_sigint_handler)
+
+    def stop(self, graceful=False):
         self.stop_flag.set()
-        self._logger.info('Shutting down')
+        if graceful:
+            self._logger.info('Shutting down gracefully...')
+            try:
+                for _, worker_process in self.worker_threads:
+                    worker_process.join()
+            except KeyboardInterrupt:
+                self._logger.info('Received request to shut down now.')
+            else:
+                self._logger.info('All workers have stopped.')
+        else:
+            self._logger.info('Shutting down')
 
     def run(self):
         self.start()
@@ -446,7 +463,8 @@ class Consumer(object):
                 is_set = self.stop_flag.wait(timeout=timeout)
                 time.sleep(timeout)
             except KeyboardInterrupt:
-                self.stop()
+                self._logger.info('Received SIGINT')
+                self.stop(graceful=True)
             except:
                 self._logger.exception('Error in consumer.')
                 self.stop()
