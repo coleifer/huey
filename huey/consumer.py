@@ -229,9 +229,15 @@ class Scheduler(BaseProcess):
     def loop(self, now=None):
         start = time.time()
 
-        for task in self.huey.read_schedule(now or self.get_utcnow()):
-            self._logger.info('Scheduling %s for execution' % task)
-            self.enqueue(task)
+        try:
+            task_list = self.huey.read_schedule(now or self.get_utcnow())
+        except ScheduleReadException:
+            #self.huey.emit_task(EVENT_ERROR_SCHEDULING, task, error=True)
+            self._logger.exception('Error reading from task schedule.')
+        else:
+            for task in task_list:
+                self._logger.info('Scheduling %s for execution' % task)
+                self.enqueue(task)
 
         if self.periodic and self._counter == self._q:
             self.enqueue_periodic_tasks(now or self.get_now(), start)
