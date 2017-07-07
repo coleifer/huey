@@ -8,18 +8,23 @@ from huey.constants import EmptyData
 from huey.storage import BaseStorage
 
 
-class Task(Model):
+class BaseModel(Model):
+    class Meta:
+        database = SqliteDatabase(None)  # Placeholder.
+
+
+class Task(BaseModel):
     queue = CharField()
     data = BlobField()
 
 
-class Schedule(Model):
+class Schedule(BaseModel):
     queue = CharField()
     data = BlobField()
     timestamp = TimestampField()
 
 
-class KeyValue(Model):
+class KeyValue(BaseModel):
     queue = CharField()
     key = CharField()
     value = BlobField()
@@ -36,7 +41,7 @@ class SqliteStorage(BaseStorage):
         Task._meta.database = self.database
         Schedule._meta.database = self.database
         KeyValue._meta.database = self.database
-        self.database.create_tables([Task, Schedule, KeyValue], True)
+        self.database.create_tables([Task, Schedule, KeyValue], safe=True)
 
     def tasks(self, *columns):
         return Task.select(*columns).where(Task.queue == self.name)
