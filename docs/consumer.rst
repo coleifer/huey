@@ -170,9 +170,23 @@ granularity of 60 seconds.
 
     huey_consumer.py my.app.huey -w 100 -k greenlet -C -s 60
 
+.. _consumer-shutdown:
+
+Consumer shutdown
+-----------------
+
+The huey consumer supports graceful shutdown via ``SIGINT``. When the consumer
+process receives ``SIGINT``, workers are allowed to finish up whatever task
+they are currently executing.
+
+Alternatively, you can shutdown the consumer using ``SIGTERM`` and any running
+tasks will be interrupted, ensuring the process exits quickly.
+
+.. _consumer-internals:
 
 Consumer Internals
 ------------------
+
 This section will attempt to explain what happens when you call a
 ``task``-decorated function in your application. To do this, we will go into
 the implementation of the consumer. The `code for the consumer <https://github.com/coleifer/huey/blob/master/huey/consumer.py>`_
@@ -213,7 +227,9 @@ scheduler will check through the various periodic tasks to see if any should
 be run. If so, these tasks are enqueued.
 
 .. warning::
-    When the consumer is shut-down cleanly (SIGTERM), any workers still
+    SIGINT is used to perform a graceful shutdown.
+
+    When the consumer is shutdown using SIGTERM, any workers still
     involved in the execution of a task will be interrupted mid-task.
 
 Events
