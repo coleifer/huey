@@ -169,7 +169,8 @@ class TestExecution(ConsumerTestCase):
         self.assertTrue(consumer.is_crashed(2))
         self.assertFalse(consumer.is_crashed(1, blocking=False))
 
-        consumer.check_worker_health()
+        self.assertFalse(consumer.check_worker_health())
+        self.assertEqual(capture.messages[-1], 'Worker 2 died, restarting.')
         self.assertFalse(consumer.is_crashed(2, blocking=False))
 
         w1_2 = consumer.worker_threads[0][0]
