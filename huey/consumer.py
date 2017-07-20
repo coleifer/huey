@@ -220,8 +220,9 @@ class Scheduler(BaseProcess):
         self.periodic = periodic
         if periodic:
             # Determine the periodic task interval.
-            self._counter = -1
+            self._counter = 0
             self._q, self._r = divmod(60, self.interval)
+            self._cr = self._r
         self._logger = logging.getLogger('huey.consumer.Scheduler')
 
     def loop(self, now=None):
@@ -238,24 +239,33 @@ class Scheduler(BaseProcess):
                 self.enqueue(task)
 
         if self.periodic:
+            # The scheduler has an interesting property of being able to run at
+            # intervals that are not factors of 60. Suppose we ask our
+            # scheduler to run every 45 seconds. We still want to schedule
+            # periodic tasks once per minute, however. So we use a running
+            # remainder to ensure that no matter what interval the scheduler is
+            # running at, we still are enqueueing tasks once per minute at the
+            # same time.
+            if self._counter >= self._q:
+                self._counter = 0
+                if self._cr:
+                    self.sleep_for_interval(start, self._cr)
+                if self._r:
+                    self._cr += self._r
+                    if self._cr >= self.interval:
+                        self._cr -= self.interval
+                        self._counter -= 1
+
+                self.enqueue_periodic_tasks(now or self.get_now(), start)
             self._counter += 1
 
-        if self.periodic and self._counter >= self._q:
-            self.enqueue_periodic_tasks(now or self.get_now(), start)
-        else:
-            self.sleep_for_interval(start, self.interval)
+        self.sleep_for_interval(start, self.interval)
 
     def enqueue_periodic_tasks(self, now, start):
-        # Sleep the remainder of 60 % Interval so we check the periodic
-        # tasks consistently every 60 seconds.
-        if self._r:
-            self.sleep_for_interval(start, self._r)
-
         self.huey.emit_status(
             EVENT_CHECKING_PERIODIC,
             timestamp=self.get_timestamp())
         self._logger.debug('Checking periodic tasks')
-        self._counter = 0
         for task in self.huey.read_periodic(now):
             self.huey.emit_task(
                 EVENT_SCHEDULING_PERIODIC,
@@ -264,9 +274,6 @@ class Scheduler(BaseProcess):
             self._logger.info('Scheduling periodic task %s.' % task)
             self.enqueue(task)
 
-        # Because we only slept for part of the user-defined interval, now
-        # sleep the remainder.
-        self.sleep_for_interval(start, self.interval + self._r)
         return True
 
 
