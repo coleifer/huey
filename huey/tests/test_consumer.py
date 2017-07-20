@@ -476,14 +476,14 @@ class TestConsumerAPIs(ConsumerTestCase):
     def test_periodic_scheduler(self):
         dt = datetime.datetime(2011, 1, 3, 3, 7)
         sched = self.scheduler(dt, False)
-        self.assertEqual(sched._counter, 1)
-        self.assertEqual(sched._q, 5)
+        self.assertEqual(sched._counter, 0)
+        self.assertEqual(sched._q, 6)
         self.assertEqual(len(self.huey), 0)
 
         dt = datetime.datetime(2011, 1, 1, 0, 2)
         sched = self.scheduler(dt, True)
         self.assertEqual(sched._counter, 0)
-        self.assertEqual(sched._q, 5)
+        self.assertEqual(sched._q, 6)
         self.assertEqual(state, {})
 
         for i in range(len(self.huey)):
@@ -564,21 +564,21 @@ class TestConsumerAPIs(ConsumerTestCase):
 
         curr_time = datetime.datetime(2015, 12, 30, 21, 1, 7)
         scheduler = self.scheduler(curr_time)
-        self.assertEqual(scheduler._counter, 1)
+        self.assertEqual(scheduler._counter, 0)
         self.assertEqual(scheduler._q, 4)
 
         scheduler.loop(curr_time.replace(second=20))
-        self.assertEqual(scheduler._counter, 2)
+        self.assertEqual(scheduler._counter, 1)
         self.assertEqual(scheduler._q, 4)
         self.assertEqual(len(self.huey), 0)
 
         scheduler.loop(curr_time.replace(second=33))
-        self.assertEqual(scheduler._counter, 3)
+        self.assertEqual(scheduler._counter, 2)
         self.assertEqual(scheduler._q, 4)
         self.assertEqual(len(self.huey), 0)
 
         scheduler.loop(curr_time.replace(second=46))
-        self.assertEqual(scheduler._counter, 4)
+        self.assertEqual(scheduler._counter, 3)
         self.assertEqual(scheduler._q, 4)
         self.assertEqual(scheduler._r, 8)
         self.assertEqual(len(self.huey), 0)

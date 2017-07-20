@@ -220,10 +220,8 @@ class Scheduler(BaseProcess):
         self.periodic = periodic
         if periodic:
             # Determine the periodic task interval.
+            self._counter = -1
             self._q, self._r = divmod(60, self.interval)
-            if not self._r:
-                self._q -= 1
-            self._counter = 0
         self._logger = logging.getLogger('huey.consumer.Scheduler')
 
     def loop(self, now=None):
@@ -239,11 +237,12 @@ class Scheduler(BaseProcess):
                 self._logger.info('Scheduling %s for execution' % task)
                 self.enqueue(task)
 
-        if self.periodic and self._counter == self._q:
+        if self.periodic:
+            self._counter += 1
+
+        if self.periodic and self._counter >= self._q:
             self.enqueue_periodic_tasks(now or self.get_now(), start)
         else:
-            if self.periodic:
-                self._counter += 1
             self.sleep_for_interval(start, self.interval)
 
     def enqueue_periodic_tasks(self, now, start):
@@ -267,7 +266,7 @@ class Scheduler(BaseProcess):
 
         # Because we only slept for part of the user-defined interval, now
         # sleep the remainder.
-        self.sleep_for_interval(start, self.interval - self._r)
+        self.sleep_for_interval(start, self.interval + self._r)
         return True
 
 
