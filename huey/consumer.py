@@ -239,12 +239,8 @@ class Scheduler(BaseProcess):
                 self._logger.info('Scheduling %s for execution' % task)
                 self.enqueue(task)
 
-        if self.periodic and self._counter == self._q:
-            self.enqueue_periodic_tasks(now or self.get_now(), start)
-        else:
-            if self.periodic:
-                self._counter += 1
-            self.sleep_for_interval(start, self.interval)
+        self.enqueue_periodic_tasks(now or self.get_now(), start)
+        self.sleep_for_interval(start, self.interval)
 
     def enqueue_periodic_tasks(self, now, start):
         # Sleep the remainder of 60 % Interval so we check the periodic
