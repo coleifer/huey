@@ -158,31 +158,6 @@ class TestExecution(ConsumerTestCase):
         self.assertEqual(state, {'ka': 'vz'})
 
     @consumer_test
-    def test_worker_health_logging(self, consumer, capture):
-        w1_1 = consumer.worker_threads[0][0]
-        w2_1 = consumer.worker_threads[1][0]
-
-        modify_state('k', '1').get(blocking=True)
-        self.assertEqual(state, {'k': '1'})
-
-        consumer.crash(2)
-        self.assertTrue(consumer.is_crashed(2))
-        self.assertFalse(consumer.is_crashed(1, blocking=False))
-
-        self.assertFalse(consumer.check_worker_health())
-        self.assertEqual(capture.messages[-1], 'Worker 2 died, restarting.')
-        self.assertFalse(consumer.is_crashed(2, blocking=False))
-
-        w1_2 = consumer.worker_threads[0][0]
-        w2_2 = consumer.worker_threads[1][0]
-        self.assertTrue(w1_1 is w1_2)
-        self.assertFalse(w1_2 is w2_2)
-
-        task_exec, worker_restart = capture.messages[-2:]
-        self.assertTrue(task_exec.startswith('Executing queuecmd_modify'))
-        self.assertEqual(worker_restart, 'Worker 2 died, restarting.')
-
-    @consumer_test
     def test_threaded_execution(self, consumer, capture):
         r1 = modify_state('k1', 'v1')
         r2 = modify_state('k2', 'v2')
