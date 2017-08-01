@@ -79,6 +79,23 @@ class Huey(object):
         raise NotImplementedError('Storage API not implemented in the base '
                                   'Huey class. Use `RedisHuey` instead.')
 
+    def _normalize_execute_time(self, eta=None, delay=None, convert_utc=True):
+        if delay and eta:
+            raise ValueError('Both a delay and an eta cannot be '
+                             'specified at the same time')
+        elif delay:
+            method = (convert_utc and datetime.datetime.utcnow or
+                      datetime.datetime.now)
+            return method() + datetime.timedelta(seconds=delay)
+        elif eta:
+            if is_naive(eta) and convert_utc:
+                eta = local_to_utc(eta)
+            elif is_aware(eta) and convert_utc:
+                eta = aware_to_utc(eta)
+            elif is_aware(eta) and not convert_utc:
+                eta = make_naive(eta)
+            return eta
+
     def task(self, retries=0, retry_delay=0, retries_as_argument=False,
              include_task=False, name=None):
         def decorator(func):
@@ -95,22 +112,11 @@ class Huey(object):
 
             def schedule(args=None, kwargs=None, eta=None, delay=None,
                          convert_utc=True, task_id=None):
-                if delay and eta:
-                    raise ValueError('Both a delay and an eta cannot be '
-                                     'specified at the same time')
-                if delay:
-                    eta = (datetime.datetime.now() +
-                           datetime.timedelta(seconds=delay))
-                if eta:
-                    if is_naive(eta) and convert_utc:
-                        eta = local_to_utc(eta)
-                    elif is_aware(eta) and convert_utc:
-                        eta = aware_to_utc(eta)
-                    elif is_aware(eta) and not convert_utc:
-                        eta = make_naive(eta)
+                execute_time = self._normalize_execute_time(
+                    eta=eta, delay=delay, convert_utc=convert_utc)
                 cmd = klass(
                     (args or (), kwargs or {}),
-                    execute_time=eta,
+                    execute_time=execute_time,
                     retries=retries,
                     retry_delay=retry_delay,
                     task_id=task_id)
@@ -477,6 +483,22 @@ class TaskResultWrapper(object):
 
     def restore(self):
         self.huey.restore(self.task)
+
+    def reschedule(self, eta=None, delay=None, convert_utc=True):
+        # Rescheduling works by revoking the currently-scheduled task (nothing
+        # is done to check if the task has already run, however). Then the
+        # original task's data is used to enqueue a new task with a new task ID
+        # and execution_time.
+        self.revoke()
+        execute_time = self.huey._normalize_execute_time(
+            eta=eta, delay=delay, convert_utc=convert_utc)
+        cmd = self.task.__class__(
+            self.task.data,
+            execute_time=execute_time,
+            retries=self.task.retries,
+            retry_delay=self.task.retry_delay,
+            task_id=None)
+        return self.huey.enqueue(cmd)
 
 
 def with_metaclass(meta, base=object):

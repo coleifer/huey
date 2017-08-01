@@ -317,6 +317,41 @@ class TestHueyQueueAPIs(BaseQueueTestCase):
         self.assertEqual(len(huey), 0)
         self.assertEqual(state, {'nugget': 'green'})
 
+    def test_reschedule(self):
+        eta = datetime.datetime.utcnow() + datetime.timedelta(seconds=60)
+        trw = add_values.schedule((1, 2), eta=eta, convert_utc=False)
+        self.assertEqual(trw.task.execute_time, eta)
+
+        # Pull pending task off queue. Quick sanity check that the task result
+        # wrapper has the same task_id as the task we just pulled down.
+        task = huey_results.dequeue()
+        self.assertEqual(trw.task.task_id, task.task_id)
+        self.assertEqual(trw.task.execute_time, task.execute_time)
+
+        # Verify the task is not ready to run and add to schedule.
+        self.assertFalse(huey_results.ready_to_run(task))
+        huey_results.add_schedule(task)
+
+        # Reschedule the task using the result wrapper.
+        new_eta = eta - datetime.timedelta(seconds=30)
+        trw_r = trw.reschedule(eta=new_eta, convert_utc=False)
+        self.assertEqual(trw_r.task.execute_time, new_eta)
+
+        task_r = huey_results.dequeue()
+        self.assertEqual(task_r.execute_time, new_eta)
+        self.assertFalse(huey_results.ready_to_run(task_r))
+        huey_results.add_schedule(task_r)
+
+        self.assertTrue(huey_results.is_revoked(task))
+        self.assertFalse(huey_results.is_revoked(task_r))
+
+        # Reschedule without an ETA.
+        trw_r2 = trw_r.reschedule()
+        task_r2 = huey_results.dequeue()
+        self.assertTrue(task_r2.execute_time is None)
+        self.assertTrue(huey_results.ready_to_run(task_r2))
+        self.assertTrue(huey_results.is_revoked(task_r))
+
     def test_revoke(self):
         ac = PutTask(('k', 'v'))
         ac2 = PutTask(('k2', 'v2'))

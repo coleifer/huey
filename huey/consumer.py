@@ -120,7 +120,7 @@ class Worker(BaseProcess):
 
         if task:
             self.delay = self.default_delay
-            self.handle_task(task, now or self.get_utcnow())
+            self.handle_task(task, now or self.get_now())
         elif exc_raised or not self.huey.blocking:
             self.sleep()
 
@@ -172,7 +172,7 @@ class Worker(BaseProcess):
                 duration=duration)
             self._logger.exception('Unhandled exception in worker thread')
             if task.retries:
-                self.requeue_task(task, self.get_utcnow())
+                self.requeue_task(task, self.get_now())
         else:
             self.huey.emit_task(
                 EVENT_FINISHED,
@@ -229,7 +229,7 @@ class Scheduler(BaseProcess):
         start = time.time()
 
         try:
-            task_list = self.huey.read_schedule(now or self.get_utcnow())
+            task_list = self.huey.read_schedule(now or self.get_now())
         except ScheduleReadException:
             #self.huey.emit_task(EVENT_ERROR_SCHEDULING, task, error=True)
             self._logger.exception('Error reading from task schedule.')
