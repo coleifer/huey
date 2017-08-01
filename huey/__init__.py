@@ -1,6 +1,6 @@
 __author__ = 'Charles Leifer'
 __license__ = 'MIT'
-__version__ = '1.3.1'
+__version__ = '1.4.0'
 
 from huey.api import crontab
 from huey.api import Huey
