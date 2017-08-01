@@ -169,6 +169,20 @@ You can specify an "estimated time of arrival" as well using datetimes:
     >>> in_a_minute = datetime.datetime.now() + datetime.timedelta(seconds=60)
     >>> res = count_beans.schedule(args=(100,), eta=in_a_minute)
 
+.. note::
+    By default, the Huey consumer runs in UTC-mode. The effect of this on
+    scheduled tasks is that when using naive datetimes, they must be with
+    respect to ``datetime.utcnow()``.
+
+    The reason we aren't using ``utcnow()`` in the example above is because
+    the ``schedule()`` method takes a 3rd parameter, ``convert_utc``, which
+    defaults to ``True``. So in the above code, the datetime is converted from
+    localtime to UTC before being sent to the queue.
+
+    If you are running the consumer in localtime-mode (``-o``), then you should
+    **always** specify ``convert_utc=False`` with ``.schedule()``, including
+    when you are specifying a ``delay``.
+
 Looking at the redis output, we see the following (simplified for reability)::
 
     +1325563365.910640 "LPUSH" count_beans(100)
@@ -332,7 +346,11 @@ We can prevent a task from executing until a certain time:
 
     print_time.revoke(revoke_until=in_10)
 
-.. note:: Remember to use UTC if the consumer is using UTC.
+.. note::
+    When specifying the ``revoke_until`` setting, naive datetimes should be
+    with respect to ``datetime.utcnow()`` if the consumer is running in
+    UTC-mode (the default). Use ``datetime.now()`` if the consumers is running
+    in localtime-mode (``-o``).
 
 Finally, we can prevent the task from running indefinitely:
 

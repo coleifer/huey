@@ -145,11 +145,43 @@ Function decorators and helpers
 
             :param args: arguments to call the decorated function with
             :param kwargs: keyword arguments to call the decorated function with
-            :param datetime eta: the time at which the function should be executed
+            :param datetime eta: the time at which the function should be
+                executed. See note below on how to correctly specify the
+                ``eta`` whether the consumer is running in UTC- or
+                localtime-mode.
             :param int delay: number of seconds to wait before executing function
-            :param convert_utc: whether the ``eta`` or ``delay`` should be converted from local time to UTC, defaults to ``True``. If you are running your consumer in ``localtime`` mode, you should probably specify ``False`` here.
+            :param convert_utc: whether the ``eta`` or ``delay`` should be converted from local time to UTC.
+                Defaults to ``True``. See note below.
             :rtype: like calls to the decorated function, will return an :py:class:`TaskResultWrapper`
                     object if a result store is configured, otherwise returns ``None``
+
+            .. note::
+                It can easily become confusing when/how to use the
+                ``convert_utc`` parameter when scheduling tasks. Similarly, if
+                you are using naive datetimes, whether the ETA should be based
+                around ``datetime.utcnow()`` or ``datetime.now()``.
+
+                If you are running the consumer in UTC-mode (the default):
+
+                * When specifying a ``delay``, ``convert_utc=True``.
+                * When specifying an ``eta`` with respect to
+                  ``datetime.now()``, ``convert_utc=True``.
+                * When specifying an ``eta`` with respect to
+                  ``datetime.utcnow()``, ``convert_utc=False``.
+
+                If you are running the consumer in localtime-mode (``-o``):
+
+                * When specifying a ``delay``, ``convert_utc=False``.
+                * When specifying an ``eta``, it should always be with respect
+                  to ``datetime.now()`` with ``convert_utc=False``.
+
+                In other words, for consumers running in UTC-mode, the only
+                time ``convert_utc=False`` is when you are passing an ``eta``
+                that is already a naive datetime with respect to ``utcnow()``.
+
+                Similarly for localtime-mode consumers, ``convert_utc`` should
+                always be ``False`` and when specifying an ``eta`` it should be
+                with respect to ``datetime.now()``.
 
         .. py:function:: {decorated func}.call_local
 
@@ -372,6 +404,12 @@ Function decorators and helpers
 
     :rtype: a test function that takes a ``datetime`` and returns a boolean
 
+    .. note::
+        It is currently not possible to run periodic tasks with an interval
+        less than once per minute. If you need to run tasks more frequently,
+        you can create a periodic task that runs once per minute, and from that
+        task, schedule any number of sub-tasks to run after the desired delays.
+
 TaskResultWrapper
 -----------------
 
@@ -475,6 +513,24 @@ TaskResultWrapper
         Restore the given task.  Unless it has already been skipped over, it
         will be restored and run as scheduled.
 
+    .. py:method:: reschedule([eta=None[, delay=None[, convert+utc=True]]])
+
+        Reschedule the given task. The original task instance will be revoked,
+        but **no checks are made** to verify that it hasn't already been
+        executed.
+
+        If neither an ``eta`` nor a ``delay`` is specified, the task will be
+        run as soon as it is received by a worker.
+
+        :param datetime eta: the time at which the function should be
+            executed. See note below on how to correctly specify the
+            ``eta`` whether the consumer is running in UTC- or
+        :param int delay: number of seconds to wait before executing function
+        :param convert_utc: whether the ``eta`` or ``delay`` should be
+            converted from local time to UTC. Defaults to ``True``. See the
+            note in the ``schedule()`` method of :py:meth:`Huey.task` for more
+            information.
+        :rtype: :py:class:`TaskResultWrapper` object for the new task.
 
 Storage
 -------
