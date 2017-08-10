@@ -612,6 +612,8 @@ def crontab(month='*', day='*', day_of_week='*', hour='*', minute='*'):
     return True when the given datetime matches the parameters set forth in
     the crontab.
 
+    For day-of-week, 0=Sunday and 6=Saturday.
+
     Acceptable inputs:
     * = every distinct value
     */n = run every "n" times, i.e. hours='*/4' == 0, 4, 8, 12, 16, 20
@@ -621,7 +623,7 @@ def crontab(month='*', day='*', day_of_week='*', hour='*', minute='*'):
     validation = (
         ('m', month, range(1, 13)),
         ('d', day, range(1, 32)),
-        ('w', day_of_week, range(7)),
+        ('w', day_of_week, range(8)), # 0-6, but also 7 for Sunday.
         ('H', hour, range(24)),
         ('M', minute, range(60))
     )

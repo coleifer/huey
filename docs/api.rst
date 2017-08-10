@@ -395,6 +395,8 @@ Function decorators and helpers
     return ``True`` when a given ``datetime`` matches the parameters set forth in
     the crontab.
 
+    Day-of-week uses 0=Sunday and 6=Saturday.
+
     Acceptable inputs:
 
     - "*" = every distinct value
