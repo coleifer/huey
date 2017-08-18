@@ -12,6 +12,11 @@ from huey.storage import RedisStorage
 from huey.tests.base import b
 from huey.tests.base import BaseTestCase
 from huey.utils import local_to_utc
+try:
+    from unittest.mock import Mock
+except ImportError:
+    # python 2
+    from mock import Mock
 
 huey = RedisHuey(result_store=False, events=False, blocking=False)
 huey_results = RedisHuey(blocking=False, max_errors=10)
@@ -580,3 +585,107 @@ class TestHueyQueueAPIs(BaseQueueTestCase):
         self.assertTrue(huey_results.ready_to_run(task1, curr70))
         self.assertFalse(huey_results.ready_to_run(task2, curr70))
         self.assertTrue(huey_results.ready_to_run(task3, curr70))
+
+
+class TestHueyHooks(BaseQueueTestCase):
+    def test_no_nooks(self):
+        hooks = None
+        huey = RedisHuey(hooks=hooks, global_registry=False)
+
+        @huey.task()
+        def test():
+            print('done')
+
+        test()
+        task = huey.dequeue()
+        huey.execute(task)
+
+    def test_execution_hooks_task_lifecycle(self):
+        hooks = Mock()
+        huey = RedisHuey(hooks=hooks, global_registry=False)
+
+        @huey.task()
+        def test():
+            self.assertTrue(hooks.on_task_execution_start.called)
+            print('done')
+            self.assertFalse(hooks.on_task_execution_finished.called)
+
+        test()
+        task = huey.dequeue()
+        self.assertFalse(hooks.on_task_execution_start.called)
+        huey.execute(task)
+        self.assertTrue(hooks.on_task_execution_finished.called)
+
+        task_id, a_task = hooks.on_task_execution_start.call_args[0]
+        self.assertEqual(task_id, task.task_id)
+        self.assertEqual(task, a_task)
+
+        task_id, a_task = hooks.on_task_execution_finished.call_args[0]
+        self.assertEqual(task_id, task.task_id)
+        self.assertEqual(task, a_task)
+
+    def test_execution_hooks_final_retry(self):
+        hooks = Mock()
+        huey = RedisHuey(hooks=hooks, global_registry=False)
+
+        @huey.task()
+        def test():
+            raise ValueError('fail')
+
+        test()
+        task = huey.dequeue()
+        with self.assertRaises(ValueError) as context:
+            huey.execute(task)
+        self.assertTrue(hooks.on_task_error_final.called)
+        self.assertFalse(hooks.on_task_error_retries_left.called)
+        task_id, a_task, metadata, exception, is_manual_retry = hooks.on_task_error_final.call_args[0]
+        self.assertEqual(task_id, task.task_id)
+        self.assertEqual(task, a_task)
+        self.assertEqual(exception, context.exception)
+        self.assertFalse(is_manual_retry)
+
+    def test_execution_hooks_final_retry_whitelisted_exception(self):
+        import huey
+        hooks = Mock()
+        rh = RedisHuey(hooks=hooks, global_registry=False)
+
+        @rh.task()
+        def test():
+            try:
+                raise ValueError('bar')
+            except ValueError:
+                raise huey.api.Retry(msg='Bar is an expected error')
+
+        test()
+        task = rh.dequeue()
+        with self.assertRaises(huey.api.Retry) as context:
+            rh.execute(task)
+        self.assertTrue(hooks.on_task_error_final.called)
+        self.assertFalse(hooks.on_task_error_retries_left.called)
+        task_id, a_task, metadata, exception, is_manual_retry = hooks.on_task_error_final.call_args[0]
+        self.assertEqual(task_id, task.task_id)
+        self.assertEqual(task, a_task)
+        self.assertEqual(exception, context.exception)
+        self.assertTrue(is_manual_retry)
+        self.assertTrue('huey.api.Retry' in metadata['traceback'])
+        self.assertTrue('Bar is an expected error' in metadata['traceback'])
+
+    def test_execution_hooks_not_final_retry(self):
+        hooks = Mock()
+        huey = RedisHuey(hooks=hooks, global_registry=False)
+
+        @huey.task(retries=1)
+        def test():
+            raise ValueError('fail')
+
+        test()
+        task = huey.dequeue()
+        with self.assertRaises(ValueError) as context:
+            huey.execute(task)
+        self.assertFalse(hooks.on_task_error_final.called)
+        self.assertTrue(hooks.on_task_error_retries_left.called)
+        task_id, a_task, metadata, exception, is_manual_retry = hooks.on_task_error_retries_left.call_args[0]
+        self.assertEqual(task_id, task.task_id)
+        self.assertEqual(task, a_task)
+        self.assertEqual(exception, context.exception)
+        self.assertFalse(is_manual_retry)

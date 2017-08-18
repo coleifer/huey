@@ -14,7 +14,8 @@ class TaskRegistry(object):
     _registry = {}
     _periodic_tasks = []
 
-    def task_to_string(self, task):
+    @staticmethod
+    def task_to_string(task):
         return '%s' % (task.__name__)
 
     def register(self, task_class):
@@ -42,11 +43,12 @@ class TaskRegistry(object):
     def __contains__(self, klass_str):
         return klass_str in self._registry
 
-    def get_message_for_task(self, task):
+    @staticmethod
+    def get_message_for_task(task):
         """Convert a task object to a message for storage in the queue"""
         return pickle.dumps((
             task.task_id,
-            self.task_to_string(type(task)),
+            TaskRegistry.task_to_string(type(task)),
             task.execute_time,
             task.retries,
             task.retry_delay,

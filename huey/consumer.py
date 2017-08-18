@@ -8,13 +8,15 @@ import time
 from multiprocessing import Event as ProcessEvent
 from multiprocessing import Process
 
+import huey
+
 try:
     import gevent
     from gevent import Greenlet
     from gevent.event import Event as GreenEvent
 except ImportError:
     Greenlet = GreenEvent = None
-
+from huey.api import Huey
 from huey.constants import WORKER_GREENLET
 from huey.constants import WORKER_PROCESS
 from huey.constants import WORKER_THREAD
@@ -170,7 +172,8 @@ class Worker(BaseProcess):
                 task,
                 error=True,
                 duration=duration)
-            self._logger.exception('Unhandled exception in worker thread')
+            self._logger.error('{}\n{}'.format('Unhandled exception in worker thread',
+                                               Huey.format_latest_exc_info()))
             if task.retries:
                 self.requeue_task(task, self.get_now())
         else:
