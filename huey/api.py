@@ -644,6 +644,8 @@ def crontab(month='*', day='*', day_of_week='*', hour='*', minute='*'):
                 piece = int(piece)
                 if piece not in acceptable:
                     raise ValueError('%d is not a valid input' % piece)
+                elif date_str == 'w':
+                    piece %= 7
                 settings.add(piece)
 
             else:
@@ -652,11 +654,17 @@ def crontab(month='*', day='*', day_of_week='*', hour='*', minute='*'):
                     lhs, rhs = map(int, dash_match.groups())
                     if lhs not in acceptable or rhs not in acceptable:
                         raise ValueError('%s is not a valid input' % piece)
+                    elif date_str == 'w':
+                        lhs %= 7
+                        rhs %= 7
                     settings.update(range(lhs, rhs + 1))
                     continue
 
                 every_match = every_re.match(piece)
                 if every_match:
+                    if date_str == 'w':
+                        raise ValueError('Cannot perform this kind of matching'
+                                         ' on day-of-week.')
                     interval = int(every_match.groups()[0])
                     settings.update(acceptable[::interval])
 
