@@ -18,9 +18,9 @@ logger = logging.getLogger('huey.mini')
 
 
 class MiniHuey(object):
-    def __init__(self, name='huey'):
+    def __init__(self, name='huey', interval=1):
         self.name = name
-        self._interval = 1
+        self._interval = interval
         self._last_check = datetime.datetime.now()
         self._periodic_interval = datetime.timedelta(seconds=60)
         self._periodic_tasks = []
