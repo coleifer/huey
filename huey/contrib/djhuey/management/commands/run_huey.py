@@ -34,6 +34,7 @@ class Command(BaseCommand):
                     short = '-V'
                 if 'type' in kwargs:
                     kwargs['type'] = self._type_map[kwargs['type']]
+                kwargs.setdefault('default', None)
                 parser.add_argument(full, short, **kwargs)
 
     def autodiscover(self):
