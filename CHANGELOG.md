@@ -1,13 +1,20 @@
 Changelog
 =========
 
-v1.4.1 (unreleased)
+v1.4.2 (unreleased)
 -------------------
 
-[View commits](https://github.com/coleifer/huey/compare/1.4.0...HEAD)
+[View commits](https://github.com/coleifer/huey/compare/1.4.1...HEAD)
 
-Support using `7` to represent *Sunday* when doing day-of-week calculations in
-the `crontab` helper.
+v1.4.1
+------
+
+[View commits](https://github.com/coleifer/huey/compare/1.4.0...1.4.1)
+
+* Support using `7` to represent *Sunday* when doing day-of-week calculations
+  in the `crontab` helper.
+* Fix bug #243, wherein Django interpreted boolean CLI arguments as having a
+  boolean default value.
 
 
 v1.4.0
@@ -16,13 +23,13 @@ v1.4.0
 [View commits](https://github.com/coleifer/huey/compare/1.3.1...1.4.0)
 
 Fixed a subtle bug in the way Huey calculated when to run the periodic task
-scheduler. If you had configured the consumer to check the schedule at an 
+scheduler. If you had configured the consumer to check the schedule at an
 interval that was not a factor of 60, then there is a chance that periodic
 tasks may be scheduled at incorrect intervals from one minute to the next. This
 is fixed in 1.4.0.
 
 Added better signal handling in order to support graceful shutdown. Graceful
-shutdown involves letting workers finish executing any tasks they may be 
+shutdown involves letting workers finish executing any tasks they may be
 processing at the time the shutdown signal is received. The default behavior is
 to interrupt the workers mid-task. Huey uses `SIGTERM` to shutdown the
 consumer immediately, and `SIGINT` to gracefully shutdown.
@@ -86,8 +93,8 @@ v1.2.0
 
 [View commits](https://github.com/coleifer/huey/compare/1.1.2...1.2.0)
 
-Removed the metadata APIs added in 1.1.0, as they seemed poorly-designed and 
-altogether a decent idea terribly implemented. Perhaps something I'll revisit, 
+Removed the metadata APIs added in 1.1.0, as they seemed poorly-designed and
+altogether a decent idea terribly implemented. Perhaps something I'll revisit,
 but which should be easy to implement as a third-party library using the events
 APIs.
 
@@ -105,7 +112,7 @@ v1.1.2
 
 I've added a new API for fetching a task's result given on the task's ID. You
 can now call `huey.result(task_id)` and retrieve the result if the task has
-finished executing. Additionally, the [Huey.result](https://huey.readthedocs.io/en/latest/api.html#Huey.result) 
+finished executing. Additionally, the [Huey.result](https://huey.readthedocs.io/en/latest/api.html#Huey.result)
 method accepts the same parameters as [AsyncData.get](https://huey.readthedocs.io/en/latest/api.html#AsyncData.get),
 allowing you to block for results, specify a timeout, etc.
 
