@@ -1,3 +1,4 @@
+from huey import RedisHuey
 from huey.api import crontab
 from huey.api import QueueTask
 from huey.registry import registry
@@ -35,3 +36,15 @@ class TestRegistry(BaseTestCase):
         periodic = registry._periodic_tasks
         task_classes = [type(task) for task in periodic]
         self.assertTrue(test_task_two.task_class in task_classes)
+
+    def test_non_global_task_registry(self):
+
+        huey = RedisHuey(global_registry=False)
+
+        @huey.task()
+        def test():
+            return 'test'
+
+        self.assertIn('queuecmd_test', huey.registry._registry)
+        huey2 = RedisHuey(global_registry=False)
+        self.assertNotIn('queuecmd_test', huey2.registry._registry)
