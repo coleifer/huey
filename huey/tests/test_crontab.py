@@ -55,6 +55,16 @@ class CrontabTestCase(BaseTestCase):
             res = validate_dow(datetime.datetime(2011, 1, x))
             self.assertEqual(res, x in valids)
 
+    def test_crontab_sunday(self):
+        for dow in ('0', '7'):
+            validate = crontab(day_of_week=dow, hour='0', minute='0')
+            valid = set((2, 9, 16, 23, 30))
+            for x in range(1, 32):
+                if x in valid:
+                    self.assertTrue(validate(datetime.datetime(2011, 1, x)))
+                else:
+                    self.assertFalse(validate(datetime.datetime(2011, 1, x)))
+
     def test_crontab_all_together(self):
         # jan 1, 2011 is a saturday
         # may 1, 2011 is a sunday

@@ -11,8 +11,9 @@ class TaskRegistry(object):
     """
     _ignore = ['QueueTask', 'PeriodicQueueTask', 'NewBase']
 
-    _registry = {}
-    _periodic_tasks = []
+    def __init__(self):
+        self._registry = {}
+        self._periodic_tasks = []
 
     @staticmethod
     def task_to_string(task):
