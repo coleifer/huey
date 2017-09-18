@@ -1,3 +1,4 @@
+import contextlib
 import datetime
 import json
 import pickle
@@ -5,7 +6,9 @@ import re
 import time
 import traceback
 import uuid
+import sys
 from functools import wraps
+import logging
 
 from huey.constants import EmptyData
 from huey.exceptions import DataStoreGetException
@@ -61,7 +64,8 @@ class Huey(object):
     """
     def __init__(self, name='huey', result_store=True, events=True,
                  store_none=False, always_eager=False, store_errors=True,
-                 blocking=False, global_registry=True, **storage_kwargs):
+                 blocking=False, global_registry=True, hooks=None, **storage_kwargs):
+        self._logger = logging.getLogger('%s.%s' % (self.__class__.__module__, self.__class__.__name__))
         self.name = name
         self.result_store = result_store
         self.events = events
@@ -70,6 +74,7 @@ class Huey(object):
         self.store_errors = store_errors
         self.blocking = blocking
         self.storage = self.get_storage(**storage_kwargs)
+        self.hooks = hooks
         if global_registry:
             self.registry = registry
         else:
@@ -102,6 +107,7 @@ class Huey(object):
             """
             Decorator to execute a function out-of-band via the consumer.
             """
+            # create the task class
             klass = create_task(
                 QueueTask,
                 func,
@@ -127,6 +133,7 @@ class Huey(object):
 
             @wraps(func)
             def inner_run(*args, **kwargs):
+                # create class instance
                 cmd = klass(
                     (args, kwargs),
                     retries=retries,
@@ -256,10 +263,16 @@ class Huey(object):
             'retry_delay': task.retry_delay,
             'execute_time': self._format_time(task.execute_time)}
         if include_data and not isinstance(task, PeriodicQueueTask):
-            targs, tkwargs = task.get_data()
-            if tkwargs.get("task") and isinstance(tkwargs["task"], QueueTask):
-                del(tkwargs['task'])
-            metadata['data'] = (targs, tkwargs)
+            res = task.get_data()
+            # function style
+            if isinstance(res, tuple):
+                targs, tkwargs = res
+                if tkwargs.get("task") and isinstance(tkwargs["task"], QueueTask):
+                    del (tkwargs['task'])
+                metadata['data'] = (targs, tkwargs)
+            # class style
+            else:
+                metadata['data'] = res
 
         return metadata
 
@@ -267,7 +280,7 @@ class Huey(object):
         if self.events:
             metadata = {'status': status, 'error': error}
             if error:
-                metadata['traceback'] = traceback.format_exc()
+                metadata['traceback'] = Huey.format_latest_exc_info()
             metadata.update(data)
             self.emit(json.dumps(metadata))
 
@@ -277,19 +290,55 @@ class Huey(object):
             metadata.update(data)
             self.emit_status(status, error=error, **metadata)
 
+    @staticmethod
+    def get_latest_exc_info():
+        """ Get the latest exc_info but do not show exc_info of Retry exception """
+        exc_info = sys.exc_info()
+        return exc_info
+
+    @staticmethod
+    def format_latest_exc_info():
+        """ Format the latest exc_info """
+        exc_info = Huey.get_latest_exc_info()
+        return ''.join(traceback.format_exception(*exc_info))
+
+    @contextlib.contextmanager
+    def call_hook(self):
+        try:
+            yield
+        except:
+            self._logger.exception('Unhandled exception in hooks')
+
     def execute(self, task):
         if not isinstance(task, QueueTask):
             raise TypeError('Unknown object: %s' % task)
 
         try:
+            if self.hooks:
+                with self.call_hook():
+                    self.hooks.on_task_execution_start(task.task_id, task)
             result = task.execute()
+            if self.hooks:
+                with self.call_hook():
+                    self.hooks.on_task_execution_finished(task.task_id, task)
         except Exception as exc:
             if self.result_store and self.store_errors:
-                metadata = self._get_task_metadata(task, True)
+                metadata = self._get_task_metadata(task, error=True, include_data=True)
+                metadata['traceback'] = Huey.format_latest_exc_info()
                 metadata['error'] = exc
-                metadata['traceback'] = traceback.format_exc()
                 self._put_error(pickle.dumps(metadata))
-            raise
+            if self.hooks is not None:
+                is_manual_retry = isinstance(exc, Retry)
+                metadata = self._get_task_metadata(task, error=True, include_data=True)
+                metadata['traceback'] = Huey.format_latest_exc_info()
+                metadata['time'] = datetime.datetime.utcnow().isoformat()
+                if task.retries == 0:
+                    with self.call_hook():
+                        self.hooks.on_task_error_final(task.task_id, task, metadata, exc, is_manual_retry)
+                elif task.retries > 0:
+                    with self.call_hook():
+                        self.hooks.on_task_error_retries_left(task.task_id, task, metadata, exc, is_manual_retry)
+            raise exc
 
         if result is None and not self.store_none:
             return
@@ -547,7 +596,8 @@ class QueueTask(object):
             rep += ' %s retries' % self.retries
         return rep
 
-    def create_id(self):
+    @staticmethod
+    def create_id():
         return str(uuid.uuid4())
 
     def get_data(self):
@@ -683,3 +733,71 @@ def crontab(month='*', day='*', day_of_week='*', hour='*', minute='*'):
         return True
 
     return validate_date
+
+
+class Hooks:
+    def on_task_execution_start(self, task_id, task):
+        """
+        Called when a worker is about to execute a task.
+
+        :param task_id: Id of the task
+        :type task_id: str
+        :param task: The task that failed.
+        :type task: dict
+        """
+        pass
+
+    def on_task_execution_finished(self, task_id, task):
+        """
+        Called when a worker executed a task successfully.
+
+        :param task_id: Id of the task
+        :type task_id: str
+        :param task: The task that failed.
+        :type task: dict
+        """
+        pass
+
+    def on_task_error_retries_left(self, task_id, task, metadata, exception, is_manual_retry):
+        """
+        Called if a task raised an exception but still has retries left.
+
+        :param task_id: Id of the task
+        :type task_id: str
+        :param task: The task that failed.
+        :type task: dict
+        :param metadata: Metadata about the task.
+        :type metadata: dict
+        :param exception: The exception that caused the failure.
+        :type exception: Exception
+        :param is_manual_retry: Whether the exception is raised manually with Raise() in the task.
+        :type is_manual_retry: bool
+        """
+        pass
+
+    def on_task_error_final(self, task_id, task, metadata, exception, is_manual_retry):
+        """
+        Called if a task raised an exception and all retries are exceeded.
+
+        :param task_id: Id of the task
+        :type task_id: str
+        :param task: The task that failed.
+        :type task: dict
+        :param metadata: Metadata about the task.
+        :type metadata: dict
+        :param exception: The exception that caused the failure.
+        :type exception: Exception
+        :param is_manual_retry: Whether the exception is raised manually with Raise() in the task.
+        :type is_manual_retry: bool
+        """
+        pass
+
+
+class Retry(Exception):
+    def __init__(self, msg=None):
+        if msg is None:
+            msg = ''
+        self.msg = msg
+
+    def __str__(self):
+        return self.msg

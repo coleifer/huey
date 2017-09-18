@@ -6,7 +6,9 @@ python:
   - "3.6"
 services:
   - redis
-install: "pip install redis"
+install:
+- "pip install redis"
+- "if [[ $TRAVIS_PYTHON_VERSION == 2.7 ]]; then pip install mock; fi"
 script: "python runtests.py"
 notifications:
   email: true
