@@ -127,7 +127,7 @@ listed here.
     workloads, *process* is likely to be more performant. The *greenlet* worker
     type is suited for IO-heavy workloads. When using *greenlet* you can
     specify tens or hundreds of workers since they are extremely lightweight
-    compared to threads/processes.
+    compared to threads/processes. *See note below on using gevent/greenlet*.
 
 .. note::
     Due to a conflict with Django's base option list, the "verbose" option is
@@ -135,6 +135,35 @@ listed here.
     DEBUG level.
 
 For more information, read the :ref:`Options for the consumer <consumer-options>` section.
+
+Using gevent
+^^^^^^^^^^^^
+
+When using worker type *greenlet*, it's necessary to apply a monkey-patch
+before any libraries or system modules are imported. Gevent monkey-patches
+things like ``socket`` to provide non-blocking I/O, and if those modules are
+loaded before the patch is applied, then the resulting code will execute
+synchronously.
+
+Unfortunately, because of Django's design, the only way to reliably apply this
+patch is to create a custom bootstrap script that mimics the functionality of
+``manage.py``. Here is the patched ``manage.py`` code:
+
+.. code-block:: python
+
+    #!/usr/bin/env python
+    import os
+    import sys
+
+    # Apply monkey-patch if we are running the huey consumer.
+    if 'run_huey' in sys.argv:
+        from gevent import monkey
+        monkey.patch_all()
+
+    if __name__ == "__main__":
+        os.environ.setdefault("DJANGO_SETTINGS_MODULE", "conf")
+        from django.core.management import execute_from_command_line
+        execute_from_command_line(sys.argv)
 
 How to create tasks
 ^^^^^^^^^^^^^^^^^^^
