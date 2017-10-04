@@ -14,76 +14,217 @@ class BaseStorage(object):
         self.name = name
 
     def enqueue(self, data):
+        """
+        Given an opaque chunk of data, add it to the queue.
+
+        :param bytes data: Task data.
+        :return: No return value.
+        """
         raise NotImplementedError
 
     def dequeue(self):
+        """
+        Atomically remove data from the queue. If no data is available, no data
+        is returned.
+
+        :return: Opaque binary task data or None if queue is empty.
+        """
         raise NotImplementedError
 
     def unqueue(self, data):
+        """
+        Atomically remove the given data from the queue, if it is present. This
+        method is used to "delete" a task without executing it. It is not
+        expected that this method will be used very often. Up to the
+        implementation whether more than one instance of the task can be
+        deleted, but typically each chunk of data is unique because it has a
+        UUID4 task id.
+
+        :param bytes data: Task data to remove.
+        :return: Number of tasks deleted.
+        """
         raise NotImplementedError
 
     def queue_size(self):
+        """
+        Return the length of the queue.
+
+        :return: Number of tasks.
+        """
         raise NotImplementedError
 
     def enqueued_items(self, limit=None):
+        """
+        Non-destructively read the given number of tasks from the queue. If no
+        limit is specified, all tasks will be read.
+
+        :param int limit: Restrict the number of tasks returned.
+        :return: A list containing opaque binary task data.
+        """
         raise NotImplementedError
 
     def flush_queue(self):
+        """
+        Remove all data from the queue.
+
+        :return: No return value.
+        """
         raise NotImplementedError
 
     def add_to_schedule(self, data, ts):
+        """
+        Add the given task data to the schedule, to be executed at the given
+        timestamp.
+
+        :param bytes data: Task data.
+        :param datetime ts: Timestamp at which task should be executed.
+        :return: No return value.
+        """
         raise NotImplementedError
 
     def read_schedule(self, ts):
+        """
+        Read all tasks from the schedule that should be executed at or before
+        the given timestamp. Once read, the tasks are removed from the
+        schedule.
+
+        :param datetime ts: Timestamp
+        :return: List containing task data for tasks which should be executed
+                 at or before the given timestamp.
+        """
         raise NotImplementedError
 
     def schedule_size(self):
+        """
+        :return: The number of tasks currently in the schedule.
+        """
         raise NotImplementedError
 
     def scheduled_items(self, limit=None):
+        """
+        Non-destructively read the given number of tasks from the schedule.
+
+        :param int limit: Restrict the number of tasks returned.
+        :return: List of tasks that are in schedule, in order from soonest to
+                 latest.
+        """
         raise NotImplementedError
 
     def flush_schedule(self):
+        """
+        Delete all scheduled tasks.
+
+        :return: No return value.
+        """
         raise NotImplementedError
 
     def put_data(self, key, value):
+        """
+        Store an arbitrary key/value pair.
+
+        :param bytes key: lookup key
+        :param bytes value: value
+        :return: No return value.
+        """
         raise NotImplementedError
 
     def peek_data(self, key):
+        """
+        Non-destructively read the value at the given key, if it exists.
+
+        :param bytes key: Key to read.
+        :return: Associated value, if key exists, or ``EmptyData``.
+        """
         raise NotImplementedError
 
     def pop_data(self, key):
+        """
+        Destructively read the value at the given key, if it exists.
+
+        :param bytes key: Key to read.
+        :return: Associated value, if key exists, or ``EmptyData``.
+        """
         raise NotImplementedError
 
     def has_data_for_key(self, key):
+        """
+        Return whether there is data for the given key.
+
+        :return: Boolean value.
+        """
         raise NotImplementedError
 
     def result_store_size(self):
+        """
+        :return: Number of key/value pairs in the result store.
+        """
         raise NotImplementedError
 
     def result_items(self):
+        """
+        Non-destructively read all the key/value pairs from the data-store.
+
+        :return: Dictionary mapping all key/value pairs in the data-store.
+        """
         raise NotImplementedError
 
     def flush_results(self):
+        """
+        Delete all key/value pairs from the data-store.
+
+        :return: No return value.
+        """
         raise NotImplementedError
 
     def put_error(self, metadata):
+        """
+        Log an error in the error store. The ``max_errors`` parameter is used
+        to prevent the error store from growing without bounds.
+
+        :param metadata: Store the metadata in the error store.
+        :return: No return value.
+        """
         raise NotImplementedError
 
     def get_errors(self, limit=None, offset=0):
+        """
+        Non-destructively read error data from the error store.
+
+        :param int limit: Restrict number of rows returned.
+        :param int offset: Start reading at the given offset.
+        :return: List of error metadata.
+        """
         raise NotImplementedError
 
     def flush_errors(self):
+        """
+        Delete all error metadata from the error store.
+
+        :return: No return value.
+        """
         raise NotImplementedError
 
     def emit(self, message):
+        """
+        Publish a message from the consumer.
+        """
         raise NotImplementedError
 
     def __iter__(self):
+        """
+        Successively yield events emitted by the huey consumer(s).
+
+        :return: Iterator that yields consumer event metadata.
+        """
         # Iterate over consumer-sent events.
         raise NotImplementedError
 
     def flush_all(self):
+        """
+        Remove all persistent or semi-persistent data.
+
+        :return: No return value.
+        """
         self.flush_queue()
         self.flush_schedule()
         self.flush_results()
@@ -238,6 +379,11 @@ class RedisStorage(BaseStorage):
         self.conn.publish(self.name, message)
 
     def listener(self):
+        """
+        Create a channel for listening to raw event data.
+
+        :return: a Redis pubsub object.
+        """
         pubsub = self.conn.pubsub()
         pubsub.subscribe([self.name])
         return pubsub
