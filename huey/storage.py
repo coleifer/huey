@@ -2,8 +2,11 @@ import json
 import re
 import time
 
-import redis
-from redis.exceptions import ConnectionError
+try:
+    import redis
+    from redis.exceptions import ConnectionError
+except ImportError:
+    redis = ConnectionError = None
 
 from huey.api import Huey
 from huey.constants import EmptyData
@@ -247,6 +250,12 @@ class RedisStorage(BaseStorage):
     def __init__(self, name='huey', blocking=False, read_timeout=1,
                  max_errors=1000, connection_pool=None, url=None,
                  client_name=None, **connection_params):
+
+        if redis is None:
+            raise ImportError('"redis" python module not found, cannot use '
+                              'Redis storage backend. Run "pip install redis" '
+                              'to install.')
+
         if sum(1 for p in (url, connection_pool, connection_params) if p) > 1:
             raise ValueError(
                 'The connection configuration is over-determined. '
