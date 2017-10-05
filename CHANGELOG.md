@@ -1,10 +1,28 @@
 Changelog
 =========
 
-v1.4.2 (unreleased)
+v1.5.1 (unreleased)
 -------------------
 
-[View commits](https://github.com/coleifer/huey/compare/1.4.1...HEAD)
+[View commits](https://github.com/coleifer/huey/compare/1.5.0...HEAD)
+
+v1.5.0
+------
+
+[View commits](https://github.com/coleifer/huey/compare/1.4.1...1.5.0)
+
+* Allow all instances of a task to be revoked/restored by adding the
+  `revoke()`, `restore()` and `is_revoked()` methods to all decorated tasks
+  (where previously they were only available on periodic tasks).
+* Periodic task instances now have a unique identifier.
+* Added documentation on how to correctly use the Django consumer management
+  command with the `gevent` worker model.
+* Logging will lazily resolve log messages.
+* Bug was fixed that prevented the local (non-global) task registry from
+  working as intended. This is now fixed.
+* Docstrings added to the `BaseStorage` APIs.
+
+Thanks to @mindojo-victor and @nachtmaar for help with some of the above items.
 
 v1.4.1
 ------
