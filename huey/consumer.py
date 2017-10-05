@@ -71,7 +71,7 @@ class BaseProcess(object):
         sleep_time = nseconds - (time.time() - start_ts)
         if sleep_time <= 0:
             return
-        self._logger.debug('Sleeping for %s' % sleep_time)
+        self._logger.debug('Sleeping for %s', sleep_time)
         # Recompute time to sleep to improve accuracy in case the process was
         # pre-empted by the kernel while logging.
         sleep_time = nseconds - (time.time() - start_ts)
@@ -83,9 +83,9 @@ class BaseProcess(object):
             self.huey.enqueue(task)
         except QueueWriteException:
             self.huey.emit_task(EVENT_ERROR_ENQUEUEING, task, error=True)
-            self._logger.error('Error enqueueing task: %s' % task)
+            self._logger.exception('Error enqueueing task: %s', task)
         else:
-            self._logger.debug('Enqueued task: %s' % task)
+            self._logger.debug('Enqueued task: %s', task)
 
     def loop(self, now=None):
         raise NotImplementedError
@@ -128,7 +128,7 @@ class Worker(BaseProcess):
         if self.delay > self.max_delay:
             self.delay = self.max_delay
 
-        self._logger.debug('No messages, sleeping for: %s' % self.delay)
+        self._logger.debug('No messages, sleeping for: %s', self.delay)
         time.sleep(self.delay)
         self.delay *= self.backoff
 
@@ -142,7 +142,7 @@ class Worker(BaseProcess):
                 EVENT_REVOKED,
                 task,
                 timestamp=to_timestamp(ts))
-            self._logger.debug('Task %s was revoked, not running' % task)
+            self._logger.debug('Task %s was revoked, not running', task)
 
     def process_task(self, task, ts):
         self.huey.emit_task(EVENT_STARTED, task, timestamp=to_timestamp(ts))
@@ -153,7 +153,7 @@ class Worker(BaseProcess):
                 self.huey.execute(task)
             finally:
                 duration = time.time() - start
-                self._logger.debug('Task %s ran in %0.3fs' % (task, duration))
+                self._logger.debug('Task %s ran in %0.3fs', task, duration)
         except DataStorePutException:
             self.huey.emit_task(
                 EVENT_ERROR_STORING_RESULT,
@@ -162,8 +162,8 @@ class Worker(BaseProcess):
                 duration=duration)
             self._logger.exception('Error storing result')
         except KeyboardInterrupt:
-            self._logger.info('Received exit signal, task %s did not finish.' %
-                              (task.task_id))
+            self._logger.info('Received exit signal, task %s did not finish.',
+                              task.task_id)
         except:
             self.huey.emit_task(
                 EVENT_ERROR_TASK,
@@ -183,8 +183,8 @@ class Worker(BaseProcess):
     def requeue_task(self, task, ts):
         task.retries -= 1
         self.huey.emit_task(EVENT_RETRYING, task)
-        self._logger.info('Re-enqueueing task %s, %s tries left' %
-                          (task.task_id, task.retries))
+        self._logger.info('Re-enqueueing task %s, %s tries left',
+                          task.task_id, task.retries)
         if task.retry_delay:
             delay = datetime.timedelta(seconds=task.retry_delay)
             task.execute_time = ts + delay
@@ -193,12 +193,12 @@ class Worker(BaseProcess):
             self.enqueue(task)
 
     def add_schedule(self, task):
-        self._logger.info('Adding %s to schedule' % task)
+        self._logger.info('Adding %s to schedule', task)
         try:
             self.huey.add_schedule(task)
         except ScheduleAddException:
             self.huey.emit_task(EVENT_ERROR_SCHEDULING, task, error=True)
-            self._logger.error('Error adding task to schedule: %s' % task)
+            self._logger.error('Error adding task to schedule: %s', task)
         else:
             self.huey.emit_task(EVENT_SCHEDULED, task)
 
@@ -209,7 +209,7 @@ class Worker(BaseProcess):
             return False
         except DataStoreGetException:
             self.huey.emit_task(EVENT_ERROR_INTERNAL, task, error=True)
-            self._logger.error('Error checking if task is revoked: %s' % task)
+            self._logger.error('Error checking if task is revoked: %s', task)
             return True
 
 
@@ -235,7 +235,7 @@ class Scheduler(BaseProcess):
             self._logger.exception('Error reading from task schedule.')
         else:
             for task in task_list:
-                self._logger.info('Scheduling %s for execution' % task)
+                self._logger.info('Scheduling %s for execution', task)
                 self.enqueue(task)
 
         if self.periodic:
@@ -271,7 +271,7 @@ class Scheduler(BaseProcess):
                 EVENT_SCHEDULING_PERIODIC,
                 task,
                 timestamp=self.get_timestamp())
-            self._logger.info('Scheduling periodic task %s.' % task)
+            self._logger.info('Scheduling periodic task %s.', task)
             self.enqueue(task)
 
         return True
@@ -413,7 +413,7 @@ class Consumer(object):
             except KeyboardInterrupt:
                 pass
             except:
-                self._logger.exception('Process %s died!' % name)
+                self._logger.exception('Process %s died!', name)
         return self.environment.create_process(_run, name)
 
     def start(self):
@@ -423,16 +423,13 @@ class Consumer(object):
                 ' is enabled. Please check your configuration and ensure that'
                 ' "huey.always_eager = False".')
         # Log startup message.
-        self._logger.info('Huey consumer started with %s %s, PID %s' % (
-            self.workers,
-            self.worker_type,
-            os.getpid()))
-        self._logger.info('Scheduler runs every %s seconds.' % (
-            self.scheduler_interval))
-        self._logger.info('Periodic tasks are %s.' % (
-            'enabled' if self.periodic else 'disabled'))
-        self._logger.info('UTC is %s.' % (
-            'enabled' if self.utc else 'disabled'))
+        self._logger.info('Huey consumer started with %s %s, PID %s',
+                          self.workers, self.worker_type, os.getpid())
+        self._logger.info('Scheduler runs every %s second(s).',
+                          self.scheduler_interval)
+        self._logger.info('Periodic tasks are %s.',
+                          'enabled' if self.periodic else 'disabled')
+        self._logger.info('UTC is %s.', 'enabled' if self.utc else 'disabled')
 
         self._set_signal_handler()
 
@@ -501,7 +498,7 @@ class Consumer(object):
         restart_occurred = False
         for i, (worker, worker_t) in enumerate(self.worker_threads):
             if not self.environment.is_alive(worker_t):
-                self._logger.warning('Worker %d died, restarting.' % (i + 1))
+                self._logger.warning('Worker %d died, restarting.', i + 1)
                 worker = self._create_worker()
                 worker_t = self._create_process(worker, 'Worker-%d' % (i + 1))
                 worker_t.start()
