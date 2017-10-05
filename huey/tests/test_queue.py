@@ -54,6 +54,10 @@ throw_error_task_res = huey_results.task()(_throw_error_task)
 def add_values(a, b):
     return a + b
 
+@huey_results.task()
+def add_values2(a, b):
+    return a + b
+
 @huey_results.periodic_task(crontab(minute='0'))
 def hourly_task2():
     state['periodic'] = 2
@@ -372,6 +376,40 @@ class TestHueyQueueAPIs(BaseQueueTestCase):
                 huey_results.execute(task)
 
         self.assertEqual(state, {'k': 'v', 'k3': 'v3'})
+
+    def test_revoke_all(self):
+        r1 = add_values(1, 2)
+        r2 = add_values(2, 3)
+        r3 = add_values(3, 4)
+        r4 = add_values2(4, 5)
+
+        add_values.revoke()
+        self.assertFalse(r2.restore())  # No effect, task itself is revoked.
+        self.assertTrue(add_values.is_revoked())
+        for task_result in (r1, r2, r3):
+            self.assertTrue(task_result.is_revoked())
+
+        self.assertFalse(r4.is_revoked())
+        self.assertEqual(len(huey_results), 4)
+
+        results = []
+        while huey_results:
+            task = huey_results.dequeue()
+            if not huey_results.is_revoked(task):
+                results.append(task.execute())
+        self.assertEqual(results, [9])
+
+        add_values.restore()
+        rr_1 = add_values(5, 6)
+        rr_2 = add_values(6, 7)
+        for task_result in (rr_1, rr_2):
+            self.assertFalse(task_result.is_revoked())
+
+        while huey_results:
+            task = huey_results.dequeue()
+            if not huey_results.is_revoked(task):
+                results.append(task.execute())
+        self.assertEqual(results, [9, 11, 13])
 
     def test_revoke_restore_by_id(self):
         t1 = PutTask(('k1', 'v1'))

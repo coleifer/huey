@@ -6,6 +6,7 @@ import time
 import traceback
 import uuid
 from functools import wraps
+from inspect import isclass
 
 from huey.constants import EmptyData
 from huey.exceptions import DataStoreGetException
@@ -96,6 +97,22 @@ class Huey(object):
                 eta = make_naive(eta)
             return eta
 
+    def _add_task_control_helpers(self, klass, task_func):
+        def is_revoked(dt=None, peek=True):
+            return self.is_revoked(klass, dt, peek)
+
+        def revoke(revoke_until=None, revoke_once=False):
+            self.revoke_all(klass, revoke_until, revoke_once)
+
+        def restore():
+            return self.restore_all(klass)
+
+        task_func.task_class = klass
+        task_func.is_revoked = is_revoked
+        task_func.revoke = revoke
+        task_func.restore = restore
+        return task_func
+
     def task(self, retries=0, retry_delay=0, retries_as_argument=False,
              include_task=False, name=None):
         def decorator(func):
@@ -110,6 +127,8 @@ class Huey(object):
                 include_task)
             self.registry.register(klass)
 
+            func = self._add_task_control_helpers(klass, func)
+
             def schedule(args=None, kwargs=None, eta=None, delay=None,
                          convert_utc=True, task_id=None):
                 execute_time = self._normalize_execute_time(
@@ -123,7 +142,6 @@ class Huey(object):
                 return self.enqueue(cmd)
 
             func.schedule = schedule
-            func.task_class = klass
 
             @wraps(func)
             def inner_run(*args, **kwargs):
@@ -149,25 +167,10 @@ class Huey(object):
                 PeriodicQueueTask,
                 func,
                 task_name=name,
-                validate_datetime=method_validate,
-            )
+                validate_datetime=method_validate)
             self.registry.register(klass)
 
-            func.task_class = klass
-
-            def _revoke(revoke_until=None, revoke_once=False):
-                self.revoke(klass(), revoke_until, revoke_once)
-            func.revoke = _revoke
-
-            def _is_revoked(dt=None, peek=True):
-                return self.is_revoked(klass(), dt, peek)
-            func.is_revoked = _is_revoked
-
-            def _restore():
-                return self.restore(klass())
-            func.restore = _restore
-
-            return func
+            return self._add_task_control_helpers(klass, func)
         return decorator
 
     def _wrapped_operation(exc_class):
@@ -299,6 +302,13 @@ class Huey(object):
 
         return result
 
+    def revoke_all(self, task_class, revoke_until=None, revoke_once=False):
+        serialized = pickle.dumps((revoke_until, revoke_once))
+        self._put_data('rt:%s' % task_class.__name__, serialized)
+
+    def restore_all(self, task_class):
+        return self._get_data('rt:%s' % task_class.__name__) is not EmptyData
+
     def revoke(self, task, revoke_until=None, revoke_once=False):
         serialized = pickle.dumps((revoke_until, revoke_once))
         self._put_data(task.revoke_id, serialized)
@@ -314,20 +324,47 @@ class Huey(object):
     def restore_by_id(self, task_id):
         return self.restore(QueueTask(task_id=task_id))
 
-    def is_revoked(self, task, dt=None, peek=True):
-        if not isinstance(task, QueueTask):
-            task = QueueTask(task_id=task)
-        res = self._get_data(task.revoke_id, peek=True)
+    def _check_revoked(self, revoke_id, dt=None, peek=True):
+        """
+        Checks if a task is revoked, returns a 2-tuple indicating:
+
+        1. Is task revoked?
+        2. Should task be restored?
+        """
+        res = self._get_data(revoke_id, peek=True)
         if res is EmptyData:
-            return False
+            return False, False
+
         revoke_until, revoke_once = pickle.loads(res)
         if revoke_once:
             # This task *was* revoked for one run, but now it should be
-            # restored to normal execution.
-            if not peek:
-                self.restore(task)
-            return True
-        return revoke_until is None or revoke_until > dt
+            # restored to normal execution (unless we are just peeking).
+            return True, not peek
+        elif revoke_until is not None and revoke_until <= dt:
+            # Task is no longer revoked and can be restored.
+            return False, True
+        else:
+            # Task is still revoked. Do not restore.
+            return True, False
+
+    def is_revoked(self, task, dt=None, peek=True):
+        if isclass(task) and issubclass(task, QueueTask):
+            revoke_id = 'rt:%s' % task.__name__
+            is_revoked, can_restore = self._check_revoked(revoke_id, dt, peek)
+            if can_restore:
+                self.restore_all(task)
+            return is_revoked
+
+        if not isinstance(task, QueueTask):
+            task = QueueTask(task_id=task)
+
+        is_revoked, can_restore = self._check_revoked(task.revoke_id, dt, peek)
+        if can_restore:
+            self.restore(task)
+        if not is_revoked:
+            is_revoked = self.is_revoked(type(task), dt, peek)
+
+        return is_revoked
 
     def add_schedule(self, task):
         msg = self.registry.get_message_for_task(task)
@@ -478,11 +515,14 @@ class TaskResultWrapper(object):
 
             return self._result
 
+    def is_revoked(self):
+        return self.huey.is_revoked(self.task, peek=True)
+
     def revoke(self):
         self.huey.revoke(self.task)
 
     def restore(self):
-        self.huey.restore(self.task)
+        return self.huey.restore(self.task)
 
     def reschedule(self, eta=None, delay=None, convert_utc=True):
         # Rescheduling works by revoking the currently-scheduled task (nothing
@@ -531,13 +571,13 @@ class QueueTask(object):
 
     def __init__(self, data=None, task_id=None, execute_time=None, retries=0,
                  retry_delay=0):
+        self.name = type(self).__name__
         self.set_data(data)
         self.task_id = task_id or self.create_id()
         self.revoke_id = 'r:%s' % self.task_id
         self.execute_time = execute_time
         self.retries = retries
         self.retry_delay = retry_delay
-        self.name = type(self).__name__
 
     def __repr__(self):
         rep = '%s: %s' % (self.name, self.task_id)
@@ -568,9 +608,6 @@ class QueueTask(object):
 
 
 class PeriodicQueueTask(QueueTask):
-    def create_id(self):
-        return type(self).__name__
-
     def validate_datetime(self, dt):
         """Validate that the task should execute at the given datetime"""
         return False
@@ -589,15 +626,13 @@ def create_task(task_class, func, retries_as_argument=False, task_name=None,
     attrs = {
         'execute': execute,
         '__module__': func.__module__,
-        '__doc__': func.__doc__
-    }
+        '__doc__': func.__doc__}
     attrs.update(kwargs)
 
     klass = type(
         task_name or 'queuecmd_%s' % (func.__name__),
         (task_class,),
-        attrs
-    )
+        attrs)
 
     return klass
 

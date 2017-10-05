@@ -192,6 +192,43 @@ Function decorators and helpers
                 >>> count_some_beans.call_local(1337)
                 'Counted 1337 beans'
 
+        .. py:function:: {decorated_func}.revoke([revoke_until=None[, revoke_once=False]])
+
+            Prevent any instance of the given task from executing.  When no
+            parameters are provided the function will not execute again until
+            explicitly restored.
+
+            This function can be called multiple times, but each call will
+            supercede any limitations placed on the previous revocation.
+
+            :param datetime revoke_until: Prevent the execution of the task until the
+                given datetime.  If ``None`` it will prevent execution indefinitely.
+            :param bool revoke_once: If ``True`` will only prevent execution of the next
+                invocation of the task.
+
+            .. code-block:: python
+
+                # skip the next execution
+                count_some_beans.revoke(revoke_once=True)
+
+                # prevent any invocation from executing.
+                count_some_beans.revoke()
+
+                # prevent any invocation for 24 hours.
+                count_some_beans.revoke(datetime.datetime.now() + datetime.timedelta(days=1))
+
+        .. py:function:: {decorated_func}.is_revoked([dt=None])
+
+            Check whether the given task is revoked.  If ``dt`` is specified,
+            it will check if the task is revoked with respect to the given datetime.
+
+            :param datetime dt: If provided, checks whether task is revoked at the
+                given datetime
+
+        .. py:function:: {decorated_func}.restore()
+
+            Clears any revoked status and allows the task to run normally.
+
         .. py:attribute:: {decorated func}.task_class
 
             Store a reference to the task class for the decorated function.
@@ -258,10 +295,11 @@ Function decorators and helpers
         .. py:function:: {decorated_func}.revoke([revoke_until=None[, revoke_once=False]])
 
             Prevent the given periodic task from executing.  When no parameters are
-            provided the function will not execute again.
+            provided the function will not execute again until explicitly
+            restored.
 
-            This function can be called multiple times, but each call will overwrite
-            the limitations of the previous.
+            This function can be called multiple times, but each call will
+            supercede any limitations placed on the previous revocation.
 
             :param datetime revoke_until: Prevent the execution of the task until the
                 given datetime.  If ``None`` it will prevent execution indefinitely.
@@ -282,14 +320,14 @@ Function decorators and helpers
         .. py:function:: {decorated_func}.is_revoked([dt=None])
 
             Check whether the given periodic task is revoked.  If ``dt`` is specified,
-            it will check if the task is revoked for the given datetime.
+            it will check if the task is revoked with respect to the given datetime.
 
             :param datetime dt: If provided, checks whether task is revoked at the
                 given datetime
 
         .. py:function:: {decorated_func}.restore()
 
-            Clears any revoked status and run the task normally
+            Clears any revoked status and allows the task to run normally.
 
         If you want access to the underlying task class, it is stored as an attribute
         on the decorated function:
@@ -300,11 +338,11 @@ Function decorators and helpers
 
     .. py:method:: revoke(task[, revoke_until=None[, revoke_once=False]])
 
-        Prevent the given task from being executed by the consumer after it has
-        been enqueued. To understand this method, you need to know a bit about
-        how the consumer works. When you call a function decorated by the
-        :py:meth:`Huey.task` method, calls to that function will enqueue a
-        message to the consumer indicating which task to execute, what the
+        Prevent the given task **instance** from being executed by the consumer
+        after it has been enqueued. To understand this method, you need to know
+        a bit about how the consumer works. When you call a function decorated
+        by the :py:meth:`Huey.task` method, calls to that function will enqueue
+        a message to the consumer indicating which task to execute, what the
         parameters are, etc. If the task is not scheduled to execute in the
         future, and there is a free worker available, the task starts executing
         immediately. Otherwise if workers are busy, it will wait in line for
@@ -316,13 +354,14 @@ Function decorators and helpers
         you call the task and the time the worker actually starts executing the
         task.
 
-        .. note::
-            When the revoked task is a periodic task, this affects the task as
-            a whole. When the task is a normal task, the revocation action only
-            applies to the given task instance.
+        .. warning::
+            This method only revokes a given **instance** of a task. Therefore,
+            this method cannot be used with periodic tasks. To revoke **all**
+            instances of a given task (including periodic tasks), see the
+            :py:meth:`~Huey.revoke_all` method.
 
-        This function can be called multiple times, but each call will overwrite
-        any previous revoke settings.
+        This function can be called multiple times, but each call will
+        supercede any previous revoke settings.
 
         :param datetime revoke_until: Prevent the execution of the task until the
             given datetime.  If ``None`` it will prevent execution indefinitely.
@@ -331,23 +370,66 @@ Function decorators and helpers
 
     .. py:method:: restore(task)
 
-        Takes a previously revoked task and un-revokes it.
+        Takes a previously revoked task **instance** and restores it, allowing
+        normal execution. If the revoked task was already consumed and
+        discarded by a worker, then restoring will have no effect.
+
+        .. note::
+            If the task class itself has been revoked, restoring a given
+            instance will not have any effect.
 
     .. py:method:: revoke_by_id(task_id[, revoke_until=None[, revoke_once=False]])
 
-        Exactly the same as :py:meth:`Huey.revoke`, except it accepts a task ID
-        instead of the task instance itself.
+        Exactly the same as :py:meth:`~Huey.revoke`, except it accepts a task
+        instance ID instead of the task instance itself.
 
     .. py:method:: restore_by_id(task_id)
 
-        Exactly the same as :py:meth:`Huey.restore`, except it accepts a task ID
-        instead of the task instance itself.
+        Exactly the same as :py:meth:`~Huey.restore`, except it accepts a task
+        instance ID instead of the task instance itself.
+
+    .. py:method:: revoke_all(task_class[, revoke_until=None[, revoke_once=False]])
+
+        Prevent any instance of the given task from being executed by the
+        consumer.
+
+        .. warning::
+            This method affects all instances of a given task.
+
+        This function can be called multiple times, but each call will
+        supercede any previous revoke settings.
+
+        :param datetime revoke_until: Prevent execution of the task until the
+            given datetime.  If ``None`` it will prevent execution indefinitely.
+        :param bool revoke_once: If ``True`` will only prevent execution the
+            next time it would normally execute.
+
+    .. py:method:: restore_all(task_class)
+
+        Takes a previously revoked task class and restores it, allowing
+        normal execution. Restoring a revoked task class does not have any
+        effect on individually revoked instances of the given task.
+
+        .. note::
+            Restoring a revoked task class does not have any effect on
+            individually revoked instances of the given task.
 
     .. py:method:: is_revoked(task[, dt=None])
 
-        Returns a boolean indicating whether the given task is revoked. If the
-        ``dt`` parameter is specified, then the result will indicate whether
-        the task is revoked at that particular datetime.
+        Returns a boolean indicating whether the given task instance/class is
+        revoked. If the ``dt`` parameter is specified, then the result will
+        indicate whether the task is revoked at that particular datetime.
+
+        .. note::
+            If a task class is specified, the return value will indicate only
+            whether all instances of that task are revoked.
+
+            If a task instance/ID is specified, the return value will indicate
+            whether the given instance **or** the task class itself has been
+            revoked.
+
+        :param task: Either a task class, task instance or task ID.
+        :return: Boolean indicating whether the aforementioned task is revoked.
 
     .. py:method:: result(task_id[, blocking=False[, timeout=None[, backoff=1.15[, max_delay=1.0[, revoke_on_timeout=False[, preserve=False]]]]]])
 
@@ -513,8 +595,19 @@ TaskResultWrapper
 
     .. py:method:: restore()
 
-        Restore the given task.  Unless it has already been skipped over, it
-        will be restored and run as scheduled.
+        Restore the given task instance. Unless the task instance has already
+        been dequeued and discarded, it will be restored and run as scheduled.
+
+        .. warning::
+            If the task class itself has been revoked, then this method has no
+            effect.
+
+    .. py:method:: is_revoked()
+
+        Return a boolean value indicating whether this particular task instance
+        **or** the task class itself has been revoked.
+
+        See also: :py:meth:`Huey.is_revoked`.
 
     .. py:method:: reschedule([eta=None[, delay=None[, convert+utc=True]]])
 

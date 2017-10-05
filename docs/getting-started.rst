@@ -312,6 +312,20 @@ The same applies to tasks that are scheduled in the future:
     # it has not already been "skipped" by the consumer
     res.restore()
 
+To revoke all instances of a given task, use the ``revoke()`` and ``restore()``
+methods on the task itself:
+
+.. code-block:: python
+
+    count_beans.revoke()
+    assert count_beans.is_revoked() is True
+
+    res = count_beans(100)
+    assert res.is_revoked() is True
+
+    count_beans.restore()
+    assert count_beans.is_revoked() is False
+
 Canceling or pausing periodic tasks
 -----------------------------------
 
@@ -359,6 +373,7 @@ Finally, we can prevent the task from running indefinitely:
     # will not print time until we call revoke() again with
     # different parameters or restore the task
     print_time.revoke()
+    assert print_time.is_revoked() is True
 
 At any time we can restore the task and it will resume normal
 execution:

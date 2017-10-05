@@ -523,15 +523,14 @@ class TestConsumerAPIs(ConsumerTestCase):
 
         loop_periodic(dt)
         self.assertEqual(state, {})
+        self.assertEqual(test_huey.result_count(), 1)
 
         # after an hour it is back
         loop_periodic(dt + td)
         self.assertEqual(state, {'p': 'y'})
 
         # our data store should reflect the delay
-        task_obj = hourly_task.task_class()
-        self.assertEqual(test_huey.result_count(), 1)
-        self.assertTrue(test_huey.storage.has_data_for_key(task_obj.revoke_id))
+        self.assertEqual(test_huey.result_count(), 0)
 
     def test_odd_scheduler_interval(self):
         self.consumer.stop()
