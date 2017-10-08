@@ -1,6 +1,11 @@
+import collections
 import pickle
 
 from huey.exceptions import QueueException
+
+
+TaskTuple = collections.namedtuple('TaskTuple', [
+    'id', 'klass', 'execute_time', 'retries', 'retry_delay', 'data'])
 
 
 class TaskRegistry(object):
@@ -45,7 +50,7 @@ class TaskRegistry(object):
 
     def get_message_for_task(self, task):
         """Convert a task object to a message for storage in the queue"""
-        return pickle.dumps((
+        return pickle.dumps(TaskTuple(
             task.task_id,
             self.task_to_string(type(task)),
             task.execute_time,
