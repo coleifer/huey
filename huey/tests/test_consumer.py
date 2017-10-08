@@ -52,6 +52,14 @@ def retry_task_delay(k, always_fail=True):
 def hourly_task():
     state['p'] = 'y'
 
+@test_huey.periodic_task(crontab(minute='3'), retries=3)
+def hourly_task2():
+    try:
+        state['p2'] += 1
+    except KeyError:
+        state['p2'] = 1
+        raise
+
 
 class CrashableWorker(Worker):
     def __init__(self, *args, **kwargs):
@@ -175,7 +183,7 @@ class TestExecution(ConsumerTestCase):
 
 class TestConsumerAPIs(ConsumerTestCase):
     def get_periodic_tasks(self):
-        return [hourly_task.task_class()]
+        return [hourly_task.task_class(), hourly_task2.task_class()]
 
     def test_dequeue_errors(self):
         huey = BrokenHuey()
@@ -466,6 +474,26 @@ class TestConsumerAPIs(ConsumerTestCase):
             self.worker(task, dt)
 
         self.assertEqual(state, {'p': 'y'})
+
+    def test_periodic_with_retry(self):
+        dt = datetime.datetime(2011, 1, 1, 0, 3)
+        sched = self.scheduler(dt, True)
+        self.assertEqual(sched._counter, 1)
+        self.assertEqual(sched._q, 6)
+        self.assertEqual(state, {})
+
+        self.assertEqual(len(self.huey), 1)
+        task = test_huey.dequeue()
+        self.assertEqual(task.retries, 3)
+        self.worker(task, dt)
+
+        # Exception occurred, so now we retry.
+        self.assertEqual(len(self.huey), 1)
+        task = test_huey.dequeue()
+        self.assertEqual(task.retries, 2)
+        self.worker(task, dt)
+
+        self.assertEqual(state, {'p2': 2})
 
     def test_revoking_periodic(self):
         global state

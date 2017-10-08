@@ -155,7 +155,8 @@ class Huey(object):
             return inner_run
         return decorator
 
-    def periodic_task(self, validate_datetime, name=None):
+    def periodic_task(self, validate_datetime, name=None, retries=0,
+                      retry_delay=0):
         """
         Decorator to execute a function on a specific schedule.
         """
@@ -166,6 +167,8 @@ class Huey(object):
             klass = create_task(
                 PeriodicQueueTask,
                 func,
+                default_retries=retries,
+                default_retry_delay=retry_delay,
                 task_name=name,
                 validate_datetime=method_validate)
             self.registry.register(klass)
@@ -568,16 +571,19 @@ class QueueTask(object):
         })
     )
     """
+    default_retries = 0
+    default_retry_delay = 0
 
-    def __init__(self, data=None, task_id=None, execute_time=None, retries=0,
-                 retry_delay=0):
+    def __init__(self, data=None, task_id=None, execute_time=None,
+                 retries=None, retry_delay=None):
         self.name = type(self).__name__
         self.set_data(data)
         self.task_id = task_id or self.create_id()
         self.revoke_id = 'r:%s' % self.task_id
         self.execute_time = execute_time
-        self.retries = retries
-        self.retry_delay = retry_delay
+        self.retries = retries if retries is not None else self.default_retries
+        self.retry_delay = retry_delay if retry_delay is not None else \
+                self.default_retry_delay
 
     def __repr__(self):
         rep = '%s: %s' % (self.name, self.task_id)
