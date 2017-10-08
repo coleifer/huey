@@ -155,6 +155,10 @@ class Huey(object):
             return inner_run
         return decorator
 
+    # We specify retries and retry_delay as 0 because they become the default
+    # values as class attributes on the derived PeriodicQueueTask instance.
+    # Since the values the class is instantiated with will always be `None`,
+    # we want the fallback behavior to be 0 by default.
     def periodic_task(self, validate_datetime, name=None, retries=0,
                       retry_delay=0):
         """
