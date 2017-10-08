@@ -1,10 +1,19 @@
 Changelog
 =========
 
-v1.5.1 (unreleased)
+v1.5.2 (unreleased)
 -------------------
 
-[View commits](https://github.com/coleifer/huey/compare/1.5.0...HEAD)
+[View commits](https://github.com/coleifer/huey/compare/1.5.1...HEAD)
+
+v1.5.1
+------
+
+Added support for specifying a `retry` and `retry_delay` on periodic tasks.
+Simply pass the desired values into the `periodic_task()` decorator after the
+validation function, as keyword arguments.
+
+[View commits](https://github.com/coleifer/huey/compare/1.5.0...1.5.1)
 
 v1.5.0
 ------
