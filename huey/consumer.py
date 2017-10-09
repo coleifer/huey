@@ -443,16 +443,18 @@ class Consumer(object):
 
         self._logger.info('\n'.join(msg))
 
-        # We'll temporarily ignore SIGINT (so that it is inherited by the
-        # child-processes). Once the child processes are created, we restore
-        # the handler.
+        # We'll temporarily ignore SIGINT and SIGHUP (so that it is inherited
+        # by the child-processes). Once the child processes are created, we
+        # restore the handler.
         original_sigint_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
+        original_sighup_handler = signal.signal(signal.SIGHUP, signal.SIG_IGN)
 
         self.scheduler.start()
         for _, worker_process in self.worker_threads:
             worker_process.start()
 
         signal.signal(signal.SIGINT, original_sigint_handler)
+        signal.signal(signal.SIGHUP, original_sighup_handler)
 
     def stop(self, graceful=False):
         self.stop_flag.set()
