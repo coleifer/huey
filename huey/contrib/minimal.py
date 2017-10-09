@@ -64,7 +64,7 @@ class MiniHuey(object):
     def start(self):
         if self._run_t is not None:
             raise Exception('Task runner is already running.')
-        self._run_t = self._pool.spawn(self._run)
+        self._run_t = gevent.spawn(self._run)
 
     def stop(self):
         if self._run_t is None:
