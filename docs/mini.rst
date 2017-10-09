@@ -12,6 +12,12 @@ scheduled to run, a new greenlet is spawned to execute the task.
 
 Usage and task declaration:
 
+.. py:class:: MiniHuey([name='huey'[, interval=1[, pool_size=None]]])
+
+    :param str name: Name given to this huey instance.
+    :param int interval: How frequently to check for scheduled tasks (seconds).
+    :param int pool_size: Limit number of concurrent tasks to given size.
+
 .. code-block:: python
 
     from huey import crontab
