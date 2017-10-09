@@ -182,6 +182,15 @@ they are currently executing.
 Alternatively, you can shutdown the consumer using ``SIGTERM`` and any running
 tasks will be interrupted, ensuring the process exits quickly.
 
+.. _consumer-restart:
+
+Consumer restart
+----------------
+
+To cleanly restart the consumer, including all workers, send the ``SIGHUP``
+signal. When the consumer receives the hang-up signal, any tasks being executed
+will be allowed to finish before the restart occurs.
+
 .. _consumer-internals:
 
 Consumer Internals
