@@ -2,6 +2,7 @@ import datetime
 import logging
 import os
 import signal
+import sys
 import threading
 import time
 
@@ -369,8 +370,11 @@ class Consumer(object):
         # Create the execution environment helper.
         self.environment = self.get_environment(self.worker_type)
 
-        # Create the event used to signal the process should exit.
+        # Create the event used to signal the process should terminate. We'll
+        # also store a boolean flag to indicate whether we should restart after
+        # the processes are cleaned up.
         self._received_signal = False
+        self._restart = False
         self.stop_flag = self.environment.get_stop_flag()
 
         # Create the scheduler process (but don't start it yet).
@@ -431,7 +435,7 @@ class Consumer(object):
                           'enabled' if self.periodic else 'disabled')
         self._logger.info('UTC is %s.', 'enabled' if self.utc else 'disabled')
 
-        self._set_signal_handler()
+        self._set_signal_handlers()
 
         msg = ['The following commands are available:']
         for command in registry._registry:
@@ -490,7 +494,12 @@ class Consumer(object):
                     self.__health_check_counter = 0
                     self.check_worker_health()
 
-        self._logger.info('Consumer exiting.')
+        if self._restart:
+            self._logger.info('Consumer will restart.')
+            python = sys.executable
+            os.execl(python, python, *sys.argv)
+        else:
+            self._logger.info('Consumer exiting.')
 
     def check_worker_health(self):
         self._logger.debug('Checking worker health.')
@@ -512,9 +521,16 @@ class Consumer(object):
 
         return not restart_occurred
 
-    def _set_signal_handler(self):
-        signal.signal(signal.SIGTERM, self._handle_signal)
+    def _set_signal_handlers(self):
+        signal.signal(signal.SIGTERM, self._handle_stop_signal)
+        signal.signal(signal.SIGHUP, self._handle_restart_signal)
 
-    def _handle_signal(self, sig_num, frame):
+    def _handle_stop_signal(self, sig_num, frame):
         self._logger.info('Received SIGTERM')
         self._received_signal = True
+        self._restart = False
+
+    def _handle_restart_signal(self, sig_num, frame):
+        self._logger.info('Received SIGHUP, will restart')
+        self._received_signal = True
+        self._restart = True
