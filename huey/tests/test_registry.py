@@ -34,8 +34,7 @@ class TestRegistry(BaseTestCase):
 
     def test_periodic_tasks(self):
         periodic = registry._periodic_tasks
-        task_classes = [type(task) for task in periodic]
-        self.assertTrue(test_task_two.task_class in task_classes)
+        self.assertTrue(test_task_two.task_class in periodic)
 
     def test_non_global_task_registry(self):
 

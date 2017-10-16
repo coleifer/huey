@@ -28,7 +28,7 @@ class TaskRegistry(object):
 
             # store an instance in a separate list of periodic tasks
             if hasattr(task_class, 'validate_datetime'):
-                self._periodic_tasks.append(task_class())
+                self._periodic_tasks.append(task_class)
 
     def unregister(self, task_class):
         klass_str = self.task_to_string(task_class)
@@ -72,7 +72,7 @@ class TaskRegistry(object):
         return klass(data, task_id, execute_time, retries, delay)
 
     def get_periodic_tasks(self):
-        return self._periodic_tasks
+        return [task_class() for task_class in self._periodic_tasks]
 
 
 registry = TaskRegistry()

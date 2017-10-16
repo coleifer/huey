@@ -183,7 +183,7 @@ class TestExecution(ConsumerTestCase):
 
 class TestConsumerAPIs(ConsumerTestCase):
     def get_periodic_tasks(self):
-        return [hourly_task.task_class(), hourly_task2.task_class()]
+        return [hourly_task.task_class, hourly_task2.task_class]
 
     def test_dequeue_errors(self):
         huey = BrokenHuey()
