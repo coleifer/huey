@@ -9,6 +9,7 @@ from functools import wraps
 from inspect import isclass
 
 from huey.constants import EmptyData
+from huey.consumer import Consumer
 from huey.exceptions import DataStoreGetException
 from huey.exceptions import DataStorePutException
 from huey.exceptions import DataStoreTimeout
@@ -79,6 +80,9 @@ class Huey(object):
     def get_storage(self, **kwargs):
         raise NotImplementedError('Storage API not implemented in the base '
                                   'Huey class. Use `RedisHuey` instead.')
+
+    def create_consumer(self, **config):
+        return Consumer(self, **config)
 
     def _normalize_execute_time(self, eta=None, delay=None, convert_utc=True):
         if delay and eta:
