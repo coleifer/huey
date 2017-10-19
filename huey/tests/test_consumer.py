@@ -60,6 +60,11 @@ def hourly_task2():
         state['p2'] = 1
         raise
 
+@test_huey.task(retries=2)
+@test_huey.lock_task('test-lock')
+def locked_task(a, b):
+    return a + b
+
 
 class CrashableWorker(Worker):
     def __init__(self, *args, **kwargs):
@@ -255,6 +260,18 @@ class TestConsumerAPIs(ConsumerTestCase):
         self.assertTaskEvents(
             ('started', task),
             ('error-task', task))
+
+    def test_task_locking(self):
+        ret = locked_task(1, 2)
+        task = test_huey.dequeue()
+        self.worker(task)
+        self.assertEqual(ret.get(), 3)
+
+        ret = locked_task(2, 3)
+        task = test_huey.dequeue()
+        with test_huey.lock_task('test-lock'):
+            self.worker(task)
+        self.assertTrue(ret.get() is None)
 
     def test_retries_and_logging(self):
         # This will continually fail.

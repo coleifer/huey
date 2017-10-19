@@ -19,6 +19,7 @@ from huey.exceptions import QueueRemoveException
 from huey.exceptions import QueueWriteException
 from huey.exceptions import ScheduleAddException
 from huey.exceptions import ScheduleReadException
+from huey.exceptions import TaskLockedException
 from huey.registry import registry
 from huey.registry import TaskRegistry
 from huey.utils import local_to_utc, is_naive, aware_to_utc, make_naive, is_aware
@@ -437,6 +438,9 @@ class Huey(object):
         periodic = set(self.get_periodic_tasks())
         return [task for task in self.get_tasks() if task not in periodic]
 
+    def lock_task(self, lock_name):
+        return TaskLock(self, lock_name)
+
     def result(self, task_id, blocking=False, timeout=None, backoff=1.15,
                max_delay=1.0, revoke_on_timeout=False, preserve=False):
         """
@@ -457,6 +461,28 @@ class Huey(object):
                 max_delay=max_delay,
                 revoke_on_timeout=revoke_on_timeout,
                 preserve=preserve)
+
+
+class TaskLock(object):
+    def __init__(self, huey, name):
+        self._huey = huey
+        self._name = name
+        self._key = '%s.lock.%s' % (self._huey.name, self._name)
+
+    def __call__(self, fn):
+        @wraps(fn)
+        def inner(*args, **kwargs):
+            with self:
+                return fn(*args, **kwargs)
+        return inner
+
+    def __enter__(self):
+        if self._huey._get_data(self._key, peek=True) is not EmptyData:
+            raise TaskLockedException('unable to set lock: %s' % self._name)
+        self._huey._put_data(self._key, '1')
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self._huey._get_data(self._key)
 
 
 class TaskResultWrapper(object):

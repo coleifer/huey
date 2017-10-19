@@ -28,6 +28,7 @@ from huey.exceptions import DataStorePutException
 from huey.exceptions import QueueWriteException
 from huey.exceptions import ScheduleAddException
 from huey.exceptions import ScheduleReadException
+from huey.exceptions import TaskLockedException
 from huey.registry import registry
 
 
@@ -38,6 +39,7 @@ EVENT_ERROR_INTERNAL = 'error-internal'
 EVENT_ERROR_SCHEDULING = 'error-scheduling'
 EVENT_ERROR_STORING_RESULT = 'error-storing-result'
 EVENT_ERROR_TASK = 'error-task'
+EVENT_LOCKED = 'locked'
 EVENT_FINISHED = 'finished'
 EVENT_RETRYING = 'retrying'
 EVENT_REVOKED = 'revoked'
@@ -162,6 +164,16 @@ class Worker(BaseProcess):
                 error=True,
                 duration=duration)
             self._logger.exception('Error storing result')
+        except TaskLockedException:
+            self.huey.emit_task(
+                EVENT_LOCKED,
+                task,
+                error=False,
+                duration=duration)
+            self._logger.warn('Task %s could not run, unable to obtain lock.',
+                              task.task_id)
+            if task.retries:
+                self.requeue_task(task, self.get_now())
         except KeyboardInterrupt:
             self._logger.info('Received exit signal, task %s did not finish.',
                               task.task_id)

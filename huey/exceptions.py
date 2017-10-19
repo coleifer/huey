@@ -36,3 +36,7 @@ class ScheduleReadException(QueueException):
 
 class ConfigurationError(QueueException):
     pass
+
+
+class TaskLockedException(QueueException):
+    pass
