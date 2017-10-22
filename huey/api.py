@@ -439,6 +439,34 @@ class Huey(object):
         return [task for task in self.get_tasks() if task not in periodic]
 
     def lock_task(self, lock_name):
+        """
+        Utilize the Storage key/value APIs to implement simple locking.
+
+        This lock is designed to be used to prevent multiple invocations of a
+        task from running concurrently. Can be used as either a context-manager
+        or as a task decorator. If using as a decorator, place it directly
+        above the function declaration.
+
+        Examples:
+
+            @huey.periodic_task(crontab(minute='*/5'))
+            @huey.lock_task('reports-lock')
+            def generate_report():
+                # If a report takes longer than 5 minutes to generate, we do
+                # not want to kick off another until the previous invocation
+                # has finished.
+                run_report()
+
+            @huey.periodic_task(crontab(minute='0'))
+            def backup():
+                # Generate backup of code
+                do_code_backup()
+
+                # Generate database backup. Since this may take longer than an
+                # hour, we want to ensure that it is not run concurrently.
+                with huey.lock_task('db-backup'):
+                    do_db_backup()
+        """
         return TaskLock(self, lock_name)
 
     def result(self, task_id, blocking=False, timeout=None, backoff=1.15,
@@ -464,6 +492,14 @@ class Huey(object):
 
 
 class TaskLock(object):
+    """
+    Utilize the Storage key/value APIs to implement simple locking.
+
+    This lock is designed to be used to prevent multiple invocations of a task
+    from running concurrently. Can be used as either a context-manager or as
+    a task decorator. If using as a decorator, place it directly above the
+    function declaration.
+    """
     def __init__(self, huey, name):
         self._huey = huey
         self._name = name
