@@ -1,10 +1,18 @@
 Changelog
 =========
 
-v1.5.3 (unreleased)
+v1.5.4 (unreleased)
 -------------------
 
-[View commits](https://github.com/coleifer/huey/compare/1.5.2...HEAD)
+[View commits](https://github.com/coleifer/huey/compare/1.5.3...HEAD)
+
+v1.5.3
+------
+
+[View commits](https://github.com/coleifer/huey/compare/1.5.2...1.5.3)
+
+* Includes addition of `TaskLock` and `Huey.lock_task()` helpers.
+* Extend `Huey` API to add method for creating the consumer.
 
 v1.5.2
 ------
