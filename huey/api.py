@@ -447,6 +447,12 @@ class Huey(object):
         or as a task decorator. If using as a decorator, place it directly
         above the function declaration.
 
+        If a second invocation occurs and the lock cannot be acquired, then a
+        special exception is raised, which is handled by the consumer. The task
+        will not be executed and an ``EVENT_LOCKED`` will be emitted. If the
+        task is configured to be retried, then it will be retried normally, but
+        the failure to acquire the lock is not considered an error.
+
         Examples:
 
             @huey.periodic_task(crontab(minute='*/5'))
@@ -493,12 +499,8 @@ class Huey(object):
 
 class TaskLock(object):
     """
-    Utilize the Storage key/value APIs to implement simple locking.
-
-    This lock is designed to be used to prevent multiple invocations of a task
-    from running concurrently. Can be used as either a context-manager or as
-    a task decorator. If using as a decorator, place it directly above the
-    function declaration.
+    Utilize the Storage key/value APIs to implement simple locking. For more
+    details see :py:meth:`Huey.lock_task`.
     """
     def __init__(self, huey, name):
         self._huey = huey
