@@ -221,6 +221,10 @@ class Huey(object):
         return self.storage.put_data(key, value)
 
     @_wrapped_operation(DataStorePutException)
+    def _put_if_empty(self, key, value):
+        return self.storage.put_if_empty(key, value)
+
+    @_wrapped_operation(DataStorePutException)
     def _put_error(self, metadata):
         self.storage.put_error(metadata)
 
@@ -515,9 +519,8 @@ class TaskLock(object):
         return inner
 
     def __enter__(self):
-        if self._huey._get_data(self._key, peek=True) is not EmptyData:
+        if not self._huey._put_if_empty(self._key, '1'):
             raise TaskLockedException('unable to set lock: %s' % self._name)
-        self._huey._put_data(self._key, '1')
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self._huey._get_data(self._key)

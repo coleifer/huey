@@ -157,6 +157,19 @@ class BaseStorage(object):
         """
         raise NotImplementedError
 
+    def put_if_empty(self, key, value):
+        """
+        Atomically write data only if the key is not already set.
+
+        :param bytes key: Key to check/set.
+        :param bytes value: Arbitrary data.
+        :return: Boolean whether key/value was set.
+        """
+        if self.has_data_for_key(key):
+            return False
+        self.put_data(key, value)
+        return True
+
     def result_store_size(self):
         """
         :return: Number of key/value pairs in the result store.
@@ -361,6 +374,9 @@ class RedisStorage(BaseStorage):
 
     def has_data_for_key(self, key):
         return self.conn.hexists(self.result_key, key)
+
+    def put_if_empty(self, key, value):
+        return self.conn.hsetnx(self.result_key, key, value)
 
     def result_store_size(self):
         return self.conn.hlen(self.result_key)
