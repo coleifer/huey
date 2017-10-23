@@ -1,10 +1,18 @@
 Changelog
 =========
 
-v1.5.4 (unreleased)
+v1.5.5 (unreleased)
 -------------------
 
-[View commits](https://github.com/coleifer/huey/compare/1.5.3...HEAD)
+[View commits](https://github.com/coleifer/huey/compare/1.5.4...HEAD)
+
+v1.5.4
+------
+
+[View commits](https://github.com/coleifer/huey/compare/1.5.3...1.5.4)
+
+* Implemented atomic "set if not exists" for Redis and SQLite, which is used by
+  the locking APIs.
 
 v1.5.3
 ------
