@@ -29,6 +29,9 @@ class KeyValue(BaseModel):
     key = CharField()
     value = BlobField()
 
+    class Meta:
+        primary_key = CompositeKey('queue', 'key')
+
 
 class SqliteStorage(BaseStorage):
     def __init__(self, name='huey', filename='huey.db', **storage_kwargs):
@@ -148,6 +151,16 @@ class SqliteStorage(BaseStorage):
 
     def has_data_for_key(self, key):
         return self.kv().where(KeyValue.key == key).exists()
+
+    def put_if_empty(self, key, value):
+        sql = ('INSERT OR ABORT INTO "keyvalue" ("queue", "key", "value") '
+               'VALUES (?, ?, ?);')
+        try:
+            res = self.database.execute_sql(sql, (self.name, key, value))
+        except IntegrityError:
+            return False
+        else:
+            return True
 
     def result_store_size(self):
         return self.kv().count()
