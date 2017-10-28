@@ -45,7 +45,7 @@ options with their default values:
 
     # settings.py
     HUEY = {
-        'name': settings.DATABASES['default']['name'],  # Use db name for huey.
+        'name': settings.DATABASES['default']['NAME'],  # Use db name for huey.
         'result_store': True,  # Store return values of tasks.
         'events': True,  # Consumer emits events allowing real-time monitoring.
         'store_none': False,  # If a task returns None, do not save to results.
