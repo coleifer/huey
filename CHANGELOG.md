@@ -1,10 +1,20 @@
 Changelog
 =========
 
-v1.5.5 (unreleased)
+v1.5.6 (unreleased)
 -------------------
 
-[View commits](https://github.com/coleifer/huey/compare/1.5.4...HEAD)
+[View commits](https://github.com/coleifer/huey/compare/1.5.5...HEAD)
+
+v1.5.5
+------
+
+[View commits](https://github.com/coleifer/huey/compare/1.5.4...1.5.5)
+
+* Implemented [pre-execute](http://huey.readthedocs.io/en/latest/api.html#Huey.register_pre_execute)
+  and [post-execute](http://huey.readthedocs.io/en/latest/api.html#Huey.register_pre_execute)
+  hooks.
+* Implemented task cancellation mechanism as part of pre-execute hooks.
 
 v1.5.4
 ------
