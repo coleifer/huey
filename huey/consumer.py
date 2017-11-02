@@ -20,6 +20,7 @@ from huey.constants import WORKER_GREENLET
 from huey.constants import WORKER_PROCESS
 from huey.constants import WORKER_THREAD
 from huey.constants import WORKER_TYPES
+from huey.exceptions import CancelExecution
 from huey.exceptions import ConfigurationError
 from huey.exceptions import DataStoreGetException
 from huey.exceptions import QueueException
@@ -100,6 +101,8 @@ class Worker(BaseProcess):
         self.max_delay = max_delay
         self.backoff = backoff
         self._logger = logging.getLogger('huey.consumer.Worker')
+        self._pre_execute = huey.pre_execute_hooks.items()
+        self._post_execute = huey.post_execute_hooks.items()
         super(Worker, self).__init__(huey, utc)
 
     def loop(self, now=None):
@@ -149,11 +152,29 @@ class Worker(BaseProcess):
 
     def process_task(self, task, ts):
         self.huey.emit_task(EVENT_STARTED, task, timestamp=to_timestamp(ts))
-        self._logger.info('Executing %s' % task)
+        if self._pre_execute:
+            self._logger.info('Running pre-execute hooks for %s', task)
+            for name, callback in self._pre_execute:
+                self._logger.debug('Executing %s pre-execute hook.', name)
+                try:
+                    callback(task)
+                except CancelExecution:
+                    self._logger.info('Execution of %s cancelled by %s.',
+                                      task, name)
+                    return
+                except Exception:
+                    self._logger.exception('Unhandled exception calling pre-'
+                                           'execute hook %s for %s.', name,
+                                           task)
+
+        self._logger.info('Executing %s', task)
         start = time.time()
+        exception = None
+        task_value = None
+
         try:
             try:
-                self.huey.execute(task)
+                task_value = self.huey.execute(task)
             finally:
                 duration = time.time() - start
                 self._logger.debug('Task %s ran in %0.3fs', task, duration)
@@ -164,34 +185,47 @@ class Worker(BaseProcess):
                 error=True,
                 duration=duration)
             self._logger.exception('Error storing result')
-        except TaskLockedException:
+        except TaskLockedException as exc:
             self.huey.emit_task(
                 EVENT_LOCKED,
                 task,
                 error=False,
                 duration=duration)
+            exception = exc
             self._logger.warn('Task %s could not run, unable to obtain lock.',
                               task.task_id)
-            if task.retries:
-                self.requeue_task(task, self.get_now())
         except KeyboardInterrupt:
             self._logger.info('Received exit signal, task %s did not finish.',
                               task.task_id)
-        except:
+            return
+        except Exception as exc:
             self.huey.emit_task(
                 EVENT_ERROR_TASK,
                 task,
                 error=True,
                 duration=duration)
+            exception = exc
             self._logger.exception('Unhandled exception in worker thread')
-            if task.retries:
-                self.requeue_task(task, self.get_now())
         else:
             self.huey.emit_task(
                 EVENT_FINISHED,
                 task,
                 duration=duration,
                 timestamp=self.get_timestamp())
+
+        if self._post_execute:
+            self._logger.info('Running post-execute hooks for %s', task)
+            for name, callback in self._post_execute:
+                self._logger.debug('Executing %s post-execute hook.', name)
+                try:
+                    callback(task, task_value, exception)
+                except Exception as exc:
+                    self._logger.exception('Unhandled exception calling post-'
+                                           'execute hook %s for %s.', name,
+                                           task)
+
+        if exception is not None and task.retries:
+            self.requeue_task(task, self.get_now())
 
     def requeue_task(self, task, ts):
         task.retries -= 1

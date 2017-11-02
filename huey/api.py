@@ -5,6 +5,7 @@ import re
 import time
 import traceback
 import uuid
+from collections import OrderedDict
 from functools import wraps
 from inspect import isclass
 
@@ -73,6 +74,8 @@ class Huey(object):
         self.store_errors = store_errors
         self.blocking = blocking
         self.storage = self.get_storage(**storage_kwargs)
+        self.pre_execute_hooks = OrderedDict()
+        self.post_execute_hooks = OrderedDict()
         if global_registry:
             self.registry = registry
         else:
@@ -183,6 +186,66 @@ class Huey(object):
             self.registry.register(klass)
 
             return self._add_task_control_helpers(klass, func)
+        return decorator
+
+    def register_pre_execute(self, name, fn):
+        """
+        Register a pre-execute hook. The callback will be executed before the
+        execution of all tasks. Execution of the task can be cancelled by
+        raising a :py:class:`CancelExecution` exception. Uncaught exceptions
+        will be logged but will not cause the task itself to be cancelled.
+
+        The callback function should accept a single task instance, the return
+        value is ignored.
+
+        :param name: Name for the hook.
+        :param fn: Callback function that accepts task to be executed.
+        """
+        self.pre_execute_hooks[name] = fn
+
+    def unregister_pre_execute(self, name):
+        del self.pre_execute_hooks[name]
+
+    def pre_execute(self, name=None):
+        """
+        Decorator for registering a pre-execute hook.
+        """
+        def decorator(fn):
+            self.register_pre_execute(name or fn.__name__, fn)
+            return fn
+        return decorator
+
+    def register_post_execute(self, name, fn):
+        """
+        Register a post-execute hook. The callback will be executed after the
+        execution of all tasks. Uncaught exceptions will be logged but will
+        have no other effect on the overall operation of the consumer.
+
+        The callback function should accept:
+
+        * a task instance
+        * the return value from the execution of the task (which may be None)
+        * any exception that was raised during the execution of the task (which
+          will be None for tasks that executed normally).
+
+        The return value of the callback itself is ignored.
+
+        :param name: Name for the hook.
+        :param fn: Callback function that accepts task that was executed and
+                   the tasks return value (or None).
+        """
+        self.post_execute_hooks[name] = fn
+
+    def unregister_post_execute(self, name):
+        del self.post_execute_hooks[name]
+
+    def post_execute(self, name=None):
+        """
+        Decorator for registering a post-execute hook.
+        """
+        def decorator(fn):
+            self.register_post_execute(name or fn.__name__, fn)
+            return fn
         return decorator
 
     def _wrapped_operation(exc_class):
