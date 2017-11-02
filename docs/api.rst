@@ -336,6 +336,76 @@ Function decorators and helpers
 
             Store a reference to the task class for the decorated function.
 
+    .. py:method:: register_pre_execute(name, fn)
+
+        Register a pre-execute hook. The callback will be executed before the
+        execution of all tasks. Execution of the task can be cancelled by
+        raising a :py:class:`CancelExecution` exception. Uncaught exceptions
+        will be logged but will not cause the task itself to be cancelled.
+
+        The callback function should accept a single task instance, the return
+        value is ignored.
+
+        Hooks are executed in the order in which they are registered (which may
+        be implicit if registered using the decorator).
+
+        :param name: Name for the hook.
+        :param fn: Callback function that accepts task to be executed.
+
+    .. py:method:: unregister_pre_execute(name)
+
+        Unregister the specified pre-execute hook.
+
+    .. py:method:: pre_execute([name=None])
+
+        Decorator for registering a pre-execute hook.
+
+        Usage:
+
+        .. code-block:: python
+
+            @huey.pre_execute()
+            def my_pre_execute_hook(task):
+                do_something()
+
+    .. py:method:: register_post_execute(name, fn)
+
+        Register a post-execute hook. The callback will be executed after the
+        execution of all tasks. Uncaught exceptions will be logged but will
+        have no other effect on the overall operation of the consumer.
+
+        The callback function should accept:
+
+        * a task instance
+        * the return value from the execution of the task (which may be None)
+        * any exception that was raised during the execution of the task (which
+          will be None for tasks that executed normally).
+
+        The return value of the callback itself is ignored.
+
+        Hooks are executed in the order in which they are registered (which may
+        be implicit if registered using the decorator).
+
+        :param name: Name for the hook.
+        :param fn: Callback function that accepts task that was executed and
+                   the tasks return value (or None).
+
+    .. py:method:: unregister_post_execute(name)
+
+        Unregister the specified post-execute hook.
+
+    .. py:method:: post_execute([name=None])
+
+        Decorator for registering a post-execute hook.
+
+        Usage:
+
+        .. code-block:: python
+
+            @huey.post_execute()
+            def my_post_execute_hook(task, task_value, exc):
+                do_something()
+
     .. py:method:: revoke(task[, revoke_until=None[, revoke_once=False]])
 
         Prevent the given task **instance** from being executed by the consumer
