@@ -183,8 +183,8 @@ class Worker(BaseProcess):
                 error=False,
                 duration=duration)
             exception = exc
-            self._logger.warn('Task %s could not run, unable to obtain lock.',
-                              task.task_id)
+            self._logger.warning('Task %s could not run, unable to obtain '
+                                 'lock.', task.task_id)
         except KeyboardInterrupt:
             self._logger.info('Received exit signal, task %s did not finish.',
                               task.task_id)
