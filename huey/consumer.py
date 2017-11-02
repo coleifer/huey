@@ -153,19 +153,10 @@ class Worker(BaseProcess):
     def process_task(self, task, ts):
         self.huey.emit_task(EVENT_STARTED, task, timestamp=to_timestamp(ts))
         if self._pre_execute:
-            self._logger.info('Running pre-execute hooks for %s', task)
-            for name, callback in self._pre_execute:
-                self._logger.debug('Executing %s pre-execute hook.', name)
-                try:
-                    callback(task)
-                except CancelExecution:
-                    self._logger.info('Execution of %s cancelled by %s.',
-                                      task, name)
-                    return
-                except Exception:
-                    self._logger.exception('Unhandled exception calling pre-'
-                                           'execute hook %s for %s.', name,
-                                           task)
+            try:
+                self.run_pre_execute_hooks(task)
+            except CancelExecution:
+                return
 
         self._logger.info('Executing %s', task)
         start = time.time()
@@ -214,18 +205,34 @@ class Worker(BaseProcess):
                 timestamp=self.get_timestamp())
 
         if self._post_execute:
-            self._logger.info('Running post-execute hooks for %s', task)
-            for name, callback in self._post_execute:
-                self._logger.debug('Executing %s post-execute hook.', name)
-                try:
-                    callback(task, task_value, exception)
-                except Exception as exc:
-                    self._logger.exception('Unhandled exception calling post-'
-                                           'execute hook %s for %s.', name,
-                                           task)
+            self.run_post_execute_hooks(task, task_value, exception)
 
         if exception is not None and task.retries:
             self.requeue_task(task, self.get_now())
+
+    def run_pre_execute_hooks(self, task):
+        self._logger.info('Running pre-execute hooks for %s', task)
+        for name, callback in self._pre_execute:
+            self._logger.debug('Executing %s pre-execute hook.', name)
+            try:
+                callback(task)
+            except CancelExecution:
+                self._logger.info('Execution of %s cancelled by %s.', task,
+                                  name)
+                raise
+            except Exception:
+                self._logger.exception('Unhandled exception calling pre-'
+                                       'execute hook %s for %s.', name, task)
+
+    def run_post_execute_hooks(self, task, task_value, exception):
+        self._logger.info('Running post-execute hooks for %s', task)
+        for name, callback in self._post_execute:
+            self._logger.debug('Executing %s post-execute hook.', name)
+            try:
+                callback(task, task_value, exception)
+            except Exception as exc:
+                self._logger.exception('Unhandled exception calling post-'
+                                       'execute hook %s for %s.', name, task)
 
     def requeue_task(self, task, ts):
         task.retries -= 1
