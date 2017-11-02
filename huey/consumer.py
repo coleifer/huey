@@ -170,33 +170,33 @@ class Worker(BaseProcess):
                 duration = time.time() - start
                 self._logger.debug('Task %s ran in %0.3fs', task, duration)
         except DataStorePutException:
+            self._logger.exception('Error storing result')
             self.huey.emit_task(
                 EVENT_ERROR_STORING_RESULT,
                 task,
                 error=True,
                 duration=duration)
-            self._logger.exception('Error storing result')
         except TaskLockedException as exc:
+            self._logger.warning('Task %s could not run, unable to obtain '
+                                 'lock.', task.task_id)
             self.huey.emit_task(
                 EVENT_LOCKED,
                 task,
                 error=False,
                 duration=duration)
             exception = exc
-            self._logger.warning('Task %s could not run, unable to obtain '
-                                 'lock.', task.task_id)
         except KeyboardInterrupt:
             self._logger.info('Received exit signal, task %s did not finish.',
                               task.task_id)
             return
         except Exception as exc:
+            self._logger.exception('Unhandled exception in worker thread')
             self.huey.emit_task(
                 EVENT_ERROR_TASK,
                 task,
                 error=True,
                 duration=duration)
             exception = exc
-            self._logger.exception('Unhandled exception in worker thread')
         else:
             self.huey.emit_task(
                 EVENT_FINISHED,
