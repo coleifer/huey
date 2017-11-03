@@ -500,14 +500,16 @@ class Consumer(object):
         # by the child-processes). Once the child processes are created, we
         # restore the handler.
         original_sigint_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
-        original_sighup_handler = signal.signal(signal.SIGHUP, signal.SIG_IGN)
+        if hasattr(signal, 'SIGHUP'):
+            original_sighup_handler = signal.signal(signal.SIGHUP, signal.SIG_IGN)
 
         self.scheduler.start()
         for _, worker_process in self.worker_threads:
             worker_process.start()
 
         signal.signal(signal.SIGINT, original_sigint_handler)
-        signal.signal(signal.SIGHUP, original_sighup_handler)
+        if hasattr(signal, 'SIGHUP'):
+            signal.signal(signal.SIGHUP, original_sighup_handler)
 
     def stop(self, graceful=False):
         self.stop_flag.set()
@@ -578,7 +580,8 @@ class Consumer(object):
 
     def _set_signal_handlers(self):
         signal.signal(signal.SIGTERM, self._handle_stop_signal)
-        signal.signal(signal.SIGHUP, self._handle_restart_signal)
+        if hasattr(signal, 'SIGHUP'):
+            signal.signal(signal.SIGHUP, self._handle_restart_signal)
 
     def _handle_stop_signal(self, sig_num, frame):
         self._logger.info('Received SIGTERM')
