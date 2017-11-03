@@ -115,7 +115,7 @@ class MiniHuey(object):
 
             # Wait for most of the remained of the time remaining.
             remaining = self._interval - (time.time() - start)
-            if remaining:
+            if remaining > 0:
                 if not self._shutdown.wait(remaining * 0.9):
                     gevent.sleep(self._interval - (time.time() - start))
         logger.info('exiting task runner')
