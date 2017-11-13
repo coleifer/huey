@@ -68,7 +68,7 @@ class OptionParserHandler(object):
                          'restarting any worker that crashes unexpectedly.')),
             option(('t', 'max_tasks'), metavar='MAX_TASKS',
                    dest='max_tasks', type='int',
-                   help=('Maximum tasks executed by the worker, before '
+                   help=('Maximum tasks executed by the consumer, before '
                          'it gets replaced. (default=0 no restarting)')),
             option(('j', 'max_tasks_jitter'), metavar='MAX_TASKS_JITTER',
                    dest='max_tasks_jitter', type='int',
