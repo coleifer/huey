@@ -1,13 +1,14 @@
 import datetime
 import logging
 import os
+import random
 import signal
 import sys
 import threading
 import time
 
 from multiprocessing import Event as ProcessEvent
-from multiprocessing import Process
+from multiprocessing import Process, Value
 
 try:
     import gevent
@@ -31,6 +32,9 @@ from huey.exceptions import ScheduleAddException
 from huey.exceptions import ScheduleReadException
 from huey.exceptions import TaskLockedException
 from huey.registry import registry
+
+
+random.seed()
 
 
 EVENT_CHECKING_PERIODIC = 'checking-periodic'
@@ -96,13 +100,14 @@ class BaseProcess(object):
 
 
 class Worker(BaseProcess):
-    def __init__(self, huey, default_delay, max_delay, backoff, utc):
+    def __init__(self, huey, default_delay, max_delay, backoff, utc, counter=None):
         self.delay = self.default_delay = default_delay
         self.max_delay = max_delay
         self.backoff = backoff
         self._logger = logging.getLogger('huey.consumer.Worker')
         self._pre_execute = huey.pre_execute_hooks.items()
         self._post_execute = huey.post_execute_hooks.items()
+        self._tasks_counter = counter
         super(Worker, self).__init__(huey, utc)
 
     def loop(self, now=None):
@@ -203,6 +208,10 @@ class Worker(BaseProcess):
                 task,
                 duration=duration,
                 timestamp=self.get_timestamp())
+        finally:
+            if self._tasks_counter:
+                with self._tasks_counter.get_lock():
+                    self._tasks_counter.value += 1
 
         if self._post_execute:
             self.run_post_execute_hooks(task, task_value, exception)
@@ -395,7 +404,7 @@ class Consumer(object):
     def __init__(self, huey, workers=1, periodic=True, initial_delay=0.1,
                  backoff=1.15, max_delay=10.0, utc=True, scheduler_interval=1,
                  worker_type='thread', check_worker_health=True,
-                 health_check_interval=1):
+                 health_check_interval=1, max_tasks=0, max_tasks_jitter=0):
 
         self._logger = logging.getLogger('huey.consumer')
         if huey.always_eager:
@@ -412,6 +421,15 @@ class Consumer(object):
         self.utc = utc
         self.scheduler_interval = max(min(scheduler_interval, 60), 1)
         self.worker_type = worker_type
+
+        # Task counting
+        self.max_tasks = max_tasks
+        self.max_tasks_jitter = max_tasks_jitter
+        self._max_tasks = max_tasks + random.randint(0, max_tasks_jitter)
+        if max_tasks > 0:
+            self._tasks_counter = Value('I', 0)
+        else:
+            self._tasks_counter = None
 
         # Configure health-check and consumer main-loop attributes.
         self._stop_flag_timeout = 0.1
@@ -453,7 +471,8 @@ class Consumer(object):
             default_delay=self.default_delay,
             max_delay=self.max_delay,
             backoff=self.backoff,
-            utc=self.utc)
+            utc=self.utc,
+            counter=self._tasks_counter)
 
     def _create_scheduler(self):
         return Scheduler(
@@ -551,6 +570,8 @@ class Consumer(object):
                     self.__health_check_counter = 0
                     self.check_worker_health()
 
+            self._handle_tasks_counting()
+
         if self._restart:
             self._logger.info('Consumer will restart.')
             python = sys.executable
@@ -592,3 +613,12 @@ class Consumer(object):
         self._logger.info('Received SIGHUP, will restart')
         self._received_signal = True
         self._restart = True
+
+    def _handle_max_tasks_restart(self):
+        self._logger.info('Max tasks reached, will restart')
+        self._received_signal = True
+        self._restart = True
+
+    def _handle_tasks_counting(self):
+        if self.max_tasks and self._tasks_counter.value > self._max_tasks:
+            self._handle_max_tasks_restart()

@@ -20,6 +20,8 @@ config_defaults = (
     ('utc', True),
     ('logfile', None),
     ('verbose', None),
+    ('max_tasks', 0),
+    ('max_tasks_jitter', 0),
 )
 config_keys = [param for param, _ in config_defaults]
 
@@ -64,7 +66,14 @@ class OptionParserHandler(object):
                    dest='check_worker_health',
                    help=('disable health check that monitors worker health, '
                          'restarting any worker that crashes unexpectedly.')),
-
+            option(('t', 'max_tasks'), metavar='MAX_TASKS',
+                   dest='max_tasks', type='int',
+                   help=('Maximum tasks executed by the consumer, before '
+                         'it gets replaced. (default=0 no restarting)')),
+            option(('j', 'max_tasks_jitter'), metavar='MAX_TASKS_JITTER',
+                   dest='max_tasks_jitter', type='int',
+                   help=('The maximum jitter to add to the max_tasks. '
+                         '(default=0)')),
         )
 
     def get_scheduler_options(self):
@@ -131,6 +140,9 @@ class ConsumerConfig(namedtuple('_ConsumerConfig', config_keys)):
         if not (0 < self.scheduler_interval <= 60):
             raise ValueError('The scheduler must run at least once per '
                              'minute, and at most once per second (1-60).')
+        if self.max_tasks < 0 or self.max_tasks_jitter < 0:
+            raise ValueError('Max tasks and max tasks jitter must be ',
+                             'zero or greather.')
 
     @property
     def loglevel(self):
