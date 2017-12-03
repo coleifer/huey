@@ -169,7 +169,7 @@ class Huey(object):
     # Since the values the class is instantiated with will always be `None`,
     # we want the fallback behavior to be 0 by default.
     def periodic_task(self, validate_datetime, name=None, retries=0,
-                      retry_delay=0):
+                      retry_delay=0, **task_settings):
         """
         Decorator to execute a function on a specific schedule.
         """
@@ -183,7 +183,8 @@ class Huey(object):
                 default_retries=retries,
                 default_retry_delay=retry_delay,
                 task_name=name,
-                validate_datetime=method_validate)
+                validate_datetime=method_validate,
+                **task_settings)
             self.registry.register(klass)
 
             return self._add_task_control_helpers(klass, func)
