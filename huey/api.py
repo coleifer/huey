@@ -122,7 +122,7 @@ class Huey(object):
         return task_func
 
     def task(self, retries=0, retry_delay=0, retries_as_argument=False,
-             include_task=False, name=None):
+             include_task=False, name=None, **task_settings):
         def decorator(func):
             """
             Decorator to execute a function out-of-band via the consumer.
@@ -132,7 +132,8 @@ class Huey(object):
                 func,
                 retries_as_argument,
                 name,
-                include_task)
+                include_task,
+                **task_settings)
             self.registry.register(klass)
 
             func = self._add_task_control_helpers(klass, func)
@@ -773,12 +774,10 @@ def create_task(task_class, func, retries_as_argument=False, task_name=None,
         '__doc__': func.__doc__}
     attrs.update(kwargs)
 
-    klass = type(
-        task_name or 'queuecmd_%s' % (func.__name__),
-        (task_class,),
-        attrs)
+    if not task_name:
+        task_name = '%s.%s' % (func.__module__ or '', func.__name__)
 
-    return klass
+    return type(task_name, (task_class,), attrs)
 
 
 dash_re = re.compile('(\d+)-(\d+)')

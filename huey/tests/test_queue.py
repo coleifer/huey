@@ -301,7 +301,8 @@ class TestHueyQueueAPIs(BaseQueueTestCase):
         put_data_ctx('k', 'v')
         task = huey.dequeue()
         huey.execute(task)
-        self.assertEqual(state['last_task_class'], 'queuecmd_put_data_ctx')
+        self.assertEqual(state['last_task_class'],
+                         'huey.tests.test_queue.put_data_ctx')
         del state['last_task_class']
 
         put_data('k', 'x')

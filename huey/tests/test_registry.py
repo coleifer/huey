@@ -23,8 +23,8 @@ class MyTaskClass(QueueTask):
 
 class TestRegistry(BaseTestCase):
     def test_registry(self):
-        self.assertTrue('queuecmd_test_task_one' in registry)
-        self.assertTrue('queuecmd_test_task_two' in registry)
+        self.assertTrue('huey.tests.test_registry.test_task_one' in registry)
+        self.assertTrue('huey.tests.test_registry.test_task_two' in registry)
         self.assertFalse('MyTaskClass' in registry)
 
         registry.register(MyTaskClass)
@@ -44,6 +44,7 @@ class TestRegistry(BaseTestCase):
         def test():
             return 'test'
 
-        self.assertIn('queuecmd_test', huey.registry._registry)
+        self.assertIn('huey.tests.test_registry.test', huey.registry._registry)
         huey2 = RedisHuey(global_registry=False)
-        self.assertNotIn('queuecmd_test', huey2.registry._registry)
+        self.assertNotIn('huey.tests.test_registry.test',
+                         huey2.registry._registry)
