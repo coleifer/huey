@@ -16,6 +16,10 @@ def test_task_one(x, y):
 def test_task_two():
     pass
 
+@huey.task(foo='bar', priority=3)
+def important():
+    pass
+
 class MyTaskClass(QueueTask):
     def execute(self):
         pass
@@ -31,6 +35,11 @@ class TestRegistry(BaseTestCase):
         self.assertTrue('MyTaskClass' in registry)
 
         self.assertFalse('another' in registry)
+
+    def test_arbitrary_parameters(self):
+        Task = registry._registry['huey.tests.test_registry.important']
+        self.assertEqual(Task.foo, 'bar')
+        self.assertEqual(Task.priority, 3)
 
     def test_periodic_tasks(self):
         periodic = registry._periodic_tasks
