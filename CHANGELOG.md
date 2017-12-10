@@ -1,10 +1,20 @@
 Changelog
 =========
 
-v1.5.6 (unreleased)
+v1.5.7 (unreleased)
 -------------------
 
-[View commits](https://github.com/coleifer/huey/compare/1.5.5...HEAD)
+[View commits](https://github.com/coleifer/huey/compare/1.5.6...HEAD)
+
+v1.5.6
+------
+
+[View commits](https://github.com/coleifer/huey/compare/1.5.5...1.5.6)
+
+* Allow arbitrary settings to be specified in ``task()`` decorators.
+* New task name format includes function module as part of task name.
+* Fix for operating systems that do not implement SIGHUP.
+* Fix bug in `contrib.minimal` task scheduler timing.
 
 v1.5.5
 ------
