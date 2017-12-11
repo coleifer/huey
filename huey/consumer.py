@@ -576,6 +576,14 @@ class Consumer(object):
         else:
             self._logger.debug('Workers are up and running.')
 
+        if not self.environment.is_alive(self.scheduler):
+            self._logger.warning('Scheduler died, restarting.')
+            scheduler = self._create_scheduler()
+            self.scheduler = self._create_process(scheduler, 'Scheduler')
+            self.scheduler.start()
+        else:
+            self._logger.debug('Scheduler is up and running.')
+
         return not restart_occurred
 
     def _set_signal_handlers(self):
