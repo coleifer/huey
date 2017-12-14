@@ -370,7 +370,7 @@ class Huey(object):
         except Exception as exc:
             if self.result_store and self.store_errors:
                 metadata = self._get_task_metadata(task, True)
-                metadata['error'] = exc
+                metadata['error'] = repr(exc)
                 metadata['traceback'] = traceback.format_exc()
                 self._put_error(pickle.dumps(metadata))
             raise

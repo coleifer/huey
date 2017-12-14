@@ -191,7 +191,7 @@ class TestHueyQueueAPIs(BaseQueueTestCase):
         self.assertEqual(len(errors), 1)
         error = errors[0]
 
-        self.assertTrue(isinstance(error['error'], TestException))
+        self.assertEqual(error['error'], 'TestException(\'nuggie\',)')
         self.assertEqual(error['id'], task.task_id)
 
         for i in range(9):
