@@ -188,7 +188,7 @@ class Worker(BaseProcess):
             exception = exc
         except RetryTask:
             if not task.retries:
-                self._logger.error('Task %s cannot be retried - no retries '
+                self._logger.error('Cannot retry task %s - no retries '
                                    'remaining.', task.task_id)
             exception = True
         except KeyboardInterrupt:

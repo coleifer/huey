@@ -361,6 +361,20 @@ class TestConsumerAPIs(ConsumerTestCase):
             ('started', task),
             ('finished', task))
 
+        explicit_retry('bar')
+        task = test_huey.dequeue()
+        self.worker(task)
+        del state['bar']
+        task = test_huey.dequeue()
+        self.worker(task)
+        del state['bar']
+        task = test_huey.dequeue()
+        with CaptureLogs() as capture:
+            self.worker(task)
+
+        self.assertLogs(capture, ['Executing', 'Cannot retry task'])
+        self.assertEqual(len(test_huey), 0)
+
     def test_scheduling(self):
         dt = datetime.datetime(2011, 1, 1, 0, 1)
         dt2 = datetime.datetime(2037, 1, 1, 0, 1)
