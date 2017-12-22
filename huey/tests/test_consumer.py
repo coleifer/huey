@@ -9,6 +9,7 @@ from huey.consumer import Consumer
 from huey.consumer import Scheduler
 from huey.consumer import Worker
 from huey.exceptions import DataStoreTimeout
+from huey.exceptions import RetryTask
 from huey.tests.base import b
 from huey.tests.base import BrokenHuey
 from huey.tests.base import CaptureLogs
@@ -46,6 +47,13 @@ def retry_task_delay(k, always_fail=True):
         if not always_fail:
             state[k] = 'fixed'
         raise Exception('fappsk')
+    return state[k]
+
+@test_huey.task(retries=2)
+def explicit_retry(k):
+    if k not in state:
+        state[k] = 'fixed'
+        raise RetryTask()
     return state[k]
 
 @test_huey.periodic_task(crontab(minute='2'))
@@ -326,6 +334,29 @@ class TestConsumerAPIs(ConsumerTestCase):
         self.assertTaskEvents(
             ('started', task),
             ('error-task', task),
+            ('retrying', task),
+            ('started', task),
+            ('finished', task))
+
+    def test_explicit_retry(self):
+        explicit_retry('foo')
+        self.assertFalse('foo' in state)
+
+        task = test_huey.dequeue()
+        with CaptureLogs() as capture:
+            self.worker(task)
+
+        self.assertLogs(capture, ['Executing', 'Re-enqueueing'])
+
+        task = test_huey.dequeue()
+        self.assertEqual(task.retries, 1)
+        self.worker(task)
+
+        self.assertEqual(state['foo'], 'fixed')
+        self.assertEqual(len(test_huey), 0)
+
+        self.assertTaskEvents(
+            ('started', task),
             ('retrying', task),
             ('started', task),
             ('finished', task))

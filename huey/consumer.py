@@ -27,6 +27,7 @@ from huey.exceptions import QueueException
 from huey.exceptions import QueueReadException
 from huey.exceptions import DataStorePutException
 from huey.exceptions import QueueWriteException
+from huey.exceptions import RetryTask
 from huey.exceptions import ScheduleAddException
 from huey.exceptions import ScheduleReadException
 from huey.exceptions import TaskLockedException
@@ -185,6 +186,11 @@ class Worker(BaseProcess):
                 error=False,
                 duration=duration)
             exception = exc
+        except RetryTask:
+            if not task.retries:
+                self._logger.error('Task %s cannot be retried - no retries '
+                                   'remaining.', task.task_id)
+            exception = True
         except KeyboardInterrupt:
             self._logger.info('Received exit signal, task %s did not finish.',
                               task.task_id)
