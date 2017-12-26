@@ -105,5 +105,5 @@ class TestSqliteStorage(HueyTestCase):
 
         messages = capture.messages[-4:-1]
         for message in messages:
-            self.assertTrue(message.startswith('Executing queue_task_'))
+            self.assertTrue(message.startswith('Executing huey.tests.test_'))
         self.assertTrue(capture.messages[-1].startswith('Shutting down'))

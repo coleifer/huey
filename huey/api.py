@@ -726,7 +726,7 @@ class QueueTask(object):
                 self.default_retry_delay
 
     def __repr__(self):
-        rep = '%s: %s' % (self.name, self.task_id)
+        rep = '%s.%s: %s' % (self.__module__, self.name, self.task_id)
         if self.execute_time:
             rep += ' @%s' % self.execute_time
         if self.retries:
