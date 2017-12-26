@@ -776,7 +776,7 @@ def create_task(task_class, func, retries_as_argument=False, task_name=None,
     attrs.update(kwargs)
 
     if not task_name:
-        task_name = '%s.%s' % (func.__module__ or '', func.__name__)
+        task_name = 'queue_task_%s' % (func.__name__)
 
     return type(task_name, (task_class,), attrs)
 
