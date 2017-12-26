@@ -737,6 +737,9 @@ class QueueTask(object):
         return str(uuid.uuid4())
 
     def get_data(self):
+        targs, tkwargs = self.data
+        if tkwargs.get("task") and isinstance(tkwargs["task"], QueueTask):
+            del(tkwargs['task'])
         return self.data
 
     def set_data(self, data):
