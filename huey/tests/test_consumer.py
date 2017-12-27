@@ -56,6 +56,13 @@ def explicit_retry(k):
         raise RetryTask()
     return state[k]
 
+@test_huey.task(retries=1, include_task=True)
+def retry_with_task(a, b, task=None):
+    assert task is not None
+    if a + b < 0:
+        raise RetryTask()
+    return a + b
+
 @test_huey.periodic_task(crontab(minute='2'))
 def hourly_task():
     state['p'] = 'y'
@@ -373,6 +380,21 @@ class TestConsumerAPIs(ConsumerTestCase):
             self.worker(task)
 
         self.assertLogs(capture, ['Executing', 'Cannot retry task'])
+        self.assertEqual(len(test_huey), 0)
+
+    def test_retry_with_task(self):
+        retry_with_task(1, -2)
+        task = test_huey.dequeue()
+        with CaptureLogs() as capture:
+            self.worker(task)
+
+        task = test_huey.dequeue()
+        self.worker(task)
+        self.assertEqual(len(test_huey), 0)
+
+        ret = retry_with_task(1, 1)
+        self.worker(test_huey.dequeue())
+        self.assertEqual(ret.get(), 2)
         self.assertEqual(len(test_huey), 0)
 
     def test_scheduling(self):

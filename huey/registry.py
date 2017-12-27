@@ -45,14 +45,19 @@ class TaskRegistry(object):
 
     def get_message_for_task(self, task):
         """Convert a task object to a message for storage in the queue"""
+        data = task.get_data()
+        if data and isinstance(data, tuple) and len(data) == 2:
+            args, kwargs = data
+            if isinstance(kwargs, dict) and 'task' in kwargs:
+                kwargs.pop('task')
+                data = (args, kwargs)
         return pickle.dumps((
             task.task_id,
             self.task_to_string(type(task)),
             task.execute_time,
             task.retries,
             task.retry_delay,
-            task.get_data(),
-        ))
+            data))
 
     def get_task_class(self, klass_str):
         klass = self._registry.get(klass_str)
