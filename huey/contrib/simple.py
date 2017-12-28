@@ -8,13 +8,9 @@ from collections import deque
 from collections import namedtuple
 from io import BytesIO
 from socket import error as socket_error
-from socket import EINTR
 import datetime
 import heapq
-import json
 import logging
-import re
-import struct
 import sys
 
 
