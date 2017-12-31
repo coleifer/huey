@@ -53,6 +53,8 @@ Bulk String: "$number of bytes\r\nstring data\r\n"
 Array: "*number of elements\r\n...elements..."
 
 * Empty array: "*0\r\n"
+
+And a new data-type, dictionaries: "%number of elements\r\n...elements..."
 """
 if sys.version_info[0] == 3:
     unicode = str
@@ -70,6 +72,7 @@ class ProtocolHandler(object):
             ':': self.handle_integer,
             '$': self.handle_string,
             '*': self.handle_array,
+            '%': self.handle_dict,
         }
 
     def handle_simple_string(self, socket_file):
@@ -94,6 +97,12 @@ class ProtocolHandler(object):
     def handle_array(self, socket_file):
         num_elements = int(socket_file.readline().rstrip('\r\n'))
         return [self.handle_request(socket_file) for _ in range(num_elements)]
+
+    def handle_dict(self, socket_file):
+        num_items = int(socket_file.readline().rstrip('\r\n'))
+        elements = [self.handle_request(socket_file)
+                    for _ in range(num_items * 2)]
+        return dict(zip(elements[::2], elements[1::2]))
 
     def handle_request(self, socket_file):
         first_byte = socket_file.read(1)
@@ -126,6 +135,11 @@ class ProtocolHandler(object):
             buf.write('*%s\r\n' % len(data))
             for item in data:
                 self._write(buf, item)
+        elif isinstance(data, dict):
+            buf.write('%%%s\r\n' % len(data))
+            for key in data:
+                self._write(buf, key)
+                self._write(buf, data[key])
         elif data is None:
             buf.write('$-1\r\n')
 
@@ -169,6 +183,9 @@ class QueueServer(object):
             ('POP', self.kv_pop),
             ('DELETE', self.kv_delete),
             ('EXISTS', self.kv_exists),
+            ('MSET', self.kv_mset),
+            ('MGET', self.kv_mget),
+            ('MPOP', self.kv_mpop),
             ('FLUSH_KV', self.kv_flush),
             ('LENGTH_KV', self.kv_length),
 
@@ -235,6 +252,17 @@ class QueueServer(object):
 
     def kv_exists(self, key):
         return 1 if key in self._kv else 0
+
+    def kv_mset(self, *items):
+        for idx in range(0, len(items), 2):
+            self._kv[items[i]] = items[i + 1]
+        return len(items) / 2
+
+    def kv_mget(self, *keys):
+        return [self._kv.get(key) for key in keys]
+
+    def kv_mpop(self, *keys):
+        return [self._kv.pop(key, None) for key in keys]
 
     def kv_flush(self):
         kvlen = self.kv_length()
@@ -386,6 +414,23 @@ class Client(object):
     def peek_data(self, key):
         return self.execute('GET', key)
     get = peek_data
+
+    def mget(self, *keys):
+        return self.execute('MGET', *keys)
+
+    def mset(self, __data=None, **kwargs):
+        items = []
+        if __data:
+            for key in __data:
+                items.append(key)
+                items.append(__data[key])
+        for key in kwargs:
+            items.append(key)
+            items.append(kwargs[key])
+        return self.execute('MSET', *items)
+
+    def mpop(self, *keys):
+        return self.execute('MPOP', *keys)
 
     def pop_data(self, key):
         return self.execute('POP', key)
