@@ -274,7 +274,7 @@ class QueueServer(object):
 
     def kv_mset(self, *items):
         for idx in range(0, len(items), 2):
-            self._kv[items[i]] = items[i + 1]
+            self._kv[items[idx]] = items[idx + 1]
         return len(items) / 2
 
     def kv_mget(self, *keys):
