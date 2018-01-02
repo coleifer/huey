@@ -18,8 +18,8 @@ logger = logging.getLogger(__name__)
 
 
 class CommandError(Exception):
-    def __init__(self, msg):
-        self.msg = msg
+    def __init__(self, message):
+        self.message = message
         super(CommandError, self).__init__()
 
 
@@ -61,45 +61,63 @@ if sys.version_info[0] == 3:
     basestring = (bytes, str)
 
 
+def encode(s):
+    if isinstance(s, unicode):
+        return s.encode('utf-8')
+    elif isinstance(s, bytes):
+        return s
+    else:
+        return str(s).encode('utf-8')
+
+
+def decode(s):
+    if isinstance(s, unicode):
+        return s
+    elif isinstance(s, bytes):
+        return s.decode('utf-8')
+    else:
+        return str(s)
+
+
 Error = namedtuple('Error', ('message',))
 
 
 class ProtocolHandler(object):
     def __init__(self):
         self.handlers = {
-            '+': self.handle_simple_string,
-            '-': self.handle_error,
-            ':': self.handle_integer,
-            '$': self.handle_string,
-            '*': self.handle_array,
-            '%': self.handle_dict,
+            b'+': self.handle_simple_string,
+            b'-': self.handle_error,
+            b':': self.handle_integer,
+            b'$': self.handle_string,
+            b'*': self.handle_array,
+            b'%': self.handle_dict,
         }
 
     def handle_simple_string(self, socket_file):
-        return socket_file.readline().rstrip('\r\n')
+        return socket_file.readline().rstrip(b'\r\n')
 
     def handle_error(self, socket_file):
-        return Error(socket_file.readline().rstrip('\r\n'))
+        return Error(socket_file.readline().rstrip(b'\r\n'))
 
     def handle_integer(self, socket_file):
-        number = socket_file.readline().rstrip('\r\n')
-        if '.' in number:
+        number = socket_file.readline().rstrip(b'\r\n')
+        if b'.' in number:
             return float(number)
         return int(number)
 
     def handle_string(self, socket_file):
-        length = int(socket_file.readline().rstrip('\r\n'))
+        length = int(socket_file.readline().rstrip(b'\r\n'))
         if length == -1:
             return None
         length += 2
         return socket_file.read(length)[:-2]
 
     def handle_array(self, socket_file):
-        num_elements = int(socket_file.readline().rstrip('\r\n'))
+        num_elements = int(socket_file.readline().rstrip(b'\r\n'))
         return [self.handle_request(socket_file) for _ in range(num_elements)]
 
     def handle_dict(self, socket_file):
-        num_items = int(socket_file.readline().rstrip('\r\n'))
+        num_items = int(socket_file.readline().rstrip(b'\r\n'))
         elements = [self.handle_request(socket_file)
                     for _ in range(num_items * 2)]
         return dict(zip(elements[::2], elements[1::2]))
@@ -123,25 +141,25 @@ class ProtocolHandler(object):
 
     def _write(self, buf, data):
         if isinstance(data, bytes):
-            buf.write('$%s\r\n%s\r\n' % (len(data), data))
+            buf.write(b'$%d\r\n%s\r\n' % (len(data), data))
         elif isinstance(data, unicode):
             bdata = data.encode('utf-8')
-            buf.write('$%s\r\n%s\r\n' % (len(bdata), data))
+            buf.write(b'$%d\r\n%s\r\n' % (len(bdata), bdata))
         elif isinstance(data, (int, float)):
-            buf.write(':%s\r\n' % data)
+            buf.write(b':%d\r\n' % data)
         elif isinstance(data, Error):
-            buf.write('-%s\r\n' % data.message)
+            buf.write(b'-%s\r\n' % bytes(data.message, 'utf-8'))
         elif isinstance(data, (list, tuple)):
-            buf.write('*%s\r\n' % len(data))
+            buf.write(b'*%d\r\n' % len(data))
             for item in data:
                 self._write(buf, item)
         elif isinstance(data, dict):
-            buf.write('%%%s\r\n' % len(data))
+            buf.write(b'%%%d\r\n' % len(data))
             for key in data:
                 self._write(buf, key)
                 self._write(buf, data[key])
         elif data is None:
-            buf.write('$-1\r\n')
+            buf.write(b'$-1\r\n')
 
 
 class Shutdown(Exception): pass
@@ -170,35 +188,35 @@ class QueueServer(object):
                         '\d{2}:\d{2}:\d{2}(?:\.\d+)?)')
         return dict((
             # Queue commands.
-            ('ENQUEUE', self.queue_append),
-            ('DEQUEUE', self.queue_pop),
-            ('REMOVE', self.queue_remove),
-            ('FLUSH', self.queue_flush),
-            ('LENGTH', self.queue_length),
+            (b'ENQUEUE', self.queue_append),
+            (b'DEQUEUE', self.queue_pop),
+            (b'REMOVE', self.queue_remove),
+            (b'FLUSH', self.queue_flush),
+            (b'LENGTH', self.queue_length),
 
             # K/V commands.
-            ('SET', self.kv_set),
-            ('SETNX', self.kv_setnx),
-            ('GET', self.kv_get),
-            ('POP', self.kv_pop),
-            ('DELETE', self.kv_delete),
-            ('EXISTS', self.kv_exists),
-            ('MSET', self.kv_mset),
-            ('MGET', self.kv_mget),
-            ('MPOP', self.kv_mpop),
-            ('FLUSH_KV', self.kv_flush),
-            ('LENGTH_KV', self.kv_length),
+            (b'SET', self.kv_set),
+            (b'SETNX', self.kv_setnx),
+            (b'GET', self.kv_get),
+            (b'POP', self.kv_pop),
+            (b'DELETE', self.kv_delete),
+            (b'EXISTS', self.kv_exists),
+            (b'MSET', self.kv_mset),
+            (b'MGET', self.kv_mget),
+            (b'MPOP', self.kv_mpop),
+            (b'FLUSH_KV', self.kv_flush),
+            (b'LENGTH_KV', self.kv_length),
 
             # Schedule commands.
-            ('ADD', self.schedule_add),
-            ('READ', self.schedule_read),
-            ('READ', self.schedule_read),
-            ('FLUSH_SCHEDULE', self.schedule_flush),
-            ('LENGTH_SCHEDULE', self.schedule_length),
+            (b'ADD', self.schedule_add),
+            (b'READ', self.schedule_read),
+            (b'READ', self.schedule_read),
+            (b'FLUSH_SCHEDULE', self.schedule_flush),
+            (b'LENGTH_SCHEDULE', self.schedule_length),
 
             # Misc.
-            ('FLUSHALL', self.flush_all),
-            ('SHUTDOWN', self.shutdown),
+            (b'FLUSHALL', self.flush_all),
+            (b'SHUTDOWN', self.shutdown),
         ))
 
     def queue_append(self, queue, value):
@@ -274,10 +292,10 @@ class QueueServer(object):
 
     def _decode_timestamp(self, timestamp):
         fmt = '%Y-%m-%d %H:%M:%S'
-        if '.' in timestamp:
+        if b'.' in timestamp:
             fmt = fmt + '.%f'
         try:
-            return datetime.datetime.strptime(timestamp, fmt)
+            return datetime.datetime.strptime(decode(timestamp), fmt)
         except ValueError:
             raise CommandError('Timestamp must be formatted Y-m-d H:M:S')
 
