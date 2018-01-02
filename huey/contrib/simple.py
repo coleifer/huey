@@ -11,6 +11,7 @@ from socket import error as socket_error
 import datetime
 import heapq
 import logging
+import optparse
 import sys
 
 
@@ -370,7 +371,7 @@ class QueueServer(object):
         if command not in self._commands:
             raise CommandError('Unrecognized command: %s' % command)
         else:
-            logger.debug('Received %s', command)
+            logger.debug('Received %s', decode(command))
 
         return self._commands[command](*data[1:])
 
@@ -472,9 +473,40 @@ class Client(object):
         self.execute('SHUTDOWN')
 
 
-if __name__ == '__main__':
-    from gevent import monkey; monkey.patch_all()
+def get_option_parser():
+    parser = optparse.OptionParser()
+    parser.add_option('-d', '--debug', action='store_true', dest='debug',
+                      help='Log debug messages.')
+    parser.add_option('-e', '--errors', action='store_true', dest='error',
+                      help='Log error messages only.')
+    parser.add_option('-H', '--host', default='127.0.0.1', dest='host',
+                      help='Host to listen on.')
+    parser.add_option('-m', '--max-clients', default=64, dest='max_clients',
+                      help='Maximum number of clients.', type=int)
+    parser.add_option('-p', '--port', default=31337, dest='port',
+                      help='Port to listen on.', type=int)
+    parser.add_option('-l', '--log-file', dest='log_file', help='Log file.')
+    return parser
+
+
+def configure_logger(options):
     logger.addHandler(logging.StreamHandler())
-    logger.setLevel(logging.DEBUG)
-    server = QueueServer()
+    if options.log_file:
+        logger.addHandler(logging.FileHandler(options.log_file))
+    if options.debug:
+        logger.setLevel(logging.DEBUG)
+    elif options.error:
+        logger.setLevel(logging.ERROR)
+    else:
+        logger.setLevel(logging.INFO)
+
+
+if __name__ == '__main__':
+    options, args = get_option_parser().parse_args()
+
+    from gevent import monkey; monkey.patch_all()
+    configure_logger(options)
+
+    server = QueueServer(host=options.host, port=options.port,
+                         max_clients=options.max_clients)
     server.run()
