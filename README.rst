@@ -7,6 +7,7 @@ a lightweight alternative.
 
 * written in python
 * optional dependency on the Python Redis client
+* supports python versions 2.7, 3.4+
 
 supports:
 
