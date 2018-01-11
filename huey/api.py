@@ -333,6 +333,20 @@ class Huey(object):
         if message:
             return self.registry.get_task_for_message(message)
 
+    def put(self, key, value):
+        return self._put_data(key,
+                              pickle.dumps(value, pickle.HIGHEST_PROTOCOL))
+
+    def get(self, key, peek=False):
+        data = self._get_data(key, peek=peek)
+        if data is EmptyData:
+            return
+        else:
+            return pickle.loads(data)
+
+    def put_error(self, metadata):
+        return self._put_error(pickle.dumps(metadata))
+
     def _format_time(self, dt):
         if dt is None:
             return None
@@ -378,29 +392,27 @@ class Huey(object):
                 metadata = self._get_task_metadata(task, True)
                 metadata['error'] = repr(exc)
                 metadata['traceback'] = traceback.format_exc()
-                self._put_data(task.task_id, pickle.dumps(Error(metadata)))
+                self.put(task.task_id, Error(metadata))
                 if self.store_errors:
-                    self._put_error(pickle.dumps(metadata))
+                    self.put_error(metadata)
             raise
 
         if result is None and not self.store_none:
             return
 
         if self.result_store and not isinstance(task, PeriodicQueueTask):
-            self._put_data(task.task_id, pickle.dumps(result))
+            self.put(task.task_id, result)
 
         return result
 
     def revoke_all(self, task_class, revoke_until=None, revoke_once=False):
-        serialized = pickle.dumps((revoke_until, revoke_once))
-        self._put_data('rt:%s' % task_class.__name__, serialized)
+        self.put('rt:%s' % task_class.__name__, (revoke_until, revoke_once))
 
     def restore_all(self, task_class):
         return self._get_data('rt:%s' % task_class.__name__) is not EmptyData
 
     def revoke(self, task, revoke_until=None, revoke_once=False):
-        serialized = pickle.dumps((revoke_until, revoke_once))
-        self._put_data(task.revoke_id, serialized)
+        self.put(task.revoke_id, (revoke_until, revoke_once))
 
     def restore(self, task):
         # Return value indicates whether the task was in fact revoked.
@@ -420,11 +432,11 @@ class Huey(object):
         1. Is task revoked?
         2. Should task be restored?
         """
-        res = self._get_data(revoke_id, peek=True)
-        if res is EmptyData:
+        res = self.get(revoke_id, peek=True)
+        if res is None:
             return False, False
 
-        revoke_until, revoke_once = pickle.loads(res)
+        revoke_until, revoke_once = res
         if revoke_once:
             # This task *was* revoked for one run, but now it should be
             # restored to normal execution (unless we are just peeking).
@@ -560,9 +572,7 @@ class Huey(object):
         as the :py:class:`TaskResultWrapper` object.
         """
         if not blocking:
-            result = self._get_data(task_id, peek=preserve)
-            if result is not EmptyData:
-                return pickle.loads(result)
+            return self.get(task_id, peek=preserve)
         else:
             task_result = TaskResultWrapper(self, QueueTask(task_id=task_id))
             return task_result.get(

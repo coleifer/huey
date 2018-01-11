@@ -43,7 +43,6 @@ registry.register(PutTask)
 class TestException(Exception):
     pass
 
-@huey.task()
 def _throw_error_task(message=None):
     raise TestException(message or 'bampf')
 

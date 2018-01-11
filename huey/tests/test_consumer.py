@@ -10,6 +10,7 @@ from huey.consumer import Scheduler
 from huey.consumer import Worker
 from huey.exceptions import DataStoreTimeout
 from huey.exceptions import RetryTask
+from huey.exceptions import TaskException
 from huey.tests.base import b
 from huey.tests.base import BrokenHuey
 from huey.tests.base import CaptureLogs
@@ -276,6 +277,22 @@ class TestConsumerAPIs(ConsumerTestCase):
             ('started', task),
             ('error-task', task))
 
+    def test_task_exception(self):
+        ret = blow_up()
+        task = test_huey.dequeue()
+        self.worker(task)
+
+        # Calling ".get()" on a task result will raise an exception if the
+        # task failed.
+        self.assertRaises(TaskException, ret.get)
+
+        try:
+            ret.get()
+        except Exception as exc:
+            self.assertTrue('blowed up' in exc.metadata['error'])
+        else:
+            assert False, 'Should not reach this point.'
+
     def test_task_locking(self):
         ret = locked_task(1, 2)
         task = test_huey.dequeue()
@@ -286,7 +303,8 @@ class TestConsumerAPIs(ConsumerTestCase):
         task = test_huey.dequeue()
         with test_huey.lock_task('test-lock'):
             self.worker(task)
-        self.assertTrue(ret.get() is None)
+
+        self.assertRaises(TaskException, ret.get)
 
     def test_retries_and_logging(self):
         # This will continually fail.
