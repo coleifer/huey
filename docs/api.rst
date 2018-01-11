@@ -511,6 +511,10 @@ Function decorators and helpers
         is reached before the result is ready, a :py:class:`DataStoreTimeout`
         exception will be raised.
 
+        .. note:: If the task failed with an exception, then a
+            :py:class:`TaskException` that wraps the original exception will be
+            raised.
+
         .. warning:: By default the result store will delete a task's return
             value after the value has been successfully read (by a successful
             call to the :py:meth:`~Huey.result` or :py:meth:`TaskResultWrapper.get`
@@ -651,6 +655,21 @@ TaskResultWrapper
 
         >>> res(blocking=True)  # No timeout, will block until it gets data.
         'Counted 10000000 beans'
+
+    If the task failed with an exception, then a :py:class:`TaskException` will
+    be raised when reading the result value::
+
+        >>> @huey.task()
+        ... def fails():
+        ...     raise Exception('I failed')
+
+        >>> res = fails()
+        >>> res()  # raises a TaskException!
+        Traceback (most recent call last):
+          File "<stdin>", line 1, in <module>
+          File "/home/charles/tmp/huey/src/huey/huey/api.py", line 684, in get
+            raise TaskException(result.metadata)
+        huey.exceptions.TaskException: Exception('I failed',)
 
     .. py:method:: get([blocking=False[, timeout=None[, backoff=1.15[, max_delay=1.0[, revoke_on_timeout=False[, preserve=False]]]]]])
 
