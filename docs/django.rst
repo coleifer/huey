@@ -52,6 +52,7 @@ options with their default values:
         'always_eager': settings.DEBUG,  # If DEBUG=True, run synchronously.
         'store_errors': True,  # Store error info if task throws exception.
         'blocking': False,  # Poll the queue rather than do blocking pop.
+        'backend_class': 'huey.RedisHuey',  # Use path to redis huey by default,
         'connection': {
             'host': 'localhost',
             'port': 6379,

@@ -1,10 +1,10 @@
 from functools import wraps
+from importlib import import_module
 import sys
+import traceback
 
 from django.conf import settings
 from django.db import connection
-
-from huey import RedisHuey
 
 
 configuration_message = """
@@ -41,6 +41,8 @@ HUEY = RedisHuey('my-app')
 """
 
 
+default_backend_path = 'huey.RedisHuey'
+
 def default_queue_name():
     try:
         return settings.DATABASE_NAME
@@ -49,6 +51,12 @@ def default_queue_name():
             return settings.DATABASES['default']['NAME']
         except KeyError:
             return 'huey'
+
+
+def get_backend(import_path=default_backend_path):
+    module_path, class_name = import_path.rsplit('.', 1)
+    module = import_module(module_path)
+    return getattr(module, class_name)
 
 
 def config_error(msg):
@@ -61,7 +69,7 @@ def config_error(msg):
 HUEY = getattr(settings, 'HUEY', None)
 if HUEY is None:
     try:
-        from huey import RedisHuey
+        RedisHuey = get_backend(default_backend_path)
     except ImportError:
         config_error('Error: Huey could not import the redis backend. '
                      'Install `redis-py`.')
@@ -71,6 +79,7 @@ if HUEY is None:
 if isinstance(HUEY, dict):
     huey_config = HUEY.copy()  # Operate on a copy.
     name = huey_config.pop('name', default_queue_name())
+    backend_path = huey_config.pop('backend_class', default_backend_path)
     conn_kwargs = huey_config.pop('connection', {})
     try:
         del huey_config['consumer']  # Don't need consumer opts here.
@@ -79,7 +88,13 @@ if isinstance(HUEY, dict):
     if 'always_eager' not in huey_config:
         huey_config['always_eager'] = settings.DEBUG
     huey_config.update(conn_kwargs)
-    HUEY = RedisHuey(name, **huey_config)
+
+    try:
+        backend_cls = get_backend(backend_path)
+    except (ValueError, ImportError, AttributeError):
+        config_error('Error: could not import Huey backend:\n%s' % traceback.format_exc())
+
+    HUEY = backend_cls(name, **huey_config)
 
 task = HUEY.task
 periodic_task = HUEY.periodic_task
