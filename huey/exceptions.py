@@ -18,3 +18,4 @@ class TaskLockedException(QueueException): pass
 
 class CancelExecution(Exception): pass
 class RetryTask(Exception): pass
+class TaskException(Exception): pass

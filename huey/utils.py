@@ -1,6 +1,10 @@
+from collections import namedtuple
 import datetime
 import sys
 import time
+
+
+Error = namedtuple('Error', ('metadata',))
 
 
 class UTC(datetime.tzinfo):

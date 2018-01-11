@@ -20,10 +20,16 @@ from huey.exceptions import QueueRemoveException
 from huey.exceptions import QueueWriteException
 from huey.exceptions import ScheduleAddException
 from huey.exceptions import ScheduleReadException
+from huey.exceptions import TaskException
 from huey.exceptions import TaskLockedException
 from huey.registry import registry
 from huey.registry import TaskRegistry
-from huey.utils import local_to_utc, is_naive, aware_to_utc, make_naive, is_aware
+from huey.utils import Error
+from huey.utils import aware_to_utc
+from huey.utils import is_aware
+from huey.utils import is_naive
+from huey.utils import local_to_utc
+from huey.utils import make_naive
 from huey.utils import wrap_exception
 
 
@@ -368,11 +374,13 @@ class Huey(object):
         try:
             result = task.execute()
         except Exception as exc:
-            if self.result_store and self.store_errors:
+            if self.result_store:
                 metadata = self._get_task_metadata(task, True)
                 metadata['error'] = repr(exc)
                 metadata['traceback'] = traceback.format_exc()
-                self._put_error(pickle.dumps(metadata))
+                self._put_data(task.task_id, pickle.dumps(Error(metadata)))
+                if self.store_errors:
+                    self._put_error(pickle.dumps(metadata))
             raise
 
         if result is None and not self.store_none:
@@ -636,8 +644,8 @@ class TaskResultWrapper(object):
         else:
             return self._result
 
-    def get(self, blocking=False, timeout=None, backoff=1.15, max_delay=1.0,
-            revoke_on_timeout=False, preserve=False):
+    def get_raw_result(self, blocking=False, timeout=None, backoff=1.15,
+                       max_delay=1.0, revoke_on_timeout=False, preserve=False):
         if not blocking:
             res = self._get(preserve)
             if res is not EmptyData:
@@ -657,6 +665,14 @@ class TaskResultWrapper(object):
                     delay *= backoff
 
             return self._result
+
+    def get(self, blocking=False, timeout=None, backoff=1.15, max_delay=1.0,
+            revoke_on_timeout=False, preserve=False):
+        result = self.get_raw_result(blocking, timeout, backoff, max_delay,
+                                     revoke_on_timeout, preserve)
+        if result is not None and isinstance(result, Error):
+            raise TaskException(result.metadata)
+        return result
 
     def is_revoked(self):
         return self.huey.is_revoked(self.task, peek=True)
