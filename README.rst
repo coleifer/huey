@@ -5,7 +5,7 @@ huey - a little task queue
 
 a lightweight alternative.
 
-* written in python
+* written in python (2.7+, 3.4+)
 * optional dependency on the Python Redis client
 
 supports:
@@ -18,6 +18,8 @@ supports:
 * task locking
 
 .. image:: http://i.imgur.com/2EpRs.jpg
+
+.. image:: https://api.travis-ci.org/coleifer/huey.svg?branch=master
 
 Huey's API
 ----------
