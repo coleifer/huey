@@ -5,10 +5,15 @@ extras_require = {
     'backends': ('peewee', "redis"),
 }
 
+here = path.abspath(path.dirname(__file__))
+with open(path.join(here, 'README.rst')) as f:
+    long_description = f.read()
+
 setup(
     name='huey',
     version=__import__('huey').__version__,
     description='huey, a little task queue',
+    long_description=long_description,
     author='Charles Leifer',
     author_email='coleifer@gmail.com',
     url='http://github.com/coleifer/huey/',
