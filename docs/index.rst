@@ -13,6 +13,7 @@ a lightweight alternative, huey is:
 * written in python
 * only dependency is the Python Redis client
 * clean and simple APIs
+* supports python versions 2.7, 3.4+
 
 huey supports:
 
