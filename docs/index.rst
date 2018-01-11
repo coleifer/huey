@@ -10,7 +10,7 @@ huey, a little task queue
 
 a lightweight alternative, huey is:
 
-* written in python
+* written in python (2.7+, 3.4+)
 * only dependency is the Python Redis client
 * clean and simple APIs
 
