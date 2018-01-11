@@ -1,4 +1,4 @@
-huey - a little task queue
+huey - a little task queue |Build Status|
 ==========================
 
 .. image:: http://media.charlesleifer.com/blog/photos/huey-logo.png
@@ -114,3 +114,5 @@ Huey is named in honor of my cat:
 
 .. image:: http://m.charlesleifer.com/t/800x-/blog/photos/p1473037658.76.jpg?key=mD9_qMaKBAuGPi95KzXYqg
 
+
+.. |Build Status| image:: https://travis-ci.org/coleifer/huey.svg?branch=master
