@@ -158,6 +158,12 @@ class Huey(object):
 
             func.schedule = schedule
 
+            def t(*args, **kwargs):
+                return klass((args, kwargs), retries=retries,
+                             retry_delay=retry_delay)
+
+            func.t = t
+
             @wraps(func)
             def inner_run(*args, **kwargs):
                 cmd = klass(
@@ -397,11 +403,12 @@ class Huey(object):
                     self.put_error(metadata)
             raise
 
-        if result is None and not self.store_none:
-            return
-
         if self.result_store and not isinstance(task, PeriodicQueueTask):
-            self.put(task.task_id, result)
+            if result is not None or self.store_none:
+                self.put(task.task_id, result)
+
+        if task.on_complete is not None:
+            self.enqueue(task.on_complete)
 
         return result
 
@@ -741,7 +748,7 @@ class QueueTask(object):
     default_retry_delay = 0
 
     def __init__(self, data=None, task_id=None, execute_time=None,
-                 retries=None, retry_delay=None):
+                 retries=None, retry_delay=None, on_complete=None):
         self.name = type(self).__name__
         self.set_data(data)
         self.task_id = task_id or self.create_id()
@@ -750,6 +757,7 @@ class QueueTask(object):
         self.retries = retries if retries is not None else self.default_retries
         self.retry_delay = retry_delay if retry_delay is not None else \
                 self.default_retry_delay
+        self.on_complete = on_complete
 
     def __repr__(self):
         rep = '%s.%s: %s' % (self.__module__, self.name, self.task_id)
@@ -757,7 +765,19 @@ class QueueTask(object):
             rep += ' @%s' % self.execute_time
         if self.retries:
             rep += ' %s retries' % self.retries
+        if self.on_complete is not None:
+            rep += ' on complete: %s' % self.on_complete
         return rep
+
+    def then(self, queue_task):
+        if not isinstance(queue_task):
+            raise ValueError('Expected QueueTask instance. Use the ".t(...)" '
+                             'helper to construct QueueTasks.')
+        if self.on_complete is None:
+            self.on_complete = queue_task
+        else:
+            self.on_complete.then(queue_task)
+        return self
 
     def create_id(self):
         return str(uuid.uuid4())

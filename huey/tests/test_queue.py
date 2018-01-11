@@ -151,6 +151,36 @@ class TestHueyQueueAPIs(BaseQueueTestCase):
         # no changes to state
         self.assertEqual(state, {})
 
+    def test_on_complete(self):
+        task = (put_data
+                .t('k1', 'v1')
+                .then(put_data.t('k2', 'v2'))
+                .then(put_data.t('k3', 'v3').then(
+                    put_data.t('k4', 'v4'))))
+        self.assertEqual(len(huey), 0)
+
+        huey.enqueue(task)
+        self.assertEqual(len(huey), 1)
+
+        t = huey.dequeue()
+        self.assertEqual(len(huey), 0)
+        huey.execute(t)
+        self.assertEqual(len(huey), 1)
+        self.assertEqual(state, {'k1': 'v1'})
+
+        huey.execute(huey.dequeue())
+        self.assertEqual(len(huey), 1)
+        self.assertEqual(state, {'k1': 'v1', 'k2': 'v2'})
+
+        huey.execute(huey.dequeue())
+        self.assertEqual(len(huey), 1)
+        self.assertEqual(state, {'k1': 'v1', 'k2': 'v2', 'k3': 'v3'})
+
+        huey.execute(huey.dequeue())
+        self.assertEqual(len(huey), 0)
+        self.assertEqual(state, {'k1': 'v1', 'k2': 'v2', 'k3': 'v3',
+                                 'k4': 'v4'})
+
     def test_scheduled_time(self):
         put_data('k', 'v')
 
