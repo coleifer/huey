@@ -1,10 +1,26 @@
 Changelog
 =========
 
-v1.5.7 (unreleased)
+v1.6.1 (unreleased)
 -------------------
 
-[View commits](https://github.com/coleifer/huey/compare/1.5.6...HEAD)
+[View commits](https://github.com/coleifer/huey/compare/1.6.0...HEAD)
+
+
+v1.6.0
+------
+
+[View commits](https://github.com/coleifer/huey/compare/1.5.6...1.6.0)
+
+* Support for [task pipelining](http://huey.readthedocs.io/en/latest/getting-started.html#task-pipelines) and task function partials
+* Support for triggering task retries using `RetryTask` exception.
+* Support for task locking, restricting concurrency of a given task.
+* Getting result of task that failed with an exception results in a `TaskException` being raised.
+* Updated health check to ensure the task scheduler is always running.
+* Refactor implementation of `task()` and `periodic_task()` decorators, which should have the added benefit of making them easier to extend.
+* Refactored result-store APIs to simplify serialization / deserialization logic.
+* Fixed bug in serialization of task exceptions.
+* Added simple client/server implementation for testing locally. [Blog post on the subject](http://charlesleifer.com/blog/building-a-simple-redis-server-with-python/).
 
 v1.5.6
 ------
