@@ -16,6 +16,7 @@ supports:
 * retry tasks that fail automatically
 * task result storage
 * task locking
+* task pipelines and chains
 
 .. image:: http://i.imgur.com/2EpRs.jpg
 

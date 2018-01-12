@@ -487,6 +487,46 @@ keyword-arguments to the child function:
 For more information, see the documentation on :py:meth:`TaskWrapper.s` and
 :py:meth:`QueueTask.then`.
 
+Locking tasks
+-------------
+
+Task locking can be accomplished using the :py:meth:`Huey.lock_task` method,
+which acts can be used as a context-manager or decorator.
+
+This lock is designed to be used to prevent multiple invocations of a task from
+running concurrently. If using the lock as a decorator, place it directly above
+the function declaration.
+
+If a second invocation occurs and the lock cannot be acquired, then a special
+exception is raised, which is handled by the consumer. The task will not be
+executed and an ``EVENT_LOCKED`` will be emitted. If the task is configured to
+be retried, then it will be retried normally, but the failure to acquire the
+lock is not considered an error.
+
+Examples:
+
+.. code-block:: python
+
+    @huey.periodic_task(crontab(minute='*/5'))
+    @huey.lock_task('reports-lock')
+    def generate_report():
+        # If a report takes longer than 5 minutes to generate, we do
+        # not want to kick off another until the previous invocation
+        # has finished.
+        run_report()
+
+
+    @huey.periodic_task(crontab(minute='0'))
+    def backup():
+        # Generate backup of code
+        do_code_backup()
+
+        # Generate database backup. Since this may take longer than an
+        # hour, we want to ensure that it is not run concurrently.
+        with huey.lock_task('db-backup'):
+            do_db_backup()
+
+
 Reading more
 ------------
 
