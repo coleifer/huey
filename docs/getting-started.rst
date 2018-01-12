@@ -382,6 +382,111 @@ execution:
 
     print_time.restore()
 
+Task Pipelines
+--------------
+
+Huey supports pipelines (or chains) of one or more tasks that should be
+executed sequentially.
+
+To get started with pipelines, let's first look behind-the-scenes at what
+happens when you invoke a ``task``-decorated function:
+
+.. code-block:: python
+
+    @huey.task()
+    def add(a, b):
+        return a + b
+
+    result = add(1, 2)
+
+    # Is equivalent to:
+    task = add.s(1, 2)
+    result = huey.enqueue(task)
+
+The :py:meth:`TaskWrapper.s` method is used to create a :py:class:`QueueTask`
+instance which represents the execution of the given function. The
+``QueueTask`` is serialized and enqueued, then dequeued, deserialized and
+executed by the consumer.
+
+To create a pipeline, we will use the :py:meth:`TaskWrapper.s` method to create
+a :py:class:`QueueTask` instance. We can then chain additional tasks using the
+:py:meth:`QueueTask.then` method:
+
+.. code-block:: python
+
+    add_task = add.s(1, 2)  # Create QueueTask to represent task invocation.
+
+    # Add additional tasks to pipeline by calling QueueTask.then().
+    pipeline = (add_task
+                .then(add, 3)  # Call add() with previous result and 3.
+                .then(add, 4)  # etc...
+                .then(add, 5))
+
+    results = huey.enqueue(pipeline)
+
+    # Print results of above pipeline.
+    print([result.get(blocking=True) for result in results])
+
+    # [3, 6, 10, 15]
+
+When enqueueing a task pipeline, the return value will be a list of
+:py:class:`TaskResultWrapper` objects, one for each task in the pipeline.
+
+Note that the return value from the parent task is passed to the child task,
+and so-on.
+
+If the value returned by the parent function is a ``tuple``, then the tuple
+will be used to update the ``*args`` for the child function.  Likewise, if the
+parent function returns a ``dict``, then the dict will be used to update the
+``**kwargs`` for the child function.
+
+Example of chaining fibonacci calculations:
+
+.. code-block:: python
+
+    @huey.task()
+    def fib(a, b=1):
+        a, b = a + b, a
+        return (a, b)  # returns tuple, which is passed as *args
+
+    pipe = (fib.s(1)
+            .then(fib)
+            .then(fib))
+    results = huey.enqueue(pipe)
+
+    print([result.get(blocking=True) for result in results])
+    # [(2, 1), (3, 2), (5, 3)]
+
+
+Here is an example of returning a dictionary to be passed in as
+keyword-arguments to the child function:
+
+.. code-block:: python
+
+    @huey.task()
+    def stateful(v1=None, v2=None, v3=None):
+        state = {
+            'v1': v1 + 1 if v1 is not None else 0,
+            'v2': v2 + 2 if v2 is not None else 0,
+            'v3': v3 + 3 if v3 is not None else 0}
+        return state
+
+    pipe = (stateful
+            .s()
+            .then(stateful)
+            .then(stateful))
+
+    results = huey.enqueue(pipe)
+    print([result.get(True) for result in results])
+
+    # Prints:
+    # [{'v1': 0, 'v2': 0, 'v3': 0},
+    #  {'v1': 1, 'v2': 2, 'v3': 3},
+    #  {'v1': 2, 'v2': 4, 'v3': 6}]
+
+For more information, see the documentation on :py:meth:`TaskWrapper.s` and
+:py:meth:`QueueTask.then`.
+
 Reading more
 ------------
 

@@ -60,9 +60,9 @@ Function decorators and helpers
         Function decorator that marks the decorated function for processing by the
         consumer. Calls to the decorated function will do the following:
 
-        1. Serialize the function call into a message suitable for storing in the queue
-        2. Enqueue the message for execution by the consumer
-        3. If a ``result_store`` has been configured, return an :py:class:`TaskResultWrapper`
+        1. Serialize the function call into a message suitable for storing in the queue.
+        2. Enqueue the message for execution by the consumer.
+        3. If a ``result_store`` has been configured, return a :py:class:`TaskResultWrapper`
            instance which can retrieve the result of the function, or ``None`` if not
            using a result store.
 
@@ -85,17 +85,9 @@ Function decorators and helpers
                 # do some counting!
                 return 'Counted %s beans' % num
 
-        Now, whenever you call this function in your application, the actual processing
-        will occur when the consumer dequeues the message and your application will
-        continue along on its way.
-
-        Without a result store:
-
-        .. code-block:: pycon
-
-            >>> res = count_some_beans(1000000)
-            >>> res is None
-            True
+        Now, whenever you call this function in your application, the actual
+        processing will occur when the consumer dequeues the message and your
+        application will continue along on its way.
 
         With a result store:
 
@@ -107,13 +99,22 @@ Function decorators and helpers
             >>> res()
             'Counted 1000000 beans'
 
+        Without a result store:
+
+        .. code-block:: pycon
+
+            >>> res = count_some_beans(1000000)
+            >>> res is None
+            True
+
         :param int retries: number of times to retry the task if an exception occurs
         :param int retry_delay: number of seconds to wait between retries
         :param boolean retries_as_argument: whether the number of retries should
             be passed in to the decorated function as an argument.
         :param boolean include_task: whether the task instance itself should be
             passed in to the decorated function as the ``task`` argument.
-        :rtype: decorated function
+        :returns: A callable :py:class:`TaskWrapper` instance.
+        :rtype: TaskWrapper
 
         The return value of any calls to the decorated function depends on whether
         the :py:class:`Huey` instance is configured with a ``result_store``.  If a
@@ -122,136 +123,27 @@ Function decorators and helpers
         the result store -- otherwise it will simply return ``None``.
 
         The ``task`` decorator also does one other important thing -- it adds
-        a special function **onto** the decorated function, which makes it possible
-        to *schedule* the execution for a certain time in the future:
+        a special methods **onto** the decorated function, which makes it possible
+        to *schedule* the execution for a certain time in the future, create
+        task pipelines, etc. For more information, see:
 
-        .. py:function:: {decorated func}.schedule(args=None, kwargs=None, eta=None, delay=None, convert_utc=True)
-
-            Use the special ``schedule`` function to schedule the execution of a
-            queue task for a given time in the future:
-
-            .. code-block:: python
-
-                import datetime
-
-                # get a datetime object representing one hour in the future
-                in_an_hour = datetime.datetime.now() + datetime.timedelta(seconds=3600)
-
-                # schedule "count_some_beans" to run in an hour
-                count_some_beans.schedule(args=(100000,), eta=in_an_hour)
-
-                # another way of doing the same thing...
-                count_some_beans.schedule(args=(100000,), delay=(60 * 60))
-
-            :param args: arguments to call the decorated function with
-            :param kwargs: keyword arguments to call the decorated function with
-            :param datetime eta: the time at which the function should be
-                executed. See note below on how to correctly specify the
-                ``eta`` whether the consumer is running in UTC- or
-                localtime-mode.
-            :param int delay: number of seconds to wait before executing function
-            :param convert_utc: whether the ``eta`` or ``delay`` should be converted from local time to UTC.
-                Defaults to ``True``. See note below.
-            :rtype: like calls to the decorated function, will return an :py:class:`TaskResultWrapper`
-                    object if a result store is configured, otherwise returns ``None``
-
-            .. note::
-                It can easily become confusing when/how to use the
-                ``convert_utc`` parameter when scheduling tasks. Similarly, if
-                you are using naive datetimes, whether the ETA should be based
-                around ``datetime.utcnow()`` or ``datetime.now()``.
-
-                If you are running the consumer in UTC-mode (the default):
-
-                * When specifying a ``delay``, ``convert_utc=True``.
-                * When specifying an ``eta`` with respect to
-                  ``datetime.now()``, ``convert_utc=True``.
-                * When specifying an ``eta`` with respect to
-                  ``datetime.utcnow()``, ``convert_utc=False``.
-
-                If you are running the consumer in localtime-mode (``-o``):
-
-                * When specifying a ``delay``, ``convert_utc=False``.
-                * When specifying an ``eta``, it should always be with respect
-                  to ``datetime.now()`` with ``convert_utc=False``.
-
-                In other words, for consumers running in UTC-mode, the only
-                time ``convert_utc=False`` is when you are passing an ``eta``
-                that is already a naive datetime with respect to ``utcnow()``.
-
-                Similarly for localtime-mode consumers, ``convert_utc`` should
-                always be ``False`` and when specifying an ``eta`` it should be
-                with respect to ``datetime.now()``.
-
-        .. py:function:: {decorated func}.call_local
-
-            Call the ``@task``-decorated function without enqueueing the call. Or, in other words, ``call_local()`` provides access to the actual function.
-
-            .. code-block:: pycon
-
-                >>> count_some_beans.call_local(1337)
-                'Counted 1337 beans'
-
-        .. py:function:: {decorated_func}.revoke([revoke_until=None[, revoke_once=False]])
-
-            Prevent any instance of the given task from executing.  When no
-            parameters are provided the function will not execute again until
-            explicitly restored.
-
-            This function can be called multiple times, but each call will
-            supercede any limitations placed on the previous revocation.
-
-            :param datetime revoke_until: Prevent the execution of the task until the
-                given datetime.  If ``None`` it will prevent execution indefinitely.
-            :param bool revoke_once: If ``True`` will only prevent execution of the next
-                invocation of the task.
-
-            .. code-block:: python
-
-                # skip the next execution
-                count_some_beans.revoke(revoke_once=True)
-
-                # prevent any invocation from executing.
-                count_some_beans.revoke()
-
-                # prevent any invocation for 24 hours.
-                count_some_beans.revoke(datetime.datetime.now() + datetime.timedelta(days=1))
-
-        .. py:function:: {decorated_func}.is_revoked([dt=None])
-
-            Check whether the given task is revoked.  If ``dt`` is specified,
-            it will check if the task is revoked with respect to the given datetime.
-
-            :param datetime dt: If provided, checks whether task is revoked at the
-                given datetime
-
-        .. py:function:: {decorated_func}.restore()
-
-            Clears any revoked status and allows the task to run normally.
-
-        .. py:attribute:: {decorated func}.task_class
-
-            Store a reference to the task class for the decorated function.
-
-            .. code-block:: pycon
-
-                >>> count_some_beans.task_class
-                tasks.queuecmd_count_beans
-
+        * :py:meth:`TaskWrapper.schedule`
+        * :py:meth:`TaskWrapper.s`
+        * :py:meth:`TaskWrapper.revoke`
+        * :py:meth:`TaskWrapper.is_revoked`
+        * :py:meth:`TaskWrapper.restore`
 
     .. py:method:: periodic_task(validate_datetime)
 
-        Function decorator that marks the decorated function for processing by the
-        consumer *at a specific interval*.  Calls to functions decorated with ``periodic_task``
-        will execute normally, unlike :py:meth:`~Huey.task`, which enqueues tasks
-        for execution by the consumer.  Rather, the ``periodic_task`` decorator
-        serves to **mark a function as needing to be executed periodically** by the
-        consumer.
+        Function decorator that marks the decorated function for processing by
+        the consumer *at a specific interval*. The ``periodic_task`` decorator
+        serves to **mark a function as needing to be executed periodically** by
+        the consumer.
 
         .. note::
-            By default, the consumer will enqueue ``periodic_task`` functions.
-            To disable the enqueueing of periodic tasks, run the consumer with
-            ``-n`` or ``--no-periodic``.
+            By default, the consumer will schedule and enqueue periodic task
+            functions.  To disable the enqueueing of periodic tasks, run the
+            consumer with ``-n`` or ``--no-periodic``.
 
         The ``validate_datetime`` parameter is a function which accepts a datetime
         object and returns a boolean value whether or not the decorated function
@@ -286,55 +178,37 @@ Function decorators and helpers
 
         :param validate_datetime: a callable which takes a ``datetime`` and returns
             a boolean whether the decorated function should execute at that time or not
-        :rtype: decorated function
+        :returns: A callable :py:class:`TaskWrapper` instance.
+        :rtype: :py:class:`PeriodicQueueTask`
 
-        Like :py:meth:`~Huey.task`, the periodic task decorator adds several helpers
-        to the decorated function.  These helpers allow you to "revoke" and "restore" the
+        Like :py:meth:`~Huey.task`, the periodic task decorator adds helpers
+        to the decorated function. These helpers allow you to "revoke" and "restore" the
         periodic task, effectively enabling you to pause it or prevent its execution.
+        For more information, see :py:class:`TaskWrapper`.
 
-        .. py:function:: {decorated_func}.revoke([revoke_until=None[, revoke_once=False]])
+    .. py:method:: enqueue(task)
 
-            Prevent the given periodic task from executing.  When no parameters are
-            provided the function will not execute again until explicitly
-            restored.
+        Enqueue the given task. When the result store is enabled (on by
+        default), the return value will be a :py:class:`TaskResultWrapper`
+        which provides access to the result (among other things).
 
-            This function can be called multiple times, but each call will
-            supercede any limitations placed on the previous revocation.
+        If the task specifies another task to run on completion (see
+        :py:meth:`QueueTask.then`), then the return value will be a ``list`` of
+        :py:class:`TaskResultWrapper` objects, one for each task in the
+        pipeline.
 
-            :param datetime revoke_until: Prevent the execution of the task until the
-                given datetime.  If ``None`` it will prevent execution indefinitely.
-            :param bool revoke_once: If ``True`` will only prevent execution the next
-                time it would normally execute.
+        .. note::
+            Unless you are executing a pipeline of tasks, it should not
+            typically be necessary to use the :py:meth:`Huey.enqueue` method.
+            Calling (or scheduling) a ``task``-decorated function will
+            automatically enqueue a task for execution.
 
-            .. code-block:: python
+            When you create a task pipeline, however, it is necessary to
+            enqueue the pipeline once it has been set up.
 
-                # skip the next execution
-                every_five_minutes.revoke(revoke_once=True)
-
-                # pause the command indefinitely
-                every_five_minutes.revoke()
-
-                # pause the command for 24 hours
-                every_five_minutes.revoke(datetime.datetime.now() + datetime.timedelta(days=1))
-
-        .. py:function:: {decorated_func}.is_revoked([dt=None])
-
-            Check whether the given periodic task is revoked.  If ``dt`` is specified,
-            it will check if the task is revoked with respect to the given datetime.
-
-            :param datetime dt: If provided, checks whether task is revoked at the
-                given datetime
-
-        .. py:function:: {decorated_func}.restore()
-
-            Clears any revoked status and allows the task to run normally.
-
-        If you want access to the underlying task class, it is stored as an attribute
-        on the decorated function:
-
-        .. py:attribute:: {decorated_func}.task_class
-
-            Store a reference to the task class for the decorated function.
+        :param QueueTask task: a :py:class:`QueueTask` instance.
+        :returns: A :py:class:`TaskResultWrapper` object (if result store
+            enabled).
 
     .. py:method:: register_pre_execute(name, fn)
 
@@ -584,6 +458,293 @@ Function decorators and helpers
     .. py:method:: all_results()
 
         Return a mapping of task-id to pickled result data for all executed tasks whose return values have not been automatically removed.
+
+
+.. py:class:: TaskWrapper(huey, func[, retries=0[, retry_delay=0[,
+    retries_as_argument=False[, include_task=False[, name=None[,
+    task_base=None[, **task_settings]]]]]]])
+
+    :param Huey huey: A huey instance.
+    :param func: User function.
+    :param int retries: Upon failure, number of times to retry the task.
+    :param int retry_delay: Number of seconds to wait before retrying after a
+        failure/exception.
+    :param bool retries_as_argument: Pass the number of remaining retries as an
+        argument to the user function.
+    :param bool include_task: Pass the task object itself as an argument to the
+        user function.
+    :param str name: Name for task (will be determined based on task module and
+        function name if not provided).
+    :param task_base: Base-class for task, defaults to :py:class:`QueueTask`.
+    :param task_settings: Arbitrary settings to pass to the task class
+        constructor.
+
+    Wrapper around a user-defined function that converts function calls into
+    tasks executed by the consumer. The wrapper, which decorates the function,
+    replaces the function in the scope with a :py:class:`TaskWrapper` instance.
+
+    The wrapper class, when called, will enqueue the requested function call
+    for execution by the consumer.
+
+    .. note::
+        You should not need to create :py:class:`TaskWrapper` instances
+        directly. Instead, use the :py:meth:`Huey.task` and
+        :py:meth:`Huey.periodic_task` decorators.
+
+    The wrapper class also has several helper methods for managing and
+    enqueueing tasks, which are described below.
+
+    .. py:method:: schedule([args=None[, kwargs=None[, eta=None[, delay=None[,
+        convert_utc=True]]]]])
+
+        Use the ``schedule`` method to schedule the execution of the queue task
+        for a given time in the future:
+
+        .. code-block:: python
+
+            import datetime
+
+            # get a datetime object representing one hour in the future
+            in_an_hour = datetime.datetime.now() + datetime.timedelta(seconds=3600)
+
+            # schedule "count_some_beans" to run in an hour
+            count_some_beans.schedule(args=(100000,), eta=in_an_hour)
+
+            # another way of doing the same thing...
+            count_some_beans.schedule(args=(100000,), delay=(60 * 60))
+
+        :param args: arguments to call the decorated function with
+        :param kwargs: keyword arguments to call the decorated function with
+        :param datetime eta: the time at which the function should be
+            executed. See note below on how to correctly specify the
+            ``eta`` whether the consumer is running in UTC- or
+            localtime-mode.
+        :param int delay: number of seconds to wait before executing function
+        :param convert_utc: whether the ``eta`` or ``delay`` should be converted from local time to UTC.
+            Defaults to ``True``. See note below.
+        :rtype: like calls to the decorated function, will return an :py:class:`TaskResultWrapper`
+                object if a result store is configured, otherwise returns ``None``
+
+        .. note::
+            It can easily become confusing when/how to use the ``convert_utc``
+            parameter when scheduling tasks. Similarly, if you are using naive
+            datetimes, whether the ETA should be based around
+            ``datetime.utcnow()`` or ``datetime.now()``.
+
+            If you are running the consumer in UTC-mode (the default):
+
+            * When specifying a ``delay``, ``convert_utc=True``.
+            * When specifying an ``eta`` with respect to
+              ``datetime.now()``, ``convert_utc=True``.
+            * When specifying an ``eta`` with respect to
+              ``datetime.utcnow()``, ``convert_utc=False``.
+
+            If you are running the consumer in localtime-mode (``-o``):
+
+            * When specifying a ``delay``, ``convert_utc=False``.
+            * When specifying an ``eta``, it should always be with respect
+              to ``datetime.now()`` with ``convert_utc=False``.
+
+            In other words, for consumers running in UTC-mode, the only time
+            ``convert_utc=False`` is when you are passing an ``eta`` that is
+            already a naive datetime with respect to ``utcnow()``.
+
+            Similarly for localtime-mode consumers, ``convert_utc`` should
+            always be ``False`` and when specifying an ``eta`` it should be
+            with respect to ``datetime.now()``.
+
+    .. py:method:: call_local()
+
+        Call the ``@task``-decorated function without enqueueing the call. Or,
+        in other words, ``call_local()`` provides access to the underlying user
+        function.
+
+        .. code-block:: pycon
+
+            >>> count_some_beans.call_local(1337)
+            'Counted 1337 beans'
+
+    .. py:method:: revoke([revoke_until=None[, revoke_once=False]])
+
+        Prevent any instance of the given task from executing.  When no
+        parameters are provided the function will not execute again until
+        explicitly restored.
+
+        This function can be called multiple times, but each call will
+        supercede any limitations placed on the previous revocation.
+
+        :param datetime revoke_until: Prevent the execution of the task until the
+            given datetime.  If ``None`` it will prevent execution indefinitely.
+        :param bool revoke_once: If ``True`` will only prevent execution of the next
+            invocation of the task.
+
+        .. code-block:: python
+
+            # skip the next execution
+            count_some_beans.revoke(revoke_once=True)
+
+            # prevent any invocation from executing.
+            count_some_beans.revoke()
+
+            # prevent any invocation for 24 hours.
+            count_some_beans.revoke(datetime.datetime.now() + datetime.timedelta(days=1))
+
+    .. py:method:: is_revoked([dt=None])
+
+        Check whether the given task is revoked.  If ``dt`` is specified, it
+        will check if the task is revoked with respect to the given datetime.
+
+        :param datetime dt: If provided, checks whether task is revoked at the
+            given datetime
+
+    .. py:method:: restore()
+
+        Clears any revoked status and allows the task to run normally.
+
+    .. py:method:: s([*args[, **kwargs]])
+
+        Create a task instance representing the invocation of the user function
+        with the given arguments and keyword-arguments. The resulting task
+        instance is **not** enqueued automatically.
+
+        To illustrate the distinction, when you call a ``task()``-decorated
+        function, behind-the-scenes, Huey is doing something like this:
+
+        .. code-block:: python
+
+            @huey.task()
+            def add(a, b):
+                return a + b
+
+            result = add(1, 2)
+
+            # Is equivalent to:
+            task = add.s(1, 2)
+            result = huey.enqueue(task)
+
+        :param args: Arguments for user-defined function.
+        :param kwargs: Keyword arguments for user-defined function.
+        :returns: a :py:class:`QueueTask` instance representing the execution
+            of the user-defined function with the given arguments.
+
+        Typically, one will use the :py:meth:`TaskWrapper.s` helper when
+        creating task execution pipelines.
+
+        For example:
+
+        .. code-block:: python
+
+            add_task = add.s(1, 2)  # Represent task invocation.
+            pipeline = (add_task
+                        .then(add, 3)  # Call add() with previous result and 3.
+                        .then(add, 4)  # etc...
+                        .then(add, 5))
+
+            results = huey.enqueue(pipeline)
+
+            # Print results of above pipeline.
+            print([result.get(blocking=True) for result in results])
+
+            # [3, 6, 10, 15]
+
+    .. py:attribute:: task_class
+
+        Store a reference to the task class for the decorated function.
+
+        .. code-block:: pycon
+
+            >>> count_some_beans.task_class
+            tasks.queuecmd_count_beans
+
+
+.. py:class:: QueueTask([data=None[, task_id=None[, execute_time=None[,
+    retries=None[, retry_delay=None[, on_complete=None]]]]]])
+
+    The ``QueueTask`` class represents the execution of a function. Instances
+    of the class are serialized and enqueued for execution by the consumer,
+    which deserializes them and executes the function.
+
+    .. note::
+        You should not need to create instances of :py:class:`QueueTask`
+        directly, but instead use either the :py:meth:`Huey.task` decorator or
+        the :py:meth:`TaskWrapper.s` method.
+
+    :param data: Data specific to this execution of the task. For
+        ``task()``-decorated functions, this will be a tuple of the
+        ``(args, kwargs)`` the function was invoked with.
+    :param str task_id: The task's ID, defaults to a UUID if not provided.
+    :param datetime execute_time: Time at which task should be executed.
+    :param int retries: Number of times to retry task upon failure/exception.
+    :param int retry_delay: Number of seconds to wait before retrying a failed
+        task.
+    :param QueueTask on_complete: Task to execute upon completion of this task.
+
+    Here's a refresher on how tasks work:
+
+    .. code-block:: python
+
+        @huey.task()
+        def add(a, b):
+            return a + b
+
+        ret = add(1, 2)
+        print(ret.get(blocking=True))  # "3".
+
+        # The above two lines are equivalent to:
+        task_instance = add.s(1, 2)  # Create a QueueTask instance.
+        ret = huey.enqueue(task_instance)  # Enqueue the queue task.
+        print(ret.get(blocking=True))  # "3".
+
+    .. py:method:: then(task[, *args[, **kwargs]])
+
+        :param TaskWrapper task: A ``task()``-decorated function.
+        :param args: Arguments to pass to the task.
+        :param kwargs: Keyword arguments to pass to the task.
+        :returns: The parent task.
+
+        The :py:meth:`~QueueTask.then` method is used to create task pipelines.
+        A pipeline is a lot like a unix pipe, such that the return value from
+        the parent task is then passed (along with any parameters specified by
+        ``args`` and ``kwargs``) to the child task.
+
+        Here's an example of chaining some addition operations:
+
+        .. code-block:: python
+
+            add_task = add.s(1, 2)  # Represent task invocation.
+            pipeline = (add_task
+                        .then(add, 3)  # Call add() with previous result and 3.
+                        .then(add, 4)  # etc...
+                        .then(add, 5))
+
+            results = huey.enqueue(pipeline)
+
+            # Print results of above pipeline.
+            print([result.get(blocking=True) for result in results])
+
+            # [3, 6, 10, 15]
+
+        If the value returned by the parent function is a ``tuple``, then the
+        tuple will be used to update the ``*args`` for the child function.
+        Likewise, if the parent function returns a ``dict``, then the dict will
+        be used to update the ``**kwargs`` for the child function.
+
+        Example of chaining fibonacci calculations:
+
+        .. code-block:: python
+
+            @huey.task()
+            def fib(a, b=1):
+                a, b = a + b, a
+                return (a, b)  # returns tuple, which is passed as *args
+
+            pipe = (fib.s(1)
+                    .then(fib)
+                    .then(fib))
+            results = huey.enqueue(pipe)
+
+            print([result.get(blocking=True) for result in results])
+            # [(2, 1), (3, 2), (5, 3)]
 
 
 .. py:function:: crontab(month='*', day='*', day_of_week='*', hour='*', minute='*')

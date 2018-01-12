@@ -21,6 +21,7 @@ huey supports:
 * schedule recurring tasks, like a crontab
 * automatically retry tasks that fail
 * task result storage
+* task pipelines and chains
 * consumer publishes event stream, allowing high-fidelity monitoring
 
 .. image:: http://i.imgur.com/2EpRs.jpg
