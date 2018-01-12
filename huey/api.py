@@ -111,63 +111,21 @@ class Huey(object):
                 eta = make_naive(eta)
             return eta
 
-    def _add_task_control_helpers(self, klass, task_func):
-        def is_revoked(dt=None, peek=True):
-            return self.is_revoked(klass, dt, peek)
-
-        def revoke(revoke_until=None, revoke_once=False):
-            self.revoke_all(klass, revoke_until, revoke_once)
-
-        def restore():
-            return self.restore_all(klass)
-
-        task_func.task_class = klass
-        task_func.is_revoked = is_revoked
-        task_func.revoke = revoke
-        task_func.restore = restore
-        return task_func
-
     def task(self, retries=0, retry_delay=0, retries_as_argument=False,
              include_task=False, name=None, **task_settings):
         def decorator(func):
             """
             Decorator to execute a function out-of-band via the consumer.
             """
-            klass = create_task(
-                QueueTask,
+            return TaskWrapper(
+                self,
                 func,
-                retries_as_argument,
-                name,
-                include_task,
+                retries=retries,
+                retry_delay=retry_delay,
+                retries_as_argument=retries_as_argument,
+                include_task=include_task,
+                name=name,
                 **task_settings)
-            self.registry.register(klass)
-
-            func = self._add_task_control_helpers(klass, func)
-
-            def schedule(args=None, kwargs=None, eta=None, delay=None,
-                         convert_utc=True, task_id=None):
-                execute_time = self._normalize_execute_time(
-                    eta=eta, delay=delay, convert_utc=convert_utc)
-                cmd = klass(
-                    (args or (), kwargs or {}),
-                    execute_time=execute_time,
-                    retries=retries,
-                    retry_delay=retry_delay,
-                    task_id=task_id)
-                return self.enqueue(cmd)
-
-            func.schedule = schedule
-
-            @wraps(func)
-            def inner_run(*args, **kwargs):
-                cmd = klass(
-                    (args, kwargs),
-                    retries=retries,
-                    retry_delay=retry_delay)
-                return self.enqueue(cmd)
-
-            inner_run.call_local = func
-            return inner_run
         return decorator
 
     # We specify retries and retry_delay as 0 because they become the default
@@ -183,17 +141,16 @@ class Huey(object):
             def method_validate(self, dt):
                 return validate_datetime(dt)
 
-            klass = create_task(
-                PeriodicQueueTask,
+            return TaskWrapper(
+                self,
                 func,
+                name=name,
+                task_base=PeriodicQueueTask,
                 default_retries=retries,
                 default_retry_delay=retry_delay,
-                task_name=name,
                 validate_datetime=method_validate,
                 **task_settings)
-            self.registry.register(klass)
 
-            return self._add_task_control_helpers(klass, func)
         return decorator
 
     def register_pre_execute(self, name, fn):
@@ -582,6 +539,57 @@ class Huey(object):
                 max_delay=max_delay,
                 revoke_on_timeout=revoke_on_timeout,
                 preserve=preserve)
+
+
+class TaskWrapper(object):
+    def __init__(self, huey, func, retries=0, retry_delay=0,
+                 retries_as_argument=False, include_task=False, name=None,
+                 task_base=None, **task_settings):
+        self.huey = huey
+        self.func = func
+        self.retries = retries
+        self.retry_delay = retry_delay
+        self.retries_as_argument = retries_as_argument
+        self.include_task = include_task
+        self.name = name
+        self.task_settings = task_settings
+        self.task_class = create_task(
+            QueueTask if task_base is None else task_base,
+            func,
+            retries_as_argument,
+            name,
+            include_task,
+            **task_settings)
+        self.huey.registry.register(self.task_class)
+
+    def is_revoked(self, dt=None, peek=True):
+        return self.huey.is_revoked(self.task_class, dt, peek)
+
+    def revoke(self, revoke_until=None, revoke_once=False):
+        self.huey.revoke_all(self.task_class, revoke_until, revoke_once)
+
+    def restore(self):
+        return self.huey.restore_all(self.task_class)
+
+    def schedule(self, args=None, kwargs=None, eta=None, delay=None,
+                 convert_utc=True, task_id=None):
+        execute_time = self.huey._normalize_execute_time(
+            eta=eta, delay=delay, convert_utc=convert_utc)
+        cmd = self.task_class(
+            (args or (), kwargs or {}),
+            execute_time=execute_time,
+            retries=self.retries,
+            retry_delay=self.retry_delay,
+            task_id=task_id)
+        return self.huey.enqueue(cmd)
+
+    def __call__(self, *args, **kwargs):
+        cmd = self.task_class((args, kwargs), retries=self.retries,
+                              retry_delay=self.retry_delay)
+        return self.huey.enqueue(cmd)
+
+    def call_local(self, *args, **kwargs):
+        return self.func(*args, **kwargs)
 
 
 class TaskLock(object):
