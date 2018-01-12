@@ -276,13 +276,24 @@ class Huey(object):
             # critical component.
             pass
 
-    def enqueue(self, task):
+    def enqueue(self, task, is_callback=False):
         if self.always_eager:
             return task.execute()
 
         self._enqueue(self.registry.get_message_for_task(task))
+        if not self.result_store:
+            return
 
-        if self.result_store:
+        if task.on_complete and not is_callback:
+            q = [task]
+            result_wrappers = []
+            while q:
+                current = q.pop()
+                result_wrappers.append(TaskResultWrapper(self, current))
+                if current.on_complete:
+                    q.append(current.on_complete)
+            return result_wrappers
+        else:
             return TaskResultWrapper(self, task)
 
     def dequeue(self):
@@ -354,11 +365,14 @@ class Huey(object):
                     self.put_error(metadata)
             raise
 
-        if result is None and not self.store_none:
-            return
-
         if self.result_store and not isinstance(task, PeriodicQueueTask):
-            self.put(task.task_id, result)
+            if result is not None or self.store_none:
+                self.put(task.task_id, result)
+
+        if task.on_complete:
+            next_task = task.on_complete
+            next_task.extend_data(result)
+            self.enqueue(next_task)
 
         return result
 
@@ -584,12 +598,14 @@ class TaskWrapper(object):
         return self.huey.enqueue(cmd)
 
     def __call__(self, *args, **kwargs):
-        cmd = self.task_class((args, kwargs), retries=self.retries,
-                              retry_delay=self.retry_delay)
-        return self.huey.enqueue(cmd)
+        return self.huey.enqueue(self.s(*args, **kwargs))
 
     def call_local(self, *args, **kwargs):
         return self.func(*args, **kwargs)
+
+    def s(self, *args, **kwargs):
+        return self.task_class((args, kwargs), retries=self.retries,
+                               retry_delay=self.retry_delay)
 
 
 class TaskLock(object):
@@ -749,7 +765,7 @@ class QueueTask(object):
     default_retry_delay = 0
 
     def __init__(self, data=None, task_id=None, execute_time=None,
-                 retries=None, retry_delay=None):
+                 retries=None, retry_delay=None, on_complete=None):
         self.name = type(self).__name__
         self.set_data(data)
         self.task_id = task_id or self.create_id()
@@ -758,6 +774,7 @@ class QueueTask(object):
         self.retries = retries if retries is not None else self.default_retries
         self.retry_delay = retry_delay if retry_delay is not None else \
                 self.default_retry_delay
+        self.on_complete = on_complete
 
     def __repr__(self):
         rep = '%s.%s: %s' % (self.__module__, self.name, self.task_id)
@@ -765,6 +782,8 @@ class QueueTask(object):
             rep += ' @%s' % self.execute_time
         if self.retries:
             rep += ' %s retries' % self.retries
+        if self.on_complete:
+            rep += ' -> %s' % self.on_complete
         return rep
 
     def create_id(self):
@@ -775,6 +794,25 @@ class QueueTask(object):
 
     def set_data(self, data):
         self.data = data
+
+    def extend_data(self, data):
+        if data is None or data == ():
+            return
+        args, kwargs = self.get_data()
+        if isinstance(data, tuple):
+            args += data
+        elif isinstance(data, dict):
+            kwargs.update(data)
+        else:
+            args = args + (data,)
+        self.set_data((args, kwargs))
+
+    def then(self, task, *args, **kwargs):
+        if self.on_complete:
+            self.on_complete.then(task, *args, **kwargs)
+        else:
+            self.on_complete = task.s(*args, **kwargs)
+        return self
 
     def execute(self):
         """Execute any arbitary code here"""
