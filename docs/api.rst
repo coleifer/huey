@@ -460,9 +460,7 @@ Function decorators and helpers
         Return a mapping of task-id to pickled result data for all executed tasks whose return values have not been automatically removed.
 
 
-.. py:class:: TaskWrapper(huey, func[, retries=0[, retry_delay=0[,
-    retries_as_argument=False[, include_task=False[, name=None[,
-    task_base=None[, **task_settings]]]]]]])
+.. py:class:: TaskWrapper(huey, func[, retries=0[, retry_delay=0[, retries_as_argument=False[, include_task=False[, name=None[, task_base=None[, **task_settings]]]]]]])
 
     :param Huey huey: A huey instance.
     :param func: User function.
@@ -494,8 +492,7 @@ Function decorators and helpers
     The wrapper class also has several helper methods for managing and
     enqueueing tasks, which are described below.
 
-    .. py:method:: schedule([args=None[, kwargs=None[, eta=None[, delay=None[,
-        convert_utc=True]]]]])
+    .. py:method:: schedule([args=None[, kwargs=None[, eta=None[, delay=None[, convert_utc=True]]]]])
 
         Use the ``schedule`` method to schedule the execution of the queue task
         for a given time in the future:
@@ -657,8 +654,7 @@ Function decorators and helpers
             tasks.queuecmd_count_beans
 
 
-.. py:class:: QueueTask([data=None[, task_id=None[, execute_time=None[,
-    retries=None[, retry_delay=None[, on_complete=None]]]]]])
+.. py:class:: QueueTask([data=None[, task_id=None[, execute_time=None[, retries=None[, retry_delay=None[, on_complete=None]]]]]])
 
     The ``QueueTask`` class represents the execution of a function. Instances
     of the class are serialized and enqueued for execution by the consumer,
