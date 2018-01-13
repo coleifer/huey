@@ -1,7 +1,11 @@
-import gevent
-from gevent import socket
-from gevent.pool import Pool
-from gevent.server import StreamServer
+try:
+    import gevent
+    from gevent import socket
+    from gevent.pool import Pool
+    from gevent.server import StreamServer
+except ImportError:
+    import socket
+    Pool = StreamServer = None
 
 from collections import defaultdict
 from collections import deque
@@ -13,9 +17,31 @@ import heapq
 import logging
 import optparse
 import sys
+try:
+    import socketserver as ss
+except ImportError:
+    import SocketServer as ss
 
 
 logger = logging.getLogger(__name__)
+
+
+class ThreadedStreamServer(object):
+    def __init__(self, address, handler):
+        self.address = address
+        self.handler = handler
+
+    def serve_forever(self):
+        handler = self.handler
+        class RequestHandler(ss.BaseRequestHandler):
+            def handle(self):
+                return handler(self.request, self.client_address)
+
+        class ThreadedServer(ss.ThreadingMixIn, ss.TCPServer):
+            allow_reuse_address = True
+
+        self.stream_server = ThreadedServer(self.address, RequestHandler)
+        self.stream_server.serve_forever()
 
 
 class CommandError(Exception):
@@ -167,15 +193,26 @@ class Shutdown(Exception): pass
 
 
 class QueueServer(object):
-    def __init__(self, host='127.0.0.1', port=31337, max_clients=64):
+    def __init__(self, host='127.0.0.1', port=31337, max_clients=64,
+                 use_gevent=True):
         self._host = host
         self._port = port
         self._max_clients = max_clients
-        self._pool = Pool(max_clients)
-        self._server = StreamServer(
-            (self._host, self._port),
-            self.connection_handler,
-            spawn=self._pool)
+        if use_gevent:
+            if Pool is None or StreamServer is None:
+                raise Exception('gevent not installed. Please install gevent '
+                                'or instantiate QueueServer with '
+                                'use_gevent=False')
+
+            self._pool = Pool(max_clients)
+            self._server = StreamServer(
+                (self._host, self._port),
+                self.connection_handler,
+                spawn=self._pool)
+        else:
+            self._server = ThreadedStreamServer(
+                (self._host, self._port),
+                self.connection_handler)
 
         self._commands = self.get_commands()
         self._protocol = ProtocolHandler()
@@ -479,6 +516,9 @@ def get_option_parser():
                       help='Log debug messages.')
     parser.add_option('-e', '--errors', action='store_true', dest='error',
                       help='Log error messages only.')
+    parser.add_option('-t', '--use-threads', action='store_false',
+                      default=True, dest='use_gevent',
+                      help='Use threads instead of gevent.')
     parser.add_option('-H', '--host', default='127.0.0.1', dest='host',
                       help='Host to listen on.')
     parser.add_option('-m', '--max-clients', default=64, dest='max_clients',
@@ -504,9 +544,11 @@ def configure_logger(options):
 if __name__ == '__main__':
     options, args = get_option_parser().parse_args()
 
-    from gevent import monkey; monkey.patch_all()
-    configure_logger(options)
+    if options.use_gevent:
+        from gevent import monkey; monkey.patch_all()
 
+    configure_logger(options)
     server = QueueServer(host=options.host, port=options.port,
-                         max_clients=options.max_clients)
+                         max_clients=options.max_clients,
+                         use_gevent=options.use_gevent)
     server.run()
