@@ -9,8 +9,8 @@ implements commands that map to the methods described by the storage API. If
 you'd like to read a technical post about the implementation, check out
 `this blog post <http://charlesleifer.com/blog/building-a-simple-redis-server-with-python/>`_.
 
-The server requires `gevent <https://www.gevent.org/>`_, but otherwise has no
-other dependencies.
+The server can optionally use `gevent <https://www.gevent.org/>`_, but if
+gevent is not available you can use threads (use ``-t`` for threads).
 
 Running the simple server
 ^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -23,6 +23,7 @@ Usage::
       -h, --help            show this help message and exit
       -d, --debug           Log debug messages.
       -e, --errors          Log error messages only.
+      -t, --use-threads     Use threads instead of gevent.
       -H HOST, --host=HOST  Host to listen on.
       -m MAX_CLIENTS, --max-clients=MAX_CLIENTS
                             Maximum number of clients.
