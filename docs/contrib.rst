@@ -13,4 +13,7 @@ beyond the core APIs.
 .. include:: sqlite.rst
 
 
+.. include:: simple.rst
+
+
 .. include:: django.rst
