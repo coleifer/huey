@@ -603,6 +603,9 @@ class TaskWrapper(object):
     def call_local(self, *args, **kwargs):
         return self.func(*args, **kwargs)
 
+    def enqueue(self, *args, **kwargs):
+        return self(*args, **kwargs)
+
     def s(self, *args, **kwargs):
         return self.task_class((args, kwargs), retries=self.retries,
                                retry_delay=self.retry_delay)
