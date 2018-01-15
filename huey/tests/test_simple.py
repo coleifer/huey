@@ -2,7 +2,6 @@ import datetime
 import sys
 import unittest
 
-from huey.contrib.simple import QueueServer
 from huey.contrib.simple_storage import SimpleHuey
 from huey.tests.base import BaseTestCase
 
@@ -33,7 +32,8 @@ class TestSimpleHuey(BaseTestCase):
         res2 = add_numbers.schedule((2, 3), eta=make_eta(2), convert_utc=False)
         self.assertEqual(len(huey), 2)
 
-        huey.add_schedule(huey.dequeue())
+        r = huey.dequeue()
+        huey.add_schedule(r)
         huey.add_schedule(huey.dequeue())
 
         scheduled = huey.read_schedule(make_eta(1))
