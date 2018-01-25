@@ -78,11 +78,15 @@ class TaskRegistry(object):
         """Convert a message from the queue into a task"""
         # parse out the pieces from the enqueued message
         raw = pickle.loads(msg)
-        task_id, klass_str, execute_time, retries, delay, data, oc_raw = raw
+        if len(raw) == 7:
+            task_id, klass_str, ex_time, retries, delay, data, oc_raw = raw
+        elif len(raw) == 6:
+            task_id, klass_str, ex_time, retries, delay, data = raw
+            oc_raw = None
 
         klass = self.get_task_class(klass_str)
         on_complete = self.get_task_for_message(oc_raw) if oc_raw else None
-        return klass(data, task_id, execute_time, retries, delay, on_complete)
+        return klass(data, task_id, ex_time, retries, delay, on_complete)
 
     def get_periodic_tasks(self):
         return [task_class() for task_class in self._periodic_tasks]
