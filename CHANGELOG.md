@@ -13,6 +13,7 @@ v1.6.0
 [View commits](https://github.com/coleifer/huey/compare/1.5.6...1.6.0)
 
 * Support for [task pipelining](http://huey.readthedocs.io/en/latest/getting-started.html#task-pipelines) and task function partials
+  (which is not compatible with 1.5's task serialization format see note below).
 * Support for triggering task retries using `RetryTask` exception.
 * Support for task locking, restricting concurrency of a given task.
 * Getting result of task that failed with an exception results in a `TaskException` being raised.
@@ -21,6 +22,12 @@ v1.6.0
 * Refactored result-store APIs to simplify serialization / deserialization logic.
 * Fixed bug in serialization of task exceptions.
 * Added simple client/server implementation for testing locally. [Blog post on the subject](http://charlesleifer.com/blog/building-a-simple-redis-server-with-python/).
+
+#### Task serialization format
+
+In v1.6.0, the serialization format of tasks has changed to accomodate an extra
+piece of metadata. As a result, tasks enqueued with huey versions previous to
+1.6 will not be able to be consumed by the 1.6 consumer.
 
 v1.5.6
 ------
