@@ -1,10 +1,19 @@
 Changelog
 =========
 
-v1.6.1 (unreleased)
+v1.6.2 (unreleased)
 -------------------
 
-[View commits](https://github.com/coleifer/huey/compare/1.6.0...HEAD)
+[View commits](https://github.com/coleifer/huey/compare/1.6.1...HEAD)
+
+v1.6.1
+------
+
+[View commits](https://github.com/coleifer/huey/compare/1.6.0...1.6.1)
+
+* Add backwards-compatibility to queue serialization protocol so that 1.6
+  consumers can continue to work with tasks enqueued by huey versions 1.5 and
+  lower.
 
 
 v1.6.0
@@ -28,6 +37,9 @@ v1.6.0
 In v1.6.0, the serialization format of tasks has changed to accomodate an extra
 piece of metadata. As a result, tasks enqueued with huey versions previous to
 1.6 will not be able to be consumed by the 1.6 consumer.
+
+At present there is a workaround available in 1.6.1, but it will be removed
+when 1.7.0 is released later.
 
 v1.5.6
 ------
