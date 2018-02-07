@@ -356,13 +356,12 @@ class Huey(object):
         try:
             result = task.execute()
         except Exception as exc:
-            if self.result_store:
+            if self.store_errors:
                 metadata = self._get_task_metadata(task, True)
                 metadata['error'] = repr(exc)
                 metadata['traceback'] = traceback.format_exc()
                 self.put(task.task_id, Error(metadata))
-                if self.store_errors:
-                    self.put_error(metadata)
+                self.put_error(metadata)
             raise
 
         if self.result_store and not isinstance(task, PeriodicQueueTask):
