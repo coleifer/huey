@@ -1,10 +1,22 @@
 Changelog
 =========
 
-v1.6.2 (unreleased)
+v1.7.1 (unreleased)
 -------------------
 
-[View commits](https://github.com/coleifer/huey/compare/1.6.1...HEAD)
+[View commits](https://github.com/coleifer/huey/compare/1.7.0...HEAD)
+
+v1.7.0
+------
+
+[View commits](https://github.com/coleifer/huey/compare/1.6.1...1.7.0)
+
+#### Backwards-incompatible change
+
+Previous versions of huey would store the traceback and associated metadata for
+a failed task within the `result_store`, regardless of whether `store_errors`
+was true or not. As of 1.7.0, task exceptions will only be stored in the result
+store if `store_errors` is True. See #290 for discussion.
 
 v1.6.1
 ------
