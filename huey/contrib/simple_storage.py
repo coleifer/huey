@@ -6,19 +6,6 @@ from simpledb import Client
 
 
 class SimpleStorage(BaseStorage):
-    copy_methods = (
-        'add_to_schedule',
-        'read_schedule',
-        'schedule_size',
-        'flush_schedule',
-        'put_data',
-        'peek_data',
-        'pop_data',
-        'has_data_for_key',
-        'put_if_empty',
-        'result_store_size',
-        'flush_results')
-
     def __init__(self, name='huey', host='127.0.0.1', port=31337,
                  **storage_kwargs):
         super(SimpleStorage, self).__init__(name=name, **storage_kwargs)
