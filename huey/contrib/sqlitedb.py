@@ -128,7 +128,10 @@ class SqliteStorage(BaseStorage):
         return Schedule.delete().where(Schedule.queue == self.name).execute()
 
     def put_data(self, key, value):
-        KeyValue.create(queue=self.name, key=key, value=value)
+        if self.has_data_for_key(key):
+            KeyValue.update(queue=self.name, key=key, value=value)
+        else:
+            KeyValue.create(queue=self.name, key=key, value=value)
 
     def peek_data(self, key):
         try:

@@ -46,6 +46,12 @@ class TestSqliteStorage(HueyTestCase):
         self.assertEqual(storage.pop_data('k1'), '3')
         self.assertEqual(storage.pop_data('k2'), '4')
 
+    def test_put_if_higher(self):
+        storage = self.huey.storage
+        self.assertEqual(storage.put_if_higher('k1', 3), 3)
+        self.assertEqual(storage.put_if_higher('k1', 2), 0)
+        self.assertEqual(storage.put_if_higher('k1', 5), 2)
+
     def test_schedule(self):
         dt1 = datetime.datetime(2013, 1, 1, 0, 0)
         dt2 = datetime.datetime(2013, 1, 2, 0, 0)

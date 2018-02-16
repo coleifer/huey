@@ -91,6 +91,11 @@ their default values.
     If you do not plan on using the periodic task feature, feel free to use
     this option to save a few CPU cycles.
 
+``-g``, ``--no-global-scheduler``
+    Indicate that this consumer process should *not* use global scheduler.
+    Use this options if you plan to run scheduler on multiple instances and you
+    want periodic tasks to be enqueued multiple times (once per instance).
+
 ``-d``, ``--delay``
     When using a "polling"-type queue backend, the amount of time to wait
     between polling the backend.  Default is 0.1 seconds. For example, when the

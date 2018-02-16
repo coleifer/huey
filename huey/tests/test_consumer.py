@@ -571,6 +571,11 @@ class TestConsumerAPIs(ConsumerTestCase):
         self.assertEqual(sched._q, 6)
         self.assertEqual(state, {})
 
+        # scheduler shouldn't rerun for the same or earlier timestamp
+        self.scheduler(dt, True)
+        self.scheduler(dt - datetime.timedelta(hours=1), True)
+        self.assertEqual(1, len(self.huey))
+
         for i in range(len(self.huey)):
             task = test_huey.dequeue()
             self.worker(task, dt)
@@ -619,7 +624,8 @@ class TestConsumerAPIs(ConsumerTestCase):
         self.assertEqual(state, {})
 
         # the next go-round it will be enqueued
-        loop_periodic(dt)
+        hour = datetime.timedelta(hours=1)
+        loop_periodic(dt + hour)
 
         # our command was run
         self.assertEqual(state, {'p': 'y'})
@@ -632,8 +638,8 @@ class TestConsumerAPIs(ConsumerTestCase):
         self.assertTrue(hourly_task.is_revoked())
 
         # it will no longer be enqueued
-        loop_periodic(dt)
-        loop_periodic(dt)
+        loop_periodic(dt + 2*hour)
+        loop_periodic(dt + 3*hour)
         self.assertEqual(state, {})
 
         # restore
@@ -641,26 +647,25 @@ class TestConsumerAPIs(ConsumerTestCase):
         self.assertFalse(hourly_task.is_revoked())
 
         # it will now be enqueued
-        loop_periodic(dt)
+        loop_periodic(dt + 4*hour)
         self.assertEqual(state, {'p': 'y'})
 
         # reset
         state = {}
 
         # revoke for an hour
-        td = datetime.timedelta(seconds=3600)
-        hourly_task.revoke(revoke_until=dt + td)
+        hourly_task.revoke(revoke_until=dt + 5*hour)
 
         loop_periodic(dt)
         self.assertEqual(state, {})
-        self.assertEqual(test_huey.result_count(), 1)
+        self.assertEqual(test_huey.result_count(), 2)
 
         # after an hour it is back
-        loop_periodic(dt + td)
+        loop_periodic(dt + 5*hour)
         self.assertEqual(state, {'p': 'y'})
 
         # our data store should reflect the delay
-        self.assertEqual(test_huey.result_count(), 0)
+        self.assertEqual(test_huey.result_count(), 1)
 
     def test_odd_scheduler_interval(self):
         self.consumer.stop()

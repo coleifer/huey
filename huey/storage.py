@@ -170,6 +170,20 @@ class BaseStorage(object):
         self.put_data(key, value)
         return True
 
+    def put_if_higher(self, key, value):
+        """
+        Atomically write data only if the key is lower or not set
+
+        :param bytes key: Key to check/set.
+        :param int value: integer value.
+        :return: int increment if higher, 0 if not updated
+        """
+        old_value = self.peek_data(key)
+        if old_value == EmptyData or old_value < value:
+            self.put_data(key, value)
+            return value - old_value if type(old_value) == int else value
+        return 0
+
     def result_store_size(self):
         """
         :return: Number of key/value pairs in the result store.
@@ -258,6 +272,20 @@ if #res and redis.call('zremrangebyscore', key, '-inf', unix_ts) == #res then
     return res
 end"""
 
+# Lua script that atomically updates value of a key if the new value (int) is
+# bigger than the stored one. If the key for new value is not set the new value
+# is inserted. Returns 0-NOP, increment if updated or new value if inserted.
+HSET_IF_HIGHER = """
+local c = tonumber(redis.call('hget', KEYS[1], KEYS[2]));
+if c == nil then
+    redis.call('hset', KEYS[1], KEYS[2], ARGV[1]) return ARGV[1]
+elseif tonumber(ARGV[1]) > c then
+    redis.call('hset', KEYS[1], KEYS[2], ARGV[1]) return ARGV[1]-c
+else
+    return 0
+end
+"""
+
 
 class RedisStorage(BaseStorage):
     def __init__(self, name='huey', blocking=False, read_timeout=1,
@@ -285,6 +313,7 @@ class RedisStorage(BaseStorage):
         self.conn = redis.Redis(connection_pool=connection_pool)
         self.connection_params = connection_params
         self._pop = self.conn.register_script(SCHEDULE_POP_LUA)
+        self._hset_if_higher = self.conn.register_script(HSET_IF_HIGHER)
 
         self.name = self.clean_name(name)
         self.queue_key = 'huey.redis.%s' % self.name
@@ -377,6 +406,10 @@ class RedisStorage(BaseStorage):
 
     def put_if_empty(self, key, value):
         return self.conn.hsetnx(self.result_key, key, value)
+
+    def put_if_higher(self, key, value):
+        return int(self._hset_if_higher(keys=[self.result_key, key],
+                                        args=[value]))
 
     def result_store_size(self):
         return self.conn.hlen(self.result_key)

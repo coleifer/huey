@@ -17,6 +17,7 @@ config_defaults = (
     ('health_check_interval', 1),
     ('scheduler_interval', 1),
     ('periodic', True),
+    ('global_scheduler', True),
     ('utc', True),
     ('logfile', None),
     ('verbose', None),
@@ -69,11 +70,14 @@ class OptionParserHandler(object):
 
     def get_scheduler_options(self):
         return (
-            # -s, -n, -u, -o
+            # -s, -n, -g, -u, -o
             option('scheduler_interval', type='int',
                    help='Granularity of scheduler in seconds.'),
             option('no_periodic', action='store_false',
                    dest='periodic', help='do NOT enqueue periodic tasks'),
+            option(('g', 'no-global-scheduler'), action='store_false',
+                   dest='global_scheduler',
+                   help='do NOT ensure global periodic tasks schedule'),
             option('utc', action='store_true',
                    help='use UTC time for all tasks (default=True)'),
             option(('o', 'localtime'), action='store_false', dest='utc',

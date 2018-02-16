@@ -43,6 +43,12 @@ class TestRedisStorage(HueyTestCase):
         storage.put_data('k3', 'v3-2')
         self.assertEqual(storage.peek_data('k3'), b('v3-2'))
 
+    def test_put_if_higher(self):
+        storage = self.huey.storage
+        self.assertEqual(storage.put_if_higher('k1', 3), 3)
+        self.assertEqual(storage.put_if_higher('k1', 2), 0)
+        self.assertEqual(storage.put_if_higher('k1', 5), 2)
+
     def test_schedules(self):
         storage = self.huey.storage
         dt1 = datetime.datetime(2013, 1, 1, 0, 0)
