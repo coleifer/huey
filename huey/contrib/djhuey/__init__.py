@@ -4,7 +4,7 @@ import sys
 import traceback
 
 from django.conf import settings
-from django.db import connection
+from django.db import close_old_connections
 
 
 configuration_message = """
@@ -108,7 +108,7 @@ def close_db(fn):
             return fn(*args, **kwargs)
         finally:
             if not HUEY.always_eager:
-                connection.close()
+                close_old_connections()
     return inner
 
 
@@ -122,3 +122,4 @@ def db_periodic_task(*args, **kwargs):
     def decorator(fn):
         return periodic_task(*args, **kwargs)(close_db(fn))
     return decorator
+
