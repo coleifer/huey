@@ -92,7 +92,8 @@ To run Huey within the parent process using background greenlets (`docs <http://
     huey = MiniHuey()
     huey.start()  # Spawns scheduler background thread and returns immediately.
 
-To run Huey with a simple Python broker (**should not be used in production**):
+To run Huey with a simple Python broker (**should not be used in production**),
+install [simpledb](https://github.com/coleifer/simpledb) and run:
 
 .. code-block:: python
 
@@ -101,7 +102,7 @@ To run Huey with a simple Python broker (**should not be used in production**):
     huey = SimpleHuey()
 
     # Be sure to run the Python broker process, e.g.:
-    # $ python huey/contrib/simple.py  # Starts Python broker.
+    # $ python simpledb.py  # Starts Python broker.
 
 Documentation
 ----------------
