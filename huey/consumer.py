@@ -32,6 +32,7 @@ from huey.exceptions import ScheduleAddException
 from huey.exceptions import ScheduleReadException
 from huey.exceptions import TaskLockedException
 from huey.registry import registry
+from huey.utils import to_timestamp
 
 
 EVENT_CHECKING_PERIODIC = 'checking-periodic'
@@ -49,11 +50,6 @@ EVENT_SCHEDULED = 'scheduled'
 EVENT_SCHEDULING_PERIODIC = 'scheduling-periodic'
 EVENT_STARTED = 'started'
 EVENT_TIMEOUT = 'timeout'
-
-
-def to_timestamp(dt):
-    if dt:
-        return time.mktime(dt.timetuple())
 
 
 class BaseProcess(object):
@@ -274,7 +270,7 @@ class Worker(BaseProcess):
 
 
 class Scheduler(BaseProcess):
-    def __init__(self, huey, interval, utc, periodic):
+    def __init__(self, huey, interval, utc, periodic, global_scheduler):
         super(Scheduler, self).__init__(huey, utc)
         self.interval = min(interval, 60)
         self.periodic = periodic
@@ -283,6 +279,7 @@ class Scheduler(BaseProcess):
             self._counter = 0
             self._q, self._r = divmod(60, self.interval)
             self._cr = self._r
+        self.global_scheduler = global_scheduler
         self._logger = logging.getLogger('huey.consumer.Scheduler')
 
     def loop(self, now=None):
@@ -322,6 +319,14 @@ class Scheduler(BaseProcess):
         self.sleep_for_interval(start, self.interval)
 
     def enqueue_periodic_tasks(self, now, start):
+        if (
+                self.global_scheduler and
+                not self.huey.update_last_scheduler_runtime(now)
+        ):
+            self._logger.debug('Scheduling of periodic tasks skipped, already',
+                               ' enqueued by other process')
+            return False
+
         self.huey.emit_status(
             EVENT_CHECKING_PERIODIC,
             timestamp=self.get_timestamp())
@@ -401,7 +406,7 @@ class Consumer(object):
     def __init__(self, huey, workers=1, periodic=True, initial_delay=0.1,
                  backoff=1.15, max_delay=10.0, utc=True, scheduler_interval=1,
                  worker_type='thread', check_worker_health=True,
-                 health_check_interval=1):
+                 health_check_interval=1, global_scheduler=True):
 
         self._logger = logging.getLogger('huey.consumer')
         if huey.always_eager:
@@ -412,6 +417,7 @@ class Consumer(object):
         self.huey = huey
         self.workers = workers
         self.periodic = periodic
+        self.global_scheduler = global_scheduler
         self.default_delay = initial_delay
         self.backoff = backoff
         self.max_delay = max_delay
@@ -466,7 +472,8 @@ class Consumer(object):
             huey=self.huey,
             interval=self.scheduler_interval,
             utc=self.utc,
-            periodic=self.periodic)
+            periodic=self.periodic,
+            global_scheduler=self.global_scheduler)
 
     def _create_process(self, process, name):
         def _run():

@@ -74,3 +74,11 @@ def local_to_utc(dt):
     Converts a naive local datetime.datetime in UTC time zone.
     """
     return datetime.datetime(*time.gmtime(time.mktime(dt.timetuple()))[:6])
+
+
+def to_timestamp(dt):
+    """
+    Converts datetime.datetime to timestamp
+    """
+    if dt:
+        return time.mktime(dt.timetuple())

@@ -30,6 +30,7 @@ from huey.utils import is_aware
 from huey.utils import is_naive
 from huey.utils import local_to_utc
 from huey.utils import make_naive
+from huey.utils import to_timestamp
 from huey.utils import wrap_exception
 
 
@@ -496,6 +497,16 @@ class Huey(object):
     def get_regular_tasks(self):
         periodic = set(self.get_periodic_tasks())
         return [task for task in self.get_tasks() if task not in periodic]
+
+    def update_last_scheduler_runtime(self, now):
+        """
+        Update periodic task scheduler last run time using Storage key/value
+        API. If the operations succeeded it returns amount of seconds since
+        previous run
+        """
+
+        ts = to_timestamp(now.replace(second=0, microsecond=0))
+        return self.storage.put_if_higher('periodic_tasks_last_run', int(ts))
 
     def lock_task(self, lock_name):
         """

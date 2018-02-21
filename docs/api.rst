@@ -142,8 +142,11 @@ Function decorators and helpers
 
         .. note::
             By default, the consumer will schedule and enqueue periodic task
-            functions.  To disable the enqueueing of periodic tasks, run the
-            consumer with ``-n`` or ``--no-periodic``.
+            functions if other consumer haven't done that before. If you want
+            periodic tasks to be enqueued on each instance separately run
+            ``-g`` or ``--no-global-scheduler``. To disable the enqueueing of
+            periodic tasks on a consumer, run the consumer with
+            ``-n`` or ``--no-periodic``.
 
         The ``validate_datetime`` parameter is a function which accepts a datetime
         object and returns a boolean value whether or not the decorated function
