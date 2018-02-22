@@ -62,8 +62,11 @@ class Command(BaseCommand):
         from huey.contrib.djhuey import HUEY
 
         consumer_options = {}
-        if isinstance(settings.HUEY, dict):
-            consumer_options.update(settings.HUEY.get('consumer', {}))
+        try:
+            if isinstance(settings.HUEY, dict):
+                consumer_options.update(settings.HUEY.get('consumer', {}))
+        except AttributeError:
+            pass
 
         for key, value in options.items():
             if value is not None:
