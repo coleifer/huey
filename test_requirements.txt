@@ -1,0 +1,4 @@
+redis
+django
+peewee
+mock
