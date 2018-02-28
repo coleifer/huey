@@ -1,4 +1,4 @@
-redis>=2.10.5
-django>=1.11.2
-peewee==2.10.1
-mock==2.0.0
+redis
+django
+peewee
+mock

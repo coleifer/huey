@@ -30,6 +30,7 @@ def run_django_tests(*test_args):
     from django.core.management import execute_from_command_line
     args = sys.argv
     args.insert(1, "test")
+    args.append('huey.contrib.djhuey.tests')
     execute_from_command_line(args)
 
 
