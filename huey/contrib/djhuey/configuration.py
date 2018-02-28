@@ -80,7 +80,7 @@ def config_error(msg):
     sys.exit(1)
 
 
-class HueySettingsReader:
+class HueySettingsReader(object):
     def __init__(self, huey_settings):
         self.huey_settings = huey_settings
         self.hueys = {}
@@ -89,23 +89,12 @@ class HueySettingsReader:
         self.consumer = None
 
     def task(self, name=None, *args, **kwargs):
-        if name is None:
-            huey = self.huey
-        else:
-            huey = self.hueys[name]
-
-        return huey.task(*args,**kwargs)
+        huey = self.huey if name is None else self.hueys[name]
+        return huey.task(*args, **kwargs)
 
     def periodic_task(self, name=None, *args, **kwargs):
-        if name is None:
-            huey = self.huey
-        else:
-            huey = self.hueys[name]
-
-        def decorator(func):
-            return huey.periodic_task(*args, **kwargs)(func)
-
-        return decorator
+        huey = self.huey if name is None else self.hueys[name]
+        return huey.periodic_task(*args, **kwargs)
 
     def _huey_instance_config(self):
         self.huey = self.huey_settings
@@ -125,12 +114,12 @@ class HueySettingsReader:
         single_reader = SingleConfReader.by_legacy(self.huey_settings)
         self.huey = single_reader.huey
         self.hueys = {single_reader.name: self.huey}
+        self.consumer = single_reader.consumer
         self.consumers = {single_reader.name: self.consumer}
 
     def _multi_config(self):
         multi_reader = MultiConfReader(self.huey_settings)
         self.consumer = multi_reader.default_configuration.consumer
-
         self.huey = multi_reader.default_configuration.huey
         for single_reader in multi_reader.configurations:
             self.hueys[single_reader.name] = single_reader.huey
@@ -139,26 +128,25 @@ class HueySettingsReader:
     def start(self):
         if self.huey_settings is None:
             self._no_config()
-            return
-        if isinstance(self.huey_settings, RedisHuey):
+        elif isinstance(self.huey_settings, RedisHuey):
             self._huey_instance_config()
-            return
-        if isinstance(self.huey_settings, dict):
+        elif isinstance(self.huey_settings, dict):
             if SingleConfReader.is_legacy(self.huey_settings):
                 self._single_config()
-                return
-            if MultiConfReader.is_multi_config(self.huey_settings):
+            elif MultiConfReader.is_multi_config(self.huey_settings):
                 self._multi_config()
-                return
-        raise ConfigurationError('Configuration doesnt match guidelines.')
+            else:
+                raise ConfigurationError('HUEY settings dictionary invalid.')
+        else:
+            raise ConfigurationError('Configuration doesnt match guidelines.')
 
 
-
-class MultiConfReader:
+class MultiConfReader(object):
     """
-    Supports the multi queue configuration.
-    This configuration style aligns with the django database configuration in the django settings file.
-    The reader is lazy. It only creates RedisHuey and Consumer if the properties are accessed.
+    Supports the multi queue configuration. This configuration style aligns
+    with the django database configuration in the django settings file. The
+    reader is lazy. It only creates RedisHuey and Consumer if the properties
+    are accessed.
 
     HUEY = {
         'my-app': {
@@ -180,24 +168,24 @@ class MultiConfReader:
         },
     }
 
-    The MultiConfiguration adds a additional property: default.
-    It indicates the default queue if only the decorator @huey.task is used.
-    The default property can only be used once.
+    The MultiConfiguration adds a additional property: default. It indicates
+    the default queue if only the decorator @huey.task is used. The default
+    property can only be used once.
     """
 
-    def __init__(self, huey_settings, handle_options={}):
+    def __init__(self, huey_settings, handle_options=None):
         self.huey_settings = huey_settings.copy()
-        self.handle_options = handle_options
+        self.handle_options = handle_options or {}
         self._single_conf_readers = []
+        self._single_conf_by_name = {}
         self._default_reader = None
         self._create_single_confs()
 
     @classmethod
     def is_multi_config(cls, huey_settings):
-        if SingleConfReader.is_legacy(huey_settings):
+        if SingleConfReader.is_legacy(huey_settings) or not len(huey_settings):
             return False
-        if len(huey_settings) == 0:
-            return False
+
         first_config = list(huey_settings.values())[0]
         return SingleConfReader.is_modern(first_config)
 
@@ -207,13 +195,12 @@ class MultiConfReader:
             reader = SingleConfReader.by_modern(name, config)
             if reader.is_default():
                 self._default_reader = reader
+
             self._single_conf_readers.append(reader)
+            self._single_conf_by_name[reader.name] = reader
 
     def __getitem__(self, item):
-        for conf in self._single_conf_readers:
-            if conf.name == item:
-                return conf
-        raise KeyError
+        return self._single_conf_by_name[item]
 
     def is_valid(self):
         for key, value in self.huey_settings.items():
@@ -232,17 +219,19 @@ class MultiConfReader:
         return self._single_conf_readers[0]
 
 
-class SingleConfReader:
+class SingleConfReader(object):
     """
-    Supports the old legacy and the modern configuration.
-    The reader is lazy. It only creates RedisHuey and Consumer if the properties are accessed.
+    Supports the old legacy and the modern configuration. The reader is lazy.
+    It only creates RedisHuey and Consumer if the properties are accessed.
     """
 
-    def __init__(self, huey_settings, handle_options={}, _factory_call=False):
+    def __init__(self, huey_settings, handle_options=None,
+                 _factory_call=False):
         if not _factory_call:
-            raise ValueError("Use the by_legacy or by_modern factory. Direct use of the constructor is not allowed.")
+            raise ValueError('Use the by_legacy or by_modern factory. Direct '
+                             'use of the constructor is not allowed.')
         self.huey_settings = huey_settings.copy()
-        self.handle_options = handle_options
+        self.handle_options = handle_options or {}
         self._huey = None
         self._consumer = None
 
@@ -255,45 +244,38 @@ class SingleConfReader:
         return isinstance(huey_settings, dict) and 'name' not in huey_settings
 
     @classmethod
-    def by_legacy(cls, huey_settings, handle_options={}):
+    def by_legacy(cls, huey_settings, handle_options=None):
         if not cls.is_legacy(huey_settings):
-            raise ValueError('huey_settings is not a legacy setting.')
-        return cls(huey_settings, handle_options=handle_options, _factory_call=True)
+            raise ValueError('HUEY setting is not in legacy format.')
+        return cls(huey_settings, handle_options, _factory_call=True)
 
     @classmethod
-    def by_modern(cls, name, config, handle_options={}):
+    def by_modern(cls, name, config, handle_options=None):
         if not cls.is_modern(config):
-            raise ValueError('config is a legacy setting.')
+            raise ValueError('HUEY setting is in legacy format.')
         config = config.copy()
         config['name'] = name
         return cls(config, handle_options=handle_options, _factory_call=True)
 
     @property
     def name(self):
-        if 'name' in self.huey_settings:
-            return self.huey_settings['name']
-        else:
-            return ''
+        return self.huey_settings.get('name') or ''
 
     @property
     def huey(self):
-        if self._huey is not None:
-            return self._huey
-        huey_config = self.huey_settings.copy()
-        name = huey_config.pop('name', self.default_queue_name())
-        conn_kwargs = huey_config.pop('connection', {})
-        try:
-            del huey_config['consumer']  # Don't need consumer opts here.
-        except KeyError:
-            pass
-        try:
-            del huey_config['default']  # Don't need default opt here.
-        except KeyError:
-            pass
-        if 'always_eager' not in huey_config:
-            huey_config['always_eager'] = settings.DEBUG
-        huey_config.update(conn_kwargs)
-        self._huey = RedisHuey(name, **huey_config)
+        if self._huey is None:
+            huey_config = self.huey_settings.copy()
+            name = huey_config.pop('name', self.default_queue_name())
+            conn_kwargs = huey_config.pop('connection', {})
+
+            # Don't need consumer or default settings here.
+            huey_config.pop('consumer', None)
+            huey_config.pop('default', None)
+
+            huey_config.setdefault('always_eager', settings.DEBUG)
+            huey_config.update(conn_kwargs)
+            self._huey = RedisHuey(name, **huey_config)
+
         return self._huey
 
     @property
@@ -307,18 +289,17 @@ class SingleConfReader:
             if value is not None:
                 consumer_options[key] = value
 
-        consumer_options.setdefault('verbose',
-                                    consumer_options.pop('huey_verbose', None))
+        is_verbose = consumer_options.pop('huey_verbose', None)
+        consumer_options.setdefault('verbose', is_verbose)
         return consumer_options
 
     @property
     def consumer(self):
-        if self._consumer is not None:
-            return self._consumer
-        config = ConsumerConfig(**self.consumer_options)
-        config.validate()
-        config.setup_logger()
-        self._consumer = Consumer(self.huey, **config.values)
+        if self._consumer is None:
+            config = ConsumerConfig(**self.consumer_options)
+            config.validate()
+            config.setup_logger()
+            self._consumer = Consumer(self.huey, **config.values)
         return self._consumer
 
     @staticmethod
@@ -332,10 +313,7 @@ class SingleConfReader:
                 return 'huey'
 
     def is_default(self):
-        if 'default' in self.huey_settings:
-            if self.huey_settings['default']:
-                return True
-        return False
+        return True if self.huey_settings.get('default') else False
 
     def __str__(self):
         return str(self.huey_settings)
