@@ -1,0 +1,18 @@
+<html>
+	<title>
+		Huey Results
+	</title>
+	<body>
+		<form method="POST">
+			<input type="submit" value="Start a task"></input>
+		</form>
+		{% for item in content%}
+			<p> {{ item }} </p>
+		{% endfor %}
+	</body>
+	<script>
+	window.setTimeout(function () {
+	    	location.href = "http://localhost:8000";
+	}, 1000); // refresh after 1 seconds.
+	</script>
+</html>
