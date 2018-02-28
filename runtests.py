@@ -32,6 +32,7 @@ def run_django_tests(*test_args):
     args.insert(1, "test")
     execute_from_command_line(args)
 
+
 if __name__ == '__main__':
     if not _requirements_installed():
         print('Requirements are not installed. Run "pip install -r test_requirements.txt" to install all dependencies.')
@@ -40,6 +41,3 @@ if __name__ == '__main__':
     run_django_tests(*sys.argv[1:])
     sys.exit(0)
 
-
-if __name__ == '__main__':
-    runtests(*sys.argv[1:])
