@@ -28,6 +28,7 @@ The following events are emitted by the consumer. I've listed the event name, an
 * ``EVENT_FINISHED`` (Worker, ``duration``): emitted when a task executes successfully and cleanly returns.
 * ``EVENT_RETRYING`` (Worker): emitted after a task failure, when the task will be retried.
 * ``EVENT_REVOKED`` (Worker, ``timestamp``): emitted when a task is pulled from the queue but is not executed due to having been revoked.
+* ``EVENT_LOCKED`` (Worker, ``duration``): emitted when a task could not be executed because a lock was unable to be acquired.
 * ``EVENT_SCHEDULED`` (Worker): emitted when a task specifies a delay or ETA and is not yet ready to run. This can also occur when a task is being retried and specifies a retry delay. The task is added to the schedule for later execution.
 * ``EVENT_SCHEDULING_PERIODIC`` (Schedule, ``timestamp``): emitted when a periodic task is scheduled for execution.
 * ``EVENT_STARTED`` (Worker, ``timestamp``): emitted when a worker begins executing a task.

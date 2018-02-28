@@ -169,6 +169,20 @@ You can specify an "estimated time of arrival" as well using datetimes:
     >>> in_a_minute = datetime.datetime.now() + datetime.timedelta(seconds=60)
     >>> res = count_beans.schedule(args=(100,), eta=in_a_minute)
 
+.. note::
+    By default, the Huey consumer runs in UTC-mode. The effect of this on
+    scheduled tasks is that when using naive datetimes, they must be with
+    respect to ``datetime.utcnow()``.
+
+    The reason we aren't using ``utcnow()`` in the example above is because
+    the ``schedule()`` method takes a 3rd parameter, ``convert_utc``, which
+    defaults to ``True``. So in the above code, the datetime is converted from
+    localtime to UTC before being sent to the queue.
+
+    If you are running the consumer in localtime-mode (``-o``), then you should
+    **always** specify ``convert_utc=False`` with ``.schedule()``, including
+    when you are specifying a ``delay``.
+
 Looking at the redis output, we see the following (simplified for reability)::
 
     +1325563365.910640 "LPUSH" count_beans(100)
@@ -298,6 +312,20 @@ The same applies to tasks that are scheduled in the future:
     # it has not already been "skipped" by the consumer
     res.restore()
 
+To revoke all instances of a given task, use the ``revoke()`` and ``restore()``
+methods on the task itself:
+
+.. code-block:: python
+
+    count_beans.revoke()
+    assert count_beans.is_revoked() is True
+
+    res = count_beans(100)
+    assert res.is_revoked() is True
+
+    count_beans.restore()
+    assert count_beans.is_revoked() is False
+
 Canceling or pausing periodic tasks
 -----------------------------------
 
@@ -332,7 +360,11 @@ We can prevent a task from executing until a certain time:
 
     print_time.revoke(revoke_until=in_10)
 
-.. note:: Remember to use UTC if the consumer is using UTC.
+.. note::
+    When specifying the ``revoke_until`` setting, naive datetimes should be
+    with respect to ``datetime.utcnow()`` if the consumer is running in
+    UTC-mode (the default). Use ``datetime.now()`` if the consumers is running
+    in localtime-mode (``-o``).
 
 Finally, we can prevent the task from running indefinitely:
 
@@ -341,6 +373,7 @@ Finally, we can prevent the task from running indefinitely:
     # will not print time until we call revoke() again with
     # different parameters or restore the task
     print_time.revoke()
+    assert print_time.is_revoked() is True
 
 At any time we can restore the task and it will resume normal
 execution:
@@ -348,6 +381,151 @@ execution:
 .. code-block:: python
 
     print_time.restore()
+
+Task Pipelines
+--------------
+
+Huey supports pipelines (or chains) of one or more tasks that should be
+executed sequentially.
+
+To get started with pipelines, let's first look behind-the-scenes at what
+happens when you invoke a ``task``-decorated function:
+
+.. code-block:: python
+
+    @huey.task()
+    def add(a, b):
+        return a + b
+
+    result = add(1, 2)
+
+    # Is equivalent to:
+    task = add.s(1, 2)
+    result = huey.enqueue(task)
+
+The :py:meth:`TaskWrapper.s` method is used to create a :py:class:`QueueTask`
+instance which represents the execution of the given function. The
+``QueueTask`` is serialized and enqueued, then dequeued, deserialized and
+executed by the consumer.
+
+To create a pipeline, we will use the :py:meth:`TaskWrapper.s` method to create
+a :py:class:`QueueTask` instance. We can then chain additional tasks using the
+:py:meth:`QueueTask.then` method:
+
+.. code-block:: python
+
+    add_task = add.s(1, 2)  # Create QueueTask to represent task invocation.
+
+    # Add additional tasks to pipeline by calling QueueTask.then().
+    pipeline = (add_task
+                .then(add, 3)  # Call add() with previous result and 3.
+                .then(add, 4)  # etc...
+                .then(add, 5))
+
+    results = huey.enqueue(pipeline)
+
+    # Print results of above pipeline.
+    print([result.get(blocking=True) for result in results])
+
+    # [3, 6, 10, 15]
+
+When enqueueing a task pipeline, the return value will be a list of
+:py:class:`TaskResultWrapper` objects, one for each task in the pipeline.
+
+Note that the return value from the parent task is passed to the child task,
+and so-on.
+
+If the value returned by the parent function is a ``tuple``, then the tuple
+will be used to update the ``*args`` for the child function.  Likewise, if the
+parent function returns a ``dict``, then the dict will be used to update the
+``**kwargs`` for the child function.
+
+Example of chaining fibonacci calculations:
+
+.. code-block:: python
+
+    @huey.task()
+    def fib(a, b=1):
+        a, b = a + b, a
+        return (a, b)  # returns tuple, which is passed as *args
+
+    pipe = (fib.s(1)
+            .then(fib)
+            .then(fib))
+    results = huey.enqueue(pipe)
+
+    print([result.get(blocking=True) for result in results])
+    # [(2, 1), (3, 2), (5, 3)]
+
+
+Here is an example of returning a dictionary to be passed in as
+keyword-arguments to the child function:
+
+.. code-block:: python
+
+    @huey.task()
+    def stateful(v1=None, v2=None, v3=None):
+        state = {
+            'v1': v1 + 1 if v1 is not None else 0,
+            'v2': v2 + 2 if v2 is not None else 0,
+            'v3': v3 + 3 if v3 is not None else 0}
+        return state
+
+    pipe = (stateful
+            .s()
+            .then(stateful)
+            .then(stateful))
+
+    results = huey.enqueue(pipe)
+    print([result.get(True) for result in results])
+
+    # Prints:
+    # [{'v1': 0, 'v2': 0, 'v3': 0},
+    #  {'v1': 1, 'v2': 2, 'v3': 3},
+    #  {'v1': 2, 'v2': 4, 'v3': 6}]
+
+For more information, see the documentation on :py:meth:`TaskWrapper.s` and
+:py:meth:`QueueTask.then`.
+
+Locking tasks
+-------------
+
+Task locking can be accomplished using the :py:meth:`Huey.lock_task` method,
+which acts can be used as a context-manager or decorator.
+
+This lock is designed to be used to prevent multiple invocations of a task from
+running concurrently. If using the lock as a decorator, place it directly above
+the function declaration.
+
+If a second invocation occurs and the lock cannot be acquired, then a special
+exception is raised, which is handled by the consumer. The task will not be
+executed and an ``EVENT_LOCKED`` will be emitted. If the task is configured to
+be retried, then it will be retried normally, but the failure to acquire the
+lock is not considered an error.
+
+Examples:
+
+.. code-block:: python
+
+    @huey.periodic_task(crontab(minute='*/5'))
+    @huey.lock_task('reports-lock')
+    def generate_report():
+        # If a report takes longer than 5 minutes to generate, we do
+        # not want to kick off another until the previous invocation
+        # has finished.
+        run_report()
+
+
+    @huey.periodic_task(crontab(minute='0'))
+    def backup():
+        # Generate backup of code
+        do_code_backup()
+
+        # Generate database backup. Since this may take longer than an
+        # hour, we want to ensure that it is not run concurrently.
+        with huey.lock_task('db-backup'):
+            do_db_backup()
+
 
 Reading more
 ------------

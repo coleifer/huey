@@ -9,6 +9,13 @@ huey can be installed from PyPI using `pip <http://www.pip-installer.org/en/late
 
     $ pip install huey
 
+
+If you want to enable SQLite and Redis backend automatically, use following command:
+
+.. code-block:: bash
+
+    $ pip install huey[backends]
+
 huey has no dependencies outside the standard library, but currently the only
 fully-implemented storage backend it ships with requires `redis <http://redis.io>`_.
 To use the redis backend, you will need to install the Redis python client:

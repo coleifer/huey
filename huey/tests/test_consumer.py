@@ -9,6 +9,8 @@ from huey.consumer import Consumer
 from huey.consumer import Scheduler
 from huey.consumer import Worker
 from huey.exceptions import DataStoreTimeout
+from huey.exceptions import RetryTask
+from huey.exceptions import TaskException
 from huey.tests.base import b
 from huey.tests.base import BrokenHuey
 from huey.tests.base import CaptureLogs
@@ -48,9 +50,36 @@ def retry_task_delay(k, always_fail=True):
         raise Exception('fappsk')
     return state[k]
 
+@test_huey.task(retries=2)
+def explicit_retry(k):
+    if k not in state:
+        state[k] = 'fixed'
+        raise RetryTask()
+    return state[k]
+
+@test_huey.task(retries=1, include_task=True)
+def retry_with_task(a, b, task=None):
+    assert task is not None
+    if a + b < 0:
+        raise RetryTask()
+    return a + b
+
 @test_huey.periodic_task(crontab(minute='2'))
 def hourly_task():
     state['p'] = 'y'
+
+@test_huey.periodic_task(crontab(minute='3'), retries=3)
+def hourly_task2():
+    try:
+        state['p2'] += 1
+    except KeyError:
+        state['p2'] = 1
+        raise
+
+@test_huey.task(retries=2)
+@test_huey.lock_task('test-lock')
+def locked_task(a, b):
+    return a + b
 
 
 class CrashableWorker(Worker):
@@ -158,30 +187,6 @@ class TestExecution(ConsumerTestCase):
         self.assertEqual(state, {'ka': 'vz'})
 
     @consumer_test
-    def test_worker_health_logging(self, consumer, capture):
-        w1_1 = consumer.worker_threads[0][0]
-        w2_1 = consumer.worker_threads[1][0]
-
-        modify_state('k', '1').get(blocking=True)
-        self.assertEqual(state, {'k': '1'})
-
-        consumer.crash(2)
-        self.assertTrue(consumer.is_crashed(2))
-        self.assertFalse(consumer.is_crashed(1, blocking=False))
-
-        consumer.check_worker_health()
-        self.assertFalse(consumer.is_crashed(2, blocking=False))
-
-        w1_2 = consumer.worker_threads[0][0]
-        w2_2 = consumer.worker_threads[1][0]
-        self.assertTrue(w1_1 is w1_2)
-        self.assertFalse(w1_2 is w2_2)
-
-        task_exec, worker_restart = capture.messages[-2:]
-        self.assertTrue(task_exec.startswith('Executing queuecmd_modify'))
-        self.assertEqual(worker_restart, 'Worker 2 died, restarting.')
-
-    @consumer_test
     def test_threaded_execution(self, consumer, capture):
         r1 = modify_state('k1', 'v1')
         r2 = modify_state('k2', 'v2')
@@ -199,7 +204,7 @@ class TestExecution(ConsumerTestCase):
 
 class TestConsumerAPIs(ConsumerTestCase):
     def get_periodic_tasks(self):
-        return [hourly_task.task_class()]
+        return [hourly_task.task_class, hourly_task2.task_class]
 
     def test_dequeue_errors(self):
         huey = BrokenHuey()
@@ -272,6 +277,35 @@ class TestConsumerAPIs(ConsumerTestCase):
             ('started', task),
             ('error-task', task))
 
+    def test_task_exception(self):
+        ret = blow_up()
+        task = test_huey.dequeue()
+        self.worker(task)
+
+        # Calling ".get()" on a task result will raise an exception if the
+        # task failed.
+        self.assertRaises(TaskException, ret.get)
+
+        try:
+            ret.get()
+        except Exception as exc:
+            self.assertTrue('blowed up' in exc.metadata['error'])
+        else:
+            assert False, 'Should not reach this point.'
+
+    def test_task_locking(self):
+        ret = locked_task(1, 2)
+        task = test_huey.dequeue()
+        self.worker(task)
+        self.assertEqual(ret.get(), 3)
+
+        ret = locked_task(2, 3)
+        task = test_huey.dequeue()
+        with test_huey.lock_task('test-lock'):
+            self.worker(task)
+
+        self.assertRaises(TaskException, ret.get)
+
     def test_retries_and_logging(self):
         # This will continually fail.
         retry_task('blampf')
@@ -328,6 +362,58 @@ class TestConsumerAPIs(ConsumerTestCase):
             ('retrying', task),
             ('started', task),
             ('finished', task))
+
+    def test_explicit_retry(self):
+        explicit_retry('foo')
+        self.assertFalse('foo' in state)
+
+        task = test_huey.dequeue()
+        with CaptureLogs() as capture:
+            self.worker(task)
+
+        self.assertLogs(capture, ['Executing', 'Re-enqueueing'])
+
+        task = test_huey.dequeue()
+        self.assertEqual(task.retries, 1)
+        self.worker(task)
+
+        self.assertEqual(state['foo'], 'fixed')
+        self.assertEqual(len(test_huey), 0)
+
+        self.assertTaskEvents(
+            ('started', task),
+            ('retrying', task),
+            ('started', task),
+            ('finished', task))
+
+        explicit_retry('bar')
+        task = test_huey.dequeue()
+        self.worker(task)
+        del state['bar']
+        task = test_huey.dequeue()
+        self.worker(task)
+        del state['bar']
+        task = test_huey.dequeue()
+        with CaptureLogs() as capture:
+            self.worker(task)
+
+        self.assertLogs(capture, ['Executing', 'Cannot retry task'])
+        self.assertEqual(len(test_huey), 0)
+
+    def test_retry_with_task(self):
+        retry_with_task(1, -2)
+        task = test_huey.dequeue()
+        with CaptureLogs() as capture:
+            self.worker(task)
+
+        task = test_huey.dequeue()
+        self.worker(task)
+        self.assertEqual(len(test_huey), 0)
+
+        ret = retry_with_task(1, 1)
+        self.worker(test_huey.dequeue())
+        self.assertEqual(ret.get(), 2)
+        self.assertEqual(len(test_huey), 0)
 
     def test_scheduling(self):
         dt = datetime.datetime(2011, 1, 1, 0, 1)
@@ -476,13 +562,13 @@ class TestConsumerAPIs(ConsumerTestCase):
         dt = datetime.datetime(2011, 1, 3, 3, 7)
         sched = self.scheduler(dt, False)
         self.assertEqual(sched._counter, 1)
-        self.assertEqual(sched._q, 5)
+        self.assertEqual(sched._q, 6)
         self.assertEqual(len(self.huey), 0)
 
         dt = datetime.datetime(2011, 1, 1, 0, 2)
         sched = self.scheduler(dt, True)
-        self.assertEqual(sched._counter, 0)
-        self.assertEqual(sched._q, 5)
+        self.assertEqual(sched._counter, 1)
+        self.assertEqual(sched._q, 6)
         self.assertEqual(state, {})
 
         for i in range(len(self.huey)):
@@ -490,6 +576,26 @@ class TestConsumerAPIs(ConsumerTestCase):
             self.worker(task, dt)
 
         self.assertEqual(state, {'p': 'y'})
+
+    def test_periodic_with_retry(self):
+        dt = datetime.datetime(2011, 1, 1, 0, 3)
+        sched = self.scheduler(dt, True)
+        self.assertEqual(sched._counter, 1)
+        self.assertEqual(sched._q, 6)
+        self.assertEqual(state, {})
+
+        self.assertEqual(len(self.huey), 1)
+        task = test_huey.dequeue()
+        self.assertEqual(task.retries, 3)
+        self.worker(task, dt)
+
+        # Exception occurred, so now we retry.
+        self.assertEqual(len(self.huey), 1)
+        task = test_huey.dequeue()
+        self.assertEqual(task.retries, 2)
+        self.worker(task, dt)
+
+        self.assertEqual(state, {'p2': 2})
 
     def test_revoking_periodic(self):
         global state
@@ -547,15 +653,14 @@ class TestConsumerAPIs(ConsumerTestCase):
 
         loop_periodic(dt)
         self.assertEqual(state, {})
+        self.assertEqual(test_huey.result_count(), 1)
 
         # after an hour it is back
         loop_periodic(dt + td)
         self.assertEqual(state, {'p': 'y'})
 
         # our data store should reflect the delay
-        task_obj = hourly_task.task_class()
-        self.assertEqual(test_huey.result_count(), 1)
-        self.assertTrue(test_huey.storage.has_data_for_key(task_obj.revoke_id))
+        self.assertEqual(test_huey.result_count(), 0)
 
     def test_odd_scheduler_interval(self):
         self.consumer.stop()

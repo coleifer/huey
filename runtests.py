@@ -17,6 +17,8 @@ def _requirements_installed():
 def run_tests(*test_args):
     suite = unittest.TestLoader().loadTestsFromModule(tests)
     result = unittest.TextTestRunner(verbosity=1).run(suite)
+    if os.path.exists('huey.db'):
+        os.unlink('huey.db')
     if result.failures:
         sys.exit(1)
     elif result.errors:
@@ -37,3 +39,7 @@ if __name__ == '__main__':
     run_tests(*sys.argv[1:])
     run_django_tests(*sys.argv[1:])
     sys.exit(0)
+
+
+if __name__ == '__main__':
+    runtests(*sys.argv[1:])

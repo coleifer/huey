@@ -34,6 +34,18 @@ class TestSqliteStorage(HueyTestCase):
         self.assertEqual(db.queue_size(), 0)
         self.assertEqual(db.result_store_size(), 0)
 
+    def test_put_if_empty(self):
+        storage = self.huey.storage
+        self.assertTrue(storage.put_if_empty('k1', '1'))
+        self.assertFalse(storage.put_if_empty('k1', '2'))
+        self.assertEqual(storage.pop_data('k1'), '1')
+
+        self.assertTrue(storage.put_if_empty('k1', '3'))
+        self.assertTrue(storage.put_if_empty('k2', '4'))
+        self.assertFalse(storage.put_if_empty('k1', 'x'))
+        self.assertEqual(storage.pop_data('k1'), '3')
+        self.assertEqual(storage.pop_data('k2'), '4')
+
     def test_schedule(self):
         dt1 = datetime.datetime(2013, 1, 1, 0, 0)
         dt2 = datetime.datetime(2013, 1, 2, 0, 0)
@@ -93,5 +105,5 @@ class TestSqliteStorage(HueyTestCase):
 
         messages = capture.messages[-4:-1]
         for message in messages:
-            self.assertTrue(message.startswith('Executing queuecmd_add'))
+            self.assertTrue(message.startswith('Executing huey.tests.test_'))
         self.assertTrue(capture.messages[-1].startswith('Shutting down'))

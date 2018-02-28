@@ -1,4 +1,5 @@
 import imp
+import logging
 
 from django.apps import apps as django_apps
 from django.conf import settings
@@ -7,6 +8,9 @@ from django.core.management.base import BaseCommand
 from huey.consumer import Consumer
 from huey.consumer_options import ConsumerConfig
 from huey.consumer_options import OptionParserHandler
+
+
+logger = logging.getLogger(__name__)
 
 
 class Command(BaseCommand):
@@ -34,6 +38,7 @@ class Command(BaseCommand):
                     short = '-V'
                 if 'type' in kwargs:
                     kwargs['type'] = self._type_map[kwargs['type']]
+                kwargs.setdefault('default', None)
                 parser.add_argument(full, short, **kwargs)
         parser.add_argument('-qu', '--queue', type=str, help='Select the queue to listen on.')
 
@@ -48,7 +53,11 @@ class Command(BaseCommand):
                 continue
             else:
                 import_path = '%s.%s' % (config.name, module_name)
-                imp.load_module(import_path, fp, path, description)
+                try:
+                    imp.load_module(import_path, fp, path, description)
+                except ImportError:
+                    logger.exception('Found "%s" but error raised attempting '
+                                     'to load module.', import_path)
 
     def handle(self, *args, **options):
         queue_defined = 'queue' in options and options['queue'] is not None

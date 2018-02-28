@@ -38,10 +38,11 @@ class PutTask(QueueTask):
         k, v = self.data
         state[k] = v
 
+registry.register(PutTask)
+
 class TestException(Exception):
     pass
 
-@huey.task()
 def _throw_error_task(message=None):
     raise TestException(message or 'bampf')
 
@@ -50,6 +51,10 @@ throw_error_task_res = huey_results.task()(_throw_error_task)
 
 @huey_results.task()
 def add_values(a, b):
+    return a + b
+
+@huey_results.task()
+def add_values2(a, b):
     return a + b
 
 @huey_results.periodic_task(crontab(minute='0'))
@@ -185,7 +190,7 @@ class TestHueyQueueAPIs(BaseQueueTestCase):
         self.assertEqual(len(errors), 1)
         error = errors[0]
 
-        self.assertTrue(isinstance(error['error'], TestException))
+        self.assertEqual(error['error'], 'TestException(\'nuggie\',)')
         self.assertEqual(error['id'], task.task_id)
 
         for i in range(9):
@@ -295,7 +300,7 @@ class TestHueyQueueAPIs(BaseQueueTestCase):
         put_data_ctx('k', 'v')
         task = huey.dequeue()
         huey.execute(task)
-        self.assertEqual(state['last_task_class'], 'queuecmd_put_data_ctx')
+        self.assertEqual(state['last_task_class'], 'queue_task_put_data_ctx')
         del state['last_task_class']
 
         put_data('k', 'x')
@@ -314,6 +319,41 @@ class TestHueyQueueAPIs(BaseQueueTestCase):
 
         self.assertEqual(len(huey), 0)
         self.assertEqual(state, {'nugget': 'green'})
+
+    def test_reschedule(self):
+        eta = datetime.datetime.utcnow() + datetime.timedelta(seconds=60)
+        trw = add_values.schedule((1, 2), eta=eta, convert_utc=False)
+        self.assertEqual(trw.task.execute_time, eta)
+
+        # Pull pending task off queue. Quick sanity check that the task result
+        # wrapper has the same task_id as the task we just pulled down.
+        task = huey_results.dequeue()
+        self.assertEqual(trw.task.task_id, task.task_id)
+        self.assertEqual(trw.task.execute_time, task.execute_time)
+
+        # Verify the task is not ready to run and add to schedule.
+        self.assertFalse(huey_results.ready_to_run(task))
+        huey_results.add_schedule(task)
+
+        # Reschedule the task using the result wrapper.
+        new_eta = eta - datetime.timedelta(seconds=30)
+        trw_r = trw.reschedule(eta=new_eta, convert_utc=False)
+        self.assertEqual(trw_r.task.execute_time, new_eta)
+
+        task_r = huey_results.dequeue()
+        self.assertEqual(task_r.execute_time, new_eta)
+        self.assertFalse(huey_results.ready_to_run(task_r))
+        huey_results.add_schedule(task_r)
+
+        self.assertTrue(huey_results.is_revoked(task))
+        self.assertFalse(huey_results.is_revoked(task_r))
+
+        # Reschedule without an ETA.
+        trw_r2 = trw_r.reschedule()
+        task_r2 = huey_results.dequeue()
+        self.assertTrue(task_r2.execute_time is None)
+        self.assertTrue(huey_results.ready_to_run(task_r2))
+        self.assertTrue(huey_results.is_revoked(task_r))
 
     def test_revoke(self):
         ac = PutTask(('k', 'v'))
@@ -335,6 +375,40 @@ class TestHueyQueueAPIs(BaseQueueTestCase):
                 huey_results.execute(task)
 
         self.assertEqual(state, {'k': 'v', 'k3': 'v3'})
+
+    def test_revoke_all(self):
+        r1 = add_values(1, 2)
+        r2 = add_values(2, 3)
+        r3 = add_values(3, 4)
+        r4 = add_values2(4, 5)
+
+        add_values.revoke()
+        self.assertFalse(r2.restore())  # No effect, task itself is revoked.
+        self.assertTrue(add_values.is_revoked())
+        for task_result in (r1, r2, r3):
+            self.assertTrue(task_result.is_revoked())
+
+        self.assertFalse(r4.is_revoked())
+        self.assertEqual(len(huey_results), 4)
+
+        results = []
+        while huey_results:
+            task = huey_results.dequeue()
+            if not huey_results.is_revoked(task):
+                results.append(task.execute())
+        self.assertEqual(results, [9])
+
+        add_values.restore()
+        rr_1 = add_values(5, 6)
+        rr_2 = add_values(6, 7)
+        for task_result in (rr_1, rr_2):
+            self.assertFalse(task_result.is_revoked())
+
+        while huey_results:
+            task = huey_results.dequeue()
+            if not huey_results.is_revoked(task):
+                results.append(task.execute())
+        self.assertEqual(results, [9, 11, 13])
 
     def test_revoke_restore_by_id(self):
         t1 = PutTask(('k1', 'v1'))

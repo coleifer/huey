@@ -46,7 +46,9 @@ Greenlet workers seem stuck
     the following code: ``from gevent import monkey; monkey.patch_all()``.
     Furthermore, if your tasks are CPU-bound, ``gevent`` can appear to lock up
     because it only supports cooperative multi-tasking (as opposed to
-    pre-emptive multi-tasking when using threads).
+    pre-emptive multi-tasking when using threads). For Django, it is necessary
+    to apply the patch inside the ``manage.py`` script. See the Django docs
+    section for the code.
 
 Testing projects using Huey
     If you don't have, or want, a redis server for running tests you can set

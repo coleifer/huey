@@ -11,8 +11,9 @@ class TaskRegistry(object):
     """
     _ignore = ['QueueTask', 'PeriodicQueueTask', 'NewBase']
 
-    _registry = {}
-    _periodic_tasks = []
+    def __init__(self):
+        self._registry = {}
+        self._periodic_tasks = []
 
     def task_to_string(self, task):
         return '%s' % (task.__name__)
@@ -27,7 +28,7 @@ class TaskRegistry(object):
 
             # store an instance in a separate list of periodic tasks
             if hasattr(task_class, 'validate_datetime'):
-                self._periodic_tasks.append(task_class())
+                self._periodic_tasks.append(task_class)
 
     def unregister(self, task_class):
         klass_str = self.task_to_string(task_class)
@@ -44,14 +45,26 @@ class TaskRegistry(object):
 
     def get_message_for_task(self, task):
         """Convert a task object to a message for storage in the queue"""
+        data = task.get_data()
+        if data and isinstance(data, tuple) and len(data) == 2:
+            args, kwargs = data
+            if isinstance(kwargs, dict) and 'task' in kwargs:
+                kwargs.pop('task')
+                data = (args, kwargs)
+
+        if task.on_complete is not None:
+            on_complete = self.get_message_for_task(task.on_complete)
+        else:
+            on_complete = None
+
         return pickle.dumps((
             task.task_id,
             self.task_to_string(type(task)),
             task.execute_time,
             task.retries,
             task.retry_delay,
-            task.get_data(),
-        ))
+            data,
+            on_complete))
 
     def get_task_class(self, klass_str):
         klass = self._registry.get(klass_str)
@@ -65,13 +78,18 @@ class TaskRegistry(object):
         """Convert a message from the queue into a task"""
         # parse out the pieces from the enqueued message
         raw = pickle.loads(msg)
-        task_id, klass_str, execute_time, retries, delay, data = raw
+        if len(raw) == 7:
+            task_id, klass_str, ex_time, retries, delay, data, oc_raw = raw
+        elif len(raw) == 6:
+            task_id, klass_str, ex_time, retries, delay, data = raw
+            oc_raw = None
 
         klass = self.get_task_class(klass_str)
-        return klass(data, task_id, execute_time, retries, delay)
+        on_complete = self.get_task_for_message(oc_raw) if oc_raw else None
+        return klass(data, task_id, ex_time, retries, delay, on_complete)
 
     def get_periodic_tasks(self):
-        return self._periodic_tasks
+        return [task_class() for task_class in self._periodic_tasks]
 
 
 registry = TaskRegistry()

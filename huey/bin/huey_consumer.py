@@ -43,7 +43,7 @@ def consumer_main():
     huey_instance = load_huey(args[0])
     config.setup_logger()
 
-    consumer = Consumer(huey_instance, **config.values)
+    consumer = huey_instance.create_consumer(**config.values)
     consumer.run()
 
 

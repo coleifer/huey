@@ -45,39 +45,40 @@ options with their default values:
 
     # settings.py
     HUEY = {
-            'my-app': { # name of the huey queue (just use your app name)
-                'result_store': True,  # Store return values of tasks.
-                'events': True,  # Consumer emits events allowing real-time monitoring.
-                'store_none': False,  # If a task returns None, do not save to results.
-                'always_eager': settings.DEBUG,  # If DEBUG=True, run synchronously.
-                'store_errors': True,  # Store error info if task throws exception.
-                'blocking': False,  # Poll the queue rather than do blocking pop.
-                'default': False,  # Indicates the default app. Only useful if you have several huey instances configured.
-                'connection': {
-                    'host': 'localhost',
-                    'port': 6379,
-                    'db': 0,
-                    'connection_pool': None,  # Definitely you should use pooling!
-                    # ... tons of other options, see redis-py for details.
+        'my-app': { # name of the huey queue (just use your app name)
+            'result_store': True,  # Store return values of tasks.
+            'events': True,  # Consumer emits events allowing real-time monitoring.
+            'store_none': False,  # If a task returns None, do not save to results.
+            'always_eager': settings.DEBUG,  # If DEBUG=True, run synchronously.
+            'store_errors': True,  # Store error info if task throws exception.
+            'blocking': False,  # Poll the queue rather than do blocking pop.
+            'backend_class': 'huey.RedisHuey',  # Use path to redis huey by default,
+            'default': False,  # Indicates the default app. Only useful if you have several huey instances configured.
+            'connection': {
+                'host': 'localhost',
+                'port': 6379,
+                'db': 0,
+                'connection_pool': None,  # Definitely you should use pooling!
+                # ... tons of other options, see redis-py for details.
 
-                    # huey-specific connection parameters.
-                    'read_timeout': 1,  # If not polling (blocking pop), use timeout.
-                    'max_errors': 1000,  # Only store the 1000 most recent errors.
-                    'url': None,  # Allow Redis config via a DSN.
-                },
-                'consumer': {
-                    'workers': 1,
-                    'worker_type': 'thread',
-                    'initial_delay': 0.1,  # Smallest polling interval, same as -d.
-                    'backoff': 1.15,  # Exponential backoff using this rate, -b.
-                    'max_delay': 10.0,  # Max possible polling interval, -m.
-                    'utc': True,  # Treat ETAs and schedules as UTC datetimes.
-                    'scheduler_interval': 1,  # Check schedule every second, -s.
-                    'periodic': True,  # Enable crontab feature.
-                    'check_worker_health': True,  # Enable worker health checks.
-                    'health_check_interval': 1,  # Check worker health every second.
-                },
-            }
+                # huey-specific connection parameters.
+                'read_timeout': 1,  # If not polling (blocking pop), use timeout.
+                'max_errors': 1000,  # Only store the 1000 most recent errors.
+                'url': None,  # Allow Redis config via a DSN.
+            },
+            'consumer': {
+                'workers': 1,
+                'worker_type': 'thread',
+                'initial_delay': 0.1,  # Smallest polling interval, same as -d.
+                'backoff': 1.15,  # Exponential backoff using this rate, -b.
+                'max_delay': 10.0,  # Max possible polling interval, -m.
+                'utc': True,  # Treat ETAs and schedules as UTC datetimes.
+                'scheduler_interval': 1,  # Check schedule every second, -s.
+                'periodic': True,  # Enable crontab feature.
+                'check_worker_health': True,  # Enable worker health checks.
+                'health_check_interval': 1,  # Check worker health every second.
+            },
+        }
     }
 
 Alternatively, you can simply set ``settings.HUEY`` to a :py:class:`Huey`
@@ -129,7 +130,7 @@ listed here.
     workloads, *process* is likely to be more performant. The *greenlet* worker
     type is suited for IO-heavy workloads. When using *greenlet* you can
     specify tens or hundreds of workers since they are extremely lightweight
-    compared to threads/processes.
+    compared to threads/processes. *See note below on using gevent/greenlet*.
 
 ``-qu``, ``--queue``
     Indicate the huey queue you want to listen on. For example "-qu my-app".
@@ -142,6 +143,35 @@ listed here.
     DEBUG level.
 
 For more information, read the :ref:`Options for the consumer <consumer-options>` section.
+
+Using gevent
+^^^^^^^^^^^^
+
+When using worker type *greenlet*, it's necessary to apply a monkey-patch
+before any libraries or system modules are imported. Gevent monkey-patches
+things like ``socket`` to provide non-blocking I/O, and if those modules are
+loaded before the patch is applied, then the resulting code will execute
+synchronously.
+
+Unfortunately, because of Django's design, the only way to reliably apply this
+patch is to create a custom bootstrap script that mimics the functionality of
+``manage.py``. Here is the patched ``manage.py`` code:
+
+.. code-block:: python
+
+    #!/usr/bin/env python
+    import os
+    import sys
+
+    # Apply monkey-patch if we are running the huey consumer.
+    if 'run_huey' in sys.argv:
+        from gevent import monkey
+        monkey.patch_all()
+
+    if __name__ == "__main__":
+        os.environ.setdefault("DJANGO_SETTINGS_MODULE", "conf")
+        from django.core.management import execute_from_command_line
+        execute_from_command_line(sys.argv)
 
 How to create tasks
 ^^^^^^^^^^^^^^^^^^^

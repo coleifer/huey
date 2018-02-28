@@ -5,9 +5,12 @@ import re
 import time
 import traceback
 import uuid
+from collections import OrderedDict
 from functools import wraps
+from inspect import isclass
 
 from huey.constants import EmptyData
+from huey.consumer import Consumer
 from huey.exceptions import DataStoreGetException
 from huey.exceptions import DataStorePutException
 from huey.exceptions import DataStoreTimeout
@@ -17,8 +20,16 @@ from huey.exceptions import QueueRemoveException
 from huey.exceptions import QueueWriteException
 from huey.exceptions import ScheduleAddException
 from huey.exceptions import ScheduleReadException
+from huey.exceptions import TaskException
+from huey.exceptions import TaskLockedException
 from huey.registry import registry
-from huey.utils import local_to_utc, is_naive, aware_to_utc, make_naive, is_aware
+from huey.registry import TaskRegistry
+from huey.utils import Error
+from huey.utils import aware_to_utc
+from huey.utils import is_aware
+from huey.utils import is_naive
+from huey.utils import local_to_utc
+from huey.utils import make_naive
 from huey.utils import wrap_exception
 
 
@@ -39,6 +50,7 @@ class Huey(object):
     :param always_eager: Useful for testing, this will execute all tasks
         immediately, without enqueueing them.
     :param store_errors: Flag to indicate whether task errors should be stored.
+    :param global_registry: Use a global registry for tasks.
 
     Example usage::
 
@@ -59,7 +71,7 @@ class Huey(object):
     """
     def __init__(self, name='huey', result_store=True, events=True,
                  store_none=False, always_eager=False, store_errors=True,
-                 blocking=False, **storage_kwargs):
+                 blocking=False, global_registry=True, **storage_kwargs):
         self.name = name
         self.result_store = result_store
         self.events = events
@@ -68,63 +80,60 @@ class Huey(object):
         self.store_errors = store_errors
         self.blocking = blocking
         self.storage = self.get_storage(**storage_kwargs)
+        self.pre_execute_hooks = OrderedDict()
+        self.post_execute_hooks = OrderedDict()
+        if global_registry:
+            self.registry = registry
+        else:
+            self.registry = TaskRegistry()
 
     def get_storage(self, **kwargs):
         raise NotImplementedError('Storage API not implemented in the base '
                                   'Huey class. Use `RedisHuey` instead.')
 
+    def create_consumer(self, **config):
+        return Consumer(self, **config)
+
+    def _normalize_execute_time(self, eta=None, delay=None, convert_utc=True):
+        if delay and eta:
+            raise ValueError('Both a delay and an eta cannot be '
+                             'specified at the same time')
+        elif delay:
+            method = (convert_utc and datetime.datetime.utcnow or
+                      datetime.datetime.now)
+            return method() + datetime.timedelta(seconds=delay)
+        elif eta:
+            if is_naive(eta) and convert_utc:
+                eta = local_to_utc(eta)
+            elif is_aware(eta) and convert_utc:
+                eta = aware_to_utc(eta)
+            elif is_aware(eta) and not convert_utc:
+                eta = make_naive(eta)
+            return eta
+
     def task(self, retries=0, retry_delay=0, retries_as_argument=False,
-             include_task=False, name=None):
+             include_task=False, name=None, **task_settings):
         def decorator(func):
             """
             Decorator to execute a function out-of-band via the consumer.
             """
-            klass = create_task(
-                QueueTask,
+            return TaskWrapper(
+                self,
                 func,
-                retries_as_argument,
-                name,
-                include_task)
-
-            def schedule(args=None, kwargs=None, eta=None, delay=None,
-                         convert_utc=True, task_id=None):
-                if delay and eta:
-                    raise ValueError('Both a delay and an eta cannot be '
-                                     'specified at the same time')
-                if delay:
-                    eta = (datetime.datetime.now() +
-                           datetime.timedelta(seconds=delay))
-                if eta:
-                    if is_naive(eta) and convert_utc:
-                        eta = local_to_utc(eta)
-                    elif is_aware(eta) and convert_utc:
-                        eta = aware_to_utc(eta)
-                    elif is_aware(eta) and not convert_utc:
-                        eta = make_naive(eta)
-                cmd = klass(
-                    (args or (), kwargs or {}),
-                    execute_time=eta,
-                    retries=retries,
-                    retry_delay=retry_delay,
-                    task_id=task_id)
-                return self.enqueue(cmd)
-
-            func.schedule = schedule
-            func.task_class = klass
-
-            @wraps(func)
-            def inner_run(*args, **kwargs):
-                cmd = klass(
-                    (args, kwargs),
-                    retries=retries,
-                    retry_delay=retry_delay)
-                return self.enqueue(cmd)
-
-            inner_run.call_local = func
-            return inner_run
+                retries=retries,
+                retry_delay=retry_delay,
+                retries_as_argument=retries_as_argument,
+                include_task=include_task,
+                name=name,
+                **task_settings)
         return decorator
 
-    def periodic_task(self, validate_datetime, name=None):
+    # We specify retries and retry_delay as 0 because they become the default
+    # values as class attributes on the derived PeriodicQueueTask instance.
+    # Since the values the class is instantiated with will always be `None`,
+    # we want the fallback behavior to be 0 by default.
+    def periodic_task(self, validate_datetime, name=None, retries=0,
+                      retry_delay=0, **task_settings):
         """
         Decorator to execute a function on a specific schedule.
         """
@@ -132,28 +141,76 @@ class Huey(object):
             def method_validate(self, dt):
                 return validate_datetime(dt)
 
-            klass = create_task(
-                PeriodicQueueTask,
+            return TaskWrapper(
+                self,
                 func,
-                task_name=name,
+                name=name,
+                task_base=PeriodicQueueTask,
+                default_retries=retries,
+                default_retry_delay=retry_delay,
                 validate_datetime=method_validate,
-            )
+                **task_settings)
 
-            func.task_class = klass
+        return decorator
 
-            def _revoke(revoke_until=None, revoke_once=False):
-                self.revoke(klass(), revoke_until, revoke_once)
-            func.revoke = _revoke
+    def register_pre_execute(self, name, fn):
+        """
+        Register a pre-execute hook. The callback will be executed before the
+        execution of all tasks. Execution of the task can be cancelled by
+        raising a :py:class:`CancelExecution` exception. Uncaught exceptions
+        will be logged but will not cause the task itself to be cancelled.
 
-            def _is_revoked(dt=None, peek=True):
-                return self.is_revoked(klass(), dt, peek)
-            func.is_revoked = _is_revoked
+        The callback function should accept a single task instance, the return
+        value is ignored.
 
-            def _restore():
-                return self.restore(klass())
-            func.restore = _restore
+        :param name: Name for the hook.
+        :param fn: Callback function that accepts task to be executed.
+        """
+        self.pre_execute_hooks[name] = fn
 
-            return func
+    def unregister_pre_execute(self, name):
+        del self.pre_execute_hooks[name]
+
+    def pre_execute(self, name=None):
+        """
+        Decorator for registering a pre-execute hook.
+        """
+        def decorator(fn):
+            self.register_pre_execute(name or fn.__name__, fn)
+            return fn
+        return decorator
+
+    def register_post_execute(self, name, fn):
+        """
+        Register a post-execute hook. The callback will be executed after the
+        execution of all tasks. Uncaught exceptions will be logged but will
+        have no other effect on the overall operation of the consumer.
+
+        The callback function should accept:
+
+        * a task instance
+        * the return value from the execution of the task (which may be None)
+        * any exception that was raised during the execution of the task (which
+          will be None for tasks that executed normally).
+
+        The return value of the callback itself is ignored.
+
+        :param name: Name for the hook.
+        :param fn: Callback function that accepts task that was executed and
+                   the tasks return value (or None).
+        """
+        self.post_execute_hooks[name] = fn
+
+    def unregister_post_execute(self, name):
+        del self.post_execute_hooks[name]
+
+    def post_execute(self, name=None):
+        """
+        Decorator for registering a post-execute hook.
+        """
+        def decorator(fn):
+            self.register_post_execute(name or fn.__name__, fn)
+            return fn
         return decorator
 
     def _wrapped_operation(exc_class):
@@ -192,6 +249,10 @@ class Huey(object):
         return self.storage.put_data(key, value)
 
     @_wrapped_operation(DataStorePutException)
+    def _put_if_empty(self, key, value):
+        return self.storage.put_if_empty(key, value)
+
+    @_wrapped_operation(DataStorePutException)
     def _put_error(self, metadata):
         self.storage.put_error(metadata)
 
@@ -215,19 +276,44 @@ class Huey(object):
             # critical component.
             pass
 
-    def enqueue(self, task):
+    def enqueue(self, task, is_callback=False):
         if self.always_eager:
             return task.execute()
 
-        self._enqueue(registry.get_message_for_task(task))
+        self._enqueue(self.registry.get_message_for_task(task))
+        if not self.result_store:
+            return
 
-        if self.result_store:
+        if task.on_complete and not is_callback:
+            q = [task]
+            result_wrappers = []
+            while q:
+                current = q.pop()
+                result_wrappers.append(TaskResultWrapper(self, current))
+                if current.on_complete:
+                    q.append(current.on_complete)
+            return result_wrappers
+        else:
             return TaskResultWrapper(self, task)
 
     def dequeue(self):
         message = self._dequeue()
         if message:
-            return registry.get_task_for_message(message)
+            return self.registry.get_task_for_message(message)
+
+    def put(self, key, value):
+        return self._put_data(key,
+                              pickle.dumps(value, pickle.HIGHEST_PROTOCOL))
+
+    def get(self, key, peek=False):
+        data = self._get_data(key, peek=peek)
+        if data is EmptyData:
+            return
+        else:
+            return pickle.loads(data)
+
+    def put_error(self, metadata):
+        return self._put_error(pickle.dumps(metadata))
 
     def _format_time(self, dt):
         if dt is None:
@@ -270,24 +356,33 @@ class Huey(object):
         try:
             result = task.execute()
         except Exception as exc:
-            if self.result_store and self.store_errors:
+            if self.store_errors:
                 metadata = self._get_task_metadata(task, True)
-                metadata['error'] = exc
+                metadata['error'] = repr(exc)
                 metadata['traceback'] = traceback.format_exc()
-                self._put_error(pickle.dumps(metadata))
+                self.put(task.task_id, Error(metadata))
+                self.put_error(metadata)
             raise
 
-        if result is None and not self.store_none:
-            return
-
         if self.result_store and not isinstance(task, PeriodicQueueTask):
-            self._put_data(task.task_id, pickle.dumps(result))
+            if result is not None or self.store_none:
+                self.put(task.task_id, result)
+
+        if task.on_complete:
+            next_task = task.on_complete
+            next_task.extend_data(result)
+            self.enqueue(next_task)
 
         return result
 
+    def revoke_all(self, task_class, revoke_until=None, revoke_once=False):
+        self.put('rt:%s' % task_class.__name__, (revoke_until, revoke_once))
+
+    def restore_all(self, task_class):
+        return self._get_data('rt:%s' % task_class.__name__) is not EmptyData
+
     def revoke(self, task, revoke_until=None, revoke_once=False):
-        serialized = pickle.dumps((revoke_until, revoke_once))
-        self._put_data(task.revoke_id, serialized)
+        self.put(task.revoke_id, (revoke_until, revoke_once))
 
     def restore(self, task):
         # Return value indicates whether the task was in fact revoked.
@@ -300,32 +395,59 @@ class Huey(object):
     def restore_by_id(self, task_id):
         return self.restore(QueueTask(task_id=task_id))
 
-    def is_revoked(self, task, dt=None, peek=True):
-        if not isinstance(task, QueueTask):
-            task = QueueTask(task_id=task)
-        res = self._get_data(task.revoke_id, peek=True)
-        if res is EmptyData:
-            return False
-        revoke_until, revoke_once = pickle.loads(res)
+    def _check_revoked(self, revoke_id, dt=None, peek=True):
+        """
+        Checks if a task is revoked, returns a 2-tuple indicating:
+
+        1. Is task revoked?
+        2. Should task be restored?
+        """
+        res = self.get(revoke_id, peek=True)
+        if res is None:
+            return False, False
+
+        revoke_until, revoke_once = res
         if revoke_once:
             # This task *was* revoked for one run, but now it should be
-            # restored to normal execution.
-            if not peek:
-                self.restore(task)
-            return True
-        return revoke_until is None or revoke_until > dt
+            # restored to normal execution (unless we are just peeking).
+            return True, not peek
+        elif revoke_until is not None and revoke_until <= dt:
+            # Task is no longer revoked and can be restored.
+            return False, True
+        else:
+            # Task is still revoked. Do not restore.
+            return True, False
+
+    def is_revoked(self, task, dt=None, peek=True):
+        if isclass(task) and issubclass(task, QueueTask):
+            revoke_id = 'rt:%s' % task.__name__
+            is_revoked, can_restore = self._check_revoked(revoke_id, dt, peek)
+            if can_restore:
+                self.restore_all(task)
+            return is_revoked
+
+        if not isinstance(task, QueueTask):
+            task = QueueTask(task_id=task)
+
+        is_revoked, can_restore = self._check_revoked(task.revoke_id, dt, peek)
+        if can_restore:
+            self.restore(task)
+        if not is_revoked:
+            is_revoked = self.is_revoked(type(task), dt, peek)
+
+        return is_revoked
 
     def add_schedule(self, task):
-        msg = registry.get_message_for_task(task)
+        msg = self.registry.get_message_for_task(task)
         ex_time = task.execute_time or datetime.datetime.fromtimestamp(0)
         self._add_to_schedule(msg, ex_time)
 
     def read_schedule(self, ts):
-        return [registry.get_task_for_message(m)
+        return [self.registry.get_task_for_message(m)
                 for m in self._read_schedule(ts)]
 
     def read_periodic(self, ts):
-        periodic = registry.get_periodic_tasks()
+        periodic = self.registry.get_periodic_tasks()
         return [task for task in periodic
                 if task.validate_datetime(ts)]
 
@@ -334,14 +456,14 @@ class Huey(object):
         return cmd.execute_time is None or cmd.execute_time <= dt
 
     def pending(self, limit=None):
-        return [registry.get_task_for_message(m)
+        return [self.registry.get_task_for_message(m)
                 for m in self.storage.enqueued_items(limit)]
 
     def pending_count(self):
         return self.storage.queue_size()
 
     def scheduled(self, limit=None):
-        return [registry.get_task_for_message(m)
+        return [self.registry.get_task_for_message(m)
                 for m in self.storage.scheduled_items(limit)]
 
     def scheduled_count(self):
@@ -365,15 +487,52 @@ class Huey(object):
         self.storage.flush_all()
 
     def get_tasks(self):
-        return sorted(registry._registry.keys())
+        return sorted(self.registry._registry.keys())
 
     def get_periodic_tasks(self):
-        return [task_name for task_name, task in registry._registry.items()
+        return [name for name, task in self.registry._registry.items()
                 if hasattr(task, 'validate_datetime')]
 
     def get_regular_tasks(self):
         periodic = set(self.get_periodic_tasks())
         return [task for task in self.get_tasks() if task not in periodic]
+
+    def lock_task(self, lock_name):
+        """
+        Utilize the Storage key/value APIs to implement simple locking.
+
+        This lock is designed to be used to prevent multiple invocations of a
+        task from running concurrently. Can be used as either a context-manager
+        or as a task decorator. If using as a decorator, place it directly
+        above the function declaration.
+
+        If a second invocation occurs and the lock cannot be acquired, then a
+        special exception is raised, which is handled by the consumer. The task
+        will not be executed and an ``EVENT_LOCKED`` will be emitted. If the
+        task is configured to be retried, then it will be retried normally, but
+        the failure to acquire the lock is not considered an error.
+
+        Examples:
+
+            @huey.periodic_task(crontab(minute='*/5'))
+            @huey.lock_task('reports-lock')
+            def generate_report():
+                # If a report takes longer than 5 minutes to generate, we do
+                # not want to kick off another until the previous invocation
+                # has finished.
+                run_report()
+
+            @huey.periodic_task(crontab(minute='0'))
+            def backup():
+                # Generate backup of code
+                do_code_backup()
+
+                # Generate database backup. Since this may take longer than an
+                # hour, we want to ensure that it is not run concurrently.
+                with huey.lock_task('db-backup'):
+                    do_db_backup()
+        """
+        return TaskLock(self, lock_name)
 
     def result(self, task_id, blocking=False, timeout=None, backoff=1.15,
                max_delay=1.0, revoke_on_timeout=False, preserve=False):
@@ -383,9 +542,7 @@ class Huey(object):
         as the :py:class:`TaskResultWrapper` object.
         """
         if not blocking:
-            result = self._get_data(task_id, peek=preserve)
-            if result is not EmptyData:
-                return pickle.loads(result)
+            return self.get(task_id, peek=preserve)
         else:
             task_result = TaskResultWrapper(self, QueueTask(task_id=task_id))
             return task_result.get(
@@ -395,6 +552,84 @@ class Huey(object):
                 max_delay=max_delay,
                 revoke_on_timeout=revoke_on_timeout,
                 preserve=preserve)
+
+
+class TaskWrapper(object):
+    def __init__(self, huey, func, retries=0, retry_delay=0,
+                 retries_as_argument=False, include_task=False, name=None,
+                 task_base=None, **task_settings):
+        self.huey = huey
+        self.func = func
+        self.retries = retries
+        self.retry_delay = retry_delay
+        self.retries_as_argument = retries_as_argument
+        self.include_task = include_task
+        self.name = name
+        self.task_settings = task_settings
+        self.task_class = create_task(
+            QueueTask if task_base is None else task_base,
+            func,
+            retries_as_argument,
+            name,
+            include_task,
+            **task_settings)
+        self.huey.registry.register(self.task_class)
+
+    def is_revoked(self, dt=None, peek=True):
+        return self.huey.is_revoked(self.task_class, dt, peek)
+
+    def revoke(self, revoke_until=None, revoke_once=False):
+        self.huey.revoke_all(self.task_class, revoke_until, revoke_once)
+
+    def restore(self):
+        return self.huey.restore_all(self.task_class)
+
+    def schedule(self, args=None, kwargs=None, eta=None, delay=None,
+                 convert_utc=True, task_id=None):
+        execute_time = self.huey._normalize_execute_time(
+            eta=eta, delay=delay, convert_utc=convert_utc)
+        cmd = self.task_class(
+            (args or (), kwargs or {}),
+            execute_time=execute_time,
+            retries=self.retries,
+            retry_delay=self.retry_delay,
+            task_id=task_id)
+        return self.huey.enqueue(cmd)
+
+    def __call__(self, *args, **kwargs):
+        return self.huey.enqueue(self.s(*args, **kwargs))
+
+    def call_local(self, *args, **kwargs):
+        return self.func(*args, **kwargs)
+
+    def s(self, *args, **kwargs):
+        return self.task_class((args, kwargs), retries=self.retries,
+                               retry_delay=self.retry_delay)
+
+
+class TaskLock(object):
+    """
+    Utilize the Storage key/value APIs to implement simple locking. For more
+    details see :py:meth:`Huey.lock_task`.
+    """
+    def __init__(self, huey, name):
+        self._huey = huey
+        self._name = name
+        self._key = '%s.lock.%s' % (self._huey.name, self._name)
+
+    def __call__(self, fn):
+        @wraps(fn)
+        def inner(*args, **kwargs):
+            with self:
+                return fn(*args, **kwargs)
+        return inner
+
+    def __enter__(self):
+        if not self._huey._put_if_empty(self._key, '1'):
+            raise TaskLockedException('unable to set lock: %s' % self._name)
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self._huey._get_data(self._key)
 
 
 class TaskResultWrapper(object):
@@ -442,8 +677,8 @@ class TaskResultWrapper(object):
         else:
             return self._result
 
-    def get(self, blocking=False, timeout=None, backoff=1.15, max_delay=1.0,
-            revoke_on_timeout=False, preserve=False):
+    def get_raw_result(self, blocking=False, timeout=None, backoff=1.15,
+                       max_delay=1.0, revoke_on_timeout=False, preserve=False):
         if not blocking:
             res = self._get(preserve)
             if res is not EmptyData:
@@ -464,26 +699,45 @@ class TaskResultWrapper(object):
 
             return self._result
 
+    def get(self, blocking=False, timeout=None, backoff=1.15, max_delay=1.0,
+            revoke_on_timeout=False, preserve=False):
+        result = self.get_raw_result(blocking, timeout, backoff, max_delay,
+                                     revoke_on_timeout, preserve)
+        if result is not None and isinstance(result, Error):
+            raise TaskException(result.metadata)
+        return result
+
+    def is_revoked(self):
+        return self.huey.is_revoked(self.task, peek=True)
+
     def revoke(self):
         self.huey.revoke(self.task)
 
     def restore(self):
-        self.huey.restore(self.task)
+        return self.huey.restore(self.task)
+
+    def reschedule(self, eta=None, delay=None, convert_utc=True):
+        # Rescheduling works by revoking the currently-scheduled task (nothing
+        # is done to check if the task has already run, however). Then the
+        # original task's data is used to enqueue a new task with a new task ID
+        # and execution_time.
+        self.revoke()
+        execute_time = self.huey._normalize_execute_time(
+            eta=eta, delay=delay, convert_utc=convert_utc)
+        cmd = self.task.__class__(
+            self.task.data,
+            execute_time=execute_time,
+            retries=self.task.retries,
+            retry_delay=self.task.retry_delay,
+            task_id=None)
+        return self.huey.enqueue(cmd)
 
 
 def with_metaclass(meta, base=object):
     return meta("NewBase", (base,), {})
 
 
-class QueueTaskMetaClass(type):
-    def __init__(cls, name, bases, attrs):
-        """
-        Metaclass to ensure that all task classes are registered
-        """
-        registry.register(cls)
-
-
-class QueueTask(with_metaclass(QueueTaskMetaClass)):
+class QueueTask(object):
     """
     A class that encapsulates the logic necessary to 'do something' given some
     arbitrary data.  When enqueued with the :class:`Huey`, it will be
@@ -506,23 +760,29 @@ class QueueTask(with_metaclass(QueueTaskMetaClass)):
         })
     )
     """
+    default_retries = 0
+    default_retry_delay = 0
 
-    def __init__(self, data=None, task_id=None, execute_time=None, retries=0,
-                 retry_delay=0):
+    def __init__(self, data=None, task_id=None, execute_time=None,
+                 retries=None, retry_delay=None, on_complete=None):
+        self.name = type(self).__name__
         self.set_data(data)
         self.task_id = task_id or self.create_id()
         self.revoke_id = 'r:%s' % self.task_id
         self.execute_time = execute_time
-        self.retries = retries
-        self.retry_delay = retry_delay
-        self.name = type(self).__name__
+        self.retries = retries if retries is not None else self.default_retries
+        self.retry_delay = retry_delay if retry_delay is not None else \
+                self.default_retry_delay
+        self.on_complete = on_complete
 
     def __repr__(self):
-        rep = '%s: %s' % (self.name, self.task_id)
+        rep = '%s.%s: %s' % (self.__module__, self.name, self.task_id)
         if self.execute_time:
             rep += ' @%s' % self.execute_time
         if self.retries:
             rep += ' %s retries' % self.retries
+        if self.on_complete:
+            rep += ' -> %s' % self.on_complete
         return rep
 
     def create_id(self):
@@ -533,6 +793,25 @@ class QueueTask(with_metaclass(QueueTaskMetaClass)):
 
     def set_data(self, data):
         self.data = data
+
+    def extend_data(self, data):
+        if data is None or data == ():
+            return
+        args, kwargs = self.get_data()
+        if isinstance(data, tuple):
+            args += data
+        elif isinstance(data, dict):
+            kwargs.update(data)
+        else:
+            args = args + (data,)
+        self.set_data((args, kwargs))
+
+    def then(self, task, *args, **kwargs):
+        if self.on_complete:
+            self.on_complete.then(task, *args, **kwargs)
+        else:
+            self.on_complete = task.s(*args, **kwargs)
+        return self
 
     def execute(self):
         """Execute any arbitary code here"""
@@ -546,9 +825,6 @@ class QueueTask(with_metaclass(QueueTaskMetaClass)):
 
 
 class PeriodicQueueTask(QueueTask):
-    def create_id(self):
-        return registry.task_to_string(type(self))
-
     def validate_datetime(self, dt):
         """Validate that the task should execute at the given datetime"""
         return False
@@ -567,17 +843,13 @@ def create_task(task_class, func, retries_as_argument=False, task_name=None,
     attrs = {
         'execute': execute,
         '__module__': func.__module__,
-        '__doc__': func.__doc__
-    }
+        '__doc__': func.__doc__}
     attrs.update(kwargs)
 
-    klass = type(
-        task_name or 'queuecmd_%s' % (func.__name__),
-        (task_class,),
-        attrs
-    )
+    if not task_name:
+        task_name = 'queue_task_%s' % (func.__name__)
 
-    return klass
+    return type(task_name, (task_class,), attrs)
 
 
 dash_re = re.compile('(\d+)-(\d+)')
@@ -590,6 +862,8 @@ def crontab(month='*', day='*', day_of_week='*', hour='*', minute='*'):
     return True when the given datetime matches the parameters set forth in
     the crontab.
 
+    For day-of-week, 0=Sunday and 6=Saturday.
+
     Acceptable inputs:
     * = every distinct value
     */n = run every "n" times, i.e. hours='*/4' == 0, 4, 8, 12, 16, 20
@@ -599,7 +873,7 @@ def crontab(month='*', day='*', day_of_week='*', hour='*', minute='*'):
     validation = (
         ('m', month, range(1, 13)),
         ('d', day, range(1, 32)),
-        ('w', day_of_week, range(7)),
+        ('w', day_of_week, range(8)), # 0-6, but also 7 for Sunday.
         ('H', hour, range(24)),
         ('M', minute, range(60))
     )
@@ -620,6 +894,8 @@ def crontab(month='*', day='*', day_of_week='*', hour='*', minute='*'):
                 piece = int(piece)
                 if piece not in acceptable:
                     raise ValueError('%d is not a valid input' % piece)
+                elif date_str == 'w':
+                    piece %= 7
                 settings.add(piece)
 
             else:
@@ -628,11 +904,17 @@ def crontab(month='*', day='*', day_of_week='*', hour='*', minute='*'):
                     lhs, rhs = map(int, dash_match.groups())
                     if lhs not in acceptable or rhs not in acceptable:
                         raise ValueError('%s is not a valid input' % piece)
+                    elif date_str == 'w':
+                        lhs %= 7
+                        rhs %= 7
                     settings.update(range(lhs, rhs + 1))
                     continue
 
                 every_match = every_re.match(piece)
                 if every_match:
+                    if date_str == 'w':
+                        raise ValueError('Cannot perform this kind of matching'
+                                         ' on day-of-week.')
                     interval = int(every_match.groups()[0])
                     settings.update(acceptable[::interval])
 
