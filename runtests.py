@@ -35,10 +35,10 @@ def run_django_tests(*test_args):
 
 
 if __name__ == '__main__':
-    if not _requirements_installed():
-        print('Requirements are not installed. Run "pip install -r test_requirements.txt" to install all dependencies.')
-        sys.exit(2)
     run_tests(*sys.argv[1:])
-    run_django_tests(*sys.argv[1:])
+    if _requirements_installed():
+        run_django_tests(*sys.argv[1:])
+    else:
+        print('Django not installed, skipping Django tests.')
     sys.exit(0)
 
