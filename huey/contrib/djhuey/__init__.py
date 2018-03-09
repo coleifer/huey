@@ -38,7 +38,9 @@ def close_db(fn):
 
 def db_task(*args, **kwargs):
     def decorator(fn):
-        return task(*args, **kwargs)(close_db(fn))
+        ret = task(*args, **kwargs)(close_db(fn))
+        ret.call_local = fn
+        return ret
     return decorator
 
 
