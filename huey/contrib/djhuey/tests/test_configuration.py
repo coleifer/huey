@@ -275,7 +275,7 @@ class HueySettingsReaderTest(TestCase):
         }
         dh = HueySettingsReader(config)
         dh.start()
-        dh_task = dh.task('my-app')(sample_task)
+        dh_task = dh.task(queue='my-app')(sample_task)
         huey_task = dh.huey.task()(sample_task)
         dh_ret = dh_task()
         huey_ret = huey_task()
