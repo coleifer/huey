@@ -88,12 +88,18 @@ class HueySettingsReader(object):
         self.consumers = {}
         self.consumer = None
 
-    def task(self, name=None, *args, **kwargs):
-        huey = self.huey if name is None else self.hueys[name]
+    def task(self, *args, **kwargs):
+        if 'queue' in kwargs:
+            huey = self.hueys[kwargs.pop('queue')]
+        else:
+            huey = self.huey
         return huey.task(*args, **kwargs)
 
-    def periodic_task(self, name=None, *args, **kwargs):
-        huey = self.huey if name is None else self.hueys[name]
+    def periodic_task(self, *args, **kwargs):
+        if 'queue' in kwargs:
+            huey = self.hueys[kwargs.pop('queue')]
+        else:
+            huey = self.huey
         return huey.periodic_task(*args, **kwargs)
 
     def _huey_instance_config(self):

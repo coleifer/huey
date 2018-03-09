@@ -311,7 +311,7 @@ You can even use huey to distribute your tasks to several queues which are proce
     }
 
     # tasks.py
-    @task('first-queue')
+    @task(queue='first-queue')
     def count_beans(number):
         print('-- counted %s beans --' % number)
         return 'Counted %s beans' % number
@@ -320,7 +320,7 @@ You can even use huey to distribute your tasks to several queues which are proce
     def every_five_mins():
         print('Every five minutes this will be printed by the consumer')
 
-    @task('second-queue', retries=3, retry_delay=10)
+    @task(queue='second-queue', retries=3, retry_delay=10)
     def try_thrice():
         if random.randint(1, 3) == 1:
             print('OK')
