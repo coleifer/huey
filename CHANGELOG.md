@@ -1,10 +1,26 @@
 Changelog
 =========
 
-v1.8.1 (unreleased)
+v1.9.1 (unreleased)
 -------------------
 
-[View commits](https://github.com/coleifer/huey/compare/1.8.0...HEAD)
+[View commits](https://github.com/coleifer/huey/compare/1.9.0...HEAD)
+
+v1.9.0
+------
+
+[View commits](https://github.com/coleifer/huey/compare/1.8.0...1.9.0)
+
+#### ROLLBACK of 1.8.0 Django Changes
+
+Due to problems with the django patch that added support for multiple huey
+instances, I've decided to rollback those changes.
+
+Django integration in Huey 1.9.0 will work the same as it had previously in
+1.7.x and earlier.
+
+Apologies, I should have reviewed the patch more thoroughly and insisted on
+better test coverage.
 
 v1.8.0
 ------
@@ -12,6 +28,8 @@ v1.8.0
 [View commits](https://github.com/coleifer/huey/compare/1.7.0...1.8.0)
 
 #### Backwards-incompatible change to Django integration
+
+**NOTE: These changes were remove in 1.9.0**
 
 In 1.8.0, support for multiple huey instances was added (with thanks to @Sebubu
 and @MarcoGlauser for the patches). Although existing Django/Huey apps should
