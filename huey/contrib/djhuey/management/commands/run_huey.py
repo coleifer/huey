@@ -65,11 +65,13 @@ class Command(BaseCommand):
             from huey.contrib.djhuey import consumers
             queue = options['queue']
             consumer = consumers[queue]
+            huey_instance = hueys[queue]
         else:
             from huey.contrib.djhuey import HUEY
             from huey.contrib.djhuey import consumer
+            huey_instance = HUEY
 
         self.autodiscover()
 
-        print('Run huey on ' + str(HUEY.name))
+        print('Run huey on ' + str(huey_instance.name))
         consumer.run()
