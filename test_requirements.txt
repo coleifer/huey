@@ -1,4 +1,0 @@
-redis
-django
-peewee
-mock

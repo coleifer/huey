@@ -6,22 +6,98 @@ import traceback
 from django.conf import settings
 from django.db import close_old_connections
 
-from huey.contrib.djhuey.configuration import HueySettingsReader
+
+configuration_message = """
+Configuring Huey for use with Django
+====================================
+
+Huey was designed to be simple to configure in the general case.  For that
+reason, huey will "just work" with no configuration at all provided you have
+Redis installed and running locally.
+
+On the other hand, you can configure huey manually using the following
+setting structure.
+
+The following example uses Redis on localhost, and will run four worker
+processes:
+
+HUEY = {
+    'name': 'my-app',
+    'connection': {'host': 'localhost', 'port': 6379},
+    'consumer': {
+        'workers': 4,
+        'worker_type': 'process',  # "thread" or "greenlet" are other options
+    },
+}
+
+If you would like to configure Huey's logger using Django's integrated logging
+settings, the logger used by consumer is named "huey.consumer".
+
+Alternatively you can simply assign `settings.HUEY` to an actual `Huey`
+object instance:
+
+from huey import RedisHuey
+HUEY = RedisHuey('my-app')
+"""
 
 
-_huey_settings = getattr(settings, 'HUEY', None)
+default_backend_path = 'huey.RedisHuey'
 
-_django_huey = HueySettingsReader(_huey_settings)
-_django_huey.start()
+def default_queue_name():
+    try:
+        return settings.DATABASE_NAME
+    except AttributeError:
+        try:
+            return settings.DATABASES['default']['NAME']
+        except KeyError:
+            return 'huey'
 
-HUEY = _django_huey.huey
-hueys = _django_huey.hueys
 
-consumer = _django_huey.consumer
-consumers = _django_huey.consumers
+def get_backend(import_path=default_backend_path):
+    module_path, class_name = import_path.rsplit('.', 1)
+    module = import_module(module_path)
+    return getattr(module, class_name)
 
-task = _django_huey.task
-periodic_task = _django_huey.periodic_task
+
+def config_error(msg):
+    print(configuration_message)
+    print('\n\n')
+    print(msg)
+    sys.exit(1)
+
+
+HUEY = getattr(settings, 'HUEY', None)
+if HUEY is None:
+    try:
+        RedisHuey = get_backend(default_backend_path)
+    except ImportError:
+        config_error('Error: Huey could not import the redis backend. '
+                     'Install `redis-py`.')
+    else:
+        HUEY = RedisHuey(default_queue_name())
+
+if isinstance(HUEY, dict):
+    huey_config = HUEY.copy()  # Operate on a copy.
+    name = huey_config.pop('name', default_queue_name())
+    backend_path = huey_config.pop('backend_class', default_backend_path)
+    conn_kwargs = huey_config.pop('connection', {})
+    try:
+        del huey_config['consumer']  # Don't need consumer opts here.
+    except KeyError:
+        pass
+    if 'always_eager' not in huey_config:
+        huey_config['always_eager'] = settings.DEBUG
+    huey_config.update(conn_kwargs)
+
+    try:
+        backend_cls = get_backend(backend_path)
+    except (ValueError, ImportError, AttributeError):
+        config_error('Error: could not import Huey backend:\n%s' % traceback.format_exc())
+
+    HUEY = backend_cls(name, **huey_config)
+
+task = HUEY.task
+periodic_task = HUEY.periodic_task
 
 
 def close_db(fn):

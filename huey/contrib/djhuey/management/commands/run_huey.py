@@ -40,7 +40,6 @@ class Command(BaseCommand):
                     kwargs['type'] = self._type_map[kwargs['type']]
                 kwargs.setdefault('default', None)
                 parser.add_argument(full, short, **kwargs)
-        parser.add_argument('-qu', '--queue', type=str, help='Select the queue to listen on.')
 
     def autodiscover(self):
         """Use Django app registry to pull out potential apps with tasks.py module."""
@@ -60,18 +59,26 @@ class Command(BaseCommand):
                                      'to load module.', import_path)
 
     def handle(self, *args, **options):
-        queue_defined = 'queue' in options and options['queue'] is not None
-        if queue_defined:
-            from huey.contrib.djhuey import consumers
-            queue = options['queue']
-            consumer = consumers[queue]
-            huey_instance = hueys[queue]
-        else:
-            from huey.contrib.djhuey import HUEY
-            from huey.contrib.djhuey import consumer
-            huey_instance = HUEY
+        from huey.contrib.djhuey import HUEY
 
+        consumer_options = {}
+        try:
+            if isinstance(settings.HUEY, dict):
+                consumer_options.update(settings.HUEY.get('consumer', {}))
+        except AttributeError:
+            pass
+
+        for key, value in options.items():
+            if value is not None:
+                consumer_options[key] = value
+
+        consumer_options.setdefault('verbose',
+                                    consumer_options.pop('huey_verbose', None))
         self.autodiscover()
 
-        print('Run huey on ' + str(huey_instance.name))
+        config = ConsumerConfig(**consumer_options)
+        config.validate()
+        config.setup_logger()
+
+        consumer = Consumer(HUEY, **config.values)
         consumer.run()
