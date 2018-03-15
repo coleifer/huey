@@ -119,7 +119,7 @@ class Huey(object):
             """
             return TaskWrapper(
                 self,
-                func,
+                func.func if isinstance(func, TaskWrapper) else func,
                 retries=retries,
                 retry_delay=retry_delay,
                 retries_as_argument=retries_as_argument,
@@ -141,12 +141,9 @@ class Huey(object):
             def method_validate(self, dt):
                 return validate_datetime(dt)
 
-            if isinstance(func, TaskWrapper):
-                func = func.func
-
             return TaskWrapper(
                 self,
-                func,
+                func.func if isinstance(func, TaskWrapper) else func,
                 name=name,
                 task_base=PeriodicQueueTask,
                 default_retries=retries,
