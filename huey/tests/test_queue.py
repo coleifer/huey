@@ -6,6 +6,7 @@ from huey import exceptions as huey_exceptions
 from huey import RedisHuey
 from huey.api import Huey
 from huey.api import QueueTask
+from huey.api import TaskWrapper
 from huey.constants import EmptyData
 from huey.registry import registry
 from huey.storage import RedisStorage
@@ -617,3 +618,21 @@ class TestHueyQueueAPIs(BaseQueueTestCase):
         self.assertTrue(huey_results.ready_to_run(task1, curr70))
         self.assertFalse(huey_results.ready_to_run(task2, curr70))
         self.assertTrue(huey_results.ready_to_run(task3, curr70))
+
+    def test_task_decorators(self):
+        huey = RedisHuey()
+
+        def test_fn():
+            pass
+
+        test_fn_task = huey.task()(test_fn)
+        test_fn_cron = huey.periodic_task(crontab(minute='0'))(test_fn)
+
+        self.assertTrue(isinstance(test_fn_task, TaskWrapper))
+        self.assertTrue(test_fn_task.func is test_fn)
+        self.assertTrue(isinstance(test_fn_cron, TaskWrapper))
+        self.assertTrue(test_fn_cron.func is test_fn)
+
+        test_cron_task = huey.periodic_task(crontab(minute='0'))(test_fn_task)
+        self.assertTrue(isinstance(test_cron_task, TaskWrapper))
+        self.assertTrue(test_cron_task.func is test_fn)

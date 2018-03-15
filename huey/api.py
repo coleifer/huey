@@ -141,6 +141,9 @@ class Huey(object):
             def method_validate(self, dt):
                 return validate_datetime(dt)
 
+            if isinstance(func, TaskWrapper):
+                func = func.func
+
             return TaskWrapper(
                 self,
                 func,
