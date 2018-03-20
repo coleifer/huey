@@ -276,7 +276,7 @@ class Huey(object):
             # critical component.
             pass
 
-    def enqueue(self, task, is_callback=False):
+    def enqueue(self, task):
         if self.always_eager:
             return task.execute()
 
@@ -284,7 +284,7 @@ class Huey(object):
         if not self.result_store:
             return
 
-        if task.on_complete and not is_callback:
+        if task.on_complete:
             q = [task]
             result_wrappers = []
             while q:
