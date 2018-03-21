@@ -284,9 +284,14 @@ class Scheduler(BaseProcess):
             self._q, self._r = divmod(60, self.interval)
             self._cr = self._r
         self._logger = logging.getLogger('huey.consumer.Scheduler')
+        self._next_loop = time.time()
 
     def loop(self, now=None):
-        start = time.time()
+        current = self._next_loop
+        self._next_loop += self.interval
+        if self._next_loop < time.time():
+            self._logger.info('scheduler skipping iteration to avoid race.')
+            return
 
         try:
             task_list = self.huey.read_schedule(now or self.get_now())
@@ -309,17 +314,17 @@ class Scheduler(BaseProcess):
             if self._counter >= self._q:
                 self._counter = 0
                 if self._cr:
-                    self.sleep_for_interval(start, self._cr)
+                    self.sleep_for_interval(current, self._cr)
                 if self._r:
                     self._cr += self._r
                     if self._cr >= self.interval:
                         self._cr -= self.interval
                         self._counter -= 1
 
-                self.enqueue_periodic_tasks(now or self.get_now(), start)
+                self.enqueue_periodic_tasks(now or self.get_now(), current)
             self._counter += 1
 
-        self.sleep_for_interval(start, self.interval)
+        self.sleep_for_interval(current, self.interval)
 
     def enqueue_periodic_tasks(self, now, start):
         self.huey.emit_status(
