@@ -732,6 +732,9 @@ class TaskResultWrapper(object):
             task_id=None)
         return self.huey.enqueue(cmd)
 
+    def reset(self):
+        self._result = EmptyData
+
 
 def with_metaclass(meta, base=object):
     return meta("NewBase", (base,), {})
