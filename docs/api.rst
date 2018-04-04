@@ -914,6 +914,11 @@ TaskResultWrapper
             information.
         :rtype: :py:class:`TaskResultWrapper` object for the new task.
 
+    .. py:method:: reset()
+
+        Reset the cached result and allow re-fetching a new result for the
+        given task (i.e. after a task error and subsequent retry).
+
 Storage
 -------
 
