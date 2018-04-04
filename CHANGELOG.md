@@ -1,10 +1,20 @@
 Changelog
 =========
 
-v1.9.1 (unreleased)
+v1.9.2 (unreleased)
 -------------------
 
-[View commits](https://github.com/coleifer/huey/compare/1.9.0...HEAD)
+[View commits](https://github.com/coleifer/huey/compare/1.9.1...HEAD)
+
+v1.9.1
+------
+
+[View commits](https://github.com/coleifer/huey/compare/1.9.0...1.9.1)
+
+* Ensure the scheduler loop does not drift (fixes #304).
+* Add `TaskResultWrapper.reset()` to enable resetting the results of tasks that
+  failed and are subsequently being retried.
+* Allow task-decorated functions to be also decorated as periodic tasks.
 
 v1.9.0
 ------
