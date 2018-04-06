@@ -20,6 +20,7 @@ config_defaults = (
     ('utc', True),
     ('logfile', None),
     ('verbose', None),
+    ('flush_locks', False),
 )
 config_keys = [param for param, _ in config_defaults]
 
@@ -37,7 +38,7 @@ def option(name, **options):
 class OptionParserHandler(object):
     def get_worker_options(self):
         return (
-            # -w, -k, -d, -m, -b, -c, -C
+            # -w, -k, -d, -m, -b, -c, -C, -f
             option('workers', type='int',
                    help='number of worker threads/processes (default=1)'),
             option(('k', 'worker-type'), choices=WORKER_TYPES,
@@ -64,7 +65,8 @@ class OptionParserHandler(object):
                    dest='check_worker_health',
                    help=('disable health check that monitors worker health, '
                          'restarting any worker that crashes unexpectedly.')),
-
+            option('flush_locks', action='store_true', dest='flush_locks',
+                   help=('flush all locks when starting consumer.')),
         )
 
     def get_scheduler_options(self):

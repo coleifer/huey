@@ -82,6 +82,7 @@ class Huey(object):
         self.storage = self.get_storage(**storage_kwargs)
         self.pre_execute_hooks = OrderedDict()
         self.post_execute_hooks = OrderedDict()
+        self._locks = set()
         if global_registry:
             self.registry = registry
         else:
@@ -534,6 +535,18 @@ class Huey(object):
         """
         return TaskLock(self, lock_name)
 
+    def flush_locks(self):
+        """
+        Flush any stale locks (for example, when restarting the consumer).
+
+        :return: List of any stale locks that were cleared.
+        """
+        flushed = set()
+        for lock_key in self._locks:
+            if self._get_data(lock_key) is not EmptyData:
+                flushed.add(lock_key.split('.lock.', 1)[-1])
+        return flushed
+
     def result(self, task_id, blocking=False, timeout=None, backoff=1.15,
                max_delay=1.0, revoke_on_timeout=False, preserve=False):
         """
@@ -616,6 +629,7 @@ class TaskLock(object):
         self._huey = huey
         self._name = name
         self._key = '%s.lock.%s' % (self._huey.name, self._name)
+        self._huey._locks.add(self._key)
 
     def __call__(self, fn):
         @wraps(fn)

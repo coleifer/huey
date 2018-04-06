@@ -636,3 +636,11 @@ class TestHueyQueueAPIs(BaseQueueTestCase):
         test_cron_task = huey.periodic_task(crontab(minute='0'))(test_fn_task)
         self.assertTrue(isinstance(test_cron_task, TaskWrapper))
         self.assertTrue(test_cron_task.func is test_fn)
+
+    def test_flush_locks(self):
+        with huey.lock_task('lock1'):
+            with huey.lock_task('lock2'):
+                flushed = huey.flush_locks()
+
+        self.assertEqual(flushed, set(['lock1', 'lock2']))
+        self.assertEqual(huey.flush_locks(), set())

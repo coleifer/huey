@@ -406,7 +406,7 @@ class Consumer(object):
     def __init__(self, huey, workers=1, periodic=True, initial_delay=0.1,
                  backoff=1.15, max_delay=10.0, utc=True, scheduler_interval=1,
                  worker_type='thread', check_worker_health=True,
-                 health_check_interval=1):
+                 health_check_interval=1, flush_locks=False):
 
         self._logger = logging.getLogger('huey.consumer')
         if huey.always_eager:
@@ -441,6 +441,9 @@ class Consumer(object):
         self._restart = False
         self.stop_flag = self.environment.get_stop_flag()
 
+        if flush_locks:
+            self.flush_locks()
+
         # Create the scheduler process (but don't start it yet).
         scheduler = self._create_scheduler()
         self.scheduler = self._create_process(scheduler, 'Scheduler')
@@ -451,6 +454,13 @@ class Consumer(object):
             worker = self._create_worker()
             process = self._create_process(worker, 'Worker-%d' % (i + 1))
             self.worker_threads.append((worker, process))
+
+    def flush_locks(self):
+        self._logger.debug('Flushing locks before starting up.')
+        flushed = self.huey.flush_locks()
+        if flushed:
+            self._logger.warning('Found stale locks: %s' % (
+                ', '.join(key for key in flushed)))
 
     def get_environment(self, worker_type):
         if worker_type not in WORKER_TO_ENVIRONMENT:
