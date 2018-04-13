@@ -44,19 +44,25 @@ class Command(BaseCommand):
     def autodiscover(self):
         """Use Django app registry to pull out potential apps with tasks.py module."""
         module_name = 'tasks'
-        for config in django_apps.get_app_configs():
-            app_path = config.module.__path__
-            try:
-                fp, path, description = imp.find_module(module_name, app_path)
-            except ImportError:
-                continue
-            else:
-                import_path = '%s.%s' % (config.name, module_name)
+
+        try:
+            # Django 2.0+
+            from django.utils.module_loading import autodiscover_modules
+            autodiscover_modules(module_name)
+        except ImportError:
+            for config in django_apps.get_app_configs():
+                app_path = config.module.__path__
                 try:
-                    imp.load_module(import_path, fp, path, description)
+                    fp, path, description = imp.find_module(module_name, app_path)
                 except ImportError:
-                    logger.exception('Found "%s" but error raised attempting '
-                                     'to load module.', import_path)
+                    continue
+                else:
+                    import_path = '%s.%s' % (config.name, module_name)
+                    try:
+                        imp.load_module(import_path, fp, path, description)
+                    except ImportError:
+                        logger.exception('Found "%s" but error raised attempting '
+                                         'to load module.', import_path)
 
     def handle(self, *args, **options):
         from huey.contrib.djhuey import HUEY
