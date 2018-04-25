@@ -57,6 +57,43 @@ def to_timestamp(dt):
 
 
 class BaseProcess(object):
+    """
+    Abstract process run by the consumer. Provides convenience methods for
+    things like sleeping for a given amount of time and enqueueing tasks.
+
+    Subclasses should implement the `loop()` method, which is called repeatedly
+    until the consumer is shutdown. The `loop()` method's return value is
+    ignored, but an unhandled exception will lead to the process shutting down.
+
+    A typical pattern might be::
+
+        class CustomProcess(BaseProcess):
+            def loop(self, now=None):
+                # Get the current timestamp.
+                current_ts = time.time()
+
+                # Perform some action, which may take an arbitrary amount of
+                # time.
+                do_some_action()
+
+                # Sleep for 60 seconds, with respect to current_ts, so that
+                # the whole loop() method repeats every ~60s.
+                self.sleep_for_interval(current_ts, 60)
+
+    You will want to ensure that the consumer starts your custom process::
+
+        class MyConsumer(Consumer):
+            def start(self):
+                # Initialize workers, scheduler, signal handlers, etc.
+                super(MyConsumer, self).start()
+
+                # Create custom process and start it.
+                custom_impl = CustomProcess(huey=self.huey, utc=self.utc)
+                self._custom_proc = self._create_process(custom_impl, 'Custom')
+                self._custom_proc.start()
+
+    See also: Consumer._create_process().
+    """
     def __init__(self, huey, utc):
         self.huey = huey
         self.utc = utc
@@ -73,6 +110,14 @@ class BaseProcess(object):
         return time.mktime(self.get_utcnow().timetuple())
 
     def sleep_for_interval(self, start_ts, nseconds):
+        """
+        Sleep for a given interval with respect to the start timestamp.
+
+        So, if the start timestamp is 1337 and nseconds is 10, the method will
+        actually sleep for nseconds - (current_timestamp - start_timestamp). So
+        if the current timestamp is 1340, we'll only sleep for 7 seconds (the
+        goal being to sleep until 1347, or 1337 + 10).
+        """
         sleep_time = nseconds - (time.time() - start_ts)
         if sleep_time <= 0:
             return
@@ -84,6 +129,9 @@ class BaseProcess(object):
             time.sleep(sleep_time)
 
     def enqueue(self, task):
+        """
+        Convenience method for enqueueing a task.
+        """
         try:
             self.huey.enqueue(task)
         except QueueWriteException:
@@ -93,10 +141,22 @@ class BaseProcess(object):
             self._logger.debug('Enqueued task: %s', task)
 
     def loop(self, now=None):
+        """
+        Process-specific implementation. Called repeatedly for as long as the
+        consumer is running. The `now` parameter is currently only used in the
+        unit-tests (to avoid monkey-patching datetime / time). Return value is
+        ignored, but an unhandled exception will lead to the process exiting.
+        """
         raise NotImplementedError
 
 
 class Worker(BaseProcess):
+    """
+    Worker implementation.
+
+    Will pull tasks from the queue, executing them or adding them to the
+    schedule if they are set to run in the future.
+    """
     def __init__(self, huey, default_delay, max_delay, backoff, utc):
         self.delay = self.default_delay = default_delay
         self.max_delay = max_delay
@@ -140,6 +200,14 @@ class Worker(BaseProcess):
         self.delay *= self.backoff
 
     def handle_task(self, task, ts):
+        """
+        Handle a task that was just read from the queue. There are three
+        possible outcomes:
+
+        1. Task is scheduled for the future, add to the schedule.
+        2. Task is ready to run, but has been revoked. Discard.
+        3. Task is ready to run and not revoked. Execute task.
+        """
         if not self.huey.ready_to_run(task, ts):
             self.add_schedule(task)
         elif not self.is_revoked(task, ts):
@@ -152,6 +220,11 @@ class Worker(BaseProcess):
             self._logger.debug('Task %s was revoked, not running', task)
 
     def process_task(self, task, ts):
+        """
+        Execute a task and (optionally) store the return value in result store.
+
+        Unhandled exceptions are caught and logged.
+        """
         self.huey.emit_task(EVENT_STARTED, task, timestamp=to_timestamp(ts))
         if self._pre_execute:
             try:
@@ -274,6 +347,14 @@ class Worker(BaseProcess):
 
 
 class Scheduler(BaseProcess):
+    """
+    Scheduler handles enqueueing tasks when they are scheduled to execute. Note
+    that the scheduler does not actually execute any tasks, but simply enqueues
+    them so that they can be picked up by the worker processes.
+
+    If periodic tasks are enabled, the scheduler will wake up every 60 seconds
+    to enqueue any periodic tasks that should be run.
+    """
     def __init__(self, huey, interval, utc, periodic):
         super(Scheduler, self).__init__(huey, utc)
         self.interval = min(interval, 60)
@@ -343,6 +424,9 @@ class Scheduler(BaseProcess):
 
 
 class Environment(object):
+    """
+    Provide a common interface to the supported concurrent environments.
+    """
     def get_stop_flag(self):
         raise NotImplementedError
 
@@ -403,6 +487,10 @@ WORKER_TO_ENVIRONMENT = {
 
 
 class Consumer(object):
+    """
+    Consumer sets up and coordinates the execution of the workers and scheduler
+    and registers signal handlers.
+    """
     def __init__(self, huey, workers=1, periodic=True, initial_delay=0.1,
                  backoff=1.15, max_delay=10.0, utc=True, scheduler_interval=1,
                  worker_type='thread', check_worker_health=True,
@@ -415,14 +503,16 @@ class Consumer(object):
                                  'must be disabled before the consumer can '
                                  'be run.')
         self.huey = huey
-        self.workers = workers
-        self.periodic = periodic
-        self.default_delay = initial_delay
-        self.backoff = backoff
-        self.max_delay = max_delay
-        self.utc = utc
+        self.workers = workers  # Number of workers.
+        self.periodic = periodic  # Enable periodic task scheduler?
+        self.default_delay = initial_delay  # Default queue polling interval.
+        self.backoff = backoff  # Exponential backoff factor when queue empty.
+        self.max_delay = max_delay  # Maximum interval between polling events.
+        self.utc = utc  # Timestamps are considered UTC.
+
+        # Ensure that the scheduler runs at an interval between 1 and 60s.
         self.scheduler_interval = max(min(scheduler_interval, 60), 1)
-        self.worker_type = worker_type
+        self.worker_type = worker_type  # What process model are we using?
 
         # Configure health-check and consumer main-loop attributes.
         self._stop_flag_timeout = 0.1
@@ -441,6 +531,8 @@ class Consumer(object):
         self._restart = False
         self.stop_flag = self.environment.get_stop_flag()
 
+        # In the event the consumer was killed while running a task that held
+        # a lock, this ensures that all locks are flushed before starting.
         if flush_locks:
             self.flush_locks()
 
@@ -453,6 +545,10 @@ class Consumer(object):
         for i in range(workers):
             worker = self._create_worker()
             process = self._create_process(worker, 'Worker-%d' % (i + 1))
+
+            # The worker threads are stored as [(worker impl, worker_t), ...].
+            # The worker impl is not currently referenced in any consumer code,
+            # but it is referenced in the test-suite.
             self.worker_threads.append((worker, process))
 
     def flush_locks(self):
@@ -484,6 +580,10 @@ class Consumer(object):
             periodic=self.periodic)
 
     def _create_process(self, process, name):
+        """
+        Repeatedly call the `loop()` method of the given process. Unhandled
+        exceptions in the `loop()` method will cause the process to terminate.
+        """
         def _run():
             try:
                 while not self.stop_flag.is_set():
@@ -495,6 +595,9 @@ class Consumer(object):
         return self.environment.create_process(_run, name)
 
     def start(self):
+        """
+        Start all consumer processes and register signal handlers.
+        """
         if self.huey.always_eager:
             raise ConfigurationError(
                 'Consumer cannot be run with Huey instances where always_eager'
@@ -533,6 +636,12 @@ class Consumer(object):
             signal.signal(signal.SIGHUP, original_sighup_handler)
 
     def stop(self, graceful=False):
+        """
+        Set the stop-flag.
+
+        If `graceful=True`, this method blocks until the workers to finish
+        executing any tasks they might be currently working on.
+        """
         self.stop_flag.set()
         if graceful:
             self._logger.info('Shutting down gracefully...')
@@ -547,6 +656,9 @@ class Consumer(object):
             self._logger.info('Shutting down')
 
     def run(self):
+        """
+        Run the consumer.
+        """
         self.start()
         timeout = self._stop_flag_timeout
         while True:
@@ -580,6 +692,10 @@ class Consumer(object):
             self._logger.info('Consumer exiting.')
 
     def check_worker_health(self):
+        """
+        Check the health of the worker processes. Workers that have died will
+        be replaced with new workers.
+        """
         self._logger.debug('Checking worker health.')
         workers = []
         restart_occurred = False
