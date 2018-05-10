@@ -31,7 +31,6 @@ from huey.exceptions import RetryTask
 from huey.exceptions import ScheduleAddException
 from huey.exceptions import ScheduleReadException
 from huey.exceptions import TaskLockedException
-from huey.registry import registry
 
 
 EVENT_CHECKING_PERIODIC = 'checking-periodic'
@@ -615,7 +614,7 @@ class Consumer(object):
         self._set_signal_handlers()
 
         msg = ['The following commands are available:']
-        for command in registry._registry:
+        for command in self.huey.registry._registry:
             msg.append('+ %s' % command.replace('queuecmd_', ''))
 
         self._logger.info('\n'.join(msg))
