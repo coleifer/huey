@@ -644,3 +644,20 @@ class TestHueyQueueAPIs(BaseQueueTestCase):
 
         self.assertEqual(flushed, set(['lock1', 'lock2']))
         self.assertEqual(huey.flush_locks(), set())
+
+
+eager_huey = RedisHuey(blocking=False, always_eager=True)
+
+@eager_huey.task()
+def add(a, b):
+    return a + b
+
+
+class TestAlwaysEager(BaseQueueTestCase):
+    def test_always_eager(self):
+        self.assertEqual(add(1, 3), 4)
+
+        # Test pipelining.
+        pipe = add.s(1, 2).then(add, 3).then(add, 4).then(add, 5)
+        result = eager_huey.enqueue(pipe)
+        self.assertEqual(result, [3, 6, 10, 15])

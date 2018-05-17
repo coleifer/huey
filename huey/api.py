@@ -277,9 +277,21 @@ class Huey(object):
             # critical component.
             pass
 
+    def _execute_always_eager(self, task):
+        accum = []
+        while task is not None:
+            result = task.execute()
+            accum.append(result)
+            if task.on_complete:
+                task = task.on_complete
+                task.extend_data(result)
+            else:
+                task = None
+        return accum[0] if len(accum) == 1 else accum
+
     def enqueue(self, task):
         if self.always_eager:
-            return task.execute()
+            return self._execute_always_eager(task)
 
         self._enqueue(self.registry.get_message_for_task(task))
         if not self.result_store:
