@@ -99,6 +99,7 @@ if isinstance(HUEY, dict):
 task = HUEY.task
 periodic_task = HUEY.periodic_task
 lock_task = HUEY.lock_task
+enqueue = HUEY.enqueue
 
 
 def close_db(fn):
