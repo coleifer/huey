@@ -725,16 +725,21 @@ class Consumer(object):
 
     def _set_signal_handlers(self):
         signal.signal(signal.SIGTERM, self._handle_stop_signal)
-        signal.signal(signal.SIGINT, self._handle_stop_signal)
+        signal.signal(signal.SIGINT, self._handle_graceful_stop_signal)
         if hasattr(signal, 'SIGHUP'):
             signal.signal(signal.SIGHUP, self._handle_restart_signal)
 
     def _handle_stop_signal(self, sig_num, frame):
-        sig = signal._int_to_enum(sig_num, signal.Signals)
-        self._logger.info('Received {}'.format(sig.name))
+        self._logger.info('Received SIGTERM')
         self._received_signal = True
         self._restart = False
-        self._graceful = (2 == sig_num)
+        self._graceful = False
+
+    def _handle_graceful_stop_signal(self, sig_num, frame):
+        self._logger.info('Received SIGINT')
+        self._received_signal = True
+        self._restart = False
+        self._graceful = True
 
     def _handle_restart_signal(self, sig_num, frame):
         self._logger.info('Received SIGHUP, will restart')
