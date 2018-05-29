@@ -740,3 +740,4 @@ class Consumer(object):
         self._logger.info('Received SIGHUP, will restart')
         self._received_signal = True
         self._restart = True
+        self._graceful = True
