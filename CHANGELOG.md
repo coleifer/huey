@@ -1,10 +1,20 @@
 Changelog
 =========
 
-v1.9.2 (unreleased)
+master
+------
+
+[View commits](https://github.com/coleifer/huey/compare/1.9.2...HEAD)
+
+v1.10.0
 -------------------
 
-[View commits](https://github.com/coleifer/huey/compare/1.9.1...HEAD)
+[View commits](https://github.com/coleifer/huey/compare/1.9.1...1.10.0)
+
+* Ensure that the default SIGINT handler is registered. This fixes an edge-case
+  that arises when the consumer is run without job control, which causes
+  interrupt signals to be ignored.
+* Restarts (SIGHUP) are now graceful by default.
 
 v1.9.1
 ------
