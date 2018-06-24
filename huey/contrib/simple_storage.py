@@ -10,7 +10,6 @@ class SimpleStorage(BaseStorage):
                  **storage_kwargs):
         super(SimpleStorage, self).__init__(name=name, **storage_kwargs)
         self.client = Client(host=host, port=port)
-        self.client.connect()
 
     def enqueue(self, data):
         self.client.lpush(self.name, data)
