@@ -280,8 +280,12 @@ class Huey(object):
     def _execute_always_eager(self, task):
         accum = []
         while task is not None:
+            for name, callback in self.pre_execute_hooks.items():
+                callback(task)
             result = task.execute()
             accum.append(result)
+            for name, callback in self.post_execute_hooks.items():
+                callback(task)
             if task.on_complete:
                 task = task.on_complete
                 task.extend_data(result)
