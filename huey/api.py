@@ -282,10 +282,16 @@ class Huey(object):
         while task is not None:
             for name, callback in self.pre_execute_hooks.items():
                 callback(task)
-            result = task.execute()
+            try:
+                result = task.execute()
+            except Exception as exc:
+                result = None
+                task_exc = exc
+            else:
+                task_exc = None
             accum.append(result)
             for name, callback in self.post_execute_hooks.items():
-                callback(task)
+                callback(task, result, task_exc)
             if task.on_complete:
                 task = task.on_complete
                 task.extend_data(result)
