@@ -100,6 +100,13 @@ task = HUEY.task
 periodic_task = HUEY.periodic_task
 lock_task = HUEY.lock_task
 enqueue = HUEY.enqueue
+restore = HUEY.restore
+restore_all = HUEY.restore_all
+restore_by_id = HUEY.restore_by_id
+revoke = HUEY.revoke
+revoke_all = HUEY.revoke_all
+revoke_by_id = HUEY.revoke_by_id
+is_revoked = HUEY.is_revoked
 
 
 def close_db(fn):
