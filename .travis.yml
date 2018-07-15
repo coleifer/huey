@@ -1,12 +1,18 @@
 language: python
 python:
-  - "2.7"
-  - "3.4"
-  - "3.5"
-  - "3.6"
-  - "3.7"
-dist: xenial
-sudo: true
+  - 2.7
+  - 3.4
+  - 3.5
+  - 3.6
+dist: trusty
+matrix:
+  include:
+    - python: 3.7
+      dist: xenial
+      sudo: true
+    - python: 3.8-dev
+      dist: xenial
+      sudo: true
 services:
   - redis
 install: "pip install redis"
