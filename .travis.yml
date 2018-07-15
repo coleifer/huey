@@ -4,6 +4,9 @@ python:
   - "3.4"
   - "3.5"
   - "3.6"
+  - "3.7"
+dist: xenial
+sudo: true
 services:
   - redis
 install: "pip install redis"
