@@ -4,7 +4,19 @@ Changelog
 master
 ------
 
-[View commits](https://github.com/coleifer/huey/compare/1.9.2...HEAD)
+[View commits](https://github.com/coleifer/huey/compare/1.10.1...HEAD)
+
+v1.10.1
+-------------------
+
+[View commits](https://github.com/coleifer/huey/compare/1.10.0...1.10.1)
+
+* Remove call to SimpleDB Client.connect(), as the `simpledb` APIs have
+  changed and no longer use this method.
+* Ensure that pre- and post-execute hooks are run when using Huey in
+  "always_eager" mode.
+* Gracefully stop Huey consumer when SIGINT is received.
+* Improved continuous integration, now testing on Python 3.7 as well.
 
 v1.10.0
 -------------------
