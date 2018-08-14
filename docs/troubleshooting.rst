@@ -40,6 +40,11 @@ Scheduled tasks are not being run at the correct time
     converted to UTC when calling ``.schedule()``, and the consumer itself runs
     in UTC.
 
+Cronjobs are not being run
+    The consumer and scheduler run in UTC by default. To run the consumer using
+    the server's localtime, specify ``--localtime`` or ``-o`` when running the
+    consumer.
+
 Greenlet workers seem stuck
     If you wish to use the Greenlet worker type, you need to be sure to monkeypatch
     in your application's entrypoint. At the top of your ``main`` module, you can add
