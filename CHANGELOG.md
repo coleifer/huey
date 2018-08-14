@@ -4,7 +4,14 @@ Changelog
 master
 ------
 
-[View commits](https://github.com/coleifer/huey/compare/1.10.1...HEAD)
+[View commits](https://github.com/coleifer/huey/compare/1.10.2...HEAD)
+
+v1.10.2
+-------------------
+
+[View commits](https://github.com/coleifer/huey/compare/1.10.1...1.10.2)
+
+* More granular "extras" installation options.
 
 v1.10.1
 -------------------
