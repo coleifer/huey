@@ -368,7 +368,7 @@ class Huey(object):
 
     def emit_task(self, status, task, error=False, **data):
         if self.events:
-            metadata = self._get_task_metadata(task)
+            metadata = self._get_task_metadata(task, False, True)
             metadata.update(data)
             self.emit_status(status, error=error, **metadata)
 
@@ -380,7 +380,7 @@ class Huey(object):
             result = task.execute()
         except Exception as exc:
             if self.store_errors:
-                metadata = self._get_task_metadata(task, True)
+                metadata = self._get_task_metadata(task, True, True)
                 metadata['error'] = repr(exc)
                 metadata['traceback'] = traceback.format_exc()
                 self.put(task.task_id, Error(metadata))
