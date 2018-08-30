@@ -6,6 +6,10 @@ master
 
 [View commits](https://github.com/coleifer/huey/compare/1.10.2...HEAD)
 
+* Added an API for registering hooks to run when each worker process starts-up.
+  This simplifies creating global/process-wide shared resources, such as a
+  connection pool or database client. [Documentation](https://huey.readthedocs.io/en/latest/api.html#Huey.on_startup).
+
 v1.10.2
 -------------------
 
