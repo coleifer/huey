@@ -82,6 +82,7 @@ class Huey(object):
         self.storage = self.get_storage(**storage_kwargs)
         self.pre_execute_hooks = OrderedDict()
         self.post_execute_hooks = OrderedDict()
+        self.startup_hooks = OrderedDict()
         self._locks = set()
         if global_registry:
             self.registry = registry
@@ -211,6 +212,40 @@ class Huey(object):
         """
         def decorator(fn):
             self.register_post_execute(name or fn.__name__, fn)
+            return fn
+        return decorator
+
+    def register_startup(self, name, fn):
+        """
+        Register a startup hook. The callback will be executed whenever a
+        worker comes online. Uncaught exceptions will be logged but will
+        have no other effect on the overall operation of the worker.
+
+        The callback function must not accept any parameters.
+
+        This API is provided to simplify setting up global resources that, for
+        whatever reason, should not be created as import-time side-effects. For
+        example, your tasks need to write data into a Postgres database. If you
+        create the connection at import-time, before the worker processes are
+        spawned, you'll likely run into errors when attempting to use the
+        connection from the child (worker) processes. To avoid this problem,
+        you can register a startup hook which is executed by the worker process
+        as part of its initialization.
+
+        :param name: Name for the hook.
+        :param fn: Callback function.
+        """
+        self.startup_hooks[name] = fn
+
+    def unregister_startup(self, name):
+        del self.startup_hooks[name]
+
+    def on_startup(self, name=None):
+        """
+        Decorator for registering a startup hook.
+        """
+        def decorator(fn):
+            self.register_startup(name or fn.__name__, fn)
             return fn
         return decorator
 

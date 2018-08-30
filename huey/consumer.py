@@ -97,6 +97,9 @@ class BaseProcess(object):
         self.huey = huey
         self.utc = utc
 
+    def initialize(self):
+        pass
+
     def get_now(self):
         if self.utc:
             return datetime.datetime.utcnow()
@@ -164,6 +167,14 @@ class Worker(BaseProcess):
         self._pre_execute = huey.pre_execute_hooks.items()
         self._post_execute = huey.post_execute_hooks.items()
         super(Worker, self).__init__(huey, utc)
+
+    def initialize(self):
+        for name, startup_hook in self.huey.startup_hooks.items():
+            self._logger.debug('calling startup hook "%s"', name)
+            try:
+                startup_hook()
+            except Exception as exc:
+                self._logger.exception('startup hook "%s" failed', name)
 
     def loop(self, now=None):
         task = None
@@ -585,6 +596,7 @@ class Consumer(object):
         exceptions in the `loop()` method will cause the process to terminate.
         """
         def _run():
+            process.initialize()
             try:
                 while not self.stop_flag.is_set():
                     process.loop()

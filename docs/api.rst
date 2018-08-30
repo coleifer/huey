@@ -280,6 +280,51 @@ Function decorators and helpers
             def my_post_execute_hook(task, task_value, exc):
                 do_something()
 
+    .. py:method:: register_startup(name, fn)
+
+        Register a startup hook. The callback will be executed whenever a
+        worker comes online. Uncaught exceptions will be logged but will
+        have no other effect on the overall operation of the worker.
+
+        The callback function must not accept any parameters.
+
+        This API is provided to simplify setting up global resources that, for
+        whatever reason, should not be created as import-time side-effects. For
+        example, your tasks need to write data into a Postgres database. If you
+        create the connection at import-time, before the worker processes are
+        spawned, you'll likely run into errors when attempting to use the
+        connection from the child (worker) processes. To avoid this problem,
+        you can register a startup hook which executes once when the worker
+        starts up.
+
+        :param name: Name for the hook.
+        :param fn: Callback function.
+
+    .. py:method:: unregister_startup(name)
+
+        Unregister the specified startup hook.
+
+    .. py:method:: on_startup([name=None])
+
+        Decorator for registering a startup hook. See
+        :py:meth:`~Huey.register_startup` for information about start hooks.
+
+        Usage:
+
+        .. code-block:: python
+
+            db_connection = None
+
+            @huey.on_startup()
+            def setup_db_connection():
+                global db_connection
+                db_connection = psycopg2.connect(database='my_db')
+
+            @huey.task()
+            def write_data(rows):
+                cursor = db_connection.cursor()
+                # ...
+
     .. py:method:: revoke(task[, revoke_until=None[, revoke_once=False]])
 
         Prevent the given task **instance** from being executed by the consumer
