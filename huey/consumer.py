@@ -527,9 +527,7 @@ class Consumer(object):
         # Configure health-check and consumer main-loop attributes.
         self._stop_flag_timeout = 0.1
         self._health_check = check_worker_health
-        self._health_check_interval = (float(health_check_interval) /
-                                       self._stop_flag_timeout)
-        self.__health_check_counter = 0
+        self._health_check_interval = float(health_check_interval)
 
         # Create the execution environment helper.
         self.environment = self.get_environment(self.worker_type)
@@ -673,10 +671,11 @@ class Consumer(object):
         """
         self.start()
         timeout = self._stop_flag_timeout
+        health_check_ts = time.time()
+
         while True:
             try:
-                is_set = self.stop_flag.wait(timeout=timeout)
-                time.sleep(timeout)
+                self.stop_flag.wait(timeout=timeout)
             except KeyboardInterrupt:
                 self._logger.info('Received SIGINT')
                 self.stop(graceful=True)
@@ -691,9 +690,9 @@ class Consumer(object):
                 break
 
             if self._health_check:
-                self.__health_check_counter += 1
-                if self.__health_check_counter == self._health_check_interval:
-                    self.__health_check_counter = 0
+                now = time.time()
+                if now >= health_check_ts + self._health_check_interval:
+                    health_check_ts = now
                     self.check_worker_health()
 
         if self._restart:
