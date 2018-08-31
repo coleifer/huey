@@ -676,7 +676,6 @@ class Consumer(object):
         while True:
             try:
                 is_set = self.stop_flag.wait(timeout=timeout)
-                time.sleep(timeout)
             except KeyboardInterrupt:
                 self._logger.info('Received SIGINT')
                 self.stop(graceful=True)
