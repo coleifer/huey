@@ -165,6 +165,10 @@ class SqliteStorage(BaseStorage):
     def result_store_size(self):
         return self.kv().count()
 
+    def result_items(self):
+        query = self.kv(KeyValue.key, KeyValue.value).tuples()
+        return dict((k, pickle.loads(v)) for k, v in query.iterator())
+
     def flush_results(self):
         return KeyValue.delete().where(KeyValue.queue == self.name).execute()
 
