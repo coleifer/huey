@@ -91,6 +91,12 @@ shown how you can create a connection pool:
 
     pool = ConnectionPool(host='my.redis.host', port=6379, max_connections=20)
     HUEY = RedisHuey('my-app', connection_pool=pool)
+       
+Whether you do use a dictionary or a instance, you can get the :py:class:`Huey` instance here:
+
+.. code-block:: python
+
+    from huey.contrib.djhuey import HUEY
 
 Running the Consumer
 ^^^^^^^^^^^^^^^^^^^^
@@ -175,8 +181,10 @@ two tasks:
 
 .. code-block:: python
 
+    from datetime import datetime
+
     from huey import crontab
-    from huey.contrib.djhuey import periodic_task, task
+    from huey.contrib.djhuey import periodic_task, task, HUEY
 
     @task()
     def count_beans(number):
@@ -187,6 +195,15 @@ two tasks:
     def every_five_mins():
         print('Every five minutes this will be printed by the consumer')
 
+    @periodic_task(crontab(minute='*'))
+    def print_huey_stats():
+        """ print stats every minute """
+        print("huey stats %s" % datetime.utcnow())
+        print("\tperiodic_tasks: %r" % HUEY.get_periodic_tasks())
+        print("\tregular_tasks.: %r" % HUEY.get_regular_tasks())
+        print("\tpending.......: %r" % HUEY.pending(limit=None))
+        print("\tpending count.: %i" % HUEY.pending_count())
+        print("\tresult count..: %i" % HUEY.result_count())
 
 Tasks that execute queries
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
