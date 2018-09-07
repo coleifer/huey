@@ -721,10 +721,10 @@ class TaskResultWrapper(object):
         print result()  # Prints 3
 
         # If you want to block until the result is ready, you can pass
-        # block=True. We'll also specify a 4 second timeout so we don't
+        # blocking=True. We'll also specify a 4 second timeout so we don't
         # block forever if the consumer goes down:
         result2 = my_task(2, 3)
-        print result(block=True, timeout=4)
+        print result(blocking=True, timeout=4)
     """
     def __init__(self, huey, task):
         self.huey = huey
