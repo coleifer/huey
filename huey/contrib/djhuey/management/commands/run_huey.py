@@ -1,9 +1,8 @@
-import imp
 import logging
 
-from django.apps import apps as django_apps
 from django.conf import settings
 from django.core.management.base import BaseCommand
+from django.utils.module_loading import autodiscover_modules
 
 from huey.consumer import Consumer
 from huey.consumer_options import ConsumerConfig
@@ -41,23 +40,6 @@ class Command(BaseCommand):
                 kwargs.setdefault('default', None)
                 parser.add_argument(full, short, **kwargs)
 
-    def autodiscover(self):
-        """Use Django app registry to pull out potential apps with tasks.py module."""
-        module_name = 'tasks'
-        for config in django_apps.get_app_configs():
-            app_path = config.module.__path__
-            try:
-                fp, path, description = imp.find_module(module_name, app_path)
-            except ImportError:
-                continue
-            else:
-                import_path = '%s.%s' % (config.name, module_name)
-                try:
-                    imp.load_module(import_path, fp, path, description)
-                except ImportError:
-                    logger.exception('Found "%s" but error raised attempting '
-                                     'to load module.', import_path)
-
     def handle(self, *args, **options):
         from huey.contrib.djhuey import HUEY
 
@@ -74,7 +56,8 @@ class Command(BaseCommand):
 
         consumer_options.setdefault('verbose',
                                     consumer_options.pop('huey_verbose', None))
-        self.autodiscover()
+        
+        autodiscover_modules("tasks")
 
         config = ConsumerConfig(**consumer_options)
         config.validate()
