@@ -611,17 +611,14 @@ class Huey(object):
         method accepts the same parameters and has the same behavior
         as the :py:class:`TaskResultWrapper` object.
         """
-        if not blocking:
-            return self.get(task_id, peek=preserve)
-        else:
-            task_result = TaskResultWrapper(self, QueueTask(task_id=task_id))
-            return task_result.get(
-                blocking=blocking,
-                timeout=timeout,
-                backoff=backoff,
-                max_delay=max_delay,
-                revoke_on_timeout=revoke_on_timeout,
-                preserve=preserve)
+        task_result = TaskResultWrapper(self, QueueTask(task_id=task_id))
+        return task_result.get(
+            blocking=blocking,
+            timeout=timeout,
+            backoff=backoff,
+            max_delay=max_delay,
+            revoke_on_timeout=revoke_on_timeout,
+            preserve=preserve)
 
 
 class TaskWrapper(object):
