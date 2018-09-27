@@ -8,6 +8,7 @@ from huey.api import Huey
 from huey.api import QueueTask
 from huey.api import TaskWrapper
 from huey.constants import EmptyData
+from huey.exceptions import TaskException
 from huey.registry import registry
 from huey.storage import RedisStorage
 from huey.tests.base import b
@@ -521,6 +522,24 @@ class TestHueyQueueAPIs(BaseQueueTestCase):
         # Execute the second task, which returns a zero value.
         huey_results.execute(huey_results.dequeue())
         self.assertEqual(huey_results.result(tid2), 0)
+
+    def test_huey_result_error_propagation(self):
+        # Execute a task that raises a TestException error.
+        res = throw_error_task_res()
+        task = huey_results.dequeue()
+        self.assertRaises(TestException, huey_results.execute, task)
+
+        # Verify TaskException raised when resolving TaskResultWrapper.
+        self.assertRaises(TaskException, res.get)
+
+        # Execute task again to verify the huey.result() API behavior.
+        res = throw_error_task_res()
+        tid = res.task.task_id
+        task = huey_results.dequeue()
+        self.assertRaises(TestException, huey_results.execute, task)
+
+        # Verify error raised when calling .result() with task ID.
+        self.assertRaises(TaskException, huey.result, tid)
 
     def test_result_preserve(self):
         res = add_values(1, 2)
