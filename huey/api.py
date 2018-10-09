@@ -314,6 +314,7 @@ class Huey(object):
 
     def _execute_always_eager(self, task):
         accum = []
+        failure_exc = None
         while task is not None:
             for name, callback in self.pre_execute_hooks.items():
                 callback(task)
@@ -321,7 +322,7 @@ class Huey(object):
                 result = task.execute()
             except Exception as exc:
                 result = None
-                task_exc = exc
+                failure_exc = task_exc = exc
             else:
                 task_exc = None
             accum.append(result)
@@ -332,6 +333,10 @@ class Huey(object):
                 task.extend_data(result)
             else:
                 task = None
+
+        if failure_exc is not None:
+            raise failure_exc
+
         return accum[0] if len(accum) == 1 else accum
 
     def enqueue(self, task):

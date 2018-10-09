@@ -680,3 +680,9 @@ class TestAlwaysEager(BaseQueueTestCase):
         pipe = add.s(1, 2).then(add, 3).then(add, 4).then(add, 5)
         result = eager_huey.enqueue(pipe)
         self.assertEqual(result, [3, 6, 10, 15])
+
+    def test_always_eager_failure(self):
+        self.assertRaises(TypeError, add, 1, None)
+
+        pipe = add.s(1, 2).then(add, None).then(add, 4)
+        self.assertRaises(TypeError, eager_huey.enqueue, pipe)
