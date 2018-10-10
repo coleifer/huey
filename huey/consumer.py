@@ -287,6 +287,7 @@ class Worker(BaseProcess):
                 duration=duration)
             exception = exc
         else:
+            self._logger.info('Task %s finished in %0.3fs', task, duration)
             self.huey.emit_task(
                 EVENT_FINISHED,
                 task,
