@@ -252,7 +252,6 @@ class Worker(BaseProcess):
                 task_value = self.huey.execute(task)
             finally:
                 duration = time.time() - start
-                self._logger.debug('Task %s ran in %0.3fs', task, duration)
         except DataStorePutException:
             self._logger.exception('Error storing result')
             self.huey.emit_task(
@@ -287,6 +286,7 @@ class Worker(BaseProcess):
                 duration=duration)
             exception = exc
         else:
+            self._logger.info('Executed %s in %0.3fs', task, duration)
             self.huey.emit_task(
                 EVENT_FINISHED,
                 task,

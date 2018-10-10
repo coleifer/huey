@@ -243,7 +243,8 @@ class TestConsumerAPIs(ConsumerTestCase):
             res = modify_state('k', 'v')
             worker.loop()
 
-        self.assertLogs(capture, ['Executing %s' % res.task])
+        self.assertLogs(capture, ['Executing %s' % res.task,
+                                  'Executed %s in ' % res.task])
 
         self.assertEqual(state, {'k': 'v'})
         self.assertEqual(res.get(), 'v')
