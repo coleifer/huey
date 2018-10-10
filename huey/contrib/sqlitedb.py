@@ -1,4 +1,5 @@
 import operator
+import pickle
 import threading
 
 from peewee import *

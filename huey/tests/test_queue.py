@@ -1,5 +1,4 @@
 import datetime
-import pickle
 
 from huey import crontab
 from huey import exceptions as huey_exceptions
