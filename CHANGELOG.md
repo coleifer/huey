@@ -6,10 +6,12 @@ master
 
 [View commits](https://github.com/coleifer/huey/compare/1.10.3...HEAD)
 
+* Log time taken to execute tasks at default log level.
+
 v1.10.3
 -------------------
 
-[View commits](https://github.com/coleifer/huey/compare/1.10.1...1.10.2)
+[View commits](https://github.com/coleifer/huey/compare/1.10.2...1.10.3)
 
 * Fixed regression where in *always eager* mode exceptions within tasks were
   being swallowed instead of raised.
