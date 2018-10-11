@@ -81,15 +81,18 @@ class MiniHuey(object):
     def _execute(self, fn, args, kwargs, async_result):
         args = args or ()
         kwargs = kwargs or {}
+        start = time.time()
         try:
             ret = fn(*args, **kwargs)
         except Exception as exc:
             logger.exception('task %s failed' % fn.__name__)
             raise
+        else:
+            duration = time.time() - start
 
         if async_result is not None:
             async_result.set(ret)
-        logger.info('executed %s' % fn.__name__)
+        logger.info('executed %s in %0.3fs', fn.__name__, duration)
 
     def _run(self):
         logger.info('task runner started.')
