@@ -9,8 +9,11 @@ from huey.tests.test_utils import *
 from huey.tests.test_wrapper import *
 
 try:
-    import peewee
-except ImportError:
-    pass
-else:
     from huey.tests.test_sqlite import *
+except ImportError:
+    print('skipping sqlite tests, missing dependencies')
+
+try:
+    from huey.tests.test_simple import *
+except ImportError:
+    print('skipping simpledb tests, missing dependencies')

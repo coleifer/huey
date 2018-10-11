@@ -2,11 +2,20 @@ import datetime
 import sys
 import unittest
 
+import gevent
+from simpledb import Client
+from simpledb import QueueServer
+
 from huey.contrib.simple_storage import SimpleHuey
 from huey.tests.base import BaseTestCase
 
 
-huey = SimpleHuey()
+huey = SimpleHuey(port=31339)
+
+
+def run_queue_server():
+    server = QueueServer(host='127.0.0.1', port=31339, use_gevent=True)
+    gevent.spawn(server.run)
 
 
 @huey.task()
@@ -15,6 +24,10 @@ def add_numbers(a, b):
 
 
 class TestSimpleHuey(BaseTestCase):
+    @classmethod
+    def setUpClass(cls):
+        run_queue_server()
+
     def setUp(self):
         huey.storage.flush_all()
 

@@ -103,8 +103,14 @@ class TestSqliteStorage(HueyTestCase):
                 for _, worker in consumer.worker_threads:
                     worker.join()
 
-        for message in capture.messages[-7:-1:2]:
-            self.assertTrue(message.startswith('Executing huey.tests.test_'))
-        for message in capture.messages[-6:-1:2]:
-            self.assertTrue(message.startswith('Executed huey.tests.test_'))
+        executing = 0
+        executed = 0
+        for message in capture.messages[-7:-1]:
+            if message.startswith('Executing huey.tests.test_'):
+                executing += 1
+            elif message.startswith('Executed huey.tests.test_'):
+                executed += 1
+
+        self.assertEqual(executing, 3)
+        self.assertEqual(executed, 3)
         self.assertTrue(capture.messages[-1].startswith('Shutting down'))
