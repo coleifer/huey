@@ -3,10 +3,11 @@ import re
 import time
 
 try:
-    import redis
+    from redis import ConnectionPool
+    from redis import Redis
     from redis.exceptions import ConnectionError
 except ImportError:
-    redis = ConnectionError = None
+    ConnectionPool = Redis = ConnectionError = None
 
 from huey.api import Huey
 from huey.constants import EmptyData
@@ -260,11 +261,13 @@ end"""
 
 
 class RedisStorage(BaseStorage):
+    redis_client = Redis
+
     def __init__(self, name='huey', blocking=False, read_timeout=1,
                  max_errors=1000, connection_pool=None, url=None,
                  client_name=None, **connection_params):
 
-        if redis is None:
+        if Redis is None:
             raise ImportError('"redis" python module not found, cannot use '
                               'Redis storage backend. Run "pip install redis" '
                               'to install.')
@@ -276,13 +279,13 @@ class RedisStorage(BaseStorage):
                 '"url", "connection_pool", or "connection_params"')
 
         if url:
-            connection_pool = redis.ConnectionPool.from_url(
+            connection_pool = ConnectionPool.from_url(
                 url, decode_components=True)
         elif connection_pool is None:
-            connection_pool = redis.ConnectionPool(**connection_params)
+            connection_pool = ConnectionPool(**connection_params)
 
         self.pool = connection_pool
-        self.conn = redis.Redis(connection_pool=connection_pool)
+        self.conn = self.redis_client(connection_pool=connection_pool)
         self.connection_params = connection_params
         self._pop = self.conn.register_script(SCHEDULE_POP_LUA)
 
