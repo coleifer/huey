@@ -4,9 +4,18 @@ Changelog
 master
 ------
 
-[View commits](https://github.com/coleifer/huey/compare/1.10.3...HEAD)
+[View commits](https://github.com/coleifer/huey/compare/1.10.4...HEAD)
+
+v1.10.4
+-------------------
+
+[View commits](https://github.com/coleifer/huey/compare/1.10.3...1.10.4)
 
 * Log time taken to execute tasks at default log level.
+* Fix missing import in SQLite storage backend.
+* Small refactoring in Redis storage backend to make it easier to override the
+  driver / client implementation.
+* Fix failing tests for simpledb storage backend.
 
 v1.10.3
 -------------------
