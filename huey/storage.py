@@ -4,7 +4,10 @@ import time
 
 try:
     from redis import ConnectionPool
-    from redis import Redis
+    try:
+        from redis import StrictRedis as Redis
+    except ImportError:
+        from redis import Redis
     from redis.exceptions import ConnectionError
 except ImportError:
     ConnectionPool = Redis = ConnectionError = None
@@ -338,7 +341,7 @@ class RedisStorage(BaseStorage):
         self.conn.delete(self.queue_key)
 
     def add_to_schedule(self, data, ts):
-        self.conn.zadd(self.schedule_key, data, self.convert_ts(ts))
+        self.conn.zadd(self.schedule_key, {data: self.convert_ts(ts)})
 
     def read_schedule(self, ts):
         unix_ts = self.convert_ts(ts)
