@@ -696,19 +696,17 @@ class Consumer(object):
                     self.check_worker_health()
 
         if self._restart:
-            try:
-                import psutil
-            except ImportError:
-                self._logger.error('Error: Huey could not import psutil. '
-                                   'Install `psutil`.')
-
             self._logger.info('Consumer will restart.')
             python = sys.executable
 
             try:
+                import psutil
                 p = psutil.Process(os.getpid())
                 for handler in p.open_files() + p.connections():
                     os.close(handler.fd)
+            except ImportError:
+                self._logger.warn('Warning: Install psutil library to properly close '
+                                  'opened files and connections.')
             except Exception as e:
                 self._logger.error(e)
 

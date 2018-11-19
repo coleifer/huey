@@ -22,7 +22,6 @@ setup(
     url='http://github.com/coleifer/huey/',
     packages=find_packages(),
     extras_require=extras_require,
-    install_requires=['psutil==5.4.8'],
     package_data={
         'huey': [
         ],
