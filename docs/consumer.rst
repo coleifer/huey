@@ -191,6 +191,15 @@ To cleanly restart the consumer, including all workers, send the ``SIGHUP``
 signal. When the consumer receives the hang-up signal, any tasks being executed
 will be allowed to finish before the restart occurs.
 
+.. note::
+    If you are using Python 2.7 and either the thread or greenlet worker model,
+    it is strongly recommended that you use a process manager (such as systemd
+    or supervisor) to handle running and restarting the consumer. The reason
+    has to do with the potential of Python 2.7, when mixed with threaded/greenlet
+    workers, to leak file descriptors. For more information, check out
+    `issue 374 <https://github.com/coleifer/huey/issues/374>`_ and
+    `PEP 446 <https://www.python.org/dev/peps/pep-0446/>`_.
+
 .. _consumer-internals:
 
 Consumer Internals
