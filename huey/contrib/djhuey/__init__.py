@@ -107,6 +107,15 @@ revoke = HUEY.revoke
 revoke_all = HUEY.revoke_all
 revoke_by_id = HUEY.revoke_by_id
 is_revoked = HUEY.is_revoked
+register_pre_execute = HUEY.register_pre_execute
+unregister_pre_execute = HUEY.unregister_pre_execute
+pre_execute = HUEY.pre_execute
+register_post_execute = HUEY.register_post_execute
+unregister_post_execute = HUEY.unregister_post_execute
+post_execute = HUEY.post_execute
+register_startup = HUEY.register_startup
+unregister_startup = HUEY.unregister_startup
+on_startup = HUEY.on_startup
 
 
 def close_db(fn):
