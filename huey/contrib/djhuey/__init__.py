@@ -96,9 +96,12 @@ if isinstance(HUEY, dict):
 
     HUEY = backend_cls(name, **huey_config)
 
+# Function decorators.
 task = HUEY.task
 periodic_task = HUEY.periodic_task
 lock_task = HUEY.lock_task
+
+# Task management.
 enqueue = HUEY.enqueue
 restore = HUEY.restore
 restore_all = HUEY.restore_all
@@ -107,6 +110,11 @@ revoke = HUEY.revoke
 revoke_all = HUEY.revoke_all
 revoke_by_id = HUEY.revoke_by_id
 is_revoked = HUEY.is_revoked
+
+# Hooks.
+on_startup = HUEY.on_startup
+pre_execute = HUEY.pre_execute
+post_execute = HUEY.post_execute
 
 
 def close_db(fn):
