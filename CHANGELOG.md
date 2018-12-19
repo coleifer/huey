@@ -4,7 +4,15 @@ Changelog
 master
 ------
 
-[View commits](https://github.com/coleifer/huey/compare/1.10.4...HEAD)
+[View commits](https://github.com/coleifer/huey/compare/1.10.5...HEAD)
+
+v1.10.5
+-------
+
+[View commits](https://github.com/coleifer/huey/compare/1.10.4...1.10.5)
+
+* Compatibility with redis-py 3.0, updated requirements / dependencies.
+* Add pre-/post- hooks into the djhuey namespace.
 
 v1.10.4
 -------------------
