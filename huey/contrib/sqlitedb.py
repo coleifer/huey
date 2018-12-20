@@ -17,6 +17,7 @@ class BaseModel(Model):
 class Task(BaseModel):
     queue = CharField()
     data = BlobField()
+    priority = IntegerField(default=0)
 
 
 class Schedule(BaseModel):
@@ -42,10 +43,10 @@ class SqliteStorage(BaseStorage):
         self.initialize_task_table()
 
     def initialize_task_table(self):
-        Task._meta.database = self.database
-        Schedule._meta.database = self.database
-        KeyValue._meta.database = self.database
-        self.database.create_tables([Task, Schedule, KeyValue], safe=True)
+        models = [Task, Schedule, KeyValue]
+        for model in models:
+            model.bind(self.database, False, False)
+        self.database.create_tables(models, safe=True)
 
     def tasks(self, *columns):
         return Task.select(*columns).where(Task.queue == self.name)
@@ -62,14 +63,14 @@ class SqliteStorage(BaseStorage):
     def kv(self, *columns):
         return KeyValue.select(*columns).where(KeyValue.queue == self.name)
 
-    def enqueue(self, data):
-        Task.create(queue=self.name, data=data)
+    def enqueue(self, data, priority=None):
+        Task.create(queue=self.name, data=data, priority=priority or 0)
 
     def dequeue(self):
         try:
             task = (self
                     .tasks()
-                    .order_by(Task.id)
+                    .order_by(Task.priority.desc(), Task.id)
                     .limit(1)
                     .get())
         except Task.DoesNotExist:
@@ -88,7 +89,10 @@ class SqliteStorage(BaseStorage):
         return self.tasks().count()
 
     def enqueued_items(self, limit=None):
-        query = self.tasks(Task.data).tuples()
+        query = (self
+                 .tasks(Task.data)
+                 .order_by(Task.priority.desc(), Task.id)
+                 .tuples())
         if limit is not None:
             query = query.limit(limit)
         return map(operator.itemgetter(0), query)

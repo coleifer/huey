@@ -11,7 +11,10 @@ class SimpleStorage(BaseStorage):
         super(SimpleStorage, self).__init__(name=name, **storage_kwargs)
         self.client = Client(host=host, port=port)
 
-    def enqueue(self, data):
+    def enqueue(self, data, priority=None):
+        if priority is not None:
+            raise ValueError('task priority is not supported by this storage '
+                             'engine.')
         self.client.lpush(self.name, data)
 
     def dequeue(self):

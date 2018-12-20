@@ -71,7 +71,7 @@ class Huey(object):
     """
     def __init__(self, name='huey', result_store=True, events=True,
                  store_none=False, always_eager=False, store_errors=True,
-                 blocking=False, global_registry=True, **storage_kwargs):
+                 blocking=True, global_registry=True, **storage_kwargs):
         self.name = name
         self.result_store = result_store
         self.events = events
@@ -114,7 +114,8 @@ class Huey(object):
             return eta
 
     def task(self, retries=0, retry_delay=0, retries_as_argument=False,
-             include_task=False, name=None, **task_settings):
+             include_task=False, name=None, default_priority=None,
+             **task_settings):
         def decorator(func):
             """
             Decorator to execute a function out-of-band via the consumer.
@@ -127,6 +128,7 @@ class Huey(object):
                 retries_as_argument=retries_as_argument,
                 include_task=include_task,
                 name=name,
+                default_priority=default_priority,
                 **task_settings)
         return decorator
 
@@ -135,7 +137,7 @@ class Huey(object):
     # Since the values the class is instantiated with will always be `None`,
     # we want the fallback behavior to be 0 by default.
     def periodic_task(self, validate_datetime, name=None, retries=0,
-                      retry_delay=0, **task_settings):
+                      retry_delay=0, default_priority=None, **task_settings):
         """
         Decorator to execute a function on a specific schedule.
         """
@@ -151,6 +153,7 @@ class Huey(object):
                 default_retries=retries,
                 default_retry_delay=retry_delay,
                 validate_datetime=method_validate,
+                default_priority=default_priority,
                 **task_settings)
 
         return decorator
@@ -262,8 +265,8 @@ class Huey(object):
         return decorator
 
     @_wrapped_operation(QueueWriteException)
-    def _enqueue(self, msg):
-        self.storage.enqueue(msg)
+    def _enqueue(self, msg, priority=None):
+        self.storage.enqueue(msg, priority)
 
     @_wrapped_operation(QueueReadException)
     def _dequeue(self):
@@ -343,7 +346,7 @@ class Huey(object):
         if self.always_eager:
             return self._execute_always_eager(task)
 
-        self._enqueue(self.registry.get_message_for_task(task))
+        self._enqueue(self.registry.get_message_for_task(task), task.priority)
         if not self.result_store:
             return
 
@@ -387,6 +390,7 @@ class Huey(object):
         metadata = {
             'id': task.task_id,
             'task': type(task).__name__,
+            'priority': task.priority,
             'retries': task.retries,
             'retry_delay': task.retry_delay,
             'execute_time': self._format_time(task.execute_time)}
@@ -629,7 +633,7 @@ class Huey(object):
 class TaskWrapper(object):
     def __init__(self, huey, func, retries=0, retry_delay=0,
                  retries_as_argument=False, include_task=False, name=None,
-                 task_base=None, **task_settings):
+                 default_priority=None, task_base=None, **task_settings):
         self.huey = huey
         self.func = func
         self.retries = retries
@@ -637,6 +641,7 @@ class TaskWrapper(object):
         self.retries_as_argument = retries_as_argument
         self.include_task = include_task
         self.name = name
+        self.default_priority = default_priority
         self.task_settings = task_settings
         self.task_class = create_task(
             QueueTask if task_base is None else task_base,
@@ -644,6 +649,7 @@ class TaskWrapper(object):
             retries_as_argument,
             name,
             include_task,
+            default_priority=default_priority,
             **task_settings)
         self.huey.registry.register(self.task_class)
 
@@ -675,8 +681,12 @@ class TaskWrapper(object):
         return self.func(*args, **kwargs)
 
     def s(self, *args, **kwargs):
-        return self.task_class((args, kwargs), retries=self.retries,
-                               retry_delay=self.retry_delay)
+        priority = kwargs.pop('priority', self.default_priority)
+        return self.task_class(
+            (args, kwargs),
+            retries=self.retries,
+            retry_delay=self.retry_delay,
+            priority=priority)
 
 
 class TaskLock(object):
@@ -836,11 +846,13 @@ class QueueTask(object):
         })
     )
     """
+    default_priority = None
     default_retries = 0
     default_retry_delay = 0
 
     def __init__(self, data=None, task_id=None, execute_time=None,
-                 retries=None, retry_delay=None, on_complete=None):
+                 retries=None, retry_delay=None, priority=None,
+                 on_complete=None):
         self.name = type(self).__name__
         self.set_data(data)
         self.task_id = task_id or self.create_id()
@@ -849,6 +861,8 @@ class QueueTask(object):
         self.retries = retries if retries is not None else self.default_retries
         self.retry_delay = retry_delay if retry_delay is not None else \
                 self.default_retry_delay
+        self.priority = priority if priority is not None else \
+                self.default_priority
         self.on_complete = on_complete
 
     def __repr__(self):
@@ -857,6 +871,8 @@ class QueueTask(object):
             rep += ' @%s' % self.execute_time
         if self.retries:
             rep += ' %s retries' % self.retries
+        if self.priority is not None:
+            rep += ' priority=%s' % self.priority
         if self.on_complete:
             rep += ' -> %s' % self.on_complete
         return rep

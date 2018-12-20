@@ -1,5 +1,6 @@
 import json
 import re
+import struct
 import time
 
 try:
@@ -20,7 +21,7 @@ class BaseStorage(object):
     def __init__(self, name='huey', **storage_kwargs):
         self.name = name
 
-    def enqueue(self, data):
+    def enqueue(self, data, priority=None):
         """
         Given an opaque chunk of data, add it to the queue.
 
@@ -266,7 +267,7 @@ end"""
 class RedisStorage(BaseStorage):
     redis_client = Redis
 
-    def __init__(self, name='huey', blocking=False, read_timeout=1,
+    def __init__(self, name='huey', blocking=True, read_timeout=1,
                  max_errors=1000, connection_pool=None, url=None,
                  client_name=None, **connection_params):
 
@@ -311,7 +312,10 @@ class RedisStorage(BaseStorage):
     def convert_ts(self, ts):
         return time.mktime(ts.timetuple())
 
-    def enqueue(self, data):
+    def enqueue(self, data, priority=None):
+        if priority is not None:
+            raise ValueError('task priority is not supported by this storage '
+                             'engine.')
         self.conn.lpush(self.queue_key, data)
 
     def dequeue(self):
@@ -434,10 +438,71 @@ class _EventIterator(object):
     __next__ = next
 
 
+class RedisPriorityStorage(RedisStorage):
+    redis_client = Redis
+
+    def __init__(self, name='huey', **kwargs):
+        super(RedisPriorityStorage, self).__init__(name, **kwargs)
+        self.queue_key = 'huey.redis.p.%s' % self.name
+
+    def enqueue(self, data, priority=None):
+        priority = 0 if priority is None else -priority
+        # Prefix the message with an encoded timestamp to ensure that messages
+        # created with the same priority are stored in correct order. Since the
+        # underlying data-type is a sorted-set, this also prevents multiple
+        # identical messages, enqueue on the same microsecond, from being
+        # treated as a single item.
+        prefix = struct.pack('>Q', int(time.time() * 1000000))
+        self.conn.zadd(self.queue_key, {prefix + data: priority})
+
+    def dequeue(self):
+        if self.blocking:
+            try:
+                res = self.conn.bzpopmin(
+                    self.queue_key,
+                    timeout=self.read_timeout)[1]
+            except (ConnectionError, TypeError, IndexError):
+                # Unfortunately, there is no way to differentiate a socket
+                # timing out and a host being unreachable.
+                return
+        else:
+            # Returned as a list of (data, score) tuples.
+            res = self.conn.zpopmin(self.queue_key, count=1)
+            if not res:
+                return
+
+        # Strip the timestamp prefix from the message and return.
+        return res[8:]
+
+    def unqueue(self, data):
+        raise NotImplementedError('unqueue is not supported by this storage '
+                                  'engine.')
+
+    def queue_size(self):
+        return self.conn.zcard(self.queue_key)
+
+    def enqueued_items(self, limit=None):
+        limit = limit or -1
+        return self.conn.zrange(self.queue_key, 0, limit)
+
+
 class RedisHuey(Huey):
     def get_storage(self, read_timeout=1, max_errors=1000,
                     connection_pool=None, url=None, **connection_params):
         return RedisStorage(
+            name=self.name,
+            blocking=self.blocking,
+            read_timeout=read_timeout,
+            max_errors=max_errors,
+            connection_pool=connection_pool,
+            url=url,
+            **connection_params)
+
+
+class RedisPriorityHuey(Huey):
+    def get_storage(self, read_timeout=1, max_errors=1000,
+                    connection_pool=None, url=None, **connection_params):
+        return RedisPriorityStorage(
             name=self.name,
             blocking=self.blocking,
             read_timeout=read_timeout,
