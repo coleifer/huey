@@ -378,26 +378,6 @@ class Huey(object):
     def put_error(self, metadata):
         return self._put_error(pickle.dumps(metadata))
 
-    def _format_time(self, dt):
-        if dt is None:
-            return None
-        return time.mktime(dt.timetuple())
-
-    def _get_task_metadata(self, task, error=False, include_data=False):
-        metadata = {
-            'id': task.task_id,
-            'task': type(task).__name__,
-            'retries': task.retries,
-            'retry_delay': task.retry_delay,
-            'execute_time': self._format_time(task.execute_time)}
-        if include_data and not isinstance(task, PeriodicQueueTask):
-            targs, tkwargs = task.get_data()
-            if tkwargs.get("task") and isinstance(tkwargs["task"], QueueTask):
-                del(tkwargs['task'])
-            metadata['data'] = (targs, tkwargs)
-
-        return metadata
-
     def emit_status(self, status, error=False, timestamp=None, **data):
         if self.events:
             if timestamp is not None:
@@ -411,7 +391,7 @@ class Huey(object):
 
     def emit_task(self, status, task, error=False, **data):
         if self.events:
-            metadata = self._get_task_metadata(task)
+            metadata = task.get_metadata()
             metadata.update(data)
             self.emit_status(status, error=error, **metadata)
 
@@ -423,7 +403,7 @@ class Huey(object):
             result = task.execute()
         except Exception as exc:
             if self.store_errors:
-                metadata = self._get_task_metadata(task, True)
+                metadata = task.get_metadata()
                 metadata['error'] = repr(exc)
                 metadata['traceback'] = traceback.format_exc()
                 self.put(task.task_id, Error(metadata))
@@ -863,6 +843,19 @@ class QueueTask(object):
         if self.on_complete:
             rep += ' -> %s' % self.on_complete
         return rep
+
+    def get_metadata(self):
+        if self.execute_time:
+            timestamp = time.mktime(self.execute_time.timetuple())
+        else:
+            timestamp = None
+
+        return {
+            'id': self.task_id,
+            'task': type(self).__name__,
+            'retries': self.retries,
+            'retry_delay': self.retry_delay,
+            'execute_time': timestamp}
 
     def create_id(self):
         return str(uuid.uuid4())
