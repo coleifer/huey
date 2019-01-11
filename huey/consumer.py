@@ -20,6 +20,7 @@ from huey.constants import WORKER_GREENLET
 from huey.constants import WORKER_PROCESS
 from huey.constants import WORKER_THREAD
 from huey.constants import WORKER_TYPES
+from huey.events import *
 from huey.exceptions import CancelExecution
 from huey.exceptions import ConfigurationError
 from huey.exceptions import DataStoreGetException
@@ -31,28 +32,6 @@ from huey.exceptions import RetryTask
 from huey.exceptions import ScheduleAddException
 from huey.exceptions import ScheduleReadException
 from huey.exceptions import TaskLockedException
-
-
-EVENT_CHECKING_PERIODIC = 'checking-periodic'
-EVENT_ERROR_DEQUEUEING = 'error-dequeueing'
-EVENT_ERROR_ENQUEUEING = 'error-enqueueing'
-EVENT_ERROR_INTERNAL = 'error-internal'
-EVENT_ERROR_SCHEDULING = 'error-scheduling'
-EVENT_ERROR_STORING_RESULT = 'error-storing-result'
-EVENT_ERROR_TASK = 'error-task'
-EVENT_LOCKED = 'locked'
-EVENT_FINISHED = 'finished'
-EVENT_RETRYING = 'retrying'
-EVENT_REVOKED = 'revoked'
-EVENT_SCHEDULED = 'scheduled'
-EVENT_SCHEDULING_PERIODIC = 'scheduling-periodic'
-EVENT_STARTED = 'started'
-EVENT_TIMEOUT = 'timeout'
-
-
-def to_timestamp(dt):
-    if dt:
-        return time.mktime(dt.timetuple())
 
 
 class BaseProcess(object):
@@ -104,12 +83,6 @@ class BaseProcess(object):
         if self.utc:
             return datetime.datetime.utcnow()
         return datetime.datetime.now()
-
-    def get_utcnow(self):
-        return datetime.datetime.utcnow()
-
-    def get_timestamp(self):
-        return time.mktime(self.get_utcnow().timetuple())
 
     def sleep_for_interval(self, start_ts, nseconds):
         """
@@ -226,7 +199,7 @@ class Worker(BaseProcess):
             self.huey.emit_task(
                 EVENT_REVOKED,
                 task,
-                timestamp=to_timestamp(ts))
+                timestamp=ts)
             self._logger.debug('Task %s was revoked, not running', task)
 
     def process_task(self, task, ts):
@@ -235,7 +208,7 @@ class Worker(BaseProcess):
 
         Unhandled exceptions are caught and logged.
         """
-        self.huey.emit_task(EVENT_STARTED, task, timestamp=to_timestamp(ts))
+        self.huey.emit_task(EVENT_STARTED, task, timestamp=ts)
         if self._pre_execute:
             try:
                 self.run_pre_execute_hooks(task)
@@ -291,7 +264,7 @@ class Worker(BaseProcess):
                 EVENT_FINISHED,
                 task,
                 duration=duration,
-                timestamp=self.get_timestamp())
+                timestamp=self.get_now())
 
         if self._post_execute:
             self.run_post_execute_hooks(task, task_value, exception)
@@ -420,13 +393,13 @@ class Scheduler(BaseProcess):
     def enqueue_periodic_tasks(self, now, start):
         self.huey.emit_status(
             EVENT_CHECKING_PERIODIC,
-            timestamp=self.get_timestamp())
+            timestamp=self.get_now())
         self._logger.debug('Checking periodic tasks')
         for task in self.huey.read_periodic(now):
             self.huey.emit_task(
                 EVENT_SCHEDULING_PERIODIC,
                 task,
-                timestamp=self.get_timestamp())
+                timestamp=self.get_now())
             self._logger.info('Scheduling periodic task %s.', task)
             self.enqueue(task)
 

@@ -398,8 +398,11 @@ class Huey(object):
 
         return metadata
 
-    def emit_status(self, status, error=False, **data):
+    def emit_status(self, status, error=False, timestamp=None, **data):
         if self.events:
+            if timestamp is not None:
+                data['timestamp'] = time.mktime(timestamp.timetuple())
+
             metadata = {'status': status, 'error': error}
             if error:
                 metadata['traceback'] = traceback.format_exc()
