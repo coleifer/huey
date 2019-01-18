@@ -924,8 +924,8 @@ def create_task(task_class, func, retries_as_argument=False, task_name=None,
     return type(task_name, (task_class,), attrs)
 
 
-dash_re = re.compile('(\d+)-(\d+)')
-every_re = re.compile('\*\/(\d+)')
+dash_re = re.compile(r'(\d+)-(\d+)')
+every_re = re.compile(r'\*\/(\d+)')
 
 
 def crontab(month='*', day='*', day_of_week='*', hour='*', minute='*'):
