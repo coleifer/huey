@@ -16,7 +16,7 @@ class TaskRegistry(object):
         self._periodic_tasks = []
 
     def task_to_string(self, task):
-        return '%s' % (task.__name__)
+        return '%s.%s' % (task.__module__, task.__name__)
 
     def register(self, task_class):
         klass_str = self.task_to_string(task_class)
@@ -29,6 +29,10 @@ class TaskRegistry(object):
             # store an instance in a separate list of periodic tasks
             if hasattr(task_class, 'validate_datetime'):
                 self._periodic_tasks.append(task_class)
+        else:
+            raise ValueError('Attempting to register a task with the same '
+                             'identifier as existing task. Specify a different'
+                             ' name= to register this task. "%s"' % klass_str)
 
     def unregister(self, task_class):
         klass_str = self.task_to_string(task_class)

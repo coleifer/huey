@@ -27,17 +27,17 @@ class MyTaskClass(QueueTask):
 
 class TestRegistry(BaseTestCase):
     def test_registry(self):
-        self.assertTrue('queue_task_test_task_one' in registry)
-        self.assertTrue('queue_task_test_task_two' in registry)
-        self.assertFalse('MyTaskClass' in registry)
+        self.assertTrue('huey.tests.test_registry.test_task_one' in registry)
+        self.assertTrue('huey.tests.test_registry.test_task_two' in registry)
+        self.assertFalse('huey.tests.test_registry.MyTaskClass' in registry)
 
         registry.register(MyTaskClass)
-        self.assertTrue('MyTaskClass' in registry)
+        self.assertTrue('huey.tests.test_registry.MyTaskClass' in registry)
 
-        self.assertFalse('another' in registry)
+        self.assertFalse('huey.tests.test_registry.another' in registry)
 
     def test_arbitrary_parameters(self):
-        Task = registry._registry['queue_task_important']
+        Task = registry._registry['huey.tests.test_registry.important']
         self.assertEqual(Task.foo, 'bar')
         self.assertEqual(Task.priority, 3)
 
@@ -53,6 +53,7 @@ class TestRegistry(BaseTestCase):
         def test():
             return 'test'
 
-        self.assertIn('queue_task_test', huey.registry._registry)
+        self.assertIn('huey.tests.test_registry.test', huey.registry._registry)
         huey2 = RedisHuey(global_registry=False)
-        self.assertNotIn('queue_task_test', huey2.registry._registry)
+        self.assertNotIn('huey.tests.test_registry.test',
+                         huey2.registry._registry)

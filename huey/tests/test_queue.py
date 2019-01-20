@@ -48,7 +48,7 @@ def _throw_error_task(message=None):
     raise TestException(message or 'bampf')
 
 throw_error_task = huey.task()(_throw_error_task)
-throw_error_task_res = huey_results.task()(_throw_error_task)
+throw_error_task_res = huey_results.task(name='error_res')(_throw_error_task)
 
 @huey_results.task()
 def add_values(a, b):
@@ -301,7 +301,7 @@ class TestHueyQueueAPIs(BaseQueueTestCase):
         put_data_ctx('k', 'v')
         task = huey.dequeue()
         huey.execute(task)
-        self.assertEqual(state['last_task_class'], 'queue_task_put_data_ctx')
+        self.assertEqual(state['last_task_class'], 'put_data_ctx')
         del state['last_task_class']
 
         put_data('k', 'x')
@@ -643,8 +643,9 @@ class TestHueyQueueAPIs(BaseQueueTestCase):
         def test_fn():
             pass
 
-        test_fn_task = huey.task()(test_fn)
-        test_fn_cron = huey.periodic_task(crontab(minute='0'))(test_fn)
+        test_fn_task = huey.task(name='test_fn_task')(test_fn)
+        test_fn_cron = huey.periodic_task(crontab(minute='0'),
+                                          name='test_fn_cron')(test_fn)
 
         self.assertTrue(isinstance(test_fn_task, TaskWrapper))
         self.assertTrue(test_fn_task.func is test_fn)
