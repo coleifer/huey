@@ -6,6 +6,23 @@ master
 
 [View commits](https://github.com/coleifer/huey/compare/1.10.5...HEAD)
 
+**Backwards-incompatible changes**
+
+Previously, it was possible for certain tasks to be silently ignored if a task
+with that name already existed in the registry. To fix this, I have made two
+changes:
+
+1. The task-name, when serialized, now consists of the task module and the name
+   of the decorated function. So, "queue_task_foo" becomes "myapp.tasks.foo".
+2. An exception will be raised when attempting to register a task function with
+   the same module + name.
+
+Together, these changes are intended to fix problems described in #386.
+
+Because these changes will impact the serialization (and deserialization) of
+messages, it is important that you consume all tasks (including scheduled
+tasks) before upgrading.
+
 v1.10.5
 -------
 
