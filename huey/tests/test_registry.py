@@ -16,6 +16,10 @@ def test_task_one(x, y):
 def test_task_two():
     pass
 
+@huey.task(name='three')
+def test_task_three():
+    pass
+
 @huey.task(foo='bar', priority=3)
 def important():
     pass
@@ -29,12 +33,15 @@ class TestRegistry(BaseTestCase):
     def test_registry(self):
         self.assertTrue('huey.tests.test_registry.test_task_one' in registry)
         self.assertTrue('huey.tests.test_registry.test_task_two' in registry)
+        self.assertTrue('huey.tests.test_registry.three' in registry)
         self.assertFalse('huey.tests.test_registry.MyTaskClass' in registry)
 
         registry.register(MyTaskClass)
         self.assertTrue('huey.tests.test_registry.MyTaskClass' in registry)
 
         self.assertFalse('huey.tests.test_registry.another' in registry)
+        self.assertFalse(
+            'huey.tests.test_registry.test_task_three' in registry)
 
     def test_arbitrary_parameters(self):
         Task = registry._registry['huey.tests.test_registry.important']
