@@ -325,7 +325,11 @@ class Huey(object):
                 failure_exc = task_exc = exc
             else:
                 task_exc = None
-            accum.append(result)
+
+            result_wrapper = EagerTaskResultWrapper(self, task)
+            result_wrapper.set_result(result)
+            accum.append(result_wrapper)
+
             for name, callback in self.post_execute_hooks.items():
                 callback(task, result, task_exc)
             if task.on_complete:
@@ -790,6 +794,26 @@ class TaskResultWrapper(object):
 
     def reset(self):
         self._result = EmptyData
+
+
+class EagerTaskResultWrapper(TaskResultWrapper):
+    def set_result(self, result):
+        self._result = result
+
+    def _get(self, preserve=False):
+        return self._result
+
+    def __not_implemented__(method):
+        def _inner(self, *args, **kwargs):
+            raise NotImplementedError('Always-eager mode is enabled. %s does '
+                                      'not support the "%s" method.' %
+                                      (self, method))
+        return _inner
+    is_revoked = __not_implemented__('is_revoked')
+    revoke = __not_implemented__('revoke')
+    restore = __not_implemented__('restore')
+    reschedule = __not_implemented__('reschedule')
+    reset = __not_implemented__('reset')
 
 
 def with_metaclass(meta, base=object):

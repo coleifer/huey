@@ -23,6 +23,22 @@ Because these changes will impact the serialization (and deserialization) of
 messages, it is important that you consume all tasks (including scheduled
 tasks) before upgrading.
 
+**Always-eager mode changes**
+
+In order to provide a more consistent API, tasks enqueued using `always_eager`
+mode will now return a dummy `TaskResultWrapper` implementation that wraps the
+return value of the task. This change is designed to provide the same API for
+reading task result values, regardless of whether you are using always-eager
+mode or not.
+
+Previously, tasks executed with `always_eager` would return the Python value
+directly from the task. When using Huey with the consumer, though, task results
+are not available immediately, so a special wrapper `TaskResultWrapper` is
+returned, which provides helper methods for retrieving the return value of the
+task. Going forward, `always_eager` tasks will return `EagerTaskResultWrapper`,
+which implements the same `get()` API that is typically used to retrieve task
+return values.
+
 v1.10.5
 -------
 

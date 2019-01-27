@@ -674,12 +674,13 @@ def add(a, b):
 
 class TestAlwaysEager(BaseQueueTestCase):
     def test_always_eager(self):
-        self.assertEqual(add(1, 3), 4)
+        rw = add(1, 3)
+        self.assertEqual(rw.get(), 4)
 
         # Test pipelining.
         pipe = add.s(1, 2).then(add, 3).then(add, 4).then(add, 5)
-        result = eager_huey.enqueue(pipe)
-        self.assertEqual(result, [3, 6, 10, 15])
+        results = eager_huey.enqueue(pipe)
+        self.assertEqual([r.get() for r in results], [3, 6, 10, 15])
 
     def test_always_eager_failure(self):
         self.assertRaises(TypeError, add, 1, None)
