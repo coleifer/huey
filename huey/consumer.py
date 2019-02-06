@@ -354,7 +354,7 @@ class Scheduler(BaseProcess):
         current = self._next_loop
         self._next_loop += self.interval
         if self._next_loop < time.time():
-            self._logger.info('scheduler skipping iteration to avoid race.')
+            self._logger.debug('scheduler skipping iteration to avoid race.')
             return
 
         try:
