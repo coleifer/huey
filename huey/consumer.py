@@ -474,6 +474,11 @@ class Consumer(object):
     Consumer sets up and coordinates the execution of the workers and scheduler
     and registers signal handlers.
     """
+    # Simplify providing custom implementations. See _create_worker and
+    # _create_scheduler if you need more sophisticated overrides.
+    worker_class = Worker
+    scheduler_class = Scheduler
+
     def __init__(self, huey, workers=1, periodic=True, initial_delay=0.1,
                  backoff=1.15, max_delay=10.0, utc=True, scheduler_interval=1,
                  worker_type='thread', check_worker_health=True,
@@ -547,7 +552,7 @@ class Consumer(object):
         return WORKER_TO_ENVIRONMENT[worker_type]()
 
     def _create_worker(self):
-        return Worker(
+        return self.worker_class(
             huey=self.huey,
             default_delay=self.default_delay,
             max_delay=self.max_delay,
@@ -555,7 +560,7 @@ class Consumer(object):
             utc=self.utc)
 
     def _create_scheduler(self):
-        return Scheduler(
+        return self.scheduler_class(
             huey=self.huey,
             interval=self.scheduler_interval,
             utc=self.utc,
