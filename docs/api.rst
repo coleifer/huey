@@ -186,6 +186,15 @@ Function decorators and helpers
         periodic task, effectively enabling you to pause it or prevent its execution.
         For more information, see :py:class:`TaskWrapper`.
 
+        .. note::
+            The result (return value) of a periodic task is not stored in the
+            result store. This is primarily due to the fact that there is not
+            an obvious way one would read such results, since the invocation of
+            the periodic task happens inside the consumer scheduler. As such,
+            there is no task result handle which the user could use to read the
+            result. To store the results of periodic tasks, you will need to
+            use your own storage.
+
     .. py:method:: enqueue(task)
 
         Enqueue the given task. When the result store is enabled (on by

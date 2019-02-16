@@ -278,6 +278,8 @@ Now, when we run the consumer it will start printing the time every minute:
 
 .. image:: crontab.png
 
+.. note::
+    Periodic task return value will not be stored in the result store.
 
 Canceling or pausing tasks
 --------------------------
