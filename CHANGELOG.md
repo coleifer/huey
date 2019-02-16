@@ -4,7 +4,12 @@ Changelog
 master
 ------
 
-[View commits](https://github.com/coleifer/huey/compare/1.10.5...HEAD)
+[View commits](https://github.com/coleifer/huey/compare/1.11.0...HEAD)
+
+1.11.0
+------
+
+[View commits](https://github.com/coleifer/huey/compare/1.10.5...1.11.0)
 
 **Backwards-incompatible changes**
 
@@ -20,8 +25,8 @@ changes:
 Together, these changes are intended to fix problems described in #386.
 
 Because these changes will impact the serialization (and deserialization) of
-messages, it is important that you consume all tasks (including scheduled
-tasks) before upgrading.
+messages, **it is important that you consume all tasks (including scheduled
+tasks) before upgrading**.
 
 **Always-eager mode changes**
 
