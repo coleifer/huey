@@ -279,7 +279,9 @@ Now, when we run the consumer it will start printing the time every minute:
 .. image:: crontab.png
 
 .. note::
-    Periodic task return value will not be stored in the result store.
+    Periodic task return value will not be stored in the result store. You can
+    manually store data in the result store, however, by using the
+    :py:meth:`Huey.put` and :py:meth:`Huey.get` result store APIs.
 
 Canceling or pausing tasks
 --------------------------

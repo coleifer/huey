@@ -193,7 +193,21 @@ Function decorators and helpers
             the periodic task happens inside the consumer scheduler. As such,
             there is no task result handle which the user could use to read the
             result. To store the results of periodic tasks, you will need to
-            use your own storage.
+            use your own storage or use the storage APIs directly:
+
+            .. code-block:: python
+                @huey.periodic_task(crontab(minute='*/10'))
+                def my_task():
+                    # do some work...
+                    do_something()
+
+                    # Manually store some data in the result store.
+                    huey.put('my-task', some_data_to_store)
+
+            More info:
+
+            * :py:meth:`Huey.put`
+            * :py:meth:`Huey.get`
 
     .. py:method:: enqueue(task)
 
@@ -500,6 +514,22 @@ Function decorators and helpers
 
         :param str lock_name: Name to use for the lock.
         :return: Decorator or context-manager.
+
+    .. py:method:: put(key, value)
+
+        :param key: key for data
+        :param value: arbitrary data to store in result store.
+
+        Store a value in the result-store under the given key.
+
+    .. py:method:: get(key[, peek=False])
+
+        :param key: key to read
+        :param bool peek: non-destructive read
+
+        Read a value from the result-store at the given key. By default reads
+        are destructive, but to preserve the value you can specify
+        ``peek=True``.
 
     .. py:method:: pending([limit=None])
 
