@@ -6,6 +6,9 @@ master
 
 [View commits](https://github.com/coleifer/huey/compare/1.11.0...HEAD)
 
+* Added a `task_id` property to the `TaskResultWrapper` to expose the task's ID
+  as a direct property.
+
 1.11.0
 ------
 
