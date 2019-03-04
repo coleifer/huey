@@ -123,6 +123,13 @@ class TestHueyQueueMetadataAPIs(BaseQueueTestCase):
         self.assertEqual(sorted(huey_results.all_results().keys()),
                          sorted([b(t1.task_id), b(t2.task_id)]))
 
+    def test_task_result_wrapper(self):
+        trw = add_values(1, 2)
+        t = huey_results.dequeue()
+        self.assertEqual(trw.task_id, t.task_id)
+        huey_results.execute(t)
+        self.assertEqual(trw(), 3)
+
 
 class TestHueyQueueAPIs(BaseQueueTestCase):
     def test_enqueue(self):

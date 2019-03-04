@@ -721,6 +721,10 @@ class TaskResultWrapper(object):
 
         self._result = EmptyData
 
+    @property
+    def task_id(self):
+        return self.task.task_id
+
     def __call__(self, *args, **kwargs):
         return self.get(*args, **kwargs)
 

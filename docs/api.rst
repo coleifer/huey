@@ -912,6 +912,10 @@ TaskResultWrapper
             raise TaskException(result.metadata)
         huey.exceptions.TaskException: Exception('I failed',)
 
+    .. py:attr:: task_id
+
+        Returns the ID of the corresponding task.
+
     .. py:method:: get([blocking=False[, timeout=None[, backoff=1.15[, max_delay=1.0[, revoke_on_timeout=False[, preserve=False]]]]]])
 
         Attempt to retrieve the return value of a task.  By default, :py:meth:`~TaskResultWrapper.get`
