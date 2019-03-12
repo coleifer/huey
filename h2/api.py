@@ -1,6 +1,8 @@
 import datetime
 import logging
+import re
 import time
+import traceback
 import uuid
 
 from collections import OrderedDict
@@ -111,23 +113,25 @@ class Huey(object):
             return self._serializer.deserialize(data)
 
     def execute(self, task):
-        if not isinstance(task, QueueTask):
-            raise TypeError('Unknown object: %s' % task)
-
         try:
             result = task.execute()
         except Exception as exc:
-            if self.store_errors:
-                metadata = task.get_metadata()
-                metadata['error'] = repr(exc)
-                metadata['traceback'] = traceback.format_exc()
-                self.put(task.task_id, Error(metadata))
-                self.put_error(metadata)
+            if self.results:
+                metadata = {
+                    'error': repr(exc),
+                    'traceback': traceback.format_exc()}
+                self.put(task.id, Error(metadata))
+
+            if task.on_error:
+                next_task = task.on_error
+                next_task.extend_data(exc)
+                self.enqueue(next_task)
+
             raise
 
-        if self.result_store and not isinstance(task, PeriodicQueueTask):
+        if self.results and not isinstance(task, PeriodicTask):
             if result is not None or self.store_none:
-                self.put(task.task_id, result)
+                self.put(task.id, result)
 
         if task.on_complete:
             next_task = task.on_complete
@@ -368,7 +372,7 @@ class Task(object):
             self.on_complete = task.s(*args, **kwargs)
         return self
 
-    def err(self, task, *args, **kwargs):
+    def error(self, task, *args, **kwargs):
         if self.on_error:
             self.on_error.err(task, *args, **kwargs)
         else:
