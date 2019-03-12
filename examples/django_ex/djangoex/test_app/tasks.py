@@ -1,5 +1,6 @@
 import random
-from huey.contrib.djhuey import task, periodic_task, crontab, db_task
+from huey import crontab
+from huey.contrib.djhuey import task, periodic_task, db_task
 
 
 @task()
