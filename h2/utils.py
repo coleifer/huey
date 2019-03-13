@@ -48,20 +48,9 @@ def load_class(s):
     return getattr(mod, klass)
 
 
-def _wrap_exception(new_exc_class):
+def reraise_as(new_exc_class):
     exc_class, exc, tb = sys.exc_info()
     raise new_exc_class('%s: %s' % (exc_class.__name__, exc))
-
-
-def wrap_exception(exc_class):
-    def decorator(fn):
-        def inner(*args, **kwargs):
-            try:
-                return fn(*args, **kwargs)
-            except Exception:
-                _wrap_exception(exc_class)
-        return inner
-    return decorator
 
 
 def make_naive(dt):

@@ -1,20 +1,10 @@
 class QueueException(Exception): pass
-
-class QueueWriteException(QueueException): pass
-class QueueReadException(QueueException): pass
-class QueueRemoveException(QueueException): pass
-
-class DataStoreGetException(QueueException): pass
-class DataStorePutException(QueueException): pass
-class DataStoreTimeout(QueueException): pass
-
-class ScheduleAddException(QueueException): pass
-class ScheduleReadException(QueueException): pass
+class ResultStoreException(QueueException): pass
+class ScheduleException(QueueException): pass
 
 class ConfigurationError(QueueException): pass
 
 class TaskLockedException(QueueException): pass
-
 
 class CancelExecution(Exception): pass
 class RetryTask(Exception): pass

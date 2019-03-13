@@ -8,20 +8,28 @@ import uuid
 from collections import OrderedDict
 
 from .constants import EmptyData
+from .exceptions import CancelExecution
+from .exceptions import RetryTask
+from .exceptions import TaskLockedException
 from .registry import Registry
 from .serializer import Serializer
 from .utils import Error
 from .utils import normalize_time
-from .utils import wrap_exception
+from .utils import reraise_as
+
+
+logger = logging.getLogger('huey')
 
 
 class Huey(object):
     def __init__(self, name='huey', results=True, store_none=False, utc=True,
-                 serializer=None, compression=False, **storage_kwargs):
+                 always_eager=False, serializer=None, compression=False,
+                 **storage_kwargs):
         self.name = name
         self.results = results
         self.store_none = store_none
         self.utc = utc
+        self.always_eager = always_eager
         self.serializer = serializer or Serializer()
         if compression:
             self.serializer.compression = True
@@ -65,6 +73,24 @@ class Huey(object):
                 task_base=PeriodicTask,
                 **kw)
 
+        return decorator
+
+    def pre_execute(self, name=None):
+        def decorator(fn):
+            self._pre_execute_hooks[name or fn.__name__] = fn
+            return fn
+        return decorator
+
+    def post_execute(self, name=None):
+        def decorator(fn):
+            self._post_execute_hooks[name or fn.__name__] = fn
+            return fn
+        return decorator
+
+    def on_startup(self, name=None):
+        def decorator(fn):
+            self._startup[name or fn.__name__] = fn
+            return fn
         return decorator
 
     def serialize_task(self, task):
@@ -112,33 +138,112 @@ class Huey(object):
         if data is not EmptyData:
             return self._serializer.deserialize(data)
 
-    def execute(self, task):
+    def _get_timestamp(self):
+        return (datetime.datetime.utcnow() if self.utc else
+                datetime.datetime.now())
+
+    def execute(self, task, timestamp=None):
+        if timestamp is None:
+            timestamp = self._get_timestamp()
+
+        if not self.ready_to_run(task, timestamp):
+            self.add_schedule(task)
+            logger.debug('Task %s not ready to run, added to schedule', task)
+        elif self.is_revoked(task, timestamp, peek=False):
+            logger.debug('Task %s was revoked, not executing', task)
+        else:
+            return self._execute(task, timestamp)
+
+    def _execute(self, task, timestamp):
+        if self._pre_execute:
+            try:
+                self._run_pre_execute_hooks(task)
+            except CancelExecution:
+                return
+
+        logger.debug('Executing %s', task)
+        start = time.time()
+        exception = None
+        task_value = None
+
         try:
-            result = task.execute()
+            try:
+                task_value = task.execute()
+            finally:
+                duration = time.time() - start
+        except TaskLockedException as exc:
+            logger.warning('Task %s not run, unable to acquire lock.', task.id)
+            exception = exc
+        except RetryTask as exc:
+            if not task.retries:
+                logger.error('Task %s not retried - no retries remaining.',
+                             task.id)
+            exception = exc
+        except KeyboardInterrupt:
+            logger.info('Received exit signal, %s did not finish.', task.id)
+            return
         except Exception as exc:
-            if self.results:
-                metadata = {
-                    'error': repr(exc),
-                    'traceback': traceback.format_exc()}
-                self.put(task.id, Error(metadata))
-
-            if task.on_error:
-                next_task = task.on_error
-                next_task.extend_data(exc)
-                self.enqueue(next_task)
-
-            raise
+            logger.exception('Unhandled exception in task %s.', task.id)
+            exception = exc
+        else:
+            logger.info('%s finished in %0.3fs', task, duration)
 
         if self.results and not isinstance(task, PeriodicTask):
-            if result is not None or self.store_none:
-                self.put(task.id, result)
+            if exception is not None:
+                self.put(task.id, Error({
+                    'error': repr(exc),
+                    'retries': task.retries,
+                    'traceback': traceback.format_exc()}))
+            elif task_value is not None or self.store_none:
+                self.put(task.id, task_value)
 
-        if task.on_complete:
+        if self._post_execute:
+            self._run_post_execute_hooks(task, task_value, exception)
+
+        if task.on_complete and exception is None:
             next_task = task.on_complete
-            next_task.extend_data(result)
+            next_task.extend_data(task_value)
+            self.enqueue(next_task)
+        elif task.on_error and exception is not None:
+            next_task = task.on_error
+            next_task.extend_data(exception)
             self.enqueue(next_task)
 
-        return result
+        if exception is not None and task.retries:
+            self._requeue_task(task, self._get_timestamp())
+
+        return task_value
+
+    def _requeue_task(self, task, timestamp):
+        task.retries -= 1
+        logger.info('Requeueing %s, %s retries', task.id, task.retries)
+        if task.retry_delay:
+            delay = datetime.timedelta(seconds=task.retry_delay)
+            task.eta = timestamp + delay
+            self.add_schedule(task)
+        else:
+            self.enqueue(task)
+
+    def _run_pre_execute_hooks(self, task):
+        for name, callback in self._pre_execute.items():
+            logger.debug('Pre-execute hook %s for %s.', name, task)
+            try:
+                callback(task)
+            except CancelExecution:
+                logger.info('Execution of %s cancelled by %s.', task, name)
+                raise
+            except Exception:
+                logger.exception('Unhandled exception calling pre-execute '
+                                 'hook %s for %s.', name, task)
+
+    def _run_post_execute_hooks(self, task, task_value, exception):
+        for name, callback in self._post_execute.items():
+            logger.debug('Post-execute hook %s for %s.', name, task)
+            try:
+                callback(task, task_value, exception)
+            except Exception as exc:
+                logger.exception('Unhandled exception calling post-execute '
+                                 'hook %s for %s.', name, task)
 
     def _task_key(self, task_class, key):
         return ':'.join((key, self._registry.task_to_string(task_class)))
@@ -220,8 +325,7 @@ class Huey(object):
 
     def ready_to_run(self, task, dt=None):
         if dt is None:
-            dt = (datetime.datetime.utcnow() if self.utc
-                  else datetime.datetime.now())
+            dt = self._get_timestamp()
         return task.eta is None or cmd.eta <= dt
 
     def pending(self, limit=None):

@@ -1,3 +1,5 @@
+from collections import deque
+import heapq
 import json
 import re
 import time
@@ -205,6 +207,86 @@ class BaseStorage(object):
         self.flush_queue()
         self.flush_schedule()
         self.flush_results()
+
+
+class MemoryStorage(BaseStorage):
+    def __init__(self, *args, **kwargs):
+        super(MemoryStorage, self).__init__(*args, **kwargs)
+        self._queue = deque()
+        self._results = {}
+        self._schedule = []
+
+    def enqueue(self, data):
+        self._queue.append(data)
+
+    def dequeue(self):
+        if self._queue:
+            return self._queue.popleft()
+
+    def queue_size(self):
+        return len(self._queue)
+
+    def enqueued_items(self, limit=None):
+        items = list(self._queue)
+        if limit:
+            items = items[:limit]
+        return items
+
+    def flush_queue(self):
+        self._queue = deque()
+
+    def add_to_schedule(self, data, ts):
+        heapq.heappush(self._schedule, (ts, data))
+
+    def read_schedule(self, ts):
+        accum = []
+        while self._schedule:
+            sts, data = heapq.heappop(self._schedule)
+            if sts <= ts:
+                accum.append(data)
+            else:
+                heapq.heappush(self._schedule, (sts, data))
+                break
+
+        return accum
+
+    def schedule_size(self):
+        return len(self._schedule)
+
+    def scheduled_items(self, limit=None):
+        items = sorted(data for _, data in self._schedule)
+        if limit:
+            items = items[:limit]
+        return items
+
+    def flush_schedule(self):
+        self._schedule = []
+
+    def put_data(self, key, value):
+        self._results[key] = value
+
+    def peek_data(self, key):
+        return self._results.get(key, EmptyData)
+
+    def pop_data(self, key):
+        return self._results.pop(key, EmptyData)
+
+    def has_data_for_key(self, key):
+        return key in self._results
+
+    def result_store_size(self):
+        return len(self._results)
+
+    def result_items(self):
+        return dict(self._results)
+
+    def flush_results(self):
+        self._results = {}
+
+
+class MemoryHuey(Huey):
+    def get_storage(self, **kwargs):
+        return MemoryStorage(name=self.name, **kwargs)
 
 
 # A custom lua script to pass to redis that will read tasks from the schedule
