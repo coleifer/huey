@@ -11,6 +11,7 @@ from collections import OrderedDict
 from h2.constants import EmptyData
 from h2.exceptions import CancelExecution
 from h2.exceptions import RetryTask
+from h2.exceptions import TaskException
 from h2.exceptions import TaskLockedException
 from h2.registry import Registry
 from h2.serializer import Serializer
@@ -36,6 +37,7 @@ class Huey(object):
             self.serializer.compression = True
 
         self.storage = self.get_storage(**storage_kwargs)
+        self._locks = set()
         self._pre_execute = OrderedDict()
         self._post_execute = OrderedDict()
         self._startup = OrderedDict()
@@ -192,7 +194,7 @@ class Huey(object):
         if self.results and not isinstance(task, PeriodicTask):
             if exception is not None:
                 self.put(task.id, Error({
-                    'error': repr(exc),
+                    'error': repr(exception),
                     'retries': task.retries,
                     'traceback': traceback.format_exc()}))
             elif task_value is not None or self.store_none:
@@ -268,14 +270,14 @@ class Huey(object):
     def restore_by_id(self, id):
         return self.restore(Task(id=id))
 
-    def _check_revoked(self, revoke_id, dt=None, peek=True):
+    def _check_revoked(self, revoke_id, timestamp=None, peek=True):
         """
         Checks if a task is revoked, returns a 2-tuple indicating:
 
         1. Is task revoked?
         2. Should task be restored?
         """
-        res = self.get(revoke_id, peek=True)
+        res = self.get(revoke_id, peek=peek)
         if res is None:
             return False, False
 
@@ -284,17 +286,17 @@ class Huey(object):
             # This task *was* revoked for one run, but now it should be
             # restored to normal execution (unless we are just peeking).
             return True, not peek
-        elif revoke_until is not None and revoke_until <= dt:
+        elif revoke_until is not None and revoke_until <= timestamp:
             # Task is no longer revoked and can be restored.
-            return False, True
+            return False, not peek
         else:
             # Task is still revoked. Do not restore.
             return True, False
 
-    def is_revoked(self, task, dt=None, peek=True):
+    def is_revoked(self, task, timestamp=None, peek=True):
         if inspect.isclass(task) and issubclass(task, Task):
-            revoke_id = self._task_key(task, 'rt')
-            is_revoked, can_restore = self._check_revoked(revoke_id, dt, peek)
+            key = self._task_key(task, 'rt')
+            is_revoked, can_restore = self._check_revoked(key, timestamp, peek)
             if can_restore:
                 self.restore_all(task)
             return is_revoked
@@ -303,11 +305,12 @@ class Huey(object):
             # Assume we've been given a task ID.
             task = Task(id=task)
 
-        is_revoked, can_restore = self._check_revoked(task.revoke_id, dt, peek)
+        key = task.revoke_id
+        is_revoked, can_restore = self._check_revoked(key, timestamp, peek)
         if can_restore:
             self.restore(task)
         if not is_revoked:
-            is_revoked = self.is_revoked(type(task), dt, peek)
+            is_revoked = self.is_revoked(type(task), timestamp, peek)
 
         return is_revoked
 
@@ -316,18 +319,18 @@ class Huey(object):
         eta = task.eta or datetime.datetime.fromtimestamp(0)
         self.storage.add_to_schedule(data, eta)
 
-    def read_schedule(self, ts):
+    def read_schedule(self, timestamp):
         return [self.deserialize_task(task)
-                for task in self.storage.read_schedule(ts)]
+                for task in self.storage.read_schedule(timestamp)]
 
-    def read_periodic(self, ts):
+    def read_periodic(self, timestamp):
         return [task for task in self._registry.periodic_tasks
-                if task.validate_datetime(ts)]
+                if task.validate_datetime(timestamp)]
 
-    def ready_to_run(self, task, dt=None):
-        if dt is None:
-            dt = self._get_timestamp()
-        return task.eta is None or task.eta <= dt
+    def ready_to_run(self, task, timestamp=None):
+        if timestamp is None:
+            timestamp = self._get_timestamp()
+        return task.eta is None or task.eta <= timestamp
 
     def pending(self, limit=None):
         return [self.deserialize_task(task)
@@ -466,7 +469,10 @@ class Task(object):
         if isinstance(data, tuple):
             self.args += data
         elif isinstance(data, dict):
-            self.kwargs.update(data)
+            # XXX: alternate would be self.kwargs.update(data), but this will
+            # stomp on user-provided parameters.
+            for key, value in data.items():
+                self.kwargs.setdefault(key, value)
         else:
             self.args = self.args + (data,)
 
@@ -479,7 +485,7 @@ class Task(object):
 
     def error(self, task, *args, **kwargs):
         if self.on_error:
-            self.on_error.err(task, *args, **kwargs)
+            self.on_error.error(task, *args, **kwargs)
         else:
             self.on_error = task.s(*args, **kwargs)
         return self
@@ -567,7 +573,8 @@ class TaskWrapper(object):
 
         eta = normalize_time(eta, delay, self.huey.utc)
         task = self.task_class(
-            (args or (), kwargs or {}),
+            args or (),
+            kwargs or {},
             id=id,
             eta=eta,
             retries=self.retries,
@@ -785,8 +792,8 @@ def crontab(month='*', day='*', day_of_week='*', hour='*', minute='*'):
 
         cron_settings.append(sorted(list(settings)))
 
-    def validate_date(dt):
-        _, m, d, H, M, _, w, _, _ = dt.timetuple()
+    def validate_date(timestamp):
+        _, m, d, H, M, _, w, _, _ = timestamp.timetuple()
 
         # fix the weekday to be sunday=0
         w = (w + 1) % 7

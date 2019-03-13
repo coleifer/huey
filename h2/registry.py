@@ -70,11 +70,11 @@ class Registry(object):
 
         on_complete = None
         if message.on_complete is not None:
-            on_complete = self.string_to_task(message.on_complete)
+            on_complete = self.create_task(message.on_complete)
 
         on_error = None
         if message.on_error is not None:
-            on_error = self.string_to_task(message.on_error)
+            on_error = self.create_task(message.on_error)
 
         return TaskClass(
             message.args,
