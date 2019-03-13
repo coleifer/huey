@@ -1,4 +1,5 @@
 import datetime
+import inspect
 import logging
 import re
 import time
@@ -7,15 +8,15 @@ import uuid
 
 from collections import OrderedDict
 
-from .constants import EmptyData
-from .exceptions import CancelExecution
-from .exceptions import RetryTask
-from .exceptions import TaskLockedException
-from .registry import Registry
-from .serializer import Serializer
-from .utils import Error
-from .utils import normalize_time
-from .utils import reraise_as
+from h2.constants import EmptyData
+from h2.exceptions import CancelExecution
+from h2.exceptions import RetryTask
+from h2.exceptions import TaskLockedException
+from h2.registry import Registry
+from h2.serializer import Serializer
+from h2.utils import Error
+from h2.utils import normalize_time
+from h2.utils import reraise_as
 
 
 logger = logging.getLogger('huey')
@@ -95,10 +96,10 @@ class Huey(object):
 
     def serialize_task(self, task):
         message = self._registry.create_message(task)
-        return self._serializer.serialize(message)
+        return self.serializer.serialize(message)
 
     def deserialize_task(self, data):
-        message = self._serializer.deserialize(data)
+        message = self.serializer.deserialize(data)
         return self._registry.create_task(message)
 
     def enqueue(self, task):
@@ -122,10 +123,10 @@ class Huey(object):
             return self.deserialize_task(data)
 
     def put(self, key, data):
-        return self.storage.put_data(key, self._serializer.serialize(data))
+        return self.storage.put_data(key, self.serializer.serialize(data))
 
     def put_if_empty(self, key, data):
-        return self.storage.put_if_empty(key, self._serializer.serialize(data))
+        return self.storage.put_if_empty(key, self.serializer.serialize(data))
 
     def get_raw(self, key, peek=False):
         if peek:
@@ -136,7 +137,7 @@ class Huey(object):
     def get(self, key, peek=False):
         data = self.get_raw(key, peek)
         if data is not EmptyData:
-            return self._serializer.deserialize(data)
+            return self.serializer.deserialize(data)
 
     def _get_timestamp(self):
         return (datetime.datetime.utcnow() if self.utc else
@@ -291,7 +292,7 @@ class Huey(object):
             return True, False
 
     def is_revoked(self, task, dt=None, peek=True):
-        if isclass(task) and issubclass(task, Task):
+        if inspect.isclass(task) and issubclass(task, Task):
             revoke_id = self._task_key(task, 'rt')
             is_revoked, can_restore = self._check_revoked(revoke_id, dt, peek)
             if can_restore:
@@ -326,7 +327,7 @@ class Huey(object):
     def ready_to_run(self, task, dt=None):
         if dt is None:
             dt = self._get_timestamp()
-        return task.eta is None or cmd.eta <= dt
+        return task.eta is None or task.eta <= dt
 
     def pending(self, limit=None):
         return [self.deserialize_task(task)
@@ -564,7 +565,7 @@ class TaskWrapper(object):
         if kwargs is not None and not isinstance(kwargs, dict):
             raise ValueError('schedule() kwargs argument must be a dict.')
 
-        eta = normalize_time(eta, delay, self.utc)
+        eta = normalize_time(eta, delay, self.huey.utc)
         task = self.task_class(
             (args or (), kwargs or {}),
             id=id,
@@ -651,7 +652,7 @@ class Result(object):
             res = self.huey.get_raw(task_id, peek=preserve)
 
             if res is not EmptyData:
-                self._result = self.huey._serializer.deserialize(res)
+                self._result = self.huey.serializer.deserialize(res)
                 return self._result
             else:
                 return res

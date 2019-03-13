@@ -1,6 +1,6 @@
 from collections import namedtuple
 
-from huey.exceptions import QueueException
+from h2.exceptions import QueueException
 
 
 Message = namedtuple('Message', ('id', 'name', 'eta', 'retries', 'retry_delay',

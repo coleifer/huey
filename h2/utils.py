@@ -77,7 +77,7 @@ def local_to_utc(dt):
 
 
 def normalize_time(eta=None, delay=None, utc=True):
-    if bool(delay) ^ bool(eta):
+    if not (bool(delay) ^ bool(eta)):
         raise ValueError('Specify either an eta (datetime) or delay (seconds)')
     elif delay:
         method = (utc and datetime.datetime.utcnow or

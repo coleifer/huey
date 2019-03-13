@@ -14,8 +14,8 @@ try:
 except ImportError:
     ConnectionPool = Redis = ConnectionError = None
 
-from huey.api import Huey
-from huey.constants import EmptyData
+from h2.api import Huey
+from h2.constants import EmptyData
 
 
 class BaseStorage(object):
