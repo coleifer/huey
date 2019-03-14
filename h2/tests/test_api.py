@@ -7,7 +7,6 @@ from h2.api import TaskWrapper
 from h2.api import crontab
 from h2.constants import EmptyData
 from h2.exceptions import TaskException
-from h2.storage import MemoryHuey
 from h2.tests.base import BaseTestCase
 
 
@@ -18,13 +17,7 @@ class TestError(Exception):
         return 'TestError(%s)' % self._m
 
 
-class APITestCase(BaseTestCase):
-    def setUp(self):
-        super(APITestCase, self).setUp()
-        self.huey = MemoryHuey(utc=False)
-
-
-class TestQueue(APITestCase):
+class TestQueue(BaseTestCase):
     def test_workflow(self):
         @self.huey.task()
         def task_a(n):
@@ -491,7 +484,7 @@ class TestQueue(APITestCase):
         self.assertEqual(self.huey.scheduled_count(), 0)
 
 
-class TestDecorators(APITestCase):
+class TestDecorators(BaseTestCase):
     def test_task_decorator(self):
         @self.huey.task()
         def task_a(n):
@@ -535,7 +528,7 @@ class TestDecorators(APITestCase):
         self.assertEqual(task.execute(), 123)
 
 
-class TestTaskChaining(APITestCase):
+class TestTaskChaining(BaseTestCase):
     def test_pipeline_tuple(self):
         @self.huey.task()
         def fib(a, b=1):
@@ -652,7 +645,7 @@ class TestTaskChaining(APITestCase):
         self.assertEqual(len(self.huey), 0)
 
 
-class TestHueyAPIs(APITestCase):
+class TestHueyAPIs(BaseTestCase):
     def test_flush_locks(self):
         with self.huey.lock_task('lock1'):
             with self.huey.lock_task('lock2'):

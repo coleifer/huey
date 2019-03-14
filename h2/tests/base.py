@@ -1,6 +1,8 @@
 import logging
 import unittest
 
+from h2.storage import MemoryHuey
+
 
 class NullHandler(logging.Handler):
     def emit(self, record): pass
@@ -11,4 +13,6 @@ logger.addHandler(NullHandler())
 
 
 class BaseTestCase(unittest.TestCase):
-    pass
+    def setUp(self):
+        super(BaseTestCase, self).setUp()
+        self.huey = MemoryHuey(utc=False)
