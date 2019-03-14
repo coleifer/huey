@@ -528,6 +528,9 @@ class TaskWrapper(object):
         self.task_class = self.create_task(func, context, name, **settings)
         self.huey._registry.register(self.task_class)
 
+    def unregister(self):
+        return self.huey._registry.unregister(self.task_class)
+
     def create_task(self, func, context=False, name=None, **settings):
         def execute(self):
             args, kwargs = self.data

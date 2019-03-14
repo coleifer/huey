@@ -223,6 +223,12 @@ class MemoryStorage(BaseStorage):
         if self._queue:
             return self._queue.popleft()
 
+    def unqueue(self, data):
+        try:
+            self._queue.remove(data)
+        except ValueError:
+            pass
+
     def queue_size(self):
         return len(self._queue)
 
@@ -366,14 +372,14 @@ class RedisStorage(BaseStorage):
             return self.conn.rpop(self.queue_key)
 
     def unqueue(self, data):
-        return self.conn.lrem(self.queue_key, data)
+        return self.conn.lrem(self.queue_key, 0, data)
 
     def queue_size(self):
         return self.conn.llen(self.queue_key)
 
     def enqueued_items(self, limit=None):
         limit = limit or -1
-        return self.conn.lrange(self.queue_key, 0, limit)
+        return self.conn.lrange(self.queue_key, 0, limit)[::-1]
 
     def flush_queue(self):
         self.conn.delete(self.queue_key)
@@ -433,11 +439,11 @@ class RedisStorage(BaseStorage):
 
 
 class RedisHuey(Huey):
-    def get_storage(self, read_timeout=1, max_errors=1000,
+    def get_storage(self, blocking=False, read_timeout=1, max_errors=1000,
                     connection_pool=None, url=None, **connection_params):
         return RedisStorage(
             name=self.name,
-            blocking=self.blocking,
+            blocking=blocking,
             read_timeout=read_timeout,
             max_errors=max_errors,
             connection_pool=connection_pool,

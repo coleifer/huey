@@ -25,6 +25,7 @@ class Registry(object):
         self._registry[task_str] = task_class
         if hasattr(task_class, 'validate_datetime'):
             self._periodic_tasks.append(task_class)
+        return True
 
     def unregister(self, task_class):
         task_str = self.task_to_string(task_class)
@@ -35,6 +36,7 @@ class Registry(object):
         if hasattr(task_class, 'validate_datetime'):
             self._periodic_tasks = [t for t in self._periodic_tasks
                                     if t is not task_class]
+        return True
 
     def string_to_task(self, task_str):
         if task_str not in self._registry:
@@ -42,6 +44,10 @@ class Registry(object):
         return self._registry[task_str]
 
     def create_message(self, task):
+        task_str = self.task_to_string(type(task))
+        if task_str not in self._registry:
+            raise QueueException('%s not found in TaskRegistry' % task_str)
+
         # Remove the "task" instance from any arguments before serializing.
         if task.kwargs and 'task' in task.kwargs:
             task.kwargs.pop('task')
@@ -56,7 +62,7 @@ class Registry(object):
 
         return Message(
             task.id,
-            self.task_to_string(type(task)),
+            task_str,
             task.eta,
             task.retries,
             task.retry_delay,
