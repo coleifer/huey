@@ -105,15 +105,13 @@ class Worker(BaseProcess):
             task = self.huey.dequeue()
         except Exception:
             self._logger.exception('Error reading from queue')
-            exc_raised = True
-        else:
-            exc_raised = False
-
-        if task is not None:
-            self.delay = self.default_delay
-            self.huey.execute(task, now)
-        elif exc_raised or not self.huey.storage.blocking:
             self.sleep()
+        else:
+            if task is not None:
+                self.delay = self.default_delay
+                self.huey.execute(task, now)
+            elif not self.huey.storage.blocking:
+                self.sleep()
 
     def sleep(self):
         if self.delay > self.max_delay:
@@ -252,7 +250,7 @@ class Consumer(object):
     def __init__(self, huey, workers=1, periodic=True, initial_delay=0.1,
                  backoff=1.15, max_delay=10.0, scheduler_interval=1,
                  worker_type='thread', check_worker_health=True,
-                 health_check_interval=1, flush_locks=False):
+                 health_check_interval=10, flush_locks=False):
 
         self._logger = logging.getLogger('huey.consumer')
         if huey.always_eager:
