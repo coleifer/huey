@@ -1,13 +1,11 @@
 import datetime
 import itertools
 
-from redis import Redis
+from redis.connection import ConnectionPool
 
 from h2.constants import EmptyData
 from h2.storage import MemoryHuey
-from h2.storage import MemoryStorage
 from h2.storage import RedisHuey
-from h2.storage import RedisStorage
 from h2.tests.base import BaseTestCase
 
 
@@ -105,3 +103,10 @@ class TestMemoryStorage(StorageTests, BaseTestCase):
 class TestRedisStorage(StorageTests, BaseTestCase):
     def get_huey(self):
         return RedisHuey(utc=False)
+
+    def test_conflicting_init_args(self):
+        options = {'host': 'localhost', 'url': 'redis://localhost',
+                   'connection_pool': ConnectionPool()}
+        combinations = itertools.combinations(options.items(), 2)
+        for kwargs in (dict(item) for item in combinations):
+            self.assertRaises(ValueError, lambda: RedisHuey(**kwargs))
