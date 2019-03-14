@@ -20,6 +20,7 @@ from h2.constants import WORKER_GREENLET
 from h2.constants import WORKER_PROCESS
 from h2.constants import WORKER_THREAD
 from h2.constants import WORKER_TYPES
+from h2.exceptions import ConfigurationError
 
 
 class BaseProcess(object):
@@ -82,18 +83,17 @@ class Worker(BaseProcess):
     Will pull tasks from the queue, executing them or adding them to the
     schedule if they are set to run in the future.
     """
-    def __init__(self, huey, default_delay, max_delay, backoff, utc):
+    process_name = 'Worker'
+
+    def __init__(self, huey, default_delay, max_delay, backoff):
         self.delay = self.default_delay = default_delay
         self.max_delay = max_delay
         self.backoff = backoff
-        self._logger = logging.getLogger('huey.consumer.Worker')
-        self._pre_execute = huey.pre_execute_hooks.items()
-        self._post_execute = huey.post_execute_hooks.items()
-        super(Worker, self).__init__(huey, utc)
+        super(Worker, self).__init__(huey)
 
     def initialize(self):
-        for name, startup_hook in self.huey.startup_hooks.items():
-            self._logger.debug('calling startup hook "%s"', name)
+        for name, startup_hook in self.huey._startup.items():
+            self._logger.info('calling startup hook "%s"', name)
             try:
                 startup_hook()
             except Exception as exc:
@@ -101,182 +101,26 @@ class Worker(BaseProcess):
 
     def loop(self, now=None):
         task = None
-        exc_raised = True
         try:
             task = self.huey.dequeue()
-        except QueueReadException:
-            self.huey.emit_status(EVENT_ERROR_DEQUEUEING, error=True)
+        except Exception:
             self._logger.exception('Error reading from queue')
-        except QueueException:
-            self.huey.emit_status(EVENT_ERROR_INTERNAL, error=True)
-            self._logger.exception('Queue exception')
-        except KeyboardInterrupt:
-            raise
-        except:
-            self.huey.emit_status(EVENT_ERROR_DEQUEUEING, error=True)
-            self._logger.exception('Unknown exception dequeueing task.')
+            exc_raised = True
         else:
             exc_raised = False
 
-        if task:
+        if task is not None:
             self.delay = self.default_delay
-            self.handle_task(task, now or self.get_now())
-        elif exc_raised or not self.huey.blocking:
+            self.huey.execute(task, now)
+        elif exc_raised or not self.huey.storage.blocking:
             self.sleep()
 
     def sleep(self):
         if self.delay > self.max_delay:
             self.delay = self.max_delay
 
-        self._logger.debug('No messages, sleeping for: %s', self.delay)
         time.sleep(self.delay)
         self.delay *= self.backoff
-
-    def handle_task(self, task, ts):
-        """
-        Handle a task that was just read from the queue. There are three
-        possible outcomes:
-
-        1. Task is scheduled for the future, add to the schedule.
-        2. Task is ready to run, but has been revoked. Discard.
-        3. Task is ready to run and not revoked. Execute task.
-        """
-        if not self.huey.ready_to_run(task, ts):
-            self.add_schedule(task)
-        elif not self.is_revoked(task, ts):
-            self.process_task(task, ts)
-        else:
-            self.huey.emit_task(
-                EVENT_REVOKED,
-                task,
-                timestamp=ts)
-            self._logger.debug('Task %s was revoked, not running', task)
-
-    def process_task(self, task, ts):
-        """
-        Execute a task and (optionally) store the return value in result store.
-
-        Unhandled exceptions are caught and logged.
-        """
-        self.huey.emit_task(EVENT_STARTED, task, timestamp=ts)
-        if self._pre_execute:
-            try:
-                self.run_pre_execute_hooks(task)
-            except CancelExecution:
-                return
-
-        self._logger.info('Executing %s', task)
-        start = time.time()
-        exception = None
-        task_value = None
-
-        try:
-            try:
-                task_value = self.huey.execute(task)
-            finally:
-                duration = time.time() - start
-        except DataStorePutException:
-            self._logger.exception('Error storing result')
-            self.huey.emit_task(
-                EVENT_ERROR_STORING_RESULT,
-                task,
-                error=True,
-                duration=duration)
-        except TaskLockedException as exc:
-            self._logger.warning('Task %s could not run, unable to obtain '
-                                 'lock.', task.task_id)
-            self.huey.emit_task(
-                EVENT_LOCKED,
-                task,
-                error=False,
-                duration=duration)
-            exception = exc
-        except RetryTask:
-            if not task.retries:
-                self._logger.error('Cannot retry task %s - no retries '
-                                   'remaining.', task.task_id)
-            exception = True
-        except KeyboardInterrupt:
-            self._logger.info('Received exit signal, task %s did not finish.',
-                              task.task_id)
-            return
-        except Exception as exc:
-            self._logger.exception('Unhandled exception in worker thread')
-            self.huey.emit_task(
-                EVENT_ERROR_TASK,
-                task,
-                error=True,
-                duration=duration)
-            exception = exc
-        else:
-            self._logger.info('Executed %s in %0.3fs', task, duration)
-            self.huey.emit_task(
-                EVENT_FINISHED,
-                task,
-                duration=duration,
-                timestamp=self.get_now())
-
-        if self._post_execute:
-            self.run_post_execute_hooks(task, task_value, exception)
-
-        if exception is not None and task.retries:
-            self.requeue_task(task, self.get_now())
-
-    def run_pre_execute_hooks(self, task):
-        self._logger.info('Running pre-execute hooks for %s', task)
-        for name, callback in self._pre_execute:
-            self._logger.debug('Executing %s pre-execute hook.', name)
-            try:
-                callback(task)
-            except CancelExecution:
-                self._logger.info('Execution of %s cancelled by %s.', task,
-                                  name)
-                raise
-            except Exception:
-                self._logger.exception('Unhandled exception calling pre-'
-                                       'execute hook %s for %s.', name, task)
-
-    def run_post_execute_hooks(self, task, task_value, exception):
-        self._logger.info('Running post-execute hooks for %s', task)
-        for name, callback in self._post_execute:
-            self._logger.debug('Executing %s post-execute hook.', name)
-            try:
-                callback(task, task_value, exception)
-            except Exception as exc:
-                self._logger.exception('Unhandled exception calling post-'
-                                       'execute hook %s for %s.', name, task)
-
-    def requeue_task(self, task, ts):
-        task.retries -= 1
-        self.huey.emit_task(EVENT_RETRYING, task)
-        self._logger.info('Re-enqueueing task %s, %s tries left',
-                          task.task_id, task.retries)
-        if task.retry_delay:
-            delay = datetime.timedelta(seconds=task.retry_delay)
-            task.execute_time = ts + delay
-            self.add_schedule(task)
-        else:
-            self.enqueue(task)
-
-    def add_schedule(self, task):
-        self._logger.info('Adding %s to schedule', task)
-        try:
-            self.huey.add_schedule(task)
-        except ScheduleAddException:
-            self.huey.emit_task(EVENT_ERROR_SCHEDULING, task, error=True)
-            self._logger.error('Error adding task to schedule: %s', task)
-        else:
-            self.huey.emit_task(EVENT_SCHEDULED, task)
-
-    def is_revoked(self, task, ts):
-        try:
-            if self.huey.is_revoked(task, ts, peek=False):
-                return True
-            return False
-        except DataStoreGetException:
-            self.huey.emit_task(EVENT_ERROR_INTERNAL, task, error=True)
-            self._logger.error('Error checking if task is revoked: %s', task)
-            return True
 
 
 class Scheduler(BaseProcess):
@@ -288,17 +132,18 @@ class Scheduler(BaseProcess):
     If periodic tasks are enabled, the scheduler will wake up every 60 seconds
     to enqueue any periodic tasks that should be run.
     """
-    def __init__(self, huey, interval, utc, periodic):
-        super(Scheduler, self).__init__(huey, utc)
+    process_name = 'Scheduler'
+
+    def __init__(self, huey, interval, periodic):
+        super(Scheduler, self).__init__(huey)
         self.interval = min(interval, 60)
+        if 60 % self.interval != 0:
+            raise ConfigurationError('Scheduler interval must be a factor of '
+                                     '60, e.g. 1, 2, 3, 4, 5, 6, 10, 12...')
+
         self.periodic = periodic
-        if periodic:
-            # Determine the periodic task interval.
-            self._counter = 0
-            self._q, self._r = divmod(60, self.interval)
-            self._cr = self._r
-        self._logger = logging.getLogger('huey.consumer.Scheduler')
         self._next_loop = time.time()
+        self._next_periodic = time.time()
 
     def loop(self, now=None):
         current = self._next_loop
@@ -308,52 +153,27 @@ class Scheduler(BaseProcess):
             return
 
         try:
-            task_list = self.huey.read_schedule(now or self.get_now())
+            task_list = self.huey.read_schedule(now)
         except ScheduleReadException:
-            #self.huey.emit_task(EVENT_ERROR_SCHEDULING, task, error=True)
-            self._logger.exception('Error reading from task schedule.')
+            self._logger.exception('Error reading schedule.')
         else:
             for task in task_list:
                 self._logger.info('Scheduling %s for execution', task)
-                self.enqueue(task)
+                self.huey.enqueue(task)
 
         if self.periodic:
-            # The scheduler has an interesting property of being able to run at
-            # intervals that are not factors of 60. Suppose we ask our
-            # scheduler to run every 45 seconds. We still want to schedule
-            # periodic tasks once per minute, however. So we use a running
-            # remainder to ensure that no matter what interval the scheduler is
-            # running at, we still are enqueueing tasks once per minute at the
-            # same time.
-            if self._counter >= self._q:
-                self._counter = 0
-                if self._cr:
-                    self.sleep_for_interval(current, self._cr)
-                if self._r:
-                    self._cr += self._r
-                    if self._cr >= self.interval:
-                        self._cr -= self.interval
-                        self._counter -= 1
-
-                self.enqueue_periodic_tasks(now or self.get_now(), current)
-            self._counter += 1
+            current_p = self._next_periodic
+            if current_p <= time.time():
+                self._next_periodic += 60
+                self.enqueue_periodic_tasks(now, current)
 
         self.sleep_for_interval(current, self.interval)
 
     def enqueue_periodic_tasks(self, now, start):
-        self.huey.emit_status(
-            EVENT_CHECKING_PERIODIC,
-            timestamp=self.get_now())
         self._logger.debug('Checking periodic tasks')
         for task in self.huey.read_periodic(now):
-            self.huey.emit_task(
-                EVENT_SCHEDULING_PERIODIC,
-                task,
-                timestamp=self.get_now())
             self._logger.info('Scheduling periodic task %s.', task)
             self.enqueue(task)
-
-        return True
 
 
 class Environment(object):
@@ -430,7 +250,7 @@ class Consumer(object):
     scheduler_class = Scheduler
 
     def __init__(self, huey, workers=1, periodic=True, initial_delay=0.1,
-                 backoff=1.15, max_delay=10.0, utc=True, scheduler_interval=1,
+                 backoff=1.15, max_delay=10.0, scheduler_interval=1,
                  worker_type='thread', check_worker_health=True,
                  health_check_interval=1, flush_locks=False):
 
@@ -446,10 +266,13 @@ class Consumer(object):
         self.default_delay = initial_delay  # Default queue polling interval.
         self.backoff = backoff  # Exponential backoff factor when queue empty.
         self.max_delay = max_delay  # Maximum interval between polling events.
-        self.utc = utc  # Timestamps are considered UTC.
 
         # Ensure that the scheduler runs at an interval between 1 and 60s.
         self.scheduler_interval = max(min(scheduler_interval, 60), 1)
+        if 60 % self.scheduler_interval != 0:
+            raise ConfigurationError('Scheduler interval must be a factor '
+                                     'of 60, e.g. 1, 2, 3, 4, 5, 6, 10, 12...')
+
         self.worker_type = worker_type  # What process model are we using?
 
         # Configure health-check and consumer main-loop attributes.
@@ -506,14 +329,12 @@ class Consumer(object):
             huey=self.huey,
             default_delay=self.default_delay,
             max_delay=self.max_delay,
-            backoff=self.backoff,
-            utc=self.utc)
+            backoff=self.backoff)
 
     def _create_scheduler(self):
         return self.scheduler_class(
             huey=self.huey,
             interval=self.scheduler_interval,
-            utc=self.utc,
             periodic=self.periodic)
 
     def _create_process(self, process, name):
@@ -542,19 +363,19 @@ class Consumer(object):
                 ' is enabled. Please check your configuration and ensure that'
                 ' "huey.always_eager = False".')
         # Log startup message.
-        self._logger.info('Huey consumer started with %s %s, PID %s',
-                          self.workers, self.worker_type, os.getpid())
+        self._logger.info('Huey consumer started with %s %s, PID %s at %s',
+                          self.workers, self.worker_type, os.getpid(),
+                          self.huey._get_timestamp())
         self._logger.info('Scheduler runs every %s second(s).',
                           self.scheduler_interval)
         self._logger.info('Periodic tasks are %s.',
                           'enabled' if self.periodic else 'disabled')
-        self._logger.info('UTC is %s.', 'enabled' if self.utc else 'disabled')
 
         self._set_signal_handlers()
 
         msg = ['The following commands are available:']
-        for command in self.huey.registry._registry:
-            msg.append('+ %s' % command.replace('queuecmd_', ''))
+        for command in self.huey._registry._registry:
+            msg.append('+ %s' % command)
 
         self._logger.info('\n'.join(msg))
 

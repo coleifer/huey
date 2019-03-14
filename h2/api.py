@@ -26,7 +26,7 @@ logger = logging.getLogger('huey')
 class Huey(object):
     def __init__(self, name='huey', results=True, store_none=False, utc=True,
                  always_eager=False, serializer=None, compression=False,
-                 **storage_kwargs):
+                 blocking=False, **storage_kwargs):
         self.name = name
         self.results = results
         self.store_none = store_none
@@ -319,11 +319,15 @@ class Huey(object):
         eta = task.eta or datetime.datetime.fromtimestamp(0)
         self.storage.add_to_schedule(data, eta)
 
-    def read_schedule(self, timestamp):
+    def read_schedule(self, timestamp=None):
+        if timestamp is None:
+            timestamp = self._get_timestamp()
         return [self.deserialize_task(task)
                 for task in self.storage.read_schedule(timestamp)]
 
     def read_periodic(self, timestamp):
+        if timestamp is None:
+            timestamp = self._get_timestamp()
         return [task for task in self._registry.periodic_tasks
                 if task.validate_datetime(timestamp)]
 

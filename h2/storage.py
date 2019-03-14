@@ -19,6 +19,8 @@ from h2.constants import EmptyData
 
 
 class BaseStorage(object):
+    blocking = False  # Does dequeue() block until ready, or should we poll?
+
     def __init__(self, name='huey', **storage_kwargs):
         self.name = name
 
