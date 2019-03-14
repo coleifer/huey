@@ -128,6 +128,9 @@ class ConsumerConfig(namedtuple('_ConsumerConfig', config_keys)):
         if not (0 < self.scheduler_interval <= 60):
             raise ValueError('The scheduler must run at least once per '
                              'minute, and at most once per second (1-60).')
+        if 60 % self.scheduler_interval != 0:
+            raise ValueError('The scheduler interval must be a factor of 60: '
+                             '1, 2, 3, 4, 5, 6, 10, 12, 15, 20, 30, or 60')
 
     @property
     def loglevel(self):
@@ -143,17 +146,17 @@ class ConsumerConfig(namedtuple('_ConsumerConfig', config_keys)):
 
         logformat = ('[%(asctime)s] %(levelname)s:%(name)s:' + worker +
                      ':%(message)s')
-        loglevel = self.loglevel
         if logger is None:
-            logging.basicConfig(level=loglevel, format=logformat)
             logger = logging.getLogger()
-        else:
-            logger.setLevel(loglevel)
 
         if self.logfile:
-            handler = FileHandler(self.logfile)
-            handler.setFormatter(logging.Formatter(logformat))
-            logger.addHandler(handler)
+            handler = logging.FileHandler(self.logfile)
+        else:
+            handler = logging.StreamHandler()
+
+        handler.setFormatter(logging.Formatter(logformat))
+        logger.addHandler(handler)
+        logger.setLevel(self.loglevel)
 
     @property
     def values(self):

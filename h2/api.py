@@ -9,6 +9,7 @@ import uuid
 from collections import OrderedDict
 
 from h2.constants import EmptyData
+from h2.consumer import Consumer
 from h2.exceptions import CancelExecution
 from h2.exceptions import RetryTask
 from h2.exceptions import TaskException
@@ -46,6 +47,9 @@ class Huey(object):
     def get_storage(self, **kwargs):
         raise NotImplementedError('Storage API not implemented in the base '
                                   'Huey class. Use `RedisHuey` instead.')
+
+    def create_consumer(self, **options):
+        return Consumer(self, **options)
 
     def task(self, retries=0, retry_delay=0, context=False, name=None, **kw):
         def decorator(func):

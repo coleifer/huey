@@ -135,9 +135,6 @@ class Scheduler(BaseProcess):
     def __init__(self, huey, interval, periodic):
         super(Scheduler, self).__init__(huey)
         self.interval = min(interval, 60)
-        if 60 % self.interval != 0:
-            raise ConfigurationError('Scheduler interval must be a factor of '
-                                     '60, e.g. 1, 2, 3, 4, 5, 6, 10, 12...')
 
         self.periodic = periodic
         self._next_loop = time.time()
