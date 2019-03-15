@@ -1,5 +1,5 @@
-from h2.consumer import Consumer
-from h2.tests.base import BaseTestCase
+from huey.consumer import Consumer
+from huey.tests.base import BaseTestCase
 
 
 class TestConsumer(BaseTestCase):

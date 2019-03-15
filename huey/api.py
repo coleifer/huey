@@ -9,18 +9,18 @@ import uuid
 
 from collections import OrderedDict
 
-from h2.constants import EmptyData
-from h2.consumer import Consumer
-from h2.exceptions import CancelExecution
-from h2.exceptions import ConfigurationError
-from h2.exceptions import RetryTask
-from h2.exceptions import TaskException
-from h2.exceptions import TaskLockedException
-from h2.registry import Registry
-from h2.serializer import Serializer
-from h2.utils import Error
-from h2.utils import normalize_time
-from h2.utils import reraise_as
+from huey.constants import EmptyData
+from huey.consumer import Consumer
+from huey.exceptions import CancelExecution
+from huey.exceptions import ConfigurationError
+from huey.exceptions import RetryTask
+from huey.exceptions import TaskException
+from huey.exceptions import TaskLockedException
+from huey.registry import Registry
+from huey.serializer import Serializer
+from huey.utils import Error
+from huey.utils import normalize_time
+from huey.utils import reraise_as
 
 
 logger = logging.getLogger('huey')

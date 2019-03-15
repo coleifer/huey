@@ -16,11 +16,11 @@ try:
 except ImportError:
     Greenlet = GreenEvent = None
 
-from h2.constants import WORKER_GREENLET
-from h2.constants import WORKER_PROCESS
-from h2.constants import WORKER_THREAD
-from h2.constants import WORKER_TYPES
-from h2.exceptions import ConfigurationError
+from huey.constants import WORKER_GREENLET
+from huey.constants import WORKER_PROCESS
+from huey.constants import WORKER_THREAD
+from huey.constants import WORKER_TYPES
+from huey.exceptions import ConfigurationError
 
 
 class BaseProcess(object):

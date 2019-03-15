@@ -1,6 +1,6 @@
 import unittest
 
-from h2.utils import reraise_as
+from huey.utils import reraise_as
 
 
 class MyException(Exception): pass

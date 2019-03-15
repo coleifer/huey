@@ -1,17 +1,17 @@
 import datetime
 
-from h2.api import PeriodicTask
-from h2.api import Result
-from h2.api import Task
-from h2.api import TaskWrapper
-from h2.api import crontab
-from h2.api import _unsupported
-from h2.constants import EmptyData
-from h2.exceptions import CancelExecution
-from h2.exceptions import ConfigurationError
-from h2.exceptions import TaskException
-from h2.exceptions import TaskLockedException
-from h2.tests.base import BaseTestCase
+from huey.api import PeriodicTask
+from huey.api import Result
+from huey.api import Task
+from huey.api import TaskWrapper
+from huey.api import crontab
+from huey.api import _unsupported
+from huey.constants import EmptyData
+from huey.exceptions import CancelExecution
+from huey.exceptions import ConfigurationError
+from huey.exceptions import TaskException
+from huey.exceptions import TaskLockedException
+from huey.tests.base import BaseTestCase
 
 
 class TestError(Exception):

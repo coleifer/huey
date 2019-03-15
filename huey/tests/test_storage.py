@@ -5,13 +5,13 @@ import unittest
 
 from redis.connection import ConnectionPool
 
-from h2.constants import EmptyData
-from h2.consumer import Consumer
-from h2.storage import MemoryHuey
-from h2.storage import RedisHuey
-from h2.tests.base import BaseTestCase
+from huey.constants import EmptyData
+from huey.consumer import Consumer
+from huey.storage import MemoryHuey
+from huey.storage import RedisHuey
+from huey.tests.base import BaseTestCase
 try:
-    from h2.contrib.sqlitedb import SqliteHuey
+    from huey.contrib.sqlitedb import SqliteHuey
 except ImportError:
     SqliteHuey = None
 

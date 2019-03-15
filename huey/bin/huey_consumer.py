@@ -3,10 +3,10 @@
 import os
 import sys
 
-from h2.consumer import Consumer
-from h2.consumer_options import ConsumerConfig
-from h2.consumer_options import OptionParserHandler
-from h2.utils import load_class
+from huey.consumer import Consumer
+from huey.consumer_options import ConsumerConfig
+from huey.consumer_options import OptionParserHandler
+from huey.utils import load_class
 
 
 def err(s):

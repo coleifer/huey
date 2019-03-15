@@ -1,8 +1,8 @@
 from peewee import *
 
-from h2.api import Huey
-from h2.constants import EmptyData
-from h2.storage import BaseStorage
+from huey.api import Huey
+from huey.constants import EmptyData
+from huey.storage import BaseStorage
 
 
 class BaseModel(Model):

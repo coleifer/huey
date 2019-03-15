@@ -41,7 +41,7 @@ HUEY = RedisHuey('my-app')
 """
 
 
-default_backend_path = 'h2.RedisHuey'
+default_backend_path = 'huey.RedisHuey'
 
 def default_queue_name():
     try:

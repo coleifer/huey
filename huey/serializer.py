@@ -4,7 +4,7 @@ except ImportError:
     gzip = None
 import pickle
 
-from h2.exceptions import ConfigurationError
+from huey.exceptions import ConfigurationError
 
 
 class Serializer(object):

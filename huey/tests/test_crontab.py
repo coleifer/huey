@@ -1,7 +1,7 @@
 import datetime
 import unittest
 
-from h2 import crontab
+from huey import crontab
 
 
 class TestCrontab(unittest.TestCase):

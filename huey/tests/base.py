@@ -1,9 +1,9 @@
 import logging
 import unittest
 
-from h2.consumer import Consumer
-from h2.exceptions import TaskException
-from h2.storage import MemoryHuey
+from huey.consumer import Consumer
+from huey.exceptions import TaskException
+from huey.storage import MemoryHuey
 
 
 class NullHandler(logging.Handler):

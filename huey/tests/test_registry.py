@@ -1,5 +1,5 @@
-from h2.exceptions import QueueException
-from h2.tests.base import BaseTestCase
+from huey.exceptions import QueueException
+from huey.tests.base import BaseTestCase
 
 
 class TestRegistry(BaseTestCase):
