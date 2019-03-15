@@ -5,8 +5,10 @@ from h2.api import Result
 from h2.api import Task
 from h2.api import TaskWrapper
 from h2.api import crontab
+from h2.api import _unsupported
 from h2.constants import EmptyData
 from h2.exceptions import CancelExecution
+from h2.exceptions import ConfigurationError
 from h2.exceptions import TaskException
 from h2.exceptions import TaskLockedException
 from h2.tests.base import BaseTestCase
@@ -869,3 +871,7 @@ class TestHueyAPIs(BaseTestCase):
         for test in tests:
             self.huey.put('key', test)
             self.assertEqual(self.huey.get('key'), test)
+
+    def test_unsupported(self):
+        FooHuey = _unsupported('FooHuey', 'foo')
+        self.assertRaises(ConfigurationError, FooHuey)

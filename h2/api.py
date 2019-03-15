@@ -12,6 +12,7 @@ from collections import OrderedDict
 from h2.constants import EmptyData
 from h2.consumer import Consumer
 from h2.exceptions import CancelExecution
+from h2.exceptions import ConfigurationError
 from h2.exceptions import RetryTask
 from h2.exceptions import TaskException
 from h2.exceptions import TaskLockedException
@@ -827,3 +828,11 @@ def crontab(minute='*', hour='*', day='*', month='*', day_of_week='*'):
         return True
 
     return validate_date
+
+
+def _unsupported(name, library):
+    class UnsupportedHuey(Huey):
+        def __init__(self, *args, **kwargs):
+            raise ConfigurationError('Cannot initialize "%s", %s module not '
+                                     'installed.' % (name, library))
+    return UnsupportedHuey

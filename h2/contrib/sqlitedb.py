@@ -1,5 +1,3 @@
-import operator
-
 from peewee import *
 
 from h2.api import Huey
