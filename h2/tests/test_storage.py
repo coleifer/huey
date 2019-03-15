@@ -1,12 +1,19 @@
 import datetime
 import itertools
+import tempfile
+import unittest
 
 from redis.connection import ConnectionPool
 
 from h2.constants import EmptyData
+from h2.consumer import Consumer
 from h2.storage import MemoryHuey
 from h2.storage import RedisHuey
 from h2.tests.base import BaseTestCase
+try:
+    from h2.contrib.sqlitedb import SqliteHuey
+except ImportError:
+    SqliteHuey = None
 
 
 class StorageTests(object):
@@ -89,10 +96,33 @@ class StorageTests(object):
         self.assertEqual(self.s.peek_data(b'k1'), b'v1-y')
 
         # Test introspection.
-        self.assertEqual(self.s.result_items(), {b'k1': b'v1-y', b'k2': b'v2'})
+        state = self.s.result_items()  # Normalize keys to unicode strings.
+        clean = {k.decode('utf8') if isinstance(k, bytes) else k: v
+                 for k, v in state.items()}
+        self.assertEqual(clean, {'k1': b'v1-y', 'k2': b'v2'})
         self.s.flush_results()
         self.assertEqual(self.s.result_store_size(), 0)
         self.assertEqual(self.s.result_items(), {})
+
+    def test_consumer_integration(self):
+        @self.huey.task()
+        def task_a(n):
+            return n + 1
+
+        consumer = self.consumer()
+        consumer.start()
+        try:
+            r1 = task_a(1)
+            r2 = task_a(2)
+            r3 = task_a(3)
+
+            self.assertEqual(r1.get(blocking=True, timeout=5), 2)
+            self.assertEqual(r2.get(blocking=True, timeout=5), 3)
+            self.assertEqual(r3.get(blocking=True, timeout=5), 4)
+        finally:
+            consumer.stop()
+            for _, worker in consumer.worker_threads:
+                worker.join()
 
 
 class TestMemoryStorage(StorageTests, BaseTestCase):
@@ -110,3 +140,9 @@ class TestRedisStorage(StorageTests, BaseTestCase):
         combinations = itertools.combinations(options.items(), 2)
         for kwargs in (dict(item) for item in combinations):
             self.assertRaises(ValueError, lambda: RedisHuey(**kwargs))
+
+
+@unittest.skipIf(SqliteHuey is None, 'missing deps for sqlite backend')
+class TestSqliteStorage(StorageTests, BaseTestCase):
+    def get_huey(self):
+        return SqliteHuey(filename=tempfile.mktemp())

@@ -1,6 +1,7 @@
 import logging
 import unittest
 
+from h2.consumer import Consumer
 from h2.exceptions import TaskException
 from h2.storage import MemoryHuey
 
@@ -32,3 +33,10 @@ class BaseTestCase(unittest.TestCase):
         except exc_type as exc_val:
             return exc_val
         raise AssertionError('trap_exception() failed to catch %s' % exc_type)
+
+    def consumer(self, **params):
+        params.setdefault('initial_delay', 0.001)
+        params.setdefault('max_delay', 0.001)
+        params.setdefault('workers', 2)
+        params.setdefault('check_worker_health', False)
+        return Consumer(self.huey, **params)
