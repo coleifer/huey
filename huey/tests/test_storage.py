@@ -1,131 +1,148 @@
 import datetime
 import itertools
+import tempfile
+import unittest
 
 from redis.connection import ConnectionPool
 
-from huey.constants import EmptyData
-from huey.storage import RedisHuey
-from huey.storage import RedisStorage
-from huey.tests.base import b
-from huey.tests.base import HueyTestCase
+from h2.constants import EmptyData
+from h2.consumer import Consumer
+from h2.storage import MemoryHuey
+from h2.storage import RedisHuey
+from h2.tests.base import BaseTestCase
+try:
+    from h2.contrib.sqlitedb import SqliteHuey
+except ImportError:
+    SqliteHuey = None
 
-class TestRedisStorage(HueyTestCase):
-    def test_queues(self):
-        storage = self.huey.storage
-        storage.flush_queue()
 
+class StorageTests(object):
+    def setUp(self):
+        super(StorageTests, self).setUp()
+        self.s = self.huey.storage
+        self.s.flush_all()
+
+    def tearDown(self):
+        super(StorageTests, self).tearDown()
+        self.s.flush_all()
+
+    def test_queue_methods(self):
+        for i in range(3):
+            self.s.enqueue(b'item-%d' % i)
+
+        # Remove two items (this API is not used, but we'll test it anyways).
+        self.s.unqueue(b'item-1')
+        self.s.unqueue(b'item-x')
+        self.assertEqual(self.s.queue_size(), 2)
+        self.assertEqual(self.s.enqueued_items(), [b'item-0', b'item-2'])
+        self.assertEqual(self.s.dequeue(), b'item-0')
+        self.assertEqual(self.s.dequeue(), b'item-2')
+
+        self.assertEqual(self.s.queue_size(), 0)
+
+        # Test flushing the queue.
+        self.s.enqueue(b'item-3')
+        self.assertEqual(self.s.queue_size(), 1)
+        self.s.flush_queue()
+        self.assertEqual(self.s.queue_size(), 0)
+
+    def test_schedule_methods(self):
+        timestamp = datetime.datetime(2000, 1, 2, 3, 4, 5)
+        second = datetime.timedelta(seconds=1)
+
+        items = ((b'p1', timestamp + second),
+                 (b'p0', timestamp),
+                 (b'n1', timestamp - second),
+                 (b'p2', timestamp + second + second))
+        for data, ts in items:
+            self.s.add_to_schedule(data, ts)
+
+        self.assertEqual(self.s.schedule_size(), 4)
+
+        # Read from the schedule up-to the "p0" timestamp.
+        sched = self.s.read_schedule(timestamp)
+        self.assertEqual(sched, [b'n1', b'p0'])
+
+        self.assertEqual(self.s.scheduled_items(), [b'p1', b'p2'])
+        self.assertEqual(self.s.schedule_size(), 2)
+        sched = self.s.read_schedule(datetime.datetime.now())
+        self.assertEqual(sched, [b'p1', b'p2'])
+        self.assertEqual(self.s.schedule_size(), 0)
+        self.assertEqual(self.s.read_schedule(datetime.datetime.now()), [])
+
+    def test_result_store_methods(self):
+        # Put and peek at data. Verify missing keys return EmptyData sentinel.
+        self.s.put_data(b'k1', b'v1')
+        self.s.put_data(b'k2', b'v2')
+        self.assertEqual(self.s.peek_data(b'k2'), b'v2')
+        self.assertEqual(self.s.peek_data(b'k1'), b'v1')
+        self.assertTrue(self.s.peek_data(b'kx') is EmptyData)
+        self.assertEqual(self.s.result_store_size(), 2)
+
+        # Verify we can overwrite existing keys and that pop will remove the
+        # key/value pair. Subsequent pop on missing key will return EmptyData.
+        self.s.put_data(b'k1', b'v1-x')
+        self.assertEqual(self.s.peek_data(b'k1'), b'v1-x')
+        self.assertEqual(self.s.pop_data(b'k1'), b'v1-x')
+        self.assertTrue(self.s.pop_data(b'k1') is EmptyData)
+
+        self.assertFalse(self.s.has_data_for_key(b'k1'))
+        self.assertTrue(self.s.has_data_for_key(b'k2'))
+        self.assertEqual(self.s.result_store_size(), 1)
+
+        # Test put-if-empty.
+        self.assertTrue(self.s.put_if_empty(b'k1', b'v1-y'))
+        self.assertFalse(self.s.put_if_empty(b'k1', b'v1-z'))
+        self.assertEqual(self.s.peek_data(b'k1'), b'v1-y')
+
+        # Test introspection.
+        state = self.s.result_items()  # Normalize keys to unicode strings.
+        clean = {k.decode('utf8') if isinstance(k, bytes) else k: v
+                 for k, v in state.items()}
+        self.assertEqual(clean, {'k1': b'v1-y', 'k2': b'v2'})
+        self.s.flush_results()
+        self.assertEqual(self.s.result_store_size(), 0)
+        self.assertEqual(self.s.result_items(), {})
+
+    def test_consumer_integration(self):
         @self.huey.task()
-        def test_queues_add(k, v):
-            return k + v
+        def task_a(n):
+            return n + 1
 
-        res = test_queues_add('k', 'v')
-        self.assertEqual(storage.queue_size(), 1)
-        task = self.huey.dequeue()
-        self.huey.execute(task)
-        self.assertEqual(res.get(), 'kv')
+        consumer = self.consumer()
+        consumer.start()
+        try:
+            r1 = task_a(1)
+            r2 = task_a(2)
+            r3 = task_a(3)
 
-        res = test_queues_add('\xce', '\xcf')
-        task = self.huey.dequeue()
-        self.huey.execute(task)
-        self.assertEqual(res.get(), '\xce\xcf')
+            self.assertEqual(r1.get(blocking=True, timeout=5), 2)
+            self.assertEqual(r2.get(blocking=True, timeout=5), 3)
+            self.assertEqual(r3.get(blocking=True, timeout=5), 4)
+        finally:
+            consumer.stop()
+            for _, worker in consumer.worker_threads:
+                worker.join()
 
-    def test_data_stores(self):
-        storage = self.huey.storage
-        storage.put_data('k1', 'v1')
-        storage.put_data('k2', 'v2')
-        storage.put_data('k3', 'v3')
-        self.assertEqual(storage.peek_data('k2'), b('v2'))
-        self.assertEqual(storage.pop_data('k2'), b('v2'))
-        self.assertEqual(storage.peek_data('k2'), EmptyData)
-        self.assertEqual(storage.pop_data('k2'), EmptyData)
 
-        self.assertEqual(storage.peek_data('k3'), b('v3'))
-        storage.put_data('k3', 'v3-2')
-        self.assertEqual(storage.peek_data('k3'), b('v3-2'))
+class TestMemoryStorage(StorageTests, BaseTestCase):
+    def get_huey(self):
+        return MemoryHuey(utc=False)
 
-    def test_schedules(self):
-        storage = self.huey.storage
-        dt1 = datetime.datetime(2013, 1, 1, 0, 0)
-        dt2 = datetime.datetime(2013, 1, 2, 0, 0)
-        dt3 = datetime.datetime(2013, 1, 3, 0, 0)
-        dt4 = datetime.datetime(2013, 1, 4, 0, 0)
 
-        # Add to schedule out-of-order to ensure sorting is performed by
-        # the schedule.
-        storage.add_to_schedule('s2', dt2)
-        storage.add_to_schedule('s1', dt1)
-        storage.add_to_schedule('s4', dt4)
-        storage.add_to_schedule('s3', dt3)
-
-        # Ensure that asking for a timestamp previous to any item in the
-        # schedule returns empty list.
-        self.assertEqual(
-            storage.read_schedule(dt1 - datetime.timedelta(days=1)),
-            [])
-
-        # Ensure the upper boundary is inclusive of whatever timestamp
-        # is passed in.
-        self.assertEqual(
-            storage.read_schedule(dt3),
-            [b('s1'), b('s2'), b('s3')])
-        self.assertEqual(storage.read_schedule(dt3), [])
-
-        # Ensure the schedule is flushed and an empty schedule returns an
-        # empty list.
-        self.assertEqual(storage.read_schedule(dt4), [b('s4')])
-        self.assertEqual(storage.read_schedule(dt4), [])
-
-    def test_events(self):
-        storage = self.huey.storage
-        ps = storage.listener()
-
-        messages = ['a', 'b', 'c']
-        for message in messages:
-            storage.emit(message)
-
-        g = ps.listen()
-        next(g)
-        self.assertEqual(next(g)['data'], b('a'))
-        self.assertEqual(next(g)['data'], b('b'))
-        self.assertEqual(next(g)['data'], b('c'))
-
-    def test_event_iterator(self):
-        i = iter(self.huey.storage)
-
-        self.huey.storage.emit('"a"')
-        self.huey.storage.emit('"b"')
-
-        res = next(i)
-        self.assertEqual(res, 'a')
-        res = next(i)
-        self.assertEqual(res, 'b')
+class TestRedisStorage(StorageTests, BaseTestCase):
+    def get_huey(self):
+        return RedisHuey(utc=False)
 
     def test_conflicting_init_args(self):
-        options = {
-            'host': 'localhost',
-            'url': 'redis://localhost',
-            'connection_pool': ConnectionPool()
-        }
+        options = {'host': 'localhost', 'url': 'redis://localhost',
+                   'connection_pool': ConnectionPool()}
         combinations = itertools.combinations(options.items(), 2)
-
         for kwargs in (dict(item) for item in combinations):
-            self.assertRaises(ValueError, lambda: RedisStorage(**kwargs))
+            self.assertRaises(ValueError, lambda: RedisHuey(**kwargs))
 
-    def test_init_with_url(self):
-        s = RedisStorage(url='redis://example.org:1234')
-        args = s.pool.connection_kwargs
-        self.assertEqual(args['host'], 'example.org')
-        self.assertEqual(args['port'], 1234)
 
-    def test_init_with_kwargs(self):
-        s = RedisStorage(host='example.org', port=1234)
-        args = s.pool.connection_kwargs
-        self.assertEqual(args['host'], 'example.org')
-        self.assertEqual(args['port'], 1234)
-
-    def test_init_huey(self):
-        huey = RedisHuey(url='redis://example.org:31337/?db=7')
-        conn = huey.storage.pool.connection_kwargs
-        self.assertEqual(conn['host'], 'example.org')
-        self.assertEqual(conn['port'], 31337)
-        self.assertEqual(conn['db'], 7)
+@unittest.skipIf(SqliteHuey is None, 'missing deps for sqlite backend')
+class TestSqliteStorage(StorageTests, BaseTestCase):
+    def get_huey(self):
+        return SqliteHuey(filename=tempfile.mktemp())

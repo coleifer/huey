@@ -1,12 +1,8 @@
-import operator
-import pickle
-import threading
-
 from peewee import *
 
-from huey.api import Huey
-from huey.constants import EmptyData
-from huey.storage import BaseStorage
+from h2.api import Huey
+from h2.constants import EmptyData
+from h2.storage import BaseStorage
 
 
 class BaseModel(Model):
@@ -23,6 +19,11 @@ class Schedule(BaseModel):
     queue = CharField()
     data = BlobField()
     timestamp = TimestampField()
+
+    class Meta:
+        indexes = (
+            (('queue', 'timestamp'), False),
+        )
 
 
 class KeyValue(BaseModel):
@@ -42,10 +43,10 @@ class SqliteStorage(BaseStorage):
         self.initialize_task_table()
 
     def initialize_task_table(self):
-        Task._meta.database = self.database
-        Schedule._meta.database = self.database
-        KeyValue._meta.database = self.database
-        self.database.create_tables([Task, Schedule, KeyValue], safe=True)
+        self.database.bind([Task, Schedule, KeyValue])
+
+        with self.database:
+            self.database.create_tables([Task, Schedule, KeyValue])
 
     def tasks(self, *columns):
         return Task.select(*columns).where(Task.queue == self.name)
@@ -91,7 +92,7 @@ class SqliteStorage(BaseStorage):
         query = self.tasks(Task.data).tuples()
         if limit is not None:
             query = query.limit(limit)
-        return map(operator.itemgetter(0), query)
+        return [item[0] for item in query]
 
     def flush_queue(self):
         self.delete().execute()
@@ -123,13 +124,13 @@ class SqliteStorage(BaseStorage):
                  .schedule(Schedule.data)
                  .order_by(Schedule.timestamp)
                  .tuples())
-        return map(operator.itemgetter(0), tasks)
+        return [item[0] for item in tasks]
 
     def flush_schedule(self):
         return Schedule.delete().where(Schedule.queue == self.name).execute()
 
     def put_data(self, key, value):
-        KeyValue.create(queue=self.name, key=key, value=value)
+        KeyValue.replace(queue=self.name, key=key, value=value).execute()
 
     def peek_data(self, key):
         try:
@@ -154,10 +155,11 @@ class SqliteStorage(BaseStorage):
         return self.kv().where(KeyValue.key == key).exists()
 
     def put_if_empty(self, key, value):
-        sql = ('INSERT OR ABORT INTO "keyvalue" ("queue", "key", "value") '
-               'VALUES (?, ?, ?);')
         try:
-            res = self.database.execute_sql(sql, (self.name, key, value))
+            (KeyValue
+             .insert(queue=self.name, key=key, value=value)
+             .on_conflict('abort')
+             .execute())
         except IntegrityError:
             return False
         else:
@@ -168,29 +170,10 @@ class SqliteStorage(BaseStorage):
 
     def result_items(self):
         query = self.kv(KeyValue.key, KeyValue.value).tuples()
-        return dict((k, pickle.loads(v)) for k, v in query.iterator())
+        return dict((k, v) for k, v in query.iterator())
 
     def flush_results(self):
         return KeyValue.delete().where(KeyValue.queue == self.name).execute()
-
-    def put_error(self, metadata):
-        pass
-
-    def get_error(self, limit=None, offset=0):
-        pass
-
-    def flush_errors(self):
-        pass
-
-    def emit(self, message):
-        pass
-
-    def __iter__(self):
-        return self
-
-    def next(self):
-        raise StopIteration
-    __next__ = next
 
 
 class SqliteHuey(Huey):

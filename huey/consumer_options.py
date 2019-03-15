@@ -14,10 +14,9 @@ config_defaults = (
     ('backoff', 1.15),
     ('max_delay', 10.0),
     ('check_worker_health', True),
-    ('health_check_interval', 1),
+    ('health_check_interval', 10),
     ('scheduler_interval', 1),
     ('periodic', True),
-    ('utc', True),
     ('logfile', None),
     ('verbose', None),
     ('flush_locks', False),
@@ -76,10 +75,6 @@ class OptionParserHandler(object):
                    help='Granularity of scheduler in seconds.'),
             option('no_periodic', action='store_false',
                    dest='periodic', help='do NOT enqueue periodic tasks'),
-            option('utc', action='store_true',
-                   help='use UTC time for all tasks (default=True)'),
-            option(('o', 'localtime'), action='store_false', dest='utc',
-                   help='use local time for all tasks'),
         )
 
     def get_logging_options(self):
@@ -133,6 +128,9 @@ class ConsumerConfig(namedtuple('_ConsumerConfig', config_keys)):
         if not (0 < self.scheduler_interval <= 60):
             raise ValueError('The scheduler must run at least once per '
                              'minute, and at most once per second (1-60).')
+        if 60 % self.scheduler_interval != 0:
+            raise ValueError('The scheduler interval must be a factor of 60: '
+                             '1, 2, 3, 4, 5, 6, 10, 12, 15, 20, 30, or 60')
 
     @property
     def loglevel(self):
@@ -148,17 +146,17 @@ class ConsumerConfig(namedtuple('_ConsumerConfig', config_keys)):
 
         logformat = ('[%(asctime)s] %(levelname)s:%(name)s:' + worker +
                      ':%(message)s')
-        loglevel = self.loglevel
         if logger is None:
-            logging.basicConfig(level=loglevel, format=logformat)
             logger = logging.getLogger()
-        else:
-            logger.setLevel(loglevel)
 
         if self.logfile:
-            handler = FileHandler(self.logfile)
-            handler.setFormatter(logging.Formatter(logformat))
-            logger.addHandler(handler)
+            handler = logging.FileHandler(self.logfile)
+        else:
+            handler = logging.StreamHandler()
+
+        handler.setFormatter(logging.Formatter(logformat))
+        logger.addHandler(handler)
+        logger.setLevel(self.loglevel)
 
     @property
     def values(self):

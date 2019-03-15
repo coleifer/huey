@@ -1,18 +1,18 @@
-from huey.tests.base import BaseTestCase
-from huey.utils import wrap_exception
+import unittest
+
+from h2.utils import reraise_as
 
 
-class MyException(Exception):
-    pass
+class MyException(Exception): pass
 
 
-class TestWrapException(BaseTestCase):
+class TestReraiseAs(unittest.TestCase):
     def test_wrap_exception(self):
         def raise_keyerror():
             try:
                 {}['huey']
             except KeyError as exc:
-                raise wrap_exception(MyException)
+                reraise_as(MyException)
 
         self.assertRaises(MyException, raise_keyerror)
         try:
@@ -20,4 +20,4 @@ class TestWrapException(BaseTestCase):
         except MyException as exc:
             self.assertEqual(str(exc), "KeyError: 'huey'")
         else:
-            assert False
+            raise AssertionError('MyException not raised as expected.')

@@ -1,8 +1,0 @@
-WORKER_THREAD = 'thread'
-WORKER_GREENLET = 'greenlet'
-WORKER_PROCESS = 'process'
-WORKER_TYPES = (WORKER_THREAD, WORKER_GREENLET, WORKER_PROCESS)
-
-
-class EmptyData(object):
-    pass

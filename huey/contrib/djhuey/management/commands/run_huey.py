@@ -4,9 +4,9 @@ from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.utils.module_loading import autodiscover_modules
 
-from huey.consumer import Consumer
-from huey.consumer_options import ConsumerConfig
-from huey.consumer_options import OptionParserHandler
+from h2.consumer import Consumer
+from h2.consumer_options import ConsumerConfig
+from h2.consumer_options import OptionParserHandler
 
 
 logger = logging.getLogger(__name__)
@@ -41,7 +41,7 @@ class Command(BaseCommand):
                 parser.add_argument(full, short, **kwargs)
 
     def handle(self, *args, **options):
-        from huey.contrib.djhuey import HUEY
+        from h2.contrib.djhuey import HUEY
 
         consumer_options = {}
         try:
@@ -56,7 +56,7 @@ class Command(BaseCommand):
 
         consumer_options.setdefault('verbose',
                                     consumer_options.pop('huey_verbose', None))
-        
+
         autodiscover_modules("tasks")
 
         config = ConsumerConfig(**consumer_options)

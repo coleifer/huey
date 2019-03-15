@@ -1,3 +1,5 @@
+from collections import deque
+import heapq
 import json
 import re
 import time
@@ -12,11 +14,13 @@ try:
 except ImportError:
     ConnectionPool = Redis = ConnectionError = None
 
-from huey.api import Huey
-from huey.constants import EmptyData
+from h2.api import Huey
+from h2.constants import EmptyData
 
 
 class BaseStorage(object):
+    blocking = False  # Does dequeue() block until ready, or should we poll?
+
     def __init__(self, name='huey', **storage_kwargs):
         self.name = name
 
@@ -196,49 +200,6 @@ class BaseStorage(object):
         """
         raise NotImplementedError
 
-    def put_error(self, metadata):
-        """
-        Log an error in the error store. The ``max_errors`` parameter is used
-        to prevent the error store from growing without bounds.
-
-        :param metadata: Store the metadata in the error store.
-        :return: No return value.
-        """
-        raise NotImplementedError
-
-    def get_errors(self, limit=None, offset=0):
-        """
-        Non-destructively read error data from the error store.
-
-        :param int limit: Restrict number of rows returned.
-        :param int offset: Start reading at the given offset.
-        :return: List of error metadata.
-        """
-        raise NotImplementedError
-
-    def flush_errors(self):
-        """
-        Delete all error metadata from the error store.
-
-        :return: No return value.
-        """
-        raise NotImplementedError
-
-    def emit(self, message):
-        """
-        Publish a message from the consumer.
-        """
-        raise NotImplementedError
-
-    def __iter__(self):
-        """
-        Successively yield events emitted by the huey consumer(s).
-
-        :return: Iterator that yields consumer event metadata.
-        """
-        # Iterate over consumer-sent events.
-        raise NotImplementedError
-
     def flush_all(self):
         """
         Remove all persistent or semi-persistent data.
@@ -248,7 +209,92 @@ class BaseStorage(object):
         self.flush_queue()
         self.flush_schedule()
         self.flush_results()
-        self.flush_errors()
+
+
+class MemoryStorage(BaseStorage):
+    def __init__(self, *args, **kwargs):
+        super(MemoryStorage, self).__init__(*args, **kwargs)
+        self._queue = deque()
+        self._results = {}
+        self._schedule = []
+
+    def enqueue(self, data):
+        self._queue.append(data)
+
+    def dequeue(self):
+        if self._queue:
+            return self._queue.popleft()
+
+    def unqueue(self, data):
+        try:
+            self._queue.remove(data)
+        except ValueError:
+            pass
+
+    def queue_size(self):
+        return len(self._queue)
+
+    def enqueued_items(self, limit=None):
+        items = list(self._queue)
+        if limit:
+            items = items[:limit]
+        return items
+
+    def flush_queue(self):
+        self._queue = deque()
+
+    def add_to_schedule(self, data, ts):
+        heapq.heappush(self._schedule, (ts, data))
+
+    def read_schedule(self, ts):
+        accum = []
+        while self._schedule:
+            sts, data = heapq.heappop(self._schedule)
+            if sts <= ts:
+                accum.append(data)
+            else:
+                heapq.heappush(self._schedule, (sts, data))
+                break
+
+        return accum
+
+    def schedule_size(self):
+        return len(self._schedule)
+
+    def scheduled_items(self, limit=None):
+        items = sorted(data for _, data in self._schedule)
+        if limit:
+            items = items[:limit]
+        return items
+
+    def flush_schedule(self):
+        self._schedule = []
+
+    def put_data(self, key, value):
+        self._results[key] = value
+
+    def peek_data(self, key):
+        return self._results.get(key, EmptyData)
+
+    def pop_data(self, key):
+        return self._results.pop(key, EmptyData)
+
+    def has_data_for_key(self, key):
+        return key in self._results
+
+    def result_store_size(self):
+        return len(self._results)
+
+    def result_items(self):
+        return dict(self._results)
+
+    def flush_results(self):
+        self._results = {}
+
+
+class MemoryHuey(Huey):
+    def get_storage(self, **kwargs):
+        return MemoryStorage(name=self.name, **kwargs)
 
 
 # A custom lua script to pass to redis that will read tasks from the schedule
@@ -328,14 +374,14 @@ class RedisStorage(BaseStorage):
             return self.conn.rpop(self.queue_key)
 
     def unqueue(self, data):
-        return self.conn.lrem(self.queue_key, data)
+        return self.conn.lrem(self.queue_key, 0, data)
 
     def queue_size(self):
         return self.conn.llen(self.queue_key)
 
     def enqueued_items(self, limit=None):
         limit = limit or -1
-        return self.conn.lrange(self.queue_key, 0, limit)
+        return self.conn.lrange(self.queue_key, 0, limit)[::-1]
 
     def flush_queue(self):
         self.conn.delete(self.queue_key)
@@ -393,53 +439,13 @@ class RedisStorage(BaseStorage):
     def flush_results(self):
         self.conn.delete(self.result_key)
 
-    def put_error(self, metadata):
-        self.conn.lpush(self.error_key, metadata)
-        if self.conn.llen(self.error_key) > self.max_errors:
-            self.conn.ltrim(self.error_key, 0, int(self.max_errors * .9))
-
-    def get_errors(self, limit=None, offset=0):
-        if limit is None:
-            limit = -1
-        return self.conn.lrange(self.error_key, offset, limit)
-
-    def flush_errors(self):
-        self.conn.delete(self.error_key)
-
-    def emit(self, message):
-        self.conn.publish(self.name, message)
-
-    def listener(self):
-        """
-        Create a channel for listening to raw event data.
-
-        :return: a Redis pubsub object.
-        """
-        pubsub = self.conn.pubsub()
-        pubsub.subscribe([self.name])
-        return pubsub
-
-    def __iter__(self):
-        return _EventIterator(self.listener())
-
-
-class _EventIterator(object):
-    def __init__(self, pubsub):
-        self.listener = pubsub.listen()
-        next(self.listener)
-
-    def next(self):
-        return json.loads(next(self.listener)['data'].decode('utf-8'))
-
-    __next__ = next
-
 
 class RedisHuey(Huey):
-    def get_storage(self, read_timeout=1, max_errors=1000,
+    def get_storage(self, blocking=False, read_timeout=1, max_errors=1000,
                     connection_pool=None, url=None, **connection_params):
         return RedisStorage(
             name=self.name,
-            blocking=self.blocking,
+            blocking=blocking,
             read_timeout=read_timeout,
             max_errors=max_errors,
             connection_pool=connection_pool,

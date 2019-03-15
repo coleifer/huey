@@ -48,7 +48,7 @@ def load_class(s):
     return getattr(mod, klass)
 
 
-def wrap_exception(new_exc_class):
+def reraise_as(new_exc_class):
     exc_class, exc, tb = sys.exc_info()
     raise new_exc_class('%s: %s' % (exc_class.__name__, exc))
 
@@ -74,3 +74,22 @@ def local_to_utc(dt):
     Converts a naive local datetime.datetime in UTC time zone.
     """
     return datetime.datetime(*time.gmtime(time.mktime(dt.timetuple()))[:6])
+
+
+def normalize_time(eta=None, delay=None, utc=True):
+    if not ((delay is None) ^ (eta is None)):
+        raise ValueError('Specify either an eta (datetime) or delay (seconds)')
+    elif delay:
+        method = (utc and datetime.datetime.utcnow or
+                  datetime.datetime.now)
+        return method() + datetime.timedelta(seconds=delay)
+    elif eta:
+        if is_naive(eta) and utc:
+            # Convert naive local datetime into naive UTC datetime.
+            eta = local_to_utc(eta)
+        elif is_aware(eta) and utc:
+            # Convert tz-aware datetime into naive UTC datetime.
+            eta = aware_to_utc(eta)
+        elif is_aware(eta) and not utc:
+            eta = make_naive(eta)
+        return eta

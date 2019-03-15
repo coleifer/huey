@@ -1,7 +1,7 @@
 import sys
 import unittest
 
-from huey.tests import *
+from h2.tests import *
 
 
 if __name__ == '__main__':

@@ -1,10 +1,10 @@
 import datetime
+import unittest
 
-from huey import crontab
-from huey.tests.base import BaseTestCase
+from h2 import crontab
 
 
-class CrontabTestCase(BaseTestCase):
+class TestCrontab(unittest.TestCase):
     def test_crontab_month(self):
         # validates the following months, 1, 4, 7, 8, 9
         valids = [1, 4, 7, 8, 9]
@@ -21,6 +21,17 @@ class CrontabTestCase(BaseTestCase):
 
         for x in range(1, 32):
             res = validate_d(datetime.datetime(2011, 1, x))
+            self.assertEqual(res, x in valids)
+
+        valids = [1, 11, 21, 31]
+        validate_d = crontab(day='*/10')
+        for x in range(1, 32):
+            res = validate_d(datetime.datetime(2011, 1, x))
+            self.assertEqual(res, x in valids)
+
+        valids.pop()  # Remove 31, as feb only has 28 days.
+        for x in range(1, 29):
+            res = validate_d(datetime.datetime(2011, 2, x))
             self.assertEqual(res, x in valids)
 
     def test_crontab_hour(self):
@@ -41,6 +52,13 @@ class CrontabTestCase(BaseTestCase):
         valids = [0, 1, 4, 6, 8, 9, 12, 18, 24, 30, 36, 42, 48, 54]
         validate_m = crontab(minute='4,8-9,*/6,1')
 
+        for x in range(60):
+            res = validate_m(datetime.datetime(2011, 1, 1, 1, x))
+            self.assertEqual(res, x in valids)
+
+        # We don't ensure *every* X minutes, but just on the given intervals.
+        valids = [0, 16, 32, 48]
+        validate_m = crontab(minute='*/16')
         for x in range(60):
             res = validate_m(datetime.datetime(2011, 1, 1, 1, x))
             self.assertEqual(res, x in valids)
@@ -99,3 +117,4 @@ class CrontabTestCase(BaseTestCase):
         # check invalid configurations are detected and reported
         self.assertRaises(ValueError, crontab, minute='61')
         self.assertRaises(ValueError, crontab, minute='0-61')
+        self.assertRaises(ValueError, crontab, day_of_week='*/3')

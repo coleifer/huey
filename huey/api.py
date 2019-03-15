@@ -1,458 +1,298 @@
 import datetime
-import json
-import pickle
+import functools
+import inspect
+import logging
 import re
 import time
 import traceback
 import uuid
-from collections import OrderedDict
-from functools import wraps
-from inspect import isclass
 
-from huey.constants import EmptyData
-from huey.consumer import Consumer
-from huey.exceptions import DataStoreGetException
-from huey.exceptions import DataStorePutException
-from huey.exceptions import DataStoreTimeout
-from huey.exceptions import QueueException
-from huey.exceptions import QueueReadException
-from huey.exceptions import QueueRemoveException
-from huey.exceptions import QueueWriteException
-from huey.exceptions import ScheduleAddException
-from huey.exceptions import ScheduleReadException
-from huey.exceptions import TaskException
-from huey.exceptions import TaskLockedException
-from huey.registry import registry
-from huey.registry import TaskRegistry
-from huey.utils import Error
-from huey.utils import aware_to_utc
-from huey.utils import is_aware
-from huey.utils import is_naive
-from huey.utils import local_to_utc
-from huey.utils import make_naive
-from huey.utils import wrap_exception
+from collections import OrderedDict
+
+from h2.constants import EmptyData
+from h2.consumer import Consumer
+from h2.exceptions import CancelExecution
+from h2.exceptions import ConfigurationError
+from h2.exceptions import RetryTask
+from h2.exceptions import TaskException
+from h2.exceptions import TaskLockedException
+from h2.registry import Registry
+from h2.serializer import Serializer
+from h2.utils import Error
+from h2.utils import normalize_time
+from h2.utils import reraise_as
+
+
+logger = logging.getLogger('huey')
 
 
 class Huey(object):
-    """
-    Huey executes tasks by exposing function decorators that cause the function
-    call to be enqueued for execution by the consumer.
-
-    Typically your application will only need one Huey instance, but you can
-    have as many as you like -- the only caveat is that one consumer process
-    must be executed for each Huey instance.
-
-    :param name: a name for the task queue.
-    :param bool result_store: whether to store task results.
-    :param bool events: whether to enable consumer-sent events.
-    :param store_none: Flag to indicate whether tasks that return ``None``
-        should store their results in the result store.
-    :param always_eager: Useful for testing, this will execute all tasks
-        immediately, without enqueueing them.
-    :param store_errors: Flag to indicate whether task errors should be stored.
-    :param global_registry: Use a global registry for tasks.
-
-    Example usage::
-
-        from huey import RedisHuey
-
-        # Create a huey instance and disable consumer-sent events.
-        huey = RedisHuey('my-app', events=False)
-
-        @huey.task()
-        def slow_function(some_arg):
-            # ... do something ...
-            return some_arg
-
-        @huey.periodic_task(crontab(minute='0', hour='3'))
-        def backup():
-            # do a backup every day at 3am
-            return
-    """
-    def __init__(self, name='huey', result_store=True, events=True,
-                 store_none=False, always_eager=False, store_errors=True,
-                 blocking=False, global_registry=True, **storage_kwargs):
+    def __init__(self, name='huey', results=True, store_none=False, utc=True,
+                 always_eager=False, serializer=None, compression=False,
+                 blocking=False, **storage_kwargs):
         self.name = name
-        self.result_store = result_store
-        self.events = events
+        self.results = results
         self.store_none = store_none
+        self.utc = utc
         self.always_eager = always_eager
-        self.store_errors = store_errors
-        self.blocking = blocking
+        self.serializer = serializer or Serializer()
+        if compression:
+            self.serializer.compression = True
+
         self.storage = self.get_storage(**storage_kwargs)
-        self.pre_execute_hooks = OrderedDict()
-        self.post_execute_hooks = OrderedDict()
-        self.startup_hooks = OrderedDict()
         self._locks = set()
-        if global_registry:
-            self.registry = registry
-        else:
-            self.registry = TaskRegistry()
+        self._pre_execute = OrderedDict()
+        self._post_execute = OrderedDict()
+        self._startup = OrderedDict()
+        self._registry = Registry()
 
     def get_storage(self, **kwargs):
         raise NotImplementedError('Storage API not implemented in the base '
                                   'Huey class. Use `RedisHuey` instead.')
 
-    def create_consumer(self, **config):
-        return Consumer(self, **config)
+    def create_consumer(self, **options):
+        return Consumer(self, **options)
 
-    def _normalize_execute_time(self, eta=None, delay=None, convert_utc=True):
-        if delay and eta:
-            raise ValueError('Both a delay and an eta cannot be '
-                             'specified at the same time')
-        elif delay:
-            method = (convert_utc and datetime.datetime.utcnow or
-                      datetime.datetime.now)
-            return method() + datetime.timedelta(seconds=delay)
-        elif eta:
-            if is_naive(eta) and convert_utc:
-                eta = local_to_utc(eta)
-            elif is_aware(eta) and convert_utc:
-                eta = aware_to_utc(eta)
-            elif is_aware(eta) and not convert_utc:
-                eta = make_naive(eta)
-            return eta
-
-    def task(self, retries=0, retry_delay=0, retries_as_argument=False,
-             include_task=False, name=None, **task_settings):
+    def task(self, retries=0, retry_delay=0, context=False, name=None, **kw):
         def decorator(func):
-            """
-            Decorator to execute a function out-of-band via the consumer.
-            """
             return TaskWrapper(
                 self,
                 func.func if isinstance(func, TaskWrapper) else func,
                 retries=retries,
                 retry_delay=retry_delay,
-                retries_as_argument=retries_as_argument,
-                include_task=include_task,
+                context=context,
                 name=name,
-                **task_settings)
+                **kw)
         return decorator
 
-    # We specify retries and retry_delay as 0 because they become the default
-    # values as class attributes on the derived PeriodicQueueTask instance.
-    # Since the values the class is instantiated with will always be `None`,
-    # we want the fallback behavior to be 0 by default.
-    def periodic_task(self, validate_datetime, name=None, retries=0,
-                      retry_delay=0, **task_settings):
-        """
-        Decorator to execute a function on a specific schedule.
-        """
+    def periodic_task(self, validate_datetime, retries=0, retry_delay=0,
+                      context=False, name=None, **kw):
         def decorator(func):
-            def method_validate(self, dt):
-                return validate_datetime(dt)
+            def method_validate(self, timestamp):
+                return validate_datetime(timestamp)
 
             return TaskWrapper(
                 self,
                 func.func if isinstance(func, TaskWrapper) else func,
+                context=context,
                 name=name,
-                task_base=PeriodicQueueTask,
                 default_retries=retries,
                 default_retry_delay=retry_delay,
                 validate_datetime=method_validate,
-                **task_settings)
+                task_base=PeriodicTask,
+                **kw)
 
         return decorator
-
-    def register_pre_execute(self, name, fn):
-        """
-        Register a pre-execute hook. The callback will be executed before the
-        execution of all tasks. Execution of the task can be cancelled by
-        raising a :py:class:`CancelExecution` exception. Uncaught exceptions
-        will be logged but will not cause the task itself to be cancelled.
-
-        The callback function should accept a single task instance, the return
-        value is ignored.
-
-        :param name: Name for the hook.
-        :param fn: Callback function that accepts task to be executed.
-        """
-        self.pre_execute_hooks[name] = fn
-
-    def unregister_pre_execute(self, name):
-        del self.pre_execute_hooks[name]
 
     def pre_execute(self, name=None):
-        """
-        Decorator for registering a pre-execute hook.
-        """
         def decorator(fn):
-            self.register_pre_execute(name or fn.__name__, fn)
+            self._pre_execute[name or fn.__name__] = fn
             return fn
         return decorator
 
-    def register_post_execute(self, name, fn):
-        """
-        Register a post-execute hook. The callback will be executed after the
-        execution of all tasks. Uncaught exceptions will be logged but will
-        have no other effect on the overall operation of the consumer.
-
-        The callback function should accept:
-
-        * a task instance
-        * the return value from the execution of the task (which may be None)
-        * any exception that was raised during the execution of the task (which
-          will be None for tasks that executed normally).
-
-        The return value of the callback itself is ignored.
-
-        :param name: Name for the hook.
-        :param fn: Callback function that accepts task that was executed and
-                   the tasks return value (or None).
-        """
-        self.post_execute_hooks[name] = fn
-
-    def unregister_post_execute(self, name):
-        del self.post_execute_hooks[name]
+    def unregister_pre_execute(self, name):
+        return self._pre_execute.pop(name, None) is not None
 
     def post_execute(self, name=None):
-        """
-        Decorator for registering a post-execute hook.
-        """
         def decorator(fn):
-            self.register_post_execute(name or fn.__name__, fn)
+            self._post_execute[name or fn.__name__] = fn
             return fn
         return decorator
 
-    def register_startup(self, name, fn):
-        """
-        Register a startup hook. The callback will be executed whenever a
-        worker comes online. Uncaught exceptions will be logged but will
-        have no other effect on the overall operation of the worker.
-
-        The callback function must not accept any parameters.
-
-        This API is provided to simplify setting up global resources that, for
-        whatever reason, should not be created as import-time side-effects. For
-        example, your tasks need to write data into a Postgres database. If you
-        create the connection at import-time, before the worker processes are
-        spawned, you'll likely run into errors when attempting to use the
-        connection from the child (worker) processes. To avoid this problem,
-        you can register a startup hook which is executed by the worker process
-        as part of its initialization.
-
-        :param name: Name for the hook.
-        :param fn: Callback function.
-        """
-        self.startup_hooks[name] = fn
-
-    def unregister_startup(self, name):
-        del self.startup_hooks[name]
+    def unregister_post_execute(self, name):
+        return self._post_execute.pop(name, None) is not None
 
     def on_startup(self, name=None):
-        """
-        Decorator for registering a startup hook.
-        """
         def decorator(fn):
-            self.register_startup(name or fn.__name__, fn)
+            self._startup[name or fn.__name__] = fn
             return fn
         return decorator
 
-    def _wrapped_operation(exc_class):
-        def decorator(fn):
-            def inner(*args, **kwargs):
-                try:
-                    return fn(*args, **kwargs)
-                except (KeyboardInterrupt, RuntimeError):
-                    raise
-                except:
-                    wrap_exception(exc_class)
-            return inner
-        return decorator
+    def unregister_on_startup(self, name):
+        return self._startup.pop(name, None) is not None
 
-    @_wrapped_operation(QueueWriteException)
-    def _enqueue(self, msg):
-        self.storage.enqueue(msg)
+    def serialize_task(self, task):
+        message = self._registry.create_message(task)
+        return self.serializer.serialize(message)
 
-    @_wrapped_operation(QueueReadException)
-    def _dequeue(self):
-        return self.storage.dequeue()
+    def deserialize_task(self, data):
+        message = self.serializer.deserialize(data)
+        return self._registry.create_task(message)
 
-    @_wrapped_operation(QueueRemoveException)
-    def _unqueue(self, msg):
-        return self.queue.unqueue(msg)
+    def enqueue(self, task):
+        self.storage.enqueue(self.serialize_task(task))
+        if not self.results:
+            return
 
-    @_wrapped_operation(DataStoreGetException)
-    def _get_data(self, key, peek=False):
+        if task.on_complete:
+            current = task
+            results = []
+            while current is not None:
+                results.append(Result(self, current))
+                current = current.on_complete
+            return results
+        else:
+            return Result(self, task)
+
+    def dequeue(self):
+        data = self.storage.dequeue()
+        if data is not None:
+            return self.deserialize_task(data)
+
+    def put(self, key, data):
+        return self.storage.put_data(key, self.serializer.serialize(data))
+
+    def put_if_empty(self, key, data):
+        return self.storage.put_if_empty(key, self.serializer.serialize(data))
+
+    def get_raw(self, key, peek=False):
         if peek:
             return self.storage.peek_data(key)
         else:
             return self.storage.pop_data(key)
 
-    @_wrapped_operation(DataStorePutException)
-    def _put_data(self, key, value):
-        return self.storage.put_data(key, value)
-
-    @_wrapped_operation(DataStorePutException)
-    def _put_if_empty(self, key, value):
-        return self.storage.put_if_empty(key, value)
-
-    @_wrapped_operation(DataStorePutException)
-    def _put_error(self, metadata):
-        self.storage.put_error(metadata)
-
-    @_wrapped_operation(DataStoreGetException)
-    def _get_errors(self, limit=None, offset=0):
-        return self.storage.get_errors(limit=limit, offset=offset)
-
-    @_wrapped_operation(ScheduleAddException)
-    def _add_to_schedule(self, data, ts):
-        self.storage.add_to_schedule(data, ts)
-
-    @_wrapped_operation(ScheduleReadException)
-    def _read_schedule(self, ts):
-        return self.storage.read_schedule(ts)
-
-    def emit(self, message):
-        try:
-            self.storage.emit(message)
-        except:
-            # Events always fail silently since they are treated as a non-
-            # critical component.
-            pass
-
-    def _execute_always_eager(self, task):
-        accum = []
-        failure_exc = None
-        while task is not None:
-            for name, callback in self.pre_execute_hooks.items():
-                callback(task)
-            try:
-                result = task.execute()
-            except Exception as exc:
-                result = None
-                failure_exc = task_exc = exc
-            else:
-                task_exc = None
-
-            result_wrapper = EagerTaskResultWrapper(self, task)
-            result_wrapper.set_result(result)
-            accum.append(result_wrapper)
-
-            for name, callback in self.post_execute_hooks.items():
-                callback(task, result, task_exc)
-            if task.on_complete:
-                task = task.on_complete
-                task.extend_data(result)
-            else:
-                task = None
-
-        if failure_exc is not None:
-            raise failure_exc
-
-        return accum[0] if len(accum) == 1 else accum
-
-    def enqueue(self, task):
-        if self.always_eager:
-            return self._execute_always_eager(task)
-
-        self._enqueue(self.registry.get_message_for_task(task))
-        if not self.result_store:
-            return
-
-        if task.on_complete:
-            q = [task]
-            result_wrappers = []
-            while q:
-                current = q.pop()
-                result_wrappers.append(TaskResultWrapper(self, current))
-                if current.on_complete:
-                    q.append(current.on_complete)
-            return result_wrappers
-        else:
-            return TaskResultWrapper(self, task)
-
-    def dequeue(self):
-        message = self._dequeue()
-        if message:
-            return self.registry.get_task_for_message(message)
-
-    def put(self, key, value):
-        return self._put_data(key,
-                              pickle.dumps(value, pickle.HIGHEST_PROTOCOL))
-
     def get(self, key, peek=False):
-        data = self._get_data(key, peek=peek)
-        if data is EmptyData:
-            return
+        data = self.get_raw(key, peek)
+        if data is not EmptyData:
+            return self.serializer.deserialize(data)
+
+    def _get_timestamp(self):
+        return (datetime.datetime.utcnow() if self.utc else
+                datetime.datetime.now())
+
+    def execute(self, task, timestamp=None):
+        if timestamp is None:
+            timestamp = self._get_timestamp()
+
+        if not self.ready_to_run(task, timestamp):
+            self.add_schedule(task)
+            logger.debug('Task %s not ready to run, added to schedule', task)
+        elif self.is_revoked(task, timestamp, peek=False):
+            logger.debug('Task %s was revoked, not executing', task)
         else:
-            return pickle.loads(data)
+            return self._execute(task, timestamp)
 
-    def put_error(self, metadata):
-        return self._put_error(pickle.dumps(metadata))
+    def _execute(self, task, timestamp):
+        if self._pre_execute:
+            try:
+                self._run_pre_execute(task)
+            except CancelExecution:
+                return
 
-    def emit_status(self, status, error=False, timestamp=None, **data):
-        if self.events:
-            if timestamp is not None:
-                data['timestamp'] = time.mktime(timestamp.timetuple())
-
-            metadata = {'status': status, 'error': error}
-            if error:
-                metadata['traceback'] = traceback.format_exc()
-            metadata.update(data)
-            self.emit(json.dumps(metadata))
-
-    def emit_task(self, status, task, error=False, **data):
-        if self.events:
-            metadata = task.get_metadata()
-            metadata.update(data)
-            self.emit_status(status, error=error, **metadata)
-
-    def execute(self, task):
-        if not isinstance(task, QueueTask):
-            raise TypeError('Unknown object: %s' % task)
+        logger.debug('Executing %s', task)
+        start = time.time()
+        exception = None
+        task_value = None
 
         try:
-            result = task.execute()
+            try:
+                task_value = task.execute()
+            finally:
+                duration = time.time() - start
+        except TaskLockedException as exc:
+            logger.warning('Task %s not run, unable to acquire lock.', task.id)
+            exception = exc
+        except RetryTask as exc:
+            if not task.retries:
+                logger.error('Task %s not retried - no retries remaining.',
+                             task.id)
+            exception = exc
+        except KeyboardInterrupt:
+            logger.info('Received exit signal, %s did not finish.', task.id)
+            return
         except Exception as exc:
-            if self.store_errors:
-                metadata = task.get_metadata()
-                metadata['error'] = repr(exc)
-                metadata['traceback'] = traceback.format_exc()
-                self.put(task.task_id, Error(metadata))
-                self.put_error(metadata)
-            raise
+            logger.exception('Unhandled exception in task %s.', task.id)
+            exception = exc
+        else:
+            logger.info('%s finished in %0.3fs', task, duration)
 
-        if self.result_store and not isinstance(task, PeriodicQueueTask):
-            if result is not None or self.store_none:
-                self.put(task.task_id, result)
+        if self.results and not isinstance(task, PeriodicTask):
+            if exception is not None:
+                self.put(task.id, Error({
+                    'error': repr(exception),
+                    'retries': task.retries,
+                    'traceback': traceback.format_exc()}))
+            elif task_value is not None or self.store_none:
+                self.put(task.id, task_value)
 
-        if task.on_complete:
+        if self._post_execute:
+            self._run_post_execute(task, task_value, exception)
+
+        if task.on_complete and exception is None:
             next_task = task.on_complete
-            next_task.extend_data(result)
+            next_task.extend_data(task_value)
+            self.enqueue(next_task)
+        elif task.on_error and exception is not None:
+            next_task = task.on_error
+            next_task.extend_data(exception)
             self.enqueue(next_task)
 
-        return result
+        if exception is not None and task.retries:
+            self._requeue_task(task, self._get_timestamp())
+
+        return task_value
+
+    def _requeue_task(self, task, timestamp):
+        task.retries -= 1
+        logger.info('Requeueing %s, %s retries', task.id, task.retries)
+        if task.retry_delay:
+            delay = datetime.timedelta(seconds=task.retry_delay)
+            task.eta = timestamp + delay
+            self.add_schedule(task)
+        else:
+            self.enqueue(task)
+
+    def _run_pre_execute(self, task):
+        for name, callback in self._pre_execute.items():
+            logger.debug('Pre-execute hook %s for %s.', name, task)
+            try:
+                callback(task)
+            except CancelExecution:
+                logger.info('Execution of %s cancelled by %s.', task, name)
+                raise
+            except Exception:
+                logger.exception('Unhandled exception calling pre-execute '
+                                 'hook %s for %s.', name, task)
+
+    def _run_post_execute(self, task, task_value, exception):
+        for name, callback in self._post_execute.items():
+            logger.debug('Post-execute hook %s for %s.', name, task)
+            try:
+                callback(task, task_value, exception)
+            except Exception as exc:
+                logger.exception('Unhandled exception calling post-execute '
+                                 'hook %s for %s.', name, task)
+
+    def _task_key(self, task_class, key):
+        return ':'.join((key, self._registry.task_to_string(task_class)))
 
     def revoke_all(self, task_class, revoke_until=None, revoke_once=False):
-        self.put('rt:%s' % task_class.__name__, (revoke_until, revoke_once))
+        self.put(self._task_key(task_class, 'rt'), (revoke_until, revoke_once))
 
     def restore_all(self, task_class):
-        return self._get_data('rt:%s' % task_class.__name__) is not EmptyData
+        return self.get_raw(self._task_key(task_class, 'rt')) is not EmptyData
 
     def revoke(self, task, revoke_until=None, revoke_once=False):
         self.put(task.revoke_id, (revoke_until, revoke_once))
 
     def restore(self, task):
         # Return value indicates whether the task was in fact revoked.
-        return self._get_data(task.revoke_id) is not EmptyData
+        return self.get_raw(task.revoke_id) is not EmptyData
 
-    def revoke_by_id(self, task_id, revoke_until=None, revoke_once=False):
-        return self.revoke(QueueTask(task_id=task_id), revoke_until,
-                           revoke_once)
+    def revoke_by_id(self, id, revoke_until=None, revoke_once=False):
+        return self.revoke(Task(id=id), revoke_until, revoke_once)
 
-    def restore_by_id(self, task_id):
-        return self.restore(QueueTask(task_id=task_id))
+    def restore_by_id(self, id):
+        return self.restore(Task(id=id))
 
-    def _check_revoked(self, revoke_id, dt=None, peek=True):
+    def _check_revoked(self, revoke_id, timestamp=None, peek=True):
         """
         Checks if a task is revoked, returns a 2-tuple indicating:
 
         1. Is task revoked?
         2. Should task be restored?
         """
-        res = self.get(revoke_id, peek=True)
+        res = self.get(revoke_id, peek=peek)
         if res is None:
             return False, False
 
@@ -461,60 +301,66 @@ class Huey(object):
             # This task *was* revoked for one run, but now it should be
             # restored to normal execution (unless we are just peeking).
             return True, not peek
-        elif revoke_until is not None and revoke_until <= dt:
+        elif revoke_until is not None and revoke_until <= timestamp:
             # Task is no longer revoked and can be restored.
-            return False, True
+            return False, not peek
         else:
             # Task is still revoked. Do not restore.
             return True, False
 
-    def is_revoked(self, task, dt=None, peek=True):
-        if isclass(task) and issubclass(task, QueueTask):
-            revoke_id = 'rt:%s' % task.__name__
-            is_revoked, can_restore = self._check_revoked(revoke_id, dt, peek)
+    def is_revoked(self, task, timestamp=None, peek=True):
+        if inspect.isclass(task) and issubclass(task, Task):
+            key = self._task_key(task, 'rt')
+            is_revoked, can_restore = self._check_revoked(key, timestamp, peek)
             if can_restore:
                 self.restore_all(task)
             return is_revoked
 
-        if not isinstance(task, QueueTask):
-            task = QueueTask(task_id=task)
+        if not isinstance(task, Task):
+            # Assume we've been given a task ID.
+            task = Task(id=task)
 
-        is_revoked, can_restore = self._check_revoked(task.revoke_id, dt, peek)
+        key = task.revoke_id
+        is_revoked, can_restore = self._check_revoked(key, timestamp, peek)
         if can_restore:
             self.restore(task)
         if not is_revoked:
-            is_revoked = self.is_revoked(type(task), dt, peek)
+            is_revoked = self.is_revoked(type(task), timestamp, peek)
 
         return is_revoked
 
     def add_schedule(self, task):
-        msg = self.registry.get_message_for_task(task)
-        ex_time = task.execute_time or datetime.datetime.fromtimestamp(0)
-        self._add_to_schedule(msg, ex_time)
+        data = self.serialize_task(task)
+        eta = task.eta or datetime.datetime.fromtimestamp(0)
+        self.storage.add_to_schedule(data, eta)
 
-    def read_schedule(self, ts):
-        return [self.registry.get_task_for_message(m)
-                for m in self._read_schedule(ts)]
+    def read_schedule(self, timestamp=None):
+        if timestamp is None:
+            timestamp = self._get_timestamp()
+        return [self.deserialize_task(task)
+                for task in self.storage.read_schedule(timestamp)]
 
-    def read_periodic(self, ts):
-        periodic = self.registry.get_periodic_tasks()
-        return [task for task in periodic
-                if task.validate_datetime(ts)]
+    def read_periodic(self, timestamp):
+        if timestamp is None:
+            timestamp = self._get_timestamp()
+        return [task for task in self._registry.periodic_tasks
+                if task.validate_datetime(timestamp)]
 
-    def ready_to_run(self, cmd, dt=None):
-        dt = dt or datetime.datetime.utcnow()
-        return cmd.execute_time is None or cmd.execute_time <= dt
+    def ready_to_run(self, task, timestamp=None):
+        if timestamp is None:
+            timestamp = self._get_timestamp()
+        return task.eta is None or task.eta <= timestamp
 
     def pending(self, limit=None):
-        return [self.registry.get_task_for_message(m)
-                for m in self.storage.enqueued_items(limit)]
+        return [self.deserialize_task(task)
+                for task in self.storage.enqueued_items(limit)]
 
     def pending_count(self):
         return self.storage.queue_size()
 
     def scheduled(self, limit=None):
-        return [self.registry.get_task_for_message(m)
-                for m in self.storage.scheduled_items(limit)]
+        return [self.deserialize_task(task)
+                for task in self.storage.scheduled_items(limit)]
 
     def scheduled_count(self):
         return self.storage.schedule_size()
@@ -525,27 +371,11 @@ class Huey(object):
     def result_count(self):
         return self.storage.result_store_size()
 
-    def errors(self, limit=None, offset=0):
-        return [
-            pickle.loads(error)
-            for error in self.storage.get_errors(limit, offset)]
-
     def __len__(self):
         return self.pending_count()
 
     def flush(self):
         self.storage.flush_all()
-
-    def get_tasks(self):
-        return sorted(self.registry._registry.keys())
-
-    def get_periodic_tasks(self):
-        return [name for name, task in self.registry._registry.items()
-                if hasattr(task, 'validate_datetime')]
-
-    def get_regular_tasks(self):
-        periodic = set(self.get_periodic_tasks())
-        return [task for task in self.get_tasks() if task not in periodic]
 
     def lock_task(self, lock_name):
         """
@@ -592,18 +422,18 @@ class Huey(object):
         """
         flushed = set()
         for lock_key in self._locks:
-            if self._get_data(lock_key) is not EmptyData:
+            if self.get_raw(lock_key) is not EmptyData:
                 flushed.add(lock_key.split('.lock.', 1)[-1])
         return flushed
 
-    def result(self, task_id, blocking=False, timeout=None, backoff=1.15,
+    def result(self, id, blocking=False, timeout=None, backoff=1.15,
                max_delay=1.0, revoke_on_timeout=False, preserve=False):
         """
         Retrieve the results of a task, given the task's ID. This
         method accepts the same parameters and has the same behavior
-        as the :py:class:`TaskResultWrapper` object.
+        as the :py:class:`Result` object.
         """
-        task_result = TaskResultWrapper(self, QueueTask(task_id=task_id))
+        task_result = Result(self, Task(id=id))
         return task_result.get(
             blocking=blocking,
             timeout=timeout,
@@ -613,29 +443,134 @@ class Huey(object):
             preserve=preserve)
 
 
+class Task(object):
+    default_retries = 0
+    default_retry_delay = 0
+
+    def __init__(self, args=None, kwargs=None, id=None, eta=None, retries=None,
+                 retry_delay=None, on_complete=None, on_error=None):
+        self.name = type(self).__name__
+        self.args = () if args is None else args
+        self.kwargs = {} if kwargs is None else kwargs
+        self.id = id or self.create_id()
+        self.revoke_id = 'r:%s' % self.id
+        self.eta = eta
+        self.retries = retries if retries is not None else self.default_retries
+        self.retry_delay = retry_delay if retry_delay is not None else \
+                self.default_retry_delay
+
+        self.on_complete = on_complete
+        self.on_error = on_error
+
+    @property
+    def data(self):
+        return (self.args, self.kwargs)
+
+    def __repr__(self):
+        rep = '%s.%s: %s' % (self.__module__, self.name, self.id)
+        if self.eta:
+            rep += ' @%s' % self.eta
+        if self.retries:
+            rep += ' %s retries' % self.retries
+        if self.on_complete:
+            rep += ' -> %s' % self.on_complete
+        if self.on_error:
+            rep += ', on error %s' % self.on_complete
+        return rep
+
+    def create_id(self):
+        return str(uuid.uuid4())
+
+    def extend_data(self, data):
+        if data is None or data == ():
+            return
+
+        if isinstance(data, tuple):
+            self.args += data
+        elif isinstance(data, dict):
+            # XXX: alternate would be self.kwargs.update(data), but this will
+            # stomp on user-provided parameters.
+            for key, value in data.items():
+                self.kwargs.setdefault(key, value)
+        else:
+            self.args = self.args + (data,)
+
+    def then(self, task, *args, **kwargs):
+        if self.on_complete:
+            self.on_complete.then(task, *args, **kwargs)
+        else:
+            self.on_complete = task.s(*args, **kwargs)
+        return self
+
+    def error(self, task, *args, **kwargs):
+        if self.on_error:
+            self.on_error.error(task, *args, **kwargs)
+        else:
+            self.on_error = task.s(*args, **kwargs)
+        return self
+
+    def execute(self):
+        # Implementation provided by subclass, see: TaskWrapper.create_task().
+        raise NotImplementedError
+
+    def __eq__(self, rhs):
+        if not isinstance(rhs, Task):
+            return False
+
+        return (
+            self.id == rhs.id and
+            self.eta == rhs.eta and
+            type(self) == type(rhs))
+
+
+class PeriodicTask(Task):
+    def validate_datetime(self, timestamp):
+        return False
+
+
 class TaskWrapper(object):
-    def __init__(self, huey, func, retries=0, retry_delay=0,
-                 retries_as_argument=False, include_task=False, name=None,
-                 task_base=None, **task_settings):
+    task_base = Task
+
+    def __init__(self, huey, func, retries=None, retry_delay=None,
+                 context=False, name=None, task_base=None, **settings):
         self.huey = huey
         self.func = func
         self.retries = retries
         self.retry_delay = retry_delay
-        self.retries_as_argument = retries_as_argument
-        self.include_task = include_task
+        self.context = context
         self.name = name
-        self.task_settings = task_settings
-        self.task_class = create_task(
-            QueueTask if task_base is None else task_base,
-            func,
-            retries_as_argument,
-            name,
-            include_task,
-            **task_settings)
-        self.huey.registry.register(self.task_class)
+        self.settings = settings
+        if task_base is not None:
+            self.task_base = task_base
 
-    def is_revoked(self, dt=None, peek=True):
-        return self.huey.is_revoked(self.task_class, dt, peek)
+        # Dynamically create task class and register with Huey instance.
+        self.task_class = self.create_task(func, context, name, **settings)
+        self.huey._registry.register(self.task_class)
+
+    def unregister(self):
+        return self.huey._registry.unregister(self.task_class)
+
+    def create_task(self, func, context=False, name=None, **settings):
+        def execute(self):
+            args, kwargs = self.data
+            if self.context:
+                kwargs['task'] = self
+            return func(*args, **kwargs)
+
+        attrs = {
+            'context': context,
+            'execute': execute,
+            '__module__': func.__module__,
+            '__doc__': func.__doc__}
+        attrs.update(settings)
+
+        if not name:
+            name = func.__name__
+
+        return type(name, (self.task_base,), attrs)
+
+    def is_revoked(self, timestamp=None, peek=True):
+        return self.huey.is_revoked(self.task_class, timestamp, peek)
 
     def revoke(self, revoke_until=None, revoke_once=False):
         self.huey.revoke_all(self.task_class, revoke_until, revoke_once)
@@ -643,17 +578,30 @@ class TaskWrapper(object):
     def restore(self):
         return self.huey.restore_all(self.task_class)
 
-    def schedule(self, args=None, kwargs=None, eta=None, delay=None,
-                 convert_utc=True, task_id=None):
-        execute_time = self.huey._normalize_execute_time(
-            eta=eta, delay=delay, convert_utc=convert_utc)
-        cmd = self.task_class(
-            (args or (), kwargs or {}),
-            execute_time=execute_time,
+    def schedule(self, args=None, kwargs=None, eta=None, delay=None, id=None):
+        if eta is None and delay is None:
+            if isinstance(args, (int, float)):
+                delay = args
+            elif isinstance(args, datetime.timedelta):
+                delay = args.total_seconds()
+            elif isinstance(args, datetime.datetime):
+                eta = args
+            else:
+                raise ValueError('schedule() missing required eta= or delay=')
+            args = None
+
+        if kwargs is not None and not isinstance(kwargs, dict):
+            raise ValueError('schedule() kwargs argument must be a dict.')
+
+        eta = normalize_time(eta, delay, self.huey.utc)
+        task = self.task_class(
+            args or (),
+            kwargs or {},
+            id=id,
+            eta=eta,
             retries=self.retries,
-            retry_delay=self.retry_delay,
-            task_id=task_id)
-        return self.huey.enqueue(cmd)
+            retry_delay=self.retry_delay)
+        return self.huey.enqueue(task)
 
     def __call__(self, *args, **kwargs):
         return self.huey.enqueue(self.s(*args, **kwargs))
@@ -662,7 +610,7 @@ class TaskWrapper(object):
         return self.func(*args, **kwargs)
 
     def s(self, *args, **kwargs):
-        return self.task_class((args, kwargs), retries=self.retries,
+        return self.task_class(args, kwargs, retries=self.retries,
                                retry_delay=self.retry_delay)
 
 
@@ -678,24 +626,24 @@ class TaskLock(object):
         self._huey._locks.add(self._key)
 
     def __call__(self, fn):
-        @wraps(fn)
+        @functools.wraps(fn)
         def inner(*args, **kwargs):
             with self:
                 return fn(*args, **kwargs)
         return inner
 
     def __enter__(self):
-        if not self._huey._put_if_empty(self._key, '1'):
+        if not self._huey.put_if_empty(self._key, '1'):
             raise TaskLockedException('unable to set lock: %s' % self._name)
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self._huey._get_data(self._key)
+        self._huey.get_raw(self._key)
 
 
-class TaskResultWrapper(object):
+class Result(object):
     """
     Wrapper around task result data. When a task is executed, an instance of
-    ``TaskResultWrapper`` is returned to provide access to the return value.
+    ``Result`` is returned to provide access to the return value.
 
     To retrieve the task's result value, you can simply call the wrapper::
 
@@ -718,23 +666,22 @@ class TaskResultWrapper(object):
     def __init__(self, huey, task):
         self.huey = huey
         self.task = task
-
         self._result = EmptyData
 
     @property
-    def task_id(self):
-        return self.task.task_id
+    def id(self):
+        return self.task.id
 
     def __call__(self, *args, **kwargs):
         return self.get(*args, **kwargs)
 
     def _get(self, preserve=False):
-        task_id = self.task.task_id
+        task_id = self.id
         if self._result is EmptyData:
-            res = self.huey._get_data(task_id, peek=preserve)
+            res = self.huey.get_raw(task_id, peek=preserve)
 
             if res is not EmptyData:
-                self._result = pickle.loads(res)
+                self._result = self.huey.serializer.deserialize(res)
                 return self._result
             else:
                 return res
@@ -780,183 +727,30 @@ class TaskResultWrapper(object):
     def restore(self):
         return self.huey.restore(self.task)
 
-    def reschedule(self, eta=None, delay=None, convert_utc=True):
+    def reschedule(self, eta=None, delay=None):
         # Rescheduling works by revoking the currently-scheduled task (nothing
         # is done to check if the task has already run, however). Then the
         # original task's data is used to enqueue a new task with a new task ID
         # and execution_time.
         self.revoke()
-        execute_time = self.huey._normalize_execute_time(
-            eta=eta, delay=delay, convert_utc=convert_utc)
-        cmd = self.task.__class__(
-            self.task.data,
-            execute_time=execute_time,
+        eta = normalize_time(eta, delay, self.huey.utc)
+        task = type(self.task)(
+            self.task.args,
+            self.task.kwargs,
+            eta=eta,
             retries=self.task.retries,
-            retry_delay=self.task.retry_delay,
-            task_id=None)
-        return self.huey.enqueue(cmd)
+            retry_delay=self.task.retry_delay)
+        return self.huey.enqueue(task)
 
     def reset(self):
         self._result = EmptyData
-
-
-class EagerTaskResultWrapper(TaskResultWrapper):
-    def set_result(self, result):
-        self._result = result
-
-    def _get(self, preserve=False):
-        return self._result
-
-    def __not_implemented__(method):
-        def _inner(self, *args, **kwargs):
-            raise NotImplementedError('Always-eager mode is enabled. %s does '
-                                      'not support the "%s" method.' %
-                                      (self, method))
-        return _inner
-    is_revoked = __not_implemented__('is_revoked')
-    revoke = __not_implemented__('revoke')
-    restore = __not_implemented__('restore')
-    reschedule = __not_implemented__('reschedule')
-    reset = __not_implemented__('reset')
-
-
-def with_metaclass(meta, base=object):
-    return meta("NewBase", (base,), {})
-
-
-class QueueTask(object):
-    """
-    A class that encapsulates the logic necessary to 'do something' given some
-    arbitrary data.  When enqueued with the :class:`Huey`, it will be
-    stored in a queue for out-of-band execution via the consumer.  See also
-    the :meth:`task` decorator, which can be used to automatically
-    execute any function out-of-band.
-
-    Example::
-
-    class SendEmailTask(QueueTask):
-        def execute(self):
-            data = self.get_data()
-            send_email(data['recipient'], data['subject'], data['body'])
-
-    huey.enqueue(
-        SendEmailTask({
-            'recipient': 'somebody@spam.com',
-            'subject': 'look at this awesome website',
-            'body': 'http://youtube.com'
-        })
-    )
-    """
-    default_retries = 0
-    default_retry_delay = 0
-
-    def __init__(self, data=None, task_id=None, execute_time=None,
-                 retries=None, retry_delay=None, on_complete=None):
-        self.name = type(self).__name__
-        self.set_data(data)
-        self.task_id = task_id or self.create_id()
-        self.revoke_id = 'r:%s' % self.task_id
-        self.execute_time = execute_time
-        self.retries = retries if retries is not None else self.default_retries
-        self.retry_delay = retry_delay if retry_delay is not None else \
-                self.default_retry_delay
-        self.on_complete = on_complete
-
-    def __repr__(self):
-        rep = '%s.%s: %s' % (self.__module__, self.name, self.task_id)
-        if self.execute_time:
-            rep += ' @%s' % self.execute_time
-        if self.retries:
-            rep += ' %s retries' % self.retries
-        if self.on_complete:
-            rep += ' -> %s' % self.on_complete
-        return rep
-
-    def get_metadata(self):
-        if self.execute_time:
-            timestamp = time.mktime(self.execute_time.timetuple())
-        else:
-            timestamp = None
-
-        return {
-            'id': self.task_id,
-            'task': type(self).__name__,
-            'retries': self.retries,
-            'retry_delay': self.retry_delay,
-            'execute_time': timestamp}
-
-    def create_id(self):
-        return str(uuid.uuid4())
-
-    def get_data(self):
-        return self.data
-
-    def set_data(self, data):
-        self.data = data
-
-    def extend_data(self, data):
-        if data is None or data == ():
-            return
-        args, kwargs = self.get_data()
-        if isinstance(data, tuple):
-            args += data
-        elif isinstance(data, dict):
-            kwargs.update(data)
-        else:
-            args = args + (data,)
-        self.set_data((args, kwargs))
-
-    def then(self, task, *args, **kwargs):
-        if self.on_complete:
-            self.on_complete.then(task, *args, **kwargs)
-        else:
-            self.on_complete = task.s(*args, **kwargs)
-        return self
-
-    def execute(self):
-        """Execute any arbitary code here"""
-        raise NotImplementedError
-
-    def __eq__(self, rhs):
-        return (
-            self.task_id == rhs.task_id and
-            self.execute_time == rhs.execute_time and
-            type(self) == type(rhs))
-
-
-class PeriodicQueueTask(QueueTask):
-    def validate_datetime(self, dt):
-        """Validate that the task should execute at the given datetime"""
-        return False
-
-
-def create_task(task_class, func, retries_as_argument=False, task_name=None,
-                include_task=False, **kwargs):
-    def execute(self):
-        args, kwargs = self.data or ((), {})
-        if retries_as_argument:
-            kwargs['retries'] = self.retries
-        if include_task:
-            kwargs['task'] = self
-        return func(*args, **kwargs)
-
-    attrs = {
-        'execute': execute,
-        '__module__': func.__module__,
-        '__doc__': func.__doc__}
-    attrs.update(kwargs)
-
-    if not task_name:
-        task_name = func.__name__
-
-    return type(task_name, (task_class,), attrs)
 
 
 dash_re = re.compile(r'(\d+)-(\d+)')
 every_re = re.compile(r'\*\/(\d+)')
 
 
-def crontab(month='*', day='*', day_of_week='*', hour='*', minute='*'):
+def crontab(minute='*', hour='*', day='*', month='*', day_of_week='*'):
     """
     Convert a "crontab"-style set of parameters into a test function that will
     return True when the given datetime matches the parameters set forth in
@@ -1010,6 +804,7 @@ def crontab(month='*', day='*', day_of_week='*', hour='*', minute='*'):
                     settings.update(range(lhs, rhs + 1))
                     continue
 
+                # Handle stuff like */3, */6.
                 every_match = every_re.match(piece)
                 if every_match:
                     if date_str == 'w':
@@ -1020,16 +815,24 @@ def crontab(month='*', day='*', day_of_week='*', hour='*', minute='*'):
 
         cron_settings.append(sorted(list(settings)))
 
-    def validate_date(dt):
-        _, m, d, H, M, _, w, _, _ = dt.timetuple()
+    def validate_date(timestamp):
+        _, m, d, H, M, _, w, _, _ = timestamp.timetuple()
 
         # fix the weekday to be sunday=0
         w = (w + 1) % 7
 
-        for (date_piece, selection) in zip([m, d, w, H, M], cron_settings):
+        for (date_piece, selection) in zip((m, d, w, H, M), cron_settings):
             if date_piece not in selection:
                 return False
 
         return True
 
     return validate_date
+
+
+def _unsupported(name, library):
+    class UnsupportedHuey(Huey):
+        def __init__(self, *args, **kwargs):
+            raise ConfigurationError('Cannot initialize "%s", %s module not '
+                                     'installed.' % (name, library))
+    return UnsupportedHuey
