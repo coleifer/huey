@@ -170,6 +170,7 @@ class Huey(object):
         elif self.is_revoked(task, timestamp, peek=False):
             logger.debug('Task %s was revoked, not executing', task)
         else:
+            logger.debug('Executing %s', task)
             return self._execute(task, timestamp)
 
     def _execute(self, task, timestamp):
@@ -179,7 +180,6 @@ class Huey(object):
             except CancelExecution:
                 return
 
-        logger.debug('Executing %s', task)
         start = time.time()
         exception = None
         task_value = None
@@ -196,6 +196,9 @@ class Huey(object):
             if not task.retries:
                 logger.error('Task %s not retried - no retries remaining.',
                              task.id)
+            else:
+                logger.info('Task %s raised RetryTask exception, retrying.',
+                            task.id)
             exception = exc
         except KeyboardInterrupt:
             logger.info('Received exit signal, %s did not finish.', task.id)

@@ -98,7 +98,11 @@ class Worker(BaseProcess):
         else:
             if task is not None:
                 self.delay = self.default_delay
-                self.huey.execute(task, now)
+                try:
+                    self.huey.execute(task, now)
+                except Exception as exc:
+                    self._logger.exception('Unhandled error during execution '
+                                           'of task %s.', task.id)
             elif not self.huey.storage.blocking:
                 self.sleep()
 
