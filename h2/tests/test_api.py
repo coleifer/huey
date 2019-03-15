@@ -529,6 +529,33 @@ class TestQueue(BaseTestCase):
         self.assertEqual(self.huey.result_count(), 0)
         self.assertEqual(self.huey.scheduled_count(), 0)
 
+    def test_read_periodic(self):
+        @self.huey.periodic_task(crontab(minute='*/15', hour='9-17'))
+        def work():
+            pass
+
+        @self.huey.periodic_task(crontab(minute='0', hour='21'))
+        def sleep():
+            pass
+
+        @self.huey.periodic_task(crontab(minute='0-30'))
+        def first_half():
+            pass
+
+        def assertPeriodic(hour, minute, names):
+            dt = datetime.datetime(2000, 1, 1, hour, minute)
+            tasks = self.huey.read_periodic(dt)
+            self.assertEqual([t.name for t in tasks], names)
+
+        assertPeriodic(0, 0, ['first_half'])
+        assertPeriodic(23, 59, [])
+        assertPeriodic(9, 0, ['work', 'first_half'])
+        assertPeriodic(9, 45, ['work'])
+        assertPeriodic(9, 46, [])
+        assertPeriodic(21, 0, ['sleep', 'first_half'])
+        assertPeriodic(21, 30, ['first_half'])
+        assertPeriodic(21, 31, [])
+
 
 class TestDecorators(BaseTestCase):
     def test_task_decorator(self):
