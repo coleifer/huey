@@ -1,3 +1,4 @@
+import contextlib
 import logging
 import unittest
 
@@ -15,6 +16,8 @@ logger.addHandler(NullHandler())
 
 
 class BaseTestCase(unittest.TestCase):
+    consumer_class = Consumer
+
     def setUp(self):
         super(BaseTestCase, self).setUp()
         self.huey = self.get_huey()
@@ -39,4 +42,15 @@ class BaseTestCase(unittest.TestCase):
         params.setdefault('max_delay', 0.001)
         params.setdefault('workers', 2)
         params.setdefault('check_worker_health', False)
-        return Consumer(self.huey, **params)
+        return self.consumer_class(self.huey, **params)
+
+    @contextlib.contextmanager
+    def consumer_context(self, **kwargs):
+        consumer = self.consumer(**kwargs)
+        consumer.start()
+        try:
+            yield
+        finally:
+            consumer.stop()
+            for _, worker in consumer.worker_threads:
+                worker.join()

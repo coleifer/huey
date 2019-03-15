@@ -109,9 +109,7 @@ class StorageTests(object):
         def task_a(n):
             return n + 1
 
-        consumer = self.consumer()
-        consumer.start()
-        try:
+        with self.consumer_context():
             r1 = task_a(1)
             r2 = task_a(2)
             r3 = task_a(3)
@@ -119,10 +117,6 @@ class StorageTests(object):
             self.assertEqual(r1.get(blocking=True, timeout=5), 2)
             self.assertEqual(r2.get(blocking=True, timeout=5), 3)
             self.assertEqual(r3.get(blocking=True, timeout=5), 4)
-        finally:
-            consumer.stop()
-            for _, worker in consumer.worker_threads:
-                worker.join()
 
 
 class TestMemoryStorage(StorageTests, BaseTestCase):
