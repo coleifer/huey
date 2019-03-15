@@ -10,14 +10,21 @@ class BaseModel(Model):
         database = SqliteDatabase(None)  # Placeholder.
 
 
+class _BytesField(BlobField):
+    def python_value(self, value):
+        if value is not None and not isinstance(value, bytes):
+            value = bytes(value)
+        return value
+
+
 class Task(BaseModel):
     queue = CharField()
-    data = BlobField()
+    data = _BytesField()
 
 
 class Schedule(BaseModel):
     queue = CharField()
-    data = BlobField()
+    data = _BytesField()
     timestamp = TimestampField()
 
     class Meta:
@@ -29,7 +36,7 @@ class Schedule(BaseModel):
 class KeyValue(BaseModel):
     queue = CharField()
     key = CharField()
-    value = BlobField()
+    value = _BytesField()
 
     class Meta:
         primary_key = CompositeKey('queue', 'key')
