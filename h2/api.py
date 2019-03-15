@@ -1,4 +1,5 @@
 import datetime
+import functools
 import inspect
 import logging
 import re
@@ -84,21 +85,30 @@ class Huey(object):
 
     def pre_execute(self, name=None):
         def decorator(fn):
-            self._pre_execute_hooks[name or fn.__name__] = fn
+            self._pre_execute[name or fn.__name__] = fn
             return fn
         return decorator
 
+    def unregister_pre_execute(self, name):
+        return self._pre_execute.pop(name, None) is not None
+
     def post_execute(self, name=None):
         def decorator(fn):
-            self._post_execute_hooks[name or fn.__name__] = fn
+            self._post_execute[name or fn.__name__] = fn
             return fn
         return decorator
+
+    def unregister_post_execute(self, name):
+        return self._post_execute.pop(name, None) is not None
 
     def on_startup(self, name=None):
         def decorator(fn):
             self._startup[name or fn.__name__] = fn
             return fn
         return decorator
+
+    def unregister_on_startup(self, name):
+        return self._startup.pop(name, None) is not None
 
     def serialize_task(self, task):
         message = self._registry.create_message(task)
@@ -164,7 +174,7 @@ class Huey(object):
     def _execute(self, task, timestamp):
         if self._pre_execute:
             try:
-                self._run_pre_execute_hooks(task)
+                self._run_pre_execute(task)
             except CancelExecution:
                 return
 
@@ -205,7 +215,7 @@ class Huey(object):
                 self.put(task.id, task_value)
 
         if self._post_execute:
-            self._run_post_execute_hooks(task, task_value, exception)
+            self._run_post_execute(task, task_value, exception)
 
         if task.on_complete and exception is None:
             next_task = task.on_complete
@@ -231,7 +241,7 @@ class Huey(object):
         else:
             self.enqueue(task)
 
-    def _run_pre_execute_hooks(self, task):
+    def _run_pre_execute(self, task):
         for name, callback in self._pre_execute.items():
             logger.debug('Pre-execute hook %s for %s.', name, task)
             try:
@@ -243,7 +253,7 @@ class Huey(object):
                 logger.exception('Unhandled exception calling pre-execute '
                                  'hook %s for %s.', name, task)
 
-    def _run_post_execute_hooks(self, task, task_value, exception):
+    def _run_post_execute(self, task, task_value, exception):
         for name, callback in self._post_execute.items():
             logger.debug('Post-execute hook %s for %s.', name, task)
             try:
@@ -520,8 +530,8 @@ class PeriodicTask(Task):
 class TaskWrapper(object):
     task_base = Task
 
-    def __init__(self, huey, func, retries=0, retry_delay=0, context=False,
-                 name=None, task_base=None, **settings):
+    def __init__(self, huey, func, retries=None, retry_delay=None,
+                 context=False, name=None, task_base=None, **settings):
         self.huey = huey
         self.func = func
         self.retries = retries
@@ -615,7 +625,7 @@ class TaskLock(object):
         self._huey._locks.add(self._key)
 
     def __call__(self, fn):
-        @wraps(fn)
+        @functools.wraps(fn)
         def inner(*args, **kwargs):
             with self:
                 return fn(*args, **kwargs)
@@ -739,7 +749,7 @@ dash_re = re.compile(r'(\d+)-(\d+)')
 every_re = re.compile(r'\*\/(\d+)')
 
 
-def crontab(month='*', day='*', day_of_week='*', hour='*', minute='*'):
+def crontab(minute='*', hour='*', day='*', month='*', day_of_week='*'):
     """
     Convert a "crontab"-style set of parameters into a test function that will
     return True when the given datetime matches the parameters set forth in
@@ -793,6 +803,7 @@ def crontab(month='*', day='*', day_of_week='*', hour='*', minute='*'):
                     settings.update(range(lhs, rhs + 1))
                     continue
 
+                # Handle stuff like */3, */6.
                 every_match = every_re.match(piece)
                 if every_match:
                     if date_str == 'w':
@@ -809,7 +820,7 @@ def crontab(month='*', day='*', day_of_week='*', hour='*', minute='*'):
         # fix the weekday to be sunday=0
         w = (w + 1) % 7
 
-        for (date_piece, selection) in zip([m, d, w, H, M], cron_settings):
+        for (date_piece, selection) in zip((m, d, w, H, M), cron_settings):
             if date_piece not in selection:
                 return False
 

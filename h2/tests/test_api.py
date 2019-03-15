@@ -6,7 +6,9 @@ from h2.api import Task
 from h2.api import TaskWrapper
 from h2.api import crontab
 from h2.constants import EmptyData
+from h2.exceptions import CancelExecution
 from h2.exceptions import TaskException
+from h2.exceptions import TaskLockedException
 from h2.tests.base import BaseTestCase
 
 
@@ -53,7 +55,7 @@ class TestQueue(BaseTestCase):
 
         r1, r2, r3 = [task_a(i) for i in (1, 2, 3)]
         for _ in range(3):
-            self.huey.execute(self.huey.dequeue())
+            self.execute_next()
 
         self.assertEqual(self.huey.result_count(), 2)  # Didn't store None.
         self.assertEqual(r1(), 0)
@@ -63,7 +65,7 @@ class TestQueue(BaseTestCase):
 
         self.huey.store_none = True
         r4 = task_a(2)
-        self.assertTrue(self.huey.execute(self.huey.dequeue()) is None)
+        self.assertTrue(self.execute_next() is None)
         self.assertEqual(self.huey.result_count(), 1)
         self.assertTrue(r4._get() is None)
 
@@ -186,7 +188,7 @@ class TestQueue(BaseTestCase):
         self.huey.restore_by_id(r2.id)  # Restore one instance.
 
         for _ in range(3):
-            self.huey.execute(self.huey.dequeue())
+            self.execute_next()
 
         self.assertEqual(state, [2])
         self.assertEqual(r2(), 2)
@@ -207,7 +209,7 @@ class TestQueue(BaseTestCase):
 
         # However we'll see that this is not the case.
         for _ in range(3):
-            self.huey.execute(self.huey.dequeue())
+            self.execute_next()
 
             # After executing the first task, things are no longer revoked.
             self.assertFalse(task_a.is_revoked())
@@ -274,7 +276,7 @@ class TestQueue(BaseTestCase):
         self.assertTrue(task_p.is_revoked())  # Verify idempotent.
 
         r = task_p()
-        self.huey.execute(self.huey.dequeue())
+        self.execute_next()
         self.assertTrue(r() is None)
         self.assertEqual(state, [0])  # Task was not run, no side-effect.
 
@@ -330,13 +332,6 @@ class TestQueue(BaseTestCase):
         self.assertEqual(self.huey.result_count(), 0)
         self.assertEqual(self.huey.scheduled_count(), 0)
 
-    def trap_exception(self, fn, exc_type=TaskException):
-        try:
-            fn()
-        except exc_type as exc_val:
-            return exc_val
-        raise AssertionError('trap_exception() failed to catch %s' % exc_type)
-
     def test_task_error(self):
         @self.huey.task()
         def task_e(n):
@@ -345,7 +340,7 @@ class TestQueue(BaseTestCase):
             return n + 1
 
         re = task_e(0)
-        self.assertTrue(self.huey.execute(self.huey.dequeue()) is None)
+        self.assertTrue(self.execute_next() is None)
         self.assertEqual(self.huey.result_count(), 1)
 
         err = self.trap_exception(re)
@@ -372,15 +367,14 @@ class TestQueue(BaseTestCase):
 
         # Execute the task normally.
         r = task_a(1)
-        self.assertEqual(self.huey.execute(self.huey.dequeue()), 2)
+        self.assertEqual(self.execute_next(), 2)
         self.assertEqual(r.get(), 2)
         self.assertEqual(len(self.huey), 0)
 
         # Trigger an exception being raised. Since the task has retries, it
         # will be re-enqueued and the number of retries is decremented.
         r = task_a(-1)
-        task = self.huey.dequeue()
-        self.assertTrue(self.huey.execute(task) is None)
+        self.assertTrue(self.execute_next() is None)
 
         # Attempting to resolve the result value will raise a TaskException,
         # which wraps the original error from the task.
@@ -414,6 +408,32 @@ class TestQueue(BaseTestCase):
         self.assertEqual(len(self.huey), 0)  # Not enqueued again.
         self.assertEqual(self.huey.result_count(), 0)
 
+    def test_retry_periodic(self):
+        state = [0]
+
+        @self.huey.periodic_task(crontab(hour='0'), retries=2)
+        def task_p():
+            if state[0] == 0:
+                state[0] = 1
+                raise TestError('oops')
+            elif state[0] == 1:
+                state[0] = 2
+            else:
+                state[0] = 9  # Should not happen.
+
+        task_p()
+        self.assertTrue(self.execute_next() is None)
+
+        # The task is re-enqueued to be retried. Verify retry count is right
+        # and execute.
+        self.assertEqual(len(self.huey), 1)
+        task = self.huey.dequeue()
+        self.assertEqual(task.retries, 1)
+        self.huey.execute(task)
+
+        self.assertEqual(state, [2])
+        self.assertEqual(len(self.huey), 0)
+
     def test_retry_to_success(self):
         state = [0]
         @self.huey.task(retries=2)
@@ -424,9 +444,9 @@ class TestQueue(BaseTestCase):
             return 1337
 
         r = task_a()
-        self.assertTrue(self.huey.execute(self.huey.dequeue()) is None)
-        self.assertTrue(self.huey.execute(self.huey.dequeue()) is None)
-        self.assertEqual(self.huey.execute(self.huey.dequeue()), 1337)
+        self.assertTrue(self.execute_next() is None)
+        self.assertTrue(self.execute_next() is None)
+        self.assertEqual(self.execute_next(), 1337)
         self.assertEqual(r.get(), 1337)
 
         self.assertEqual(len(self.huey), 0)
@@ -438,13 +458,37 @@ class TestQueue(BaseTestCase):
             raise ValueError('try again')
 
         r = task_a()
-        self.assertTrue(self.huey.execute(self.huey.dequeue()) is None)
+        self.assertTrue(self.execute_next() is None)
         self.trap_exception(r)
 
+        self.assertEqual(len(self.huey), 0)
         self.assertEqual(self.huey.scheduled_count(), 1)
         task, = self.huey.scheduled()  # Dequeue the delayed retry.
         self.assertTrue(task.eta is not None)
+        self.assertEqual(task.retries, 1)
         self.assertFalse(self.huey.ready_to_run(task))
+
+        dt = datetime.datetime.utcnow() + datetime.timedelta(seconds=61)
+        self.assertTrue(self.huey.ready_to_run(task, dt))
+
+    def test_retry_delay_periodic(self):
+        @self.huey.periodic_task(crontab(), retries=2, retry_delay=60)
+        def task_p():
+            raise ValueError('try again')
+
+        r = task_p()
+        self.assertTrue(self.execute_next() is None)
+
+        self.assertEqual(len(self.huey), 0)
+        self.assertEqual(self.huey.scheduled_count(), 1)
+        task, = self.huey.scheduled()  # Dequeue the delayed retry.
+        self.assertEqual(task.id, r.id)
+        self.assertTrue(task.eta is not None)
+        self.assertEqual(task.retries, 1)
+        self.assertFalse(self.huey.ready_to_run(task))
+
+        dt = datetime.datetime.utcnow() + datetime.timedelta(seconds=61)
+        self.assertTrue(self.huey.ready_to_run(task, dt))
 
     def test_read_schedule(self):
         @self.huey.task()
@@ -525,7 +569,125 @@ class TestDecorators(BaseTestCase):
 
         task = task_p.s()
         self.assertTrue(isinstance(task, PeriodicTask))
+        self.assertEqual(task.retries, 0)
+        self.assertEqual(task.retry_delay, 0)
         self.assertEqual(task.execute(), 123)
+
+        @self.huey.periodic_task(crontab(), retries=3, retry_delay=10)
+        def task_p2():
+            pass
+
+        task = task_p2.s()
+        self.assertEqual(task.retries, 3)
+        self.assertEqual(task.retry_delay, 10)
+
+
+class TestTaskHooks(BaseTestCase):
+    def test_task_hooks(self):
+        @self.huey.task()
+        def task_a(n):
+            return n + 1
+
+        allow_tasks = [True]
+        pre_state = []
+        post_state = []
+
+        @self.huey.pre_execute()
+        def pre_execute_cancel(task):
+            if not allow_tasks[0]:
+                raise CancelExecution()
+
+        @self.huey.pre_execute()
+        def pre_execute(task):
+            pre_state.append(task.id)
+
+        @self.huey.post_execute()
+        def post_execute(task, task_value, exc):
+            if exc is not None:
+                exc = type(exc).__name__
+            post_state.append((task.id, task_value, exc))
+
+        result = task_a(3)
+        self.assertEqual(self.execute_next(), 4)
+        self.assertEqual(pre_state, [result.id])
+        self.assertEqual(post_state, [(result.id, 4, None)])
+
+        # Cancel execution.
+        task_a(5)
+        allow_tasks[0] = False  # Disable execution.
+        self.assertTrue(self.execute_next() is None)
+        self.assertEqual(len(pre_state), 1)
+        self.assertEqual(len(post_state), 1)
+
+        # Errors are passed to post-execute hook.
+        allow_tasks[0] = True  # Re-enable.
+        err_result = task_a(None)  # Can't add 1 to None!
+        self.assertTrue(self.execute_next() is None)
+        self.assertEqual(pre_state, [result.id, err_result.id])
+        self.assertEqual(post_state, [(result.id, 4, None),
+                                      (err_result.id, None, 'TypeError')])
+
+    def test_hook_unregister(self):
+        @self.huey.task()
+        def task_a(n):
+            return n + 1
+
+        pre_state = []
+        post_state = []
+
+        @self.huey.pre_execute()
+        def test_pre_exec(task):
+            pre_state.append(task.id)
+        @self.huey.post_execute()
+        def test_post_exec(task, val, exc):
+            post_state.append(task.id)
+
+        # Verify hooks in place. Sanity check.
+        r = task_a(3)
+        self.assertEqual(self.execute_next(), 4)
+        self.assertEqual(pre_state, [r.id])
+        self.assertEqual(post_state, [r.id])
+
+        self.assertTrue(self.huey.unregister_pre_execute('test_pre_exec'))
+        self.assertTrue(self.huey.unregister_post_execute('test_post_exec'))
+
+        r2 = task_a(4)
+        self.assertEqual(self.execute_next(), 5)
+        self.assertEqual(len(pre_state), 1)
+        self.assertEqual(len(post_state), 1)
+
+        # Already unregistered, returns False.
+        self.assertFalse(self.huey.unregister_pre_execute('test_pre_exec'))
+        self.assertFalse(self.huey.unregister_post_execute('test_post_exec'))
+
+    def test_task_hook_errors(self):
+        @self.huey.task()
+        def task_a(n):
+            return n + 1
+
+        pre_state = []
+        post_state = []
+
+        @self.huey.pre_execute()
+        def test_pre_exec1(task):
+            raise ValueError('flaky pre hook')
+        @self.huey.pre_execute()
+        def test_pre_exec2(task):
+            pre_state.append(task.id)
+
+        @self.huey.post_execute()
+        def test_post_exec1(task, val, exc):
+            raise ValueError('flaky post hook')
+        @self.huey.post_execute()
+        def test_post_exec2(task, val, exc):
+            post_state.append(task.id)
+
+        # One flaky callback will not prevent other callbacks, nor will it
+        # prevent the task from being executed.
+        r = task_a(3)
+        self.assertEqual(self.execute_next(), 4)
+        self.assertEqual(pre_state, [r.id])
+        self.assertEqual(post_state, [r.id])
 
 
 class TestTaskChaining(BaseTestCase):
@@ -578,7 +740,7 @@ class TestTaskChaining(BaseTestCase):
         results = self.huey.enqueue(pipeline)
         for _ in range(len(results)):
             self.assertEqual(len(self.huey), 1)
-            self.huey.execute(self.huey.dequeue())
+            self.execute_next()
 
         self.assertEqual(len(self.huey), 0)
         self.assertEqual([r() for r in results], expected)
@@ -596,10 +758,10 @@ class TestTaskChaining(BaseTestCase):
 
         task = task_a.s(0).error(task_e)
         result = self.huey.enqueue(task)
-        self.assertTrue(self.huey.execute(self.huey.dequeue()) is None)
+        self.assertTrue(self.execute_next() is None)
         self.assertRaises(TaskException, result.get)
         self.assertEqual(len(self.huey), 1)
-        self.assertEqual(self.huey.execute(self.huey.dequeue()), 1337)
+        self.assertEqual(self.execute_next(), 1337)
         self.assertEqual(state, ['TestError(0)'])
 
     def test_chain_errors(self):
@@ -627,15 +789,14 @@ class TestTaskChaining(BaseTestCase):
 
         # We get result wrappers for the invocations of task_a.
         r1, r2 = self.huey.enqueue(pipe)
-        self.huey.execute(self.huey.dequeue())  # First invocation, returns 0.
-        self.huey.execute(self.huey.dequeue())  # Second, raises error.
+        self.execute_next()  # First invocation, returns 0.
+        self.execute_next()  # Second, raises error.
 
         self.assertEqual(len(self.huey), 1)
-        self.huey.execute(self.huey.dequeue())  # Error handler (also fails).
+        self.execute_next()  # Error handler (also fails).
         self.assertEqual(len(self.huey), 1)
 
-        res = self.huey.execute(self.huey.dequeue())  # Second error handler.
-        self.assertEqual(res, 3)
+        self.assertEqual(self.execute_next(), 3)  # Second error handler.
 
         self.assertEqual(state1, ['TestError(0)'])
         self.assertEqual(state2, [(3, 'TestError(0)')])
@@ -643,6 +804,32 @@ class TestTaskChaining(BaseTestCase):
         self.assertEqual(r1(), 0)
         self.assertRaises(TaskException, r2.get)
         self.assertEqual(len(self.huey), 0)
+
+
+class TestTaskLocking(BaseTestCase):
+    def test_task_locking(self):
+        @self.huey.task(retries=1)
+        @self.huey.lock_task('lock_a')
+        def task_a(n):
+            return n + 1
+
+        task_a(3)
+        self.assertEqual(self.execute_next(), 4)
+
+        task_a(4)
+        with self.huey.lock_task('lock_x'):
+            self.assertEqual(self.execute_next(), 5)
+
+        r = task_a(5)
+        with self.huey.lock_task('lock_a'):
+            self.assertTrue(self.execute_next() is None)
+
+        exc = self.trap_exception(r)
+        self.assertTrue('unable to set lock' in str(exc))
+
+        # Task failed due to lock, will be retried, which succeeds now that the
+        # lock is released.
+        self.assertEqual(self.execute_next(), 6)
 
 
 class TestHueyAPIs(BaseTestCase):
