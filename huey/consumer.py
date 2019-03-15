@@ -55,17 +55,6 @@ class BaseProcess(object):
         if sleep_time > 0:
             time.sleep(sleep_time)
 
-    def enqueue(self, task):
-        """
-        Convenience method for enqueueing a task.
-        """
-        try:
-            self.huey.enqueue(task)
-        except QueueWriteException:
-            self._logger.exception('Error enqueueing task: %s', task)
-        else:
-            self._logger.debug('Enqueued task: %s', task)
-
     def loop(self, now=None):
         """
         Process-specific implementation. Called repeatedly for as long as the
@@ -168,7 +157,7 @@ class Scheduler(BaseProcess):
         self._logger.debug('Checking periodic tasks')
         for task in self.huey.read_periodic(now):
             self._logger.info('Scheduling periodic task %s.', task)
-            self.enqueue(task)
+            self.huey.enqueue(task)
 
 
 class Environment(object):

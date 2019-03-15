@@ -1,6 +1,7 @@
 import datetime
 import time
 
+from huey.api import crontab
 from huey.consumer import Consumer
 from huey.consumer import Scheduler
 from huey.tests.base import BaseTestCase
@@ -34,6 +35,7 @@ class TestConsumerIntegration(BaseTestCase):
     def schedule_tasks(self, consumer, now=None):
         scheduler = consumer._create_scheduler()
         scheduler._next_loop = time.time() + 60
+        scheduler._next_periodic = time.time() - 60
         scheduler.loop(now)
 
     def test_consumer_schedule_task(self):
@@ -77,3 +79,33 @@ class TestConsumerIntegration(BaseTestCase):
         self.assertEqual(rday.get(), 4)
         self.assertEqual(len(self.huey), 0)
         self.assertEqual(self.huey.scheduled_count(), 0)
+
+    def test_consumer_periodic_tasks(self):
+        state = []
+
+        @self.huey.periodic_task(crontab(minute='*/10'))
+        def task_p1():
+            state.append('p1')
+
+        @self.huey.periodic_task(crontab(minute='0', hour='0'))
+        def task_p2():
+            state.append('p2')
+
+        consumer = self.consumer(workers=1)
+        dt = datetime.datetime(2000, 1, 1, 0, 0)
+        self.schedule_tasks(consumer, dt)
+        self.assertEqual(len(self.huey), 2)
+        self.work_on_tasks(consumer, 2)
+        self.assertEqual(state, ['p1', 'p2'])
+
+        dt = datetime.datetime(2000, 1, 1, 12, 0)
+        self.schedule_tasks(consumer, dt)
+        self.assertEqual(len(self.huey), 1)
+        self.work_on_tasks(consumer, 1)
+        self.assertEqual(state, ['p1', 'p2', 'p1'])
+
+        task_p1.revoke()
+        self.schedule_tasks(consumer, dt)
+        self.assertEqual(len(self.huey), 1)  # Enqueued despite being revoked.
+        self.work_on_tasks(consumer, 1)
+        self.assertEqual(state, ['p1', 'p2', 'p1'])  # No change, not executed.
