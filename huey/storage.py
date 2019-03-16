@@ -211,6 +211,27 @@ class BaseStorage(object):
         self.flush_results()
 
 
+class BlackHoleStorage(BaseStorage):
+    def enqueue(self, data): pass
+    def dequeue(self): pass
+    def unqueue(self, data): pass
+    def queue_size(self): return 0
+    def enqueued_items(self, limit=None): return []
+    def flush_queue(self): pass
+    def add_to_schedule(self, data, ts): pass
+    def read_schedule(self, ts): return []
+    def schedule_size(self): return 0
+    def scheduled_items(self, limit=None): return []
+    def flush_schedule(self): pass
+    def put_data(self, key, value): pass
+    def peek_data(self, key): return EmptyData
+    def pop_data(self, key): return EmptyData
+    def has_data_for_key(self, key): return False
+    def result_store_size(self): return 0
+    def result_items(self): return {}
+    def flush_results(self): pass
+
+
 class MemoryStorage(BaseStorage):
     def __init__(self, *args, **kwargs):
         super(MemoryStorage, self).__init__(*args, **kwargs)
