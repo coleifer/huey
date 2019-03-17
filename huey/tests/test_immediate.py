@@ -27,6 +27,15 @@ class TestImmediate(BaseTestCase):
         r_err = task_a(None)
         self.assertRaises(TaskException, r_err.get)
 
+    def test_immediate_pipeline(self):
+        @self.huey.task()
+        def add(a, b):
+            return a + b
+
+        p = add.s(3, 4).then(add, 5).then(add, 6).then(add, 7)
+        result_group = self.huey.enqueue(p)
+        self.assertEqual(result_group(), [7, 12, 18, 25])
+
     def test_immediate_scheduling(self):
         @self.huey.task()
         def task_a(n):
@@ -78,3 +87,11 @@ class TestImmediate(BaseTestCase):
         self.assertEqual(r.get(), 4)
         self.assertEqual(len(self.huey), 0)
         self.assertEqual(self.huey.result_count(), 0)
+
+    def test_map(self):
+        @self.huey.task()
+        def task_a(n):
+            return n + 1
+
+        result_group = task_a.map(range(8))
+        self.assertEqual(result_group(), [1, 2, 3, 4, 5, 6, 7, 8])

@@ -161,8 +161,17 @@ class Huey(object):
 
     def enqueue(self, task):
         if self._immediate:
+            if task.on_complete:
+                current = task
+                results = []
+                while current is not None:
+                    results.append(Result(self, current))
+                    current = current.on_complete
+                ret = ResultGroup(results)
+            else:
+                ret = Result(self, task)
             self.execute(task)
-            return Result(self, task)
+            return ret
 
         self.storage.enqueue(self.serialize_task(task))
         if not self.results:
@@ -174,7 +183,7 @@ class Huey(object):
             while current is not None:
                 results.append(Result(self, current))
                 current = current.on_complete
-            return results
+            return ResultGroup(results)
         else:
             return Result(self, task)
 
@@ -650,6 +659,13 @@ class TaskWrapper(object):
             retry_delay=self.retry_delay)
         return self.huey.enqueue(task)
 
+    def _iter_apply(self, it):
+        return [self.s(*(i if isinstance(i, tuple) else (i,))) for i in it]
+
+    def map(self, it):
+        results = [self.huey.enqueue(task) for task in self._iter_apply(it)]
+        return ResultGroup(results)
+
     def __call__(self, *args, **kwargs):
         return self.huey.enqueue(self.s(*args, **kwargs))
 
@@ -791,6 +807,20 @@ class Result(object):
 
     def reset(self):
         self._result = EmptyData
+
+
+class ResultGroup(object):
+    def __init__(self, results):
+        self._results = results
+
+    def get(self, *args, **kwargs):
+        return [result.get(*args, **kwargs) for result in self._results]
+    __call__ = get
+
+    def __iter__(self):
+        return iter(self._results)
+    def __len__(self):
+        return len(self._results)
 
 
 dash_re = re.compile(r'(\d+)-(\d+)')
