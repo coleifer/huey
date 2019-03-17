@@ -6,6 +6,7 @@ import re
 import time
 import traceback
 import uuid
+import warnings
 
 from collections import OrderedDict
 
@@ -28,13 +29,17 @@ logger = logging.getLogger('huey')
 
 class Huey(object):
     def __init__(self, name='huey', results=True, store_none=False, utc=True,
-                 always_eager=False, serializer=None, compression=False,
-                 blocking=False, **storage_kwargs):
+                 immediate=False, serializer=None, compression=False,
+                 blocking=False, always_eager=None, **storage_kwargs):
+        if always_eager is not None:
+            warnings.warn('"always_eager" parameter is deprecated, use '
+                          '"immediate" instead', DeprecationWarning)
+            immediate = always_eager
         self.name = name
         self.results = results
         self.store_none = store_none
         self.utc = utc
-        self.always_eager = always_eager
+        self.immediate = immediate
         self.serializer = serializer or Serializer()
         if compression:
             self.serializer.compression = True

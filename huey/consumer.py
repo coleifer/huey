@@ -243,9 +243,9 @@ class Consumer(object):
                  health_check_interval=10, flush_locks=False):
 
         self._logger = logging.getLogger('huey.consumer')
-        if huey.always_eager:
+        if huey.immediate:
             self._logger.warning('Consumer initialized with Huey instance '
-                                 'that has "always_eager" mode enabled. This '
+                                 'that has "immediate" mode enabled. This '
                                  'must be disabled before the consumer can '
                                  'be run.')
         self.huey = huey
@@ -345,11 +345,11 @@ class Consumer(object):
         """
         Start all consumer processes and register signal handlers.
         """
-        if self.huey.always_eager:
+        if self.huey.immediate:
             raise ConfigurationError(
-                'Consumer cannot be run with Huey instances where always_eager'
-                ' is enabled. Please check your configuration and ensure that'
-                ' "huey.always_eager = False".')
+                'Consumer cannot be run with Huey instances where immediate '
+                'is enabled. Please check your configuration and ensure that '
+                '"huey.immediate = False".')
         # Log startup message.
         self._logger.info('Huey consumer started with %s %s, PID %s at %s',
                           self.workers, self.worker_type, os.getpid(),

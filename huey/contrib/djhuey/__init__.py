@@ -85,8 +85,8 @@ if isinstance(HUEY, dict):
         del huey_config['consumer']  # Don't need consumer opts here.
     except KeyError:
         pass
-    if 'always_eager' not in huey_config:
-        huey_config['always_eager'] = settings.DEBUG
+    if 'immediate' not in huey_config:
+        huey_config['immediate'] = settings.DEBUG
     huey_config.update(conn_kwargs)
 
     try:
@@ -124,7 +124,7 @@ def close_db(fn):
         try:
             return fn(*args, **kwargs)
         finally:
-            if not HUEY.always_eager:
+            if not HUEY.immediate:
                 close_old_connections()
     return inner
 
