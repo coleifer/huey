@@ -239,7 +239,7 @@ class Consumer(object):
 
     def __init__(self, huey, workers=1, periodic=True, initial_delay=0.1,
                  backoff=1.15, max_delay=10.0, scheduler_interval=1,
-                 worker_type='thread', check_worker_health=True,
+                 worker_type=WORKER_THREAD, check_worker_health=True,
                  health_check_interval=10, flush_locks=False):
 
         self._logger = logging.getLogger('huey.consumer')

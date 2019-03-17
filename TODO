@@ -1,0 +1,8 @@
+* ResultGroup for results of task pipelines.
+* In-memory / immediate-mode for broker-less execution.
+* Signals, e.g. signal.send('task-started', task), etc.
+* Request statistics from the consumer.
+* Priority support?
+* BZPOPMIN for alternate Redis implementation?
+* Redis streams as viable broker implementation?
+* Named pipes or file-based storage?
