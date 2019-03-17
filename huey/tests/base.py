@@ -2,9 +2,9 @@ import contextlib
 import logging
 import unittest
 
+from huey.api import MemoryHuey
 from huey.consumer import Consumer
 from huey.exceptions import TaskException
-from huey.storage import MemoryHuey
 
 
 class NullHandler(logging.Handler):

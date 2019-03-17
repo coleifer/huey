@@ -5,10 +5,11 @@ import unittest
 
 from redis.connection import ConnectionPool
 
+from huey.api import MemoryHuey
+from huey.api import RedisHuey
 from huey.constants import EmptyData
 from huey.consumer import Consumer
-from huey.storage import MemoryHuey
-from huey.storage import RedisHuey
+from huey.exceptions import ConfigurationError
 from huey.tests.base import BaseTestCase
 try:
     from huey.contrib.sqlitedb import SqliteHuey
@@ -133,7 +134,7 @@ class TestRedisStorage(StorageTests, BaseTestCase):
                    'connection_pool': ConnectionPool()}
         combinations = itertools.combinations(options.items(), 2)
         for kwargs in (dict(item) for item in combinations):
-            self.assertRaises(ValueError, lambda: RedisHuey(**kwargs))
+            self.assertRaises(ConfigurationError, lambda: RedisHuey(**kwargs))
 
 
 @unittest.skipIf(SqliteHuey is None, 'missing deps for sqlite backend')

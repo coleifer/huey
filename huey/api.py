@@ -19,6 +19,9 @@ from huey.exceptions import TaskException
 from huey.exceptions import TaskLockedException
 from huey.registry import Registry
 from huey.serializer import Serializer
+from huey.storage import BlackHoleStorage
+from huey.storage import MemoryStorage
+from huey.storage import RedisStorage
 from huey.utils import Error
 from huey.utils import normalize_time
 from huey.utils import reraise_as
@@ -844,3 +847,26 @@ def _unsupported(name, library):
             raise ConfigurationError('Cannot initialize "%s", %s module not '
                                      'installed.' % (name, library))
     return UnsupportedHuey
+
+
+class BlackHoleHuey(Huey):
+    def get_storage(self, **kwargs):
+        return BlackHoleStorage(name=self.name, **kwargs)
+
+
+class MemoryHuey(Huey):
+    def get_storage(self, **kwargs):
+        return MemoryStorage(name=self.name, **kwargs)
+
+
+class RedisHuey(Huey):
+    def get_storage(self, blocking=False, read_timeout=1, max_errors=1000,
+                    connection_pool=None, url=None, **connection_params):
+        return RedisStorage(
+            name=self.name,
+            blocking=blocking,
+            read_timeout=read_timeout,
+            max_errors=max_errors,
+            connection_pool=connection_pool,
+            url=url,
+            **connection_params)

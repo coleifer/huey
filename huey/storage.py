@@ -14,8 +14,8 @@ try:
 except ImportError:
     ConnectionPool = Redis = ConnectionError = None
 
-from huey.api import Huey
 from huey.constants import EmptyData
+from huey.exceptions import ConfigurationError
 
 
 class BaseStorage(object):
@@ -313,11 +313,6 @@ class MemoryStorage(BaseStorage):
         self._results = {}
 
 
-class MemoryHuey(Huey):
-    def get_storage(self, **kwargs):
-        return MemoryStorage(name=self.name, **kwargs)
-
-
 # A custom lua script to pass to redis that will read tasks from the schedule
 # and atomically pop them from the sorted set and return them. It won't return
 # anything if it isn't able to remove the items it reads.
@@ -338,12 +333,12 @@ class RedisStorage(BaseStorage):
                  client_name=None, **connection_params):
 
         if Redis is None:
-            raise ImportError('"redis" python module not found, cannot use '
-                              'Redis storage backend. Run "pip install redis" '
-                              'to install.')
+            raise ConfigurationError('"redis" python module not found, cannot '
+                                     'use Redis storage backend. Run "pip '
+                                     'install redis" to install.')
 
         if sum(1 for p in (url, connection_pool, connection_params) if p) > 1:
-            raise ValueError(
+            raise ConfigurationError(
                 'The connection configuration is over-determined. '
                 'Please specify only one of the the following: '
                 '"url", "connection_pool", or "connection_params"')
@@ -459,16 +454,3 @@ class RedisStorage(BaseStorage):
 
     def flush_results(self):
         self.conn.delete(self.result_key)
-
-
-class RedisHuey(Huey):
-    def get_storage(self, blocking=False, read_timeout=1, max_errors=1000,
-                    connection_pool=None, url=None, **connection_params):
-        return RedisStorage(
-            name=self.name,
-            blocking=blocking,
-            read_timeout=read_timeout,
-            max_errors=max_errors,
-            connection_pool=connection_pool,
-            url=url,
-            **connection_params)
