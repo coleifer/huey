@@ -160,6 +160,10 @@ class Huey(object):
         return self._registry.create_task(message)
 
     def enqueue(self, task):
+        if self._immediate:
+            self.execute(task)
+            return Result(self, task)
+
         self.storage.enqueue(self.serialize_task(task))
         if not self.results:
             return
