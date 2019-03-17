@@ -1,5 +1,6 @@
 import datetime
 
+from huey.api import MemoryHuey
 from huey.api import PeriodicTask
 from huey.api import Result
 from huey.api import Task
@@ -902,3 +903,27 @@ class TestHueyAPIs(BaseTestCase):
     def test_unsupported(self):
         FooHuey = _unsupported('FooHuey', 'foo')
         self.assertRaises(ConfigurationError, FooHuey)
+
+
+class TestMultipleHuey(BaseTestCase):
+    def test_multiple_huey(self):
+        huey1 = self.huey
+        huey2 = MemoryHuey('huey2', utc=False)
+
+        @huey1.task()
+        def task_a(n):
+            return n + 1
+
+        task_a2 = huey2.task(retries=1)(task_a)
+
+        r = task_a(1)
+        self.assertEqual(len(huey1), 1)
+        self.assertEqual(len(huey2), 0)
+        self.assertEqual(self.execute_next(), 2)
+        self.assertEqual(r.get(), 2)
+
+        r2 = task_a2(2)
+        self.assertEqual(len(huey1), 0)
+        self.assertEqual(len(huey2), 1)
+        self.assertEqual(huey2.execute(huey2.dequeue()), 3)
+        self.assertEqual(r2.get(), 3)
