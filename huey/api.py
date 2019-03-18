@@ -22,6 +22,7 @@ from huey.serializer import Serializer
 from huey.storage import BlackHoleStorage
 from huey.storage import MemoryStorage
 from huey.storage import RedisStorage
+from huey.storage import SqliteStorage
 from huey.utils import Error
 from huey.utils import normalize_time
 from huey.utils import reraise_as
@@ -936,3 +937,8 @@ class RedisHuey(Huey):
             connection_pool=connection_pool,
             url=url,
             **connection_params)
+
+
+class SqliteHuey(Huey):
+    def get_storage(self, filename='huey.db', **kwargs):
+        return SqliteStorage(filename=filename, name=self.name, **kwargs)

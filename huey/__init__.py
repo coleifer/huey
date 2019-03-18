@@ -6,9 +6,4 @@ from huey.api import crontab
 from huey.api import BlackHoleHuey
 from huey.api import MemoryHuey
 from huey.api import RedisHuey
-
-try:
-    from huey.contrib.sqlitedb import SqliteHuey
-except ImportError:
-    from huey.api import _unsupported
-    SqliteHuey = _unsupported('SqliteHuey', 'peewee')
+from huey.api import SqliteHuey

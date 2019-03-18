@@ -1,7 +1,13 @@
 from collections import deque
+import contextlib
 import heapq
 import json
 import re
+try:
+    import sqlite3
+except ImportError:
+    sqlite3 = None
+import threading
 import time
 
 try:
@@ -454,3 +460,229 @@ class RedisStorage(BaseStorage):
 
     def flush_results(self):
         self.conn.delete(self.result_key)
+
+
+class _ConnectionState(object):
+    def __init__(self, **kwargs):
+        super(_ConnectionState, self).__init__(**kwargs)
+        self.reset()
+    def reset(self):
+        self.conn = None
+        self.closed = True
+    def set_connection(self, conn):
+        self.conn = conn
+        self.closed = False
+class _ConnectionLocal(_ConnectionState, threading.local): pass
+
+# Python 2.x may return <buffer> object for BLOB columns.
+to_bytes = lambda b: bytes(b) if not isinstance(b, bytes) else b
+
+
+class SqliteStorage(BaseStorage):
+    table_kv = ('create table if not exists kv ('
+                'queue text not null, key text not null, value blob not null, '
+                'primary key(queue, key))')
+    table_sched = ('create table if not exists schedule ('
+                   'id integer not null primary key, queue text not null, '
+                   'data blob not null, timestamp real not null)')
+    index_sched = ('create index if not exists schedule_queue_timestamp '
+                   'on schedule (queue, timestamp)')
+    table_task = ('create table if not exists task ('
+                  'id integer not null primary key, queue text not null, '
+                  'data blob not null)')
+    ddl = [table_kv, table_sched, index_sched, table_task]
+
+    def __init__(self, filename='huey.db', name='huey', wal_mode=True,
+                 cache_mb=8, fsync=False, **kwargs):
+        super(SqliteStorage, self).__init__(name)
+        self.filename = filename
+        self._wal_mode = wal_mode
+        self._cache_mb = cache_mb
+        self._fsync = fsync
+        self._conn_kwargs = kwargs
+        self._state = _ConnectionLocal()
+        self.initialize_schema()
+
+    def close(self):
+        if self._state.closed: return False
+        self._state.conn.close()
+        self._state.reset()
+        return True
+
+    @property
+    def conn(self):
+        if self._state.closed:
+            self._state.set_connection(self._create_connection())
+        return self._state.conn
+
+    def _create_connection(self):
+        conn = sqlite3.connect(self.filename, timeout=5, **self._conn_kwargs)
+        conn.isolation_level = None  # Autocommit mode.
+        if self._wal_mode:
+            conn.execute('pragma journal_mode=wal')
+        if self._cache_mb:
+            conn.execute('pragma cache_size=%s' % (-1000 * self._cache_mb))
+        conn.execute('pragma synchronous=%s' % (2 if self._fsync else 0))
+        return conn
+
+    @contextlib.contextmanager
+    def db(self, commit=False, close=False):
+        conn = self.conn
+        try:
+            if commit: conn.execute('begin')
+            yield conn
+        except Exception:
+            if commit: conn.rollback()
+            raise
+        else:
+            if commit: conn.commit()
+        finally:
+            if close:
+                conn.close()
+                self._state.reset()
+
+    def initialize_schema(self):
+        with self.db(commit=True, close=True) as conn:
+            for sql in self.ddl:
+                conn.execute(sql)
+
+    def enqueue(self, data):
+        with self.db(commit=True) as conn:
+            conn.execute('insert into task (queue, data) values (?, ?)',
+                         (self.name, data))
+
+    def dequeue(self):
+        with self.db(commit=True) as conn:
+            curs = conn.execute('select id, data from task where queue = ? '
+                                'order by id limit 1', (self.name,))
+            result = curs.fetchone()
+            if result is not None:
+                tid, data = result
+                curs = conn.execute('delete from task where id = ?', (tid,))
+                if curs.rowcount == 1:
+                    return to_bytes(data)
+
+    def unqueue(self, data):
+        with self.db(commit=True) as conn:
+            conn.execute('delete from task where queue = ? and data = ?',
+                         (self.name, data))
+
+    def queue_size(self):
+        with self.db() as conn:
+            curs = conn.execute('select count(id) from task where queue = ?',
+                                (self.name,))
+            return curs.fetchone()[0]
+
+    def enqueued_items(self, limit=None):
+        with self.db() as conn:
+            sql = 'select data from task where queue = ? order by id'
+            if limit is None:
+                params = (self.name,)
+            else:
+                sql += ' limit ?'
+                params = (self.name, limit)
+            curs = conn.execute(sql, params)
+            return [to_bytes(data) for data, in curs.fetchall()]
+
+    def flush_queue(self):
+        with self.db(commit=True) as conn:
+            conn.execute('delete from task where queue = ?', (self.name,))
+
+    def add_to_schedule(self, data, ts):
+        with self.db(commit=True) as conn:
+            conn.execute('insert into schedule (queue, data, timestamp) '
+                         'values (?, ?, ?)', (self.name, data, ts.timestamp()))
+
+    def read_schedule(self, ts):
+        with self.db(commit=True) as conn:
+            params = (self.name, ts.timestamp())
+            curs = conn.execute('select id, data from schedule where '
+                                'queue = ? and timestamp <= ?', params)
+            id_list, data = [], []
+            for task_id, task_data in curs.fetchall():
+                id_list.append(task_id)
+                data.append(to_bytes(task_data))
+            if id_list:
+                plist = ','.join('?' * len(id_list))
+                conn.execute('delete from schedule where id IN (%s)' % plist,
+                             id_list)
+            return data
+
+    def schedule_size(self):
+        with self.db() as conn:
+            curs = conn.execute('select count(id) from schedule '
+                                'where queue = ?', (self.name,))
+            return curs.fetchone()[0]
+
+    def scheduled_items(self, limit=None):
+        with self.db() as conn:
+            sql = 'select data from schedule where queue=? order by timestamp'
+            if limit is None:
+                params = (self.name,)
+            else:
+                params = (self.name, limit)
+                sql += ' limit ?'
+            curs = conn.execute(sql, params)
+            return [to_bytes(data) for data, in curs.fetchall()]
+
+    def flush_schedule(self):
+        with self.db(commit=True) as conn:
+            conn.execute('delete from schedule where queue = ?', (self.name,))
+
+    def put_data(self, key, value):
+        with self.db(commit=True) as conn:
+            conn.execute('insert or replace into kv (queue, key, value) '
+                         'values (?, ?, ?)', (self.name, key, value))
+
+    def peek_data(self, key):
+        with self.db() as conn:
+            curs = conn.execute('select value from kv where queue = ? '
+                                'and key = ?', (self.name, key))
+            result = curs.fetchone()
+            if result is None:
+                return EmptyData
+            return to_bytes(result[0])
+
+    def pop_data(self, key):
+        with self.db(commit=True) as conn:
+            curs = conn.execute('select value from kv where queue = ? '
+                                'and key = ?', (self.name, key))
+            result = curs.fetchone()
+            if result is not None:
+                curs = conn.execute('delete from kv where queue=? and key=?',
+                                    (self.name, key))
+                if curs.rowcount == 1:
+                    return to_bytes(result[0])
+            return EmptyData
+
+    def has_data_for_key(self, key):
+        with self.db() as conn:
+            curs = conn.execute('select 1 from kv where queue=? and key=?',
+                                (self.name, key))
+            return curs.fetchone() is not None
+
+    def put_if_empty(self, key, value):
+        try:
+            with self.db(commit=True) as conn:
+                conn.execute('insert or abort into kv (queue, key, value) '
+                             'values (?, ?, ?)', (self.name, key, value))
+        except sqlite3.IntegrityError:
+            return False
+        else:
+            return True
+
+    def result_store_size(self):
+        with self.db() as conn:
+            curs = conn.execute('select count(*) from kv where queue = ?',
+                                (self.name,))
+            return curs.fetchone()[0]
+
+    def result_items(self):
+        with self.db() as conn:
+            curs = conn.execute('select key, value from kv where queue = ?',
+                                (self.name,))
+            return dict((k, to_bytes(v)) for k, v in curs.fetchall())
+
+    def flush_results(self):
+        with self.db(commit=True) as conn:
+            conn.execute('delete from kv where queue = ?', (self.name,))

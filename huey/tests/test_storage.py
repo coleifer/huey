@@ -7,14 +7,11 @@ from redis.connection import ConnectionPool
 
 from huey.api import MemoryHuey
 from huey.api import RedisHuey
+from huey.api import SqliteHuey
 from huey.constants import EmptyData
 from huey.consumer import Consumer
 from huey.exceptions import ConfigurationError
 from huey.tests.base import BaseTestCase
-try:
-    from huey.contrib.sqlitedb import SqliteHuey
-except ImportError:
-    SqliteHuey = None
 
 
 class StorageTests(object):
@@ -137,7 +134,6 @@ class TestRedisStorage(StorageTests, BaseTestCase):
             self.assertRaises(ConfigurationError, lambda: RedisHuey(**kwargs))
 
 
-@unittest.skipIf(SqliteHuey is None, 'missing deps for sqlite backend')
 class TestSqliteStorage(StorageTests, BaseTestCase):
     def get_huey(self):
         return SqliteHuey(filename=tempfile.mktemp())
