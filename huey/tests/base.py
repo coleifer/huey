@@ -51,6 +51,4 @@ class BaseTestCase(unittest.TestCase):
         try:
             yield
         finally:
-            consumer.stop()
-            for _, worker in consumer.worker_threads:
-                worker.join()
+            consumer.stop(graceful=True)

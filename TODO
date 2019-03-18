@@ -1,4 +1,3 @@
-* In-memory / immediate-mode for broker-less execution.
 * Signals, e.g. signal.send('task-started', task), etc.
 * Request statistics from the consumer.
 * Priority support?
