@@ -136,7 +136,7 @@ class ConsumerConfig(namedtuple('_ConsumerConfig', config_keys)):
     def loglevel(self):
         if self.verbose is None:
             return logging.INFO
-        return logging.DEBUG if self.verbose else logging.ERROR
+        return logging.DEBUG if self.verbose else logging.WARNING
 
     def setup_logger(self, logger=None):
         if self.worker_type == 'process':

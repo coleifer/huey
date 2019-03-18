@@ -240,7 +240,7 @@ class Huey(object):
         if not self.ready_to_run(task, timestamp):
             self.add_schedule(task)
         elif self.is_revoked(task, timestamp, False):
-            logger.info('Task %s was revoked, not executing', task)
+            logger.warning('Task %s was revoked, not executing', task)
             self._emit(S.SIGNAL_REVOKED, task)
         else:
             logger.info('Executing %s', task)
@@ -277,7 +277,7 @@ class Huey(object):
                             task.id)
             exception = exc
         except KeyboardInterrupt:
-            logger.info('Received exit signal, %s did not finish.', task.id)
+            logger.warning('Received exit signal, %s did not finish.', task.id)
             return
         except Exception as exc:
             logger.exception('Unhandled exception in task %s.', task.id)
@@ -330,7 +330,7 @@ class Huey(object):
             try:
                 callback(task)
             except CancelExecution:
-                logger.info('Execution of %s cancelled by %s.', task, name)
+                logger.warning('Task %s cancelled by %s.', task, name)
                 raise
             except Exception:
                 logger.exception('Unhandled exception calling pre-execute '

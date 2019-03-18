@@ -82,7 +82,7 @@ class Worker(BaseProcess):
 
     def initialize(self):
         for name, startup_hook in self.huey._startup.items():
-            self._logger.info('calling startup hook "%s"', name)
+            self._logger.debug('calling startup hook "%s"', name)
             try:
                 startup_hook()
             except Exception as exc:
@@ -146,7 +146,7 @@ class Scheduler(BaseProcess):
             self._logger.exception('Error reading schedule.')
         else:
             for task in task_list:
-                self._logger.debug('Enqueueing %s for execution', task)
+                self._logger.debug('Enqueueing %s', task)
                 self.huey.enqueue(task)
 
         if self.periodic:
@@ -160,7 +160,7 @@ class Scheduler(BaseProcess):
     def enqueue_periodic_tasks(self, now, start):
         self._logger.debug('Checking periodic tasks')
         for task in self.huey.read_periodic(now):
-            self._logger.info('Scheduling periodic task %s.', task)
+            self._logger.info('Enqueueing periodic task %s.', task)
             self.huey.enqueue(task)
 
 
