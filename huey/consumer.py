@@ -146,7 +146,7 @@ class Scheduler(BaseProcess):
             self._logger.exception('Error reading schedule.')
         else:
             for task in task_list:
-                self._logger.info('Scheduling %s for execution', task)
+                self._logger.debug('Enqueueing %s for execution', task)
                 self.huey.enqueue(task)
 
         if self.periodic:

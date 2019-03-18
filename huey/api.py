@@ -239,12 +239,11 @@ class Huey(object):
 
         if not self.ready_to_run(task, timestamp):
             self.add_schedule(task)
-            logger.debug('Task %s not ready to run, added to schedule', task)
         elif self.is_revoked(task, timestamp, False):
-            logger.debug('Task %s was revoked, not executing', task)
+            logger.info('Task %s was revoked, not executing', task)
             self._emit(S.SIGNAL_REVOKED, task)
         else:
-            logger.debug('Executing %s', task)
+            logger.info('Executing %s', task)
             self._emit(S.SIGNAL_EXECUTING, task)
             return self._execute(task, timestamp)
 
@@ -285,7 +284,7 @@ class Huey(object):
             exception = exc
             self._emit(S.SIGNAL_ERROR, task, exc)
         else:
-            logger.info('%s finished in %0.3fs', task, duration)
+            logger.info('%s executed in %0.3fs', task, duration)
             self._emit(S.SIGNAL_COMPLETE, task)
 
         if self.results and not isinstance(task, PeriodicTask):
@@ -416,6 +415,7 @@ class Huey(object):
         data = self.serialize_task(task)
         eta = task.eta or datetime.datetime.fromtimestamp(0)
         self.storage.add_to_schedule(data, eta)
+        logger.info('Added task %s to schedule, eta %s', task.id, eta)
         self._emit(S.SIGNAL_SCHEDULED, task)
 
     def read_schedule(self, timestamp=None):
