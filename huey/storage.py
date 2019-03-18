@@ -244,13 +244,15 @@ class MemoryStorage(BaseStorage):
         self._queue = deque()
         self._results = {}
         self._schedule = []
+        self._lock = threading.RLock()
 
     def enqueue(self, data):
         self._queue.append(data)
 
     def dequeue(self):
-        if self._queue:
-            return self._queue.popleft()
+        with self._lock:
+            if self._queue:
+                return self._queue.popleft()
 
     def unqueue(self, data):
         try:
@@ -274,14 +276,15 @@ class MemoryStorage(BaseStorage):
         heapq.heappush(self._schedule, (ts, data))
 
     def read_schedule(self, ts):
-        accum = []
-        while self._schedule:
-            sts, data = heapq.heappop(self._schedule)
-            if sts <= ts:
-                accum.append(data)
-            else:
-                heapq.heappush(self._schedule, (sts, data))
-                break
+        with self._lock:
+            accum = []
+            while self._schedule:
+                sts, data = heapq.heappop(self._schedule)
+                if sts <= ts:
+                    accum.append(data)
+                else:
+                    heapq.heappush(self._schedule, (sts, data))
+                    break
 
         return accum
 
