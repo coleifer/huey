@@ -40,7 +40,7 @@ class BaseTestCase(unittest.TestCase):
     def consumer(self, **params):
         params.setdefault('initial_delay', 0.001)
         params.setdefault('max_delay', 0.001)
-        params.setdefault('workers', 2)
+        params.setdefault('workers', 1)
         params.setdefault('check_worker_health', False)
         return self.consumer_class(self.huey, **params)
 

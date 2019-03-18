@@ -121,9 +121,12 @@ class TestQueue(BaseTestCase):
         task_a.revoke()
         self.assertTrue(task_a.is_revoked())
 
-        r1 = task_a(1)
-        r2 = task_a(2)
-        self.assertEqual(len(self.huey), 2)
+        r1, r2, r3 = task_a(1), task_a(2), task_a(3)
+        self.assertEqual(len(self.huey), 3)
+
+        # The result-wrapper will indicate the tasks are revoked.
+        for r in (r1, r2, r3):
+            self.assertTrue(r.is_revoked())
 
         # Task is discarded and not executed, due to being revoked.
         t1 = self.huey.dequeue()
@@ -131,13 +134,23 @@ class TestQueue(BaseTestCase):
         self.assertTrue(r1.get() is None)
         self.assertEqual(state, {})
 
+        # Next task is also discarded.
+        self.assertTrue(r2.is_revoked())
+        self.assertTrue(self.execute_next() is None)
+        self.assertTrue(r2.get() is None)
+        self.assertEqual(state, {})
+
         # Restore task, we will see side-effects and results of execution.
-        task_a.restore()
+        self.assertTrue(task_a.is_revoked())  # Still revoked.
+        self.assertTrue(r3.is_revoked())
+        self.assertTrue(task_a.restore())
         self.assertFalse(task_a.is_revoked())
-        t2 = self.huey.dequeue()
-        self.assertEqual(self.huey.execute(t2), 3)
-        self.assertEqual(r2.get(), 3)
-        self.assertEqual(state, {2: 2})
+        self.assertFalse(r3.is_revoked())
+
+        t3 = self.huey.dequeue()
+        self.assertEqual(self.huey.execute(t3), 4)
+        self.assertEqual(r3.get(), 4)
+        self.assertEqual(state, {3: 3})
 
     def test_revoke_task_instance(self):
         state = {}
@@ -175,6 +188,14 @@ class TestQueue(BaseTestCase):
         self.assertEqual(self.huey.execute(t3), 4)
         self.assertEqual(r3.get(), 4)
         self.assertEqual(state, {2: 2, 3: 3})
+
+        # Attempting to re-enqueue and re-execute the revoked t1 will not work,
+        # as it still appears revoked.
+        self.assertTrue(r1.is_revoked())
+        self.huey.enqueue(t1)
+        self.assertTrue(self.execute_next() is None)
+        self.assertEqual(state, {2: 2, 3: 3})
+        self.assertTrue(r1.is_revoked())  # Still revoked.
 
     def test_revoke_by_id(self):
         state = []
@@ -332,7 +353,7 @@ class TestQueue(BaseTestCase):
 
         # Verify state of internals.
         self.assertEqual(len(self.huey), 0)
-        self.assertEqual(self.huey.result_count(), 0)
+        self.assertEqual(self.huey.result_count(), 1)  # Key for revoked inst.
         self.assertEqual(self.huey.scheduled_count(), 0)
 
     def test_task_error(self):

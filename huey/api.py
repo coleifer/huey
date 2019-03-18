@@ -27,6 +27,7 @@ from huey.storage import SqliteStorage
 from huey.utils import Error
 from huey.utils import normalize_time
 from huey.utils import reraise_as
+from huey.utils import to_timestamp
 
 
 logger = logging.getLogger('huey')
@@ -239,7 +240,7 @@ class Huey(object):
         if not self.ready_to_run(task, timestamp):
             self.add_schedule(task)
             logger.debug('Task %s not ready to run, added to schedule', task)
-        elif self.is_revoked(task, timestamp, peek=False):
+        elif self.is_revoked(task, timestamp, False):
             logger.debug('Task %s was revoked, not executing', task)
             self._emit(S.SIGNAL_REVOKED, task)
         else:
@@ -374,7 +375,7 @@ class Huey(object):
         1. Is task revoked?
         2. Should task be restored?
         """
-        res = self.get(revoke_id, peek=peek)
+        res = self.get(revoke_id, peek=True)
         if res is None:
             return False, False
 
@@ -973,14 +974,14 @@ def every_between(interval, start=None, end=None):
                     s -= datetime.timedelta(days=1)
                 while s < timestamp:
                     s += interval
-                validate_date._next = s.timestamp()
+                validate_date._next = to_timestamp(s)
             else:
                 s = combine(timestamp, start)
                 while s < timestamp:
                     s += interval
-                validate_date._next = s.timestamp()
+                validate_date._next = to_timestamp(s)
 
-        ts = timestamp.timestamp()
+        ts = to_timestamp(timestamp)
         if validate_date._next <= ts:
             while validate_date._next <= ts:
                 validate_date._next += nsec

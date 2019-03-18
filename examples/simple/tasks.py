@@ -14,16 +14,21 @@ def count_beans(num):
 def every_five_mins():
     print('Consumer prints this every 5 mins')
 
-@huey.task(retries=3, retry_delay=10)
+@huey.task(retries=2, retry_delay=10)
 def try_thrice(msg):
     print('----TRY THRICE: %s----' % msg)
     if random.randint(1, 3) == 1:
         print('OK')
     else:
         print('About to fail, will retry in 10 seconds')
-        raise Exception('Crap something went wrong')
+        raise Exception('Uh-oh, something went wrong')
 
 @huey.task()
 def slow(n):
     time.sleep(n)
     print('slept %s' % n)
+    return n
+
+@huey.task()
+def add(a, b):
+    return a + b

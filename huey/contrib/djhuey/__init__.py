@@ -92,7 +92,8 @@ if isinstance(HUEY, dict):
     try:
         backend_cls = get_backend(backend_path)
     except (ValueError, ImportError, AttributeError):
-        config_error('Error: could not import Huey backend:\n%s' % traceback.format_exc())
+        config_error('Error: could not import Huey backend:\n%s'
+                     % traceback.format_exc())
 
     HUEY = backend_cls(name, **huey_config)
 

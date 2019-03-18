@@ -116,6 +116,10 @@ class StorageTests(object):
             self.assertEqual(r2.get(blocking=True, timeout=5), 3)
             self.assertEqual(r3.get(blocking=True, timeout=5), 4)
 
+            task_a.revoke()
+            self.assertTrue(task_a.is_revoked())
+            self.assertTrue(task_a.restore())
+
 
 class TestMemoryStorage(StorageTests, BaseTestCase):
     def get_huey(self):

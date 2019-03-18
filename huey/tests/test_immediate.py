@@ -59,10 +59,9 @@ class TestImmediate(BaseTestCase):
         task_a.revoke()
         r = task_a(3)
         self.assertEqual(len(self.huey), 0)
-        self.assertEqual(self.huey.result_count(), 0)
         self.assertTrue(r.get() is None)
 
-        task_a.restore()
+        self.assertTrue(task_a.restore())
         r = task_a(4)
         self.assertEqual(r.get(), 5)
 

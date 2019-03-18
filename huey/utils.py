@@ -93,3 +93,11 @@ def normalize_time(eta=None, delay=None, utc=True):
         elif is_aware(eta) and not utc:
             eta = make_naive(eta)
         return eta
+
+
+if sys.version_info[0] == 2:
+    def to_timestamp(dt):
+        return time.mktime(dt.timetuple())
+else:
+    def to_timestamp(dt):
+        return dt.timestamp()

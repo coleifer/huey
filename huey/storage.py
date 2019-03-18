@@ -22,6 +22,7 @@ except ImportError:
 
 from huey.constants import EmptyData
 from huey.exceptions import ConfigurationError
+from huey.utils import to_timestamp
 
 
 class BaseStorage(object):
@@ -479,6 +480,7 @@ class _ConnectionLocal(_ConnectionState, threading.local): pass
 
 # Python 2.x may return <buffer> object for BLOB columns.
 to_bytes = lambda b: bytes(b) if not isinstance(b, bytes) else b
+to_blob = lambda b: sqlite3.Binary(b)
 
 
 class SqliteStorage(BaseStorage):
@@ -549,7 +551,7 @@ class SqliteStorage(BaseStorage):
     def enqueue(self, data):
         with self.db(commit=True) as conn:
             conn.execute('insert into task (queue, data) values (?, ?)',
-                         (self.name, data))
+                         (self.name, to_blob(data)))
 
     def dequeue(self):
         with self.db(commit=True) as conn:
@@ -565,7 +567,7 @@ class SqliteStorage(BaseStorage):
     def unqueue(self, data):
         with self.db(commit=True) as conn:
             conn.execute('delete from task where queue = ? and data = ?',
-                         (self.name, data))
+                         (self.name, to_blob(data)))
 
     def queue_size(self):
         with self.db() as conn:
@@ -590,12 +592,14 @@ class SqliteStorage(BaseStorage):
 
     def add_to_schedule(self, data, ts):
         with self.db(commit=True) as conn:
+            data = to_blob(data)
+            ts = to_timestamp(ts)
             conn.execute('insert into schedule (queue, data, timestamp) '
-                         'values (?, ?, ?)', (self.name, data, ts.timestamp()))
+                         'values (?, ?, ?)', (self.name, data, ts))
 
     def read_schedule(self, ts):
         with self.db(commit=True) as conn:
-            params = (self.name, ts.timestamp())
+            params = (self.name, to_timestamp(ts))
             curs = conn.execute('select id, data from schedule where '
                                 'queue = ? and timestamp <= ?', params)
             id_list, data = [], []
@@ -632,7 +636,7 @@ class SqliteStorage(BaseStorage):
     def put_data(self, key, value):
         with self.db(commit=True) as conn:
             conn.execute('insert or replace into kv (queue, key, value) '
-                         'values (?, ?, ?)', (self.name, key, value))
+                         'values (?, ?, ?)', (self.name, key, to_blob(value)))
 
     def peek_data(self, key):
         with self.db() as conn:
@@ -664,8 +668,9 @@ class SqliteStorage(BaseStorage):
     def put_if_empty(self, key, value):
         try:
             with self.db(commit=True) as conn:
-                conn.execute('insert or abort into kv (queue, key, value) '
-                             'values (?, ?, ?)', (self.name, key, value))
+                conn.execute('insert or abort into kv '
+                             '(queue, key, value) values (?, ?, ?)',
+                             (self.name, key, to_blob(value)))
         except sqlite3.IntegrityError:
             return False
         else:
