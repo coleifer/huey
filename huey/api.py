@@ -10,6 +10,7 @@ import warnings
 
 from collections import OrderedDict
 
+from huey import signals as S
 from huey.constants import EmptyData
 from huey.consumer import Consumer
 from huey.exceptions import CancelExecution
@@ -60,6 +61,7 @@ class Huey(object):
         self._post_execute = OrderedDict()
         self._startup = OrderedDict()
         self._registry = Registry()
+        self._signal = S.Signal()
 
     def create_storage(self):
         # When using immediate mode, the default behavior is to use an
@@ -152,6 +154,21 @@ class Huey(object):
     def unregister_on_startup(self, name):
         return self._startup.pop(name, None) is not None
 
+    def signal(self, *signals):
+        def decorator(fn):
+            self._signal.connect(fn, *signals)
+            return fn
+        return decorator
+
+    def disconnect_signal(self, receiver, *signals):
+        self._signal.disconnect(receiver, *signals)
+
+    def _emit(self, signal, task, *args, **kwargs):
+        try:
+            self._signal.send(signal, task, *args, **kwargs)
+        except Exception as exc:
+            logger.exception('Error occurred sending signal "%s"', signal)
+
     def serialize_task(self, task):
         message = self._registry.create_message(task)
         return self.serializer.serialize(message)
@@ -161,6 +178,7 @@ class Huey(object):
         return self._registry.create_task(message)
 
     def enqueue(self, task):
+        self._emit(S.SIGNAL_ENQUEUED, task)
         if self._immediate:
             if task.on_complete:
                 current = task
@@ -223,8 +241,10 @@ class Huey(object):
             logger.debug('Task %s not ready to run, added to schedule', task)
         elif self.is_revoked(task, timestamp, peek=False):
             logger.debug('Task %s was revoked, not executing', task)
+            self._emit(S.SIGNAL_REVOKED, task)
         else:
             logger.debug('Executing %s', task)
+            self._emit(S.SIGNAL_EXECUTING, task)
             return self._execute(task, timestamp)
 
     def _execute(self, task, timestamp):
@@ -232,6 +252,7 @@ class Huey(object):
             try:
                 self._run_pre_execute(task)
             except CancelExecution:
+                self._emit(S.SIGNAL_CANCELED, task)
                 return
 
         start = time.time()
@@ -246,6 +267,7 @@ class Huey(object):
         except TaskLockedException as exc:
             logger.warning('Task %s not run, unable to acquire lock.', task.id)
             exception = exc
+            self._emit(S.SIGNAL_LOCKED, task)
         except RetryTask as exc:
             if not task.retries:
                 logger.error('Task %s not retried - no retries remaining.',
@@ -260,8 +282,10 @@ class Huey(object):
         except Exception as exc:
             logger.exception('Unhandled exception in task %s.', task.id)
             exception = exc
+            self._emit(S.SIGNAL_ERROR, task, exc)
         else:
             logger.info('%s finished in %0.3fs', task, duration)
+            self._emit(S.SIGNAL_COMPLETE, task)
 
         if self.results and not isinstance(task, PeriodicTask):
             if exception is not None:
@@ -285,6 +309,7 @@ class Huey(object):
             self.enqueue(next_task)
 
         if exception is not None and task.retries:
+            self._emit(S.SIGNAL_RETRYING, task)
             self._requeue_task(task, self._get_timestamp())
 
         return task_value
@@ -390,6 +415,7 @@ class Huey(object):
         data = self.serialize_task(task)
         eta = task.eta or datetime.datetime.fromtimestamp(0)
         self.storage.add_to_schedule(data, eta)
+        self._emit(S.SIGNAL_SCHEDULED, task)
 
     def read_schedule(self, timestamp=None):
         if timestamp is None:
@@ -660,12 +686,11 @@ class TaskWrapper(object):
             retry_delay=self.retry_delay)
         return self.huey.enqueue(task)
 
-    def _iter_apply(self, it):
+    def _apply(self, it):
         return [self.s(*(i if isinstance(i, tuple) else (i,))) for i in it]
 
     def map(self, it):
-        results = [self.huey.enqueue(task) for task in self._iter_apply(it)]
-        return ResultGroup(results)
+        return ResultGroup([self.huey.enqueue(t) for t in self._apply(it)])
 
     def __call__(self, *args, **kwargs):
         return self.huey.enqueue(self.s(*args, **kwargs))
@@ -905,6 +930,65 @@ def crontab(minute='*', hour='*', day='*', month='*', day_of_week='*'):
 
         return True
 
+    return validate_date
+
+
+def every_between(interval, start=None, end=None):
+    # Alternate format for describing periodic task schedule, consisting of a
+    # Python `timedelta` and start/end times.
+    nsec = interval.total_seconds()
+    if start is None: start = datetime.time(0)
+    if end is None: end = datetime.time(23, 59, 59)
+    if start > end:
+        start, end = end, start
+        invert = True
+    else:
+        invert = False
+
+    def combine(dt, t):
+        return dt.replace(hour=t.hour, minute=t.minute, second=t.second)
+
+    def validate_date(timestamp):
+        # First we'll check if the given time is within the start/end range.
+        timestamp = timestamp.replace(microsecond=0)
+        ts_time = timestamp.time()
+        if invert:
+            in_range = (ts_time < start) or (ts_time >= end)
+        else:
+            in_range = start <= ts_time < end
+        if not in_range:
+            return False
+
+        # If the function hasn't been initialized yet, we'll initialize it by
+        # setting the "next" timestamp to the beginning of the current window.
+        # So if the valid range is 9A-5P, we would select 9A. If the valid
+        # range is 11P-1A, we would select 11P. Then we increment the next
+        # timestamp by the interval until it is greater-than or equal to the
+        # user-provided timestamp. This gives us the time of the next valid
+        # iteration.
+        if validate_date._next is None:
+            if invert:
+                s = combine(timestamp, end)  # e.g., 23:00.
+                if ts_time < start:
+                    s -= datetime.timedelta(days=1)
+                while s < timestamp:
+                    s += interval
+                validate_date._next = s.timestamp()
+            else:
+                s = combine(timestamp, start)
+                while s < timestamp:
+                    s += interval
+                validate_date._next = s.timestamp()
+
+        ts = timestamp.timestamp()
+        if validate_date._next <= ts:
+            while validate_date._next <= ts:
+                validate_date._next += nsec
+            return True
+        else:
+            return False
+
+    validate_date._next = None
     return validate_date
 
 

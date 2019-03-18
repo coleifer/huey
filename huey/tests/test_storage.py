@@ -1,6 +1,6 @@
 import datetime
 import itertools
-import tempfile
+import os
 import unittest
 
 from redis.connection import ConnectionPool
@@ -135,5 +135,10 @@ class TestRedisStorage(StorageTests, BaseTestCase):
 
 
 class TestSqliteStorage(StorageTests, BaseTestCase):
+    def tearDown(self):
+        super(TestSqliteStorage, self).tearDown()
+        if os.path.exists('huey_storage.db'):
+            os.unlink('huey_storage.db')
+
     def get_huey(self):
-        return SqliteHuey(filename=tempfile.mktemp())
+        return SqliteHuey(filename='huey_storage.db')

@@ -492,11 +492,10 @@ class SqliteStorage(BaseStorage):
                   'data blob not null)')
     ddl = [table_kv, table_sched, index_sched, table_task]
 
-    def __init__(self, filename='huey.db', name='huey', wal_mode=True,
-                 cache_mb=8, fsync=False, **kwargs):
+    def __init__(self, filename='huey.db', name='huey', cache_mb=8,
+                 fsync=False, **kwargs):
         super(SqliteStorage, self).__init__(name)
         self.filename = filename
-        self._wal_mode = wal_mode
         self._cache_mb = cache_mb
         self._fsync = fsync
         self._conn_kwargs = kwargs
@@ -518,8 +517,6 @@ class SqliteStorage(BaseStorage):
     def _create_connection(self):
         conn = sqlite3.connect(self.filename, timeout=5, **self._conn_kwargs)
         conn.isolation_level = None  # Autocommit mode.
-        if self._wal_mode:
-            conn.execute('pragma journal_mode=wal')
         if self._cache_mb:
             conn.execute('pragma cache_size=%s' % (-1000 * self._cache_mb))
         conn.execute('pragma synchronous=%s' % (2 if self._fsync else 0))
