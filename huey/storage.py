@@ -531,7 +531,7 @@ class SqliteStorage(BaseStorage):
     def db(self, commit=False, close=False):
         conn = self.conn
         try:
-            if commit: conn.execute('begin')
+            if commit: conn.execute('begin exclusive')
             yield conn
         except Exception:
             if commit: conn.rollback()
