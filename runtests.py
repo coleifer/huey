@@ -8,33 +8,40 @@ import unittest
 from huey import tests
 
 
-def runtests(verbose=False, failfast=False, names=None):
-    if names:
-        suite = unittest.TestLoader().loadTestsFromNames(names, tests)
-    else:
-        suite = unittest.TestLoader().loadTestsFromModule(tests)
+def collect_tests(args):
+    suite = unittest.TestSuite()
 
-    runner = unittest.TextTestRunner(verbosity=2 if verbose else 1,
-                                     failfast=failfast)
-    return runner.run(suite)
+    if not args:
+        from huey import tests
+        module_suite = unittest.TestLoader().loadTestsFromModule(tests)
+        suite.addTest(module_suite)
+    else:
+        tmpl = 'huey.tests.test_%s'
+        cleaned = [tmpl % arg if not arg.startswith('test') else arg
+                   for arg in args]
+        user_suite = unittest.TestLoader().loadTestsFromNames(cleaned)
+        suite.addTest(user_suite)
+    return suite
+
+
+def runtests(suite, verbosity=1, failfast=False):
+    runner = unittest.TextTestRunner(verbosity=verbosity, failfast=failfast)
+    results = runner.run(suite)
+    return results.failures, results.errors
 
 
 if __name__ == '__main__':
     parser = optparse.OptionParser()
-    parser.add_option('-v', '--verbose', action='store_true', default=False,
-                      dest='verbose', help='Verbose output.')
+    parser.add_option('-v', '--verbosity', dest='verbosity', default=1,
+                      type='int', help='Verbosity of output')
     parser.add_option('-f', '--failfast', action='store_true', default=False,
                       help='Stop on first failure or error.')
-    options, args = parser.parse_args()
-    result = runtests(
-        verbose=options.verbose,
-        failfast=options.failfast,
-        names=args)
 
+    options, args = parser.parse_args()
+    suite = collect_tests(args)
+    failures, errors = runtests(suite, options.verbosity, options.failfast)
     if os.path.exists('huey.db'):
         os.unlink('huey.db')
 
-    if result.failures:
+    if errors or failures:
         sys.exit(1)
-    elif result.errors:
-        sys.exit(2)
