@@ -11,7 +11,7 @@ huey, a little task queue
 a lightweight alternative, huey is:
 
 * written in python (2.7+, 3.4+)
-* only dependency is the Python Redis client
+* optional dependency on the Python Redis client
 * clean and simple APIs
 
 huey supports:
@@ -23,7 +23,6 @@ huey supports:
 * task result storage
 * task locking
 * task pipelines and chains
-* consumer publishes event stream, allowing high-fidelity monitoring
 
 .. image:: http://i.imgur.com/2EpRs.jpg
 
@@ -42,6 +41,12 @@ turn functions into tasks that will be run by the consumer:
     @huey.task()
     def add_numbers(a, b):
         return a + b
+
+    @huey.task(retries=2, retry_delay=60)
+    def flaky_task(url):
+        # This task might fail, in which case it will be retried up to 2 times
+        # with a delay of 60s between retries.
+        return this_might_fail(url)
 
     @huey.periodic_task(crontab(minute='0', hour='3'))
     def nightly_backup():
@@ -74,7 +79,8 @@ like caching, event publishing, analytics, rate-limiting, and more.
 Although Huey was designed with Redis in mind, the storage system implements a
 simple API and many other tools could be used instead of Redis if that's your
 preference. Huey ships with an alternative storage implementation that uses
-:ref:`sqlite`.
+:ref:`sqlite` as well as an in-memory storage engine which can be used when
+running Huey within the main process.
 
 Table of contents
 -----------------

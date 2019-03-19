@@ -7,8 +7,9 @@ a lightweight alternative.
 
 * written in python (2.7+, 3.4+)
 * optional dependency on the Python Redis client
+* clean and simple APIs
 
-supports:
+huey supports:
 
 * multi-process, multi-thread or greenlet task execution models
 * schedule tasks to execute at a given time, or after a given delay

@@ -6,10 +6,8 @@ with open(os.path.join(os.path.dirname(__file__), 'README.rst')) as fh:
     readme = fh.read()
 
 extras_require = {
-    'backends': ['peewee', 'redis>=3.0.0', 'simpledb'],
+    'backends': ['redis>=3.0.0'],
     'redis': ['redis>=3.0.0'],
-    'simpledb': ['simpledb'],
-    'sqlite': ['peewee'],
 }
 
 setup(
