@@ -35,6 +35,12 @@ Huey's API
     def add_numbers(a, b):
         return a + b
 
+    @huey.task(retries=2, retry_delay=60)
+    def flaky_task(url):
+        # This task might fail, in which case it will be retried up to 2 times
+        # with a delay of 60s between retries.
+        return this_might_fail(url)
+
     @huey.periodic_task(crontab(minute='0', hour='3'))
     def nightly_backup():
         sync_all_data()
@@ -50,19 +56,19 @@ To enqueue a task to add two numbers and print the result:
 .. code-block:: python
 
     res = add_numbers(1, 2)  # Enqueues task.
-    print(res.get())  # Prints "3".
+    print(res())  # Prints "3".
 
 To schedule two numbers to be added in 10 seconds:
 
 .. code-block:: python
 
-    res = add_numbers.schedule(args=(1, 2), delay=10)
+    res = add_numbers.schedule((1, 2), delay=10)
 
     # Attempt to get result without blocking.
-    print(res.get(False))  # returns None.
+    print(res())  # returns None.
 
     # Block until result is ready and print.
-    print(res.get())  # after 10 seconds, prints "3".
+    print(res(blocking=True))  # Prints "3" after a few seconds.
 
 Brokers
 -------
@@ -75,34 +81,22 @@ To use Huey with Redis (**recommended**):
 
     huey = RedisHuey()
 
-To use Huey with SQLite (`docs <http://huey.readthedocs.io/en/latest/contrib.html#sqlite-storage>`_):
+To use Huey with SQLite:
 
 .. code-block:: python
 
-    from huey.contrib.sqlitedb import SqliteHuey
+    from huey import SqliteHuey
 
     huey = SqliteHuey('my-app-queue.db')
 
-To run Huey within the parent process using background greenlets (`docs <http://huey.readthedocs.io/en/latest/contrib.html#mini-huey>`_):
+To use Huey within the main process using an in-memory storage layer:
 
 .. code-block:: python
 
-    from huey.contrib.minimal import MiniHuey
+    from huey import MemoryHuey
 
-    huey = MiniHuey()
-    huey.start()  # Spawns scheduler background thread and returns immediately.
-
-To run Huey with a simple Python broker (**should not be used in production**),
-install `simpledb <https://github.com/coleifer/simpledb>`_ and run:
-
-.. code-block:: python
-
-    from huey.contrib.simple_storage import SimpleHuey
-
-    huey = SimpleHuey()
-
-    # Be sure to run the Python broker process, e.g.:
-    # $ python simpledb.py  # Starts Python broker.
+    huey = MemoryHuey()
+    huey.start()  # Starts workers and scheduler, returns immediately.
 
 Documentation
 ----------------
