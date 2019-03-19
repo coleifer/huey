@@ -8,5 +8,6 @@ In another terminal:
 
 Commands to try out:
 
-    from djangoex.test_app.tasks import count_beans
-    res = count_beans(500)
+    from djangoex.test_app.tasks import *
+    res = add(1, 2)
+    print(res.get(blocking=True))  # Wait for result, then print.
