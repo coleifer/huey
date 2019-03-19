@@ -1,4 +1,4 @@
-from huey.exceptions import QueueException
+from huey.exceptions import HueyException
 from huey.tests.base import BaseTestCase
 
 
@@ -67,10 +67,10 @@ class TestRegistry(BaseTestCase):
         # Unregister the task, which will raise an error when we try to
         # deserialize the message back into a task instance.
         self.assertTrue(task_a.unregister())
-        self.assertRaises(QueueException, self.registry.create_task, message)
+        self.assertRaises(HueyException, self.registry.create_task, message)
 
         # Similarly, we can no longer serialize the task to a message.
-        self.assertRaises(QueueException, self.registry.create_message, task)
+        self.assertRaises(HueyException, self.registry.create_message, task)
 
     def test_periodic_tasks(self):
         def task_fn(): pass

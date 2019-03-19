@@ -1,10 +1,6 @@
-class QueueException(Exception): pass
-class ResultStoreException(QueueException): pass
-class ScheduleException(QueueException): pass
-
-class ConfigurationError(QueueException): pass
-
-class TaskLockedException(QueueException): pass
+class HueyException(Exception): pass
+class ConfigurationError(HueyException): pass
+class TaskLockedException(HueyException): pass
 
 class CancelExecution(Exception): pass
 class RetryTask(Exception): pass

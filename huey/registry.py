@@ -1,6 +1,6 @@
 from collections import namedtuple
 
-from huey.exceptions import QueueException
+from huey.exceptions import HueyException
 
 
 Message = namedtuple('Message', ('id', 'name', 'eta', 'retries', 'retry_delay',
@@ -40,13 +40,13 @@ class Registry(object):
 
     def string_to_task(self, task_str):
         if task_str not in self._registry:
-            raise QueueException('%s not found in TaskRegistry' % task_str)
+            raise HueyException('%s not found in TaskRegistry' % task_str)
         return self._registry[task_str]
 
     def create_message(self, task):
         task_str = self.task_to_string(type(task))
         if task_str not in self._registry:
-            raise QueueException('%s not found in TaskRegistry' % task_str)
+            raise HueyException('%s not found in TaskRegistry' % task_str)
 
         # Remove the "task" instance from any arguments before serializing.
         if task.kwargs and 'task' in task.kwargs:

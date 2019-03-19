@@ -34,9 +34,42 @@ logger = logging.getLogger('huey')
 
 
 class Huey(object):
+    """
+    Huey executes tasks by exposing function decorators that cause the function
+    call to be enqueued for execution by a separate consumer process.
+
+    :param name: a name for the task queue, e.g. your application's name.
+    :param bool results: whether to store task results.
+    :param bool store_none: whether to store ``None`` in the result store.
+    :param bool utc: use UTC internally by converting from local time.
+    :param bool immediate: useful for debugging; causes tasks to be executed
+        synchronously in the application.
+    :param Serializer serializer: serializer implementation for tasks and
+        result data. The default implementation uses pickle.
+    :param bool compression: compress tasks and result data.
+    :param bool immediate_use_memory: automatically switch to a local in-memory
+        storage backend when immediate-mode is enabled.
+    :param storage_kwargs: arbitrary keyword arguments that will be passed to
+        the storage backend for additional configuration.
+
+    Example usage::
+
+        from huey import RedisHuey
+
+        # Create a huey instance.
+        huey = RedisHuey('my-app')
+
+        @huey.task()
+        def add_numbers(a, b):
+            return a + b
+
+        @huey.periodic_task(crontab(minute='0', hour='2'))
+        def nightly_report():
+            generate_nightly_report()
+    """
     def __init__(self, name='huey', results=True, store_none=False, utc=True,
                  immediate=False, serializer=None, compression=False,
-                 blocking=False, immediate_use_memory=True, always_eager=None,
+                 immediate_use_memory=True, always_eager=None,
                  **storage_kwargs):
         if always_eager is not None:
             warnings.warn('"always_eager" parameter is deprecated, use '
@@ -181,17 +214,19 @@ class Huey(object):
     def enqueue(self, task):
         self._emit(S.SIGNAL_ENQUEUED, task)
         if self._immediate:
+            self.execute(task)
+            if not self.results:
+                return
+
             if task.on_complete:
                 current = task
                 results = []
                 while current is not None:
                     results.append(Result(self, current))
                     current = current.on_complete
-                ret = ResultGroup(results)
+                return ResultGroup(results)
             else:
-                ret = Result(self, task)
-            self.execute(task)
-            return ret
+                return Result(self, task)
 
         self.storage.enqueue(self.serialize_task(task))
         if not self.results:
@@ -462,48 +497,9 @@ class Huey(object):
         self.storage.flush_all()
 
     def lock_task(self, lock_name):
-        """
-        Utilize the Storage key/value APIs to implement simple locking.
-
-        This lock is designed to be used to prevent multiple invocations of a
-        task from running concurrently. Can be used as either a context-manager
-        or as a task decorator. If using as a decorator, place it directly
-        above the function declaration.
-
-        If a second invocation occurs and the lock cannot be acquired, then a
-        special exception is raised, which is handled by the consumer. The task
-        will not be executed and an ``EVENT_LOCKED`` will be emitted. If the
-        task is configured to be retried, then it will be retried normally, but
-        the failure to acquire the lock is not considered an error.
-
-        Examples:
-
-            @huey.periodic_task(crontab(minute='*/5'))
-            @huey.lock_task('reports-lock')
-            def generate_report():
-                # If a report takes longer than 5 minutes to generate, we do
-                # not want to kick off another until the previous invocation
-                # has finished.
-                run_report()
-
-            @huey.periodic_task(crontab(minute='0'))
-            def backup():
-                # Generate backup of code
-                do_code_backup()
-
-                # Generate database backup. Since this may take longer than an
-                # hour, we want to ensure that it is not run concurrently.
-                with huey.lock_task('db-backup'):
-                    do_db_backup()
-        """
         return TaskLock(self, lock_name)
 
     def flush_locks(self):
-        """
-        Flush any stale locks (for example, when restarting the consumer).
-
-        :return: List of any stale locks that were cleared.
-        """
         flushed = set()
         for lock_key in self._locks:
             if self.get_raw(lock_key) is not EmptyData:
@@ -512,11 +508,6 @@ class Huey(object):
 
     def result(self, id, blocking=False, timeout=None, backoff=1.15,
                max_delay=1.0, revoke_on_timeout=False, preserve=False):
-        """
-        Retrieve the results of a task, given the task's ID. This
-        method accepts the same parameters and has the same behavior
-        as the :py:class:`Result` object.
-        """
         task_result = Result(self, Task(id=id))
         return task_result.get(
             blocking=blocking,

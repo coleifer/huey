@@ -948,3 +948,42 @@ class TestMultipleHuey(BaseTestCase):
         self.assertEqual(len(huey2), 1)
         self.assertEqual(huey2.execute(huey2.dequeue()), 3)
         self.assertEqual(r2.get(), 3)
+
+
+class TestDisableResultStore(BaseTestCase):
+    def get_huey(self):
+        return MemoryHuey(results=False, utc=False)
+
+    def test_disable_result_store(self):
+        state = []
+
+        @self.huey.task()
+        def task_a(n):
+            state.append(n)
+            return n + 1
+
+        res = task_a(2)
+        self.assertTrue(res is None)
+        self.assertEqual(self.execute_next(), 3)
+        self.assertEqual(len(self.huey), 0)
+        self.assertEqual(self.huey.result_count(), 0)
+        self.assertEqual(state, [2])
+
+        p = task_a.s(3).then(task_a)
+        res = self.huey.enqueue(p)
+        self.assertTrue(res is None)
+        self.assertEqual(self.execute_next(), 4)
+        self.assertEqual(self.execute_next(), 5)
+        self.assertEqual(state, [2, 3, 4])
+
+        self.huey.immediate = True
+        self.assertTrue(task_a(5) is None)
+        self.assertEqual(state, [2, 3, 4, 5])
+
+        p = task_a.s(6).then(task_a)
+        res = self.huey.enqueue(p)
+        self.assertTrue(res is None)
+        self.assertEqual(state, [2, 3, 4, 5, 6, 7])
+
+        self.assertEqual(len(self.huey), 0)
+        self.assertEqual(self.huey.result_count(), 0)
