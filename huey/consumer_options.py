@@ -19,6 +19,7 @@ config_defaults = (
     ('periodic', True),
     ('logfile', None),
     ('verbose', None),
+    ('simple_log', None),
     ('flush_locks', False),
 )
 config_keys = [param for param, _ in config_defaults]
@@ -70,7 +71,7 @@ class OptionParserHandler(object):
 
     def get_scheduler_options(self):
         return (
-            # -s, -n, -u, -o
+            # -s, -n
             option('scheduler_interval', type='int',
                    help='Granularity of scheduler in seconds.'),
             option('no_periodic', action='store_false',
@@ -79,12 +80,14 @@ class OptionParserHandler(object):
 
     def get_logging_options(self):
         return (
-            # -l, -v, -q
+            # -l, -v, -q, -S
             option('logfile', metavar='FILE'),
             option('verbose', action='store_true',
                    help='verbose logging (includes DEBUG statements)'),
             option('quiet', action='store_false', dest='verbose',
-                   help='minimal logging (only exceptions/errors)'),
+                   help='minimal logging'),
+            option(('S', 'simple'), action='store_true', dest='simple_log',
+                   help='simple logging format (time message)'),
         )
 
     def get_option_parser(self):
@@ -144,8 +147,11 @@ class ConsumerConfig(namedtuple('_ConsumerConfig', config_keys)):
         else:
             worker = '%(threadName)s'
 
-        logformat = ('[%(asctime)s] %(levelname)s:%(name)s:' + worker +
-                     ':%(message)s')
+        if self.simple_log:
+            logformat = '%(asctime)s %(message)s'
+        else:
+            logformat = ('[%(asctime)s] %(levelname)s:%(name)s:' + worker +
+                         ':%(message)s')
         if logger is None:
             logger = logging.getLogger()
 
@@ -161,4 +167,4 @@ class ConsumerConfig(namedtuple('_ConsumerConfig', config_keys)):
     @property
     def values(self):
         return dict((key, getattr(self, key)) for key in config_keys
-                    if key not in ('logfile', 'verbose'))
+                    if key not in ('logfile', 'verbose', 'simple_log'))
