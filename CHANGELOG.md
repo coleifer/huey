@@ -4,10 +4,41 @@ Changelog
 master
 ------
 
-[View commits](https://github.com/coleifer/huey/compare/1.11.0...HEAD)
+[View commits](https://github.com/coleifer/huey/compare/2.0.0...HEAD)
 
-* Added a `task_id` property to the `TaskResultWrapper` to expose the task's ID
-  as a direct property.
+2.0.0
+=====
+
+[View commits](https://github.com/coleifer/huey/compare/1.11.0...2.0.0)
+
+This section describes the changes in the 2.0.0 release.
+
+Overview of changes:
+
+* `always_eager` mode has been renamed to `immediate` mode. Unlike previous
+  versions, `immediate` mode involves the same code paths used by the consumer
+  process. This makes it easier to test features like task revocation and task
+  scheduling without needing to run a dedicated consumer process. Immediate
+  mode uses an in-memory storage layer by default, but can be configured to use
+  "live" storage like Redis or Sqlite.
+* The events stream API has been removed in favor of simpler callback-driven
+  [signals](https://huey.readthedocs.io/en/latest/signals.html) APIs. These
+  callbacks are executed synchronously within the huey consumer process.
+* A new serialization format is used in 2.0.0, however consumers running 2.0
+  will continue to be able to read and deserialize messages enqueued by Huey
+  version 1.11.0 for backwards compatibility.
+* New `Serializer` abstraction allows users to customize the serialization
+  format used when reading and writing tasks.
+* Huey consumer and scheduler can be more easily run within the application
+  process, if you prefer not to run a separate consumer process.
+* Tasks can now specify an `on_error` handler, in addition to the
+  previously-supported `on_complete` handler.
+* Task pipelines return a special `ResultGroup` object which simplifies reading
+  the results of a sequence of task executions.
+* `SqliteHuey` has been promoted out of `contrib`, onto an equal footing with
+  `RedisHuey`. To simplify deployment, the dependency on
+  [peewee](https://github.com/coleifer/peewee) was removed and the Sqlite
+  storage engine uses the Python `sqlite3` driver directly.
 
 1.11.0
 ------
