@@ -802,8 +802,8 @@ class Result(object):
     def is_revoked(self):
         return self.huey.is_revoked(self.task, peek=True)
 
-    def revoke(self):
-        self.huey.revoke(self.task)
+    def revoke(self, revoke_once=True):
+        self.huey.revoke(self.task, revoke_once=revoke_once)
 
     def restore(self):
         return self.huey.restore(self.task)

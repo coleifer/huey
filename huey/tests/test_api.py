@@ -189,13 +189,46 @@ class TestQueue(BaseTestCase):
         self.assertEqual(r3.get(), 4)
         self.assertEqual(state, {2: 2, 3: 3})
 
-        # Attempting to re-enqueue and re-execute the revoked t1 will not work,
-        # as it still appears revoked.
-        self.assertTrue(r1.is_revoked())
+        # Attempting to re-enqueue and re-execute the revoked t1 will now work,
+        # as it is only revoked once by default.
+        self.assertFalse(r1.is_revoked())
         self.huey.enqueue(t1)
+        self.assertEqual(self.execute_next(), 2)
+        self.assertEqual(state, {1: 1, 2: 2, 3: 3})
+        self.assertFalse(r1.is_revoked())  # Still revoked.
+
+    def test_revoke_task_instance_persistent(self):
+        state = []
+        @self.huey.task()
+        def task_a(n):
+            state.append(n)
+            return n + 1
+
+        r1 = task_a(1)
+        r2 = task_a(2)
+        r1.revoke(revoke_once=False)
+        r2.revoke()
+        self.assertTrue(r1.is_revoked())
+        self.assertTrue(r2.is_revoked())
+
+        t1 = self.huey.dequeue()
+        self.assertTrue(self.huey.execute(t1) is None)
+        self.assertTrue(r1.is_revoked())
+
+        t2 = self.huey.dequeue()
+        self.assertTrue(self.huey.execute(t2) is None)
+        self.assertFalse(r2.is_revoked())  # No longer revoked.
+        self.assertEqual(state, [])
+
+        self.huey.enqueue(t1)
+        self.huey.enqueue(t2)
         self.assertTrue(self.execute_next() is None)
-        self.assertEqual(state, {2: 2, 3: 3})
-        self.assertTrue(r1.is_revoked())  # Still revoked.
+        self.assertEqual(self.execute_next(), 3)
+        self.assertEqual(state, [2])
+
+        self.assertTrue(r1.is_revoked())
+        self.assertFalse(r2.is_revoked())
+        self.assertEqual(self.huey.result_count(), 1)  # t1's revoke id.
 
     def test_revoke_by_id(self):
         state = []
@@ -353,7 +386,7 @@ class TestQueue(BaseTestCase):
 
         # Verify state of internals.
         self.assertEqual(len(self.huey), 0)
-        self.assertEqual(self.huey.result_count(), 1)  # Key for revoked inst.
+        self.assertEqual(self.huey.result_count(), 0)
         self.assertEqual(self.huey.scheduled_count(), 0)
 
     def test_task_error(self):

@@ -1,3 +1,5 @@
+import pickle
+
 from huey.exceptions import HueyException
 from huey.tests.base import BaseTestCase
 
@@ -85,3 +87,20 @@ class TestRegistry(BaseTestCase):
         self.assertTrue(p1.unregister())
         periodic = sorted(t.name for t in self.registry.periodic_tasks)
         self.assertEqual(periodic, ['p2'])
+
+    def test_huey1_compat(self):
+        @self.huey.task()
+        def task_a(n):
+            return n + 1
+
+        t = task_a.s(2)
+
+        # Enqueue a message using the old message serialization format.
+        tc = task_a.task_class
+        old_message = (t.id, '%s.%s' % (tc.__module__, tc.__name__), None, 0,
+                       0, ((2,), {}), None)
+        self.huey.storage.enqueue(pickle.dumps(old_message))
+
+        self.assertEqual(len(self.huey), 1)
+        self.assertEqual(self.execute_next(), 3)
+        self.assertEqual(self.huey.result(t.id), 3)
