@@ -148,8 +148,10 @@ class ConsumerConfig(namedtuple('_ConsumerConfig', config_keys)):
             worker = '%(threadName)s'
 
         if self.simple_log:
+            datefmt = '%H:%M:%S'
             logformat = '%(asctime)s %(message)s'
         else:
+            datefmt = None  # Use default
             logformat = ('[%(asctime)s] %(levelname)s:%(name)s:' + worker +
                          ':%(message)s')
         if logger is None:
@@ -160,7 +162,7 @@ class ConsumerConfig(namedtuple('_ConsumerConfig', config_keys)):
         else:
             handler = logging.StreamHandler()
 
-        handler.setFormatter(logging.Formatter(logformat))
+        handler.setFormatter(logging.Formatter(logformat, datefmt))
         logger.addHandler(handler)
         logger.setLevel(self.loglevel)
 
