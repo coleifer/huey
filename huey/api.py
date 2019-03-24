@@ -304,12 +304,9 @@ class Huey(object):
             exception = exc
             self._emit(S.SIGNAL_LOCKED, task)
         except RetryTask as exc:
+            logger.info('Task %s raised RetryTask, retrying.', task.id)
             if not task.retries:
-                logger.error('Task %s not retried - no retries remaining.',
-                             task.id)
-            else:
-                logger.info('Task %s raised RetryTask exception, retrying.',
-                            task.id)
+                task.retries = 1
             exception = exc
         except KeyboardInterrupt:
             logger.warning('Received exit signal, %s did not finish.', task.id)

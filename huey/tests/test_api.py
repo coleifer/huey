@@ -10,6 +10,7 @@ from huey.api import _unsupported
 from huey.constants import EmptyData
 from huey.exceptions import CancelExecution
 from huey.exceptions import ConfigurationError
+from huey.exceptions import RetryTask
 from huey.exceptions import TaskException
 from huey.exceptions import TaskLockedException
 from huey.tests.base import BaseTestCase
@@ -224,6 +225,7 @@ class TestQueue(BaseTestCase):
         self.huey.enqueue(t2)
         self.assertTrue(self.execute_next() is None)
         self.assertEqual(self.execute_next(), 3)
+        self.assertEqual(r2.get(), 3)
         self.assertEqual(state, [2])
 
         self.assertTrue(r1.is_revoked())
@@ -546,6 +548,29 @@ class TestQueue(BaseTestCase):
 
         dt = datetime.datetime.utcnow() + datetime.timedelta(seconds=61)
         self.assertTrue(self.huey.ready_to_run(task, dt))
+
+    def test_retrytask_explicit(self):
+        state = [0]
+
+        @self.huey.task()
+        def task_a(n):
+            state[0] = state[0] + n
+            if state[0] < 2:
+                raise RetryTask('asdf')
+            return state[0]
+
+        r = task_a(1)
+        self.assertTrue(self.execute_next() is None)
+        self.assertRaises(TaskException, r.get)
+        self.assertEqual(state, [1])
+        self.assertEqual(len(self.huey), 1)
+
+        self.assertEqual(self.execute_next(), 2)
+        r.reset()
+        self.assertEqual(r.get(), 2)
+        self.assertEqual(state, [2])
+        self.assertEqual(len(self.huey), 0)
+        self.assertEqual(self.huey.result_count(), 0)
 
     def test_read_schedule(self):
         @self.huey.task()
