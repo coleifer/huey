@@ -9,23 +9,16 @@ huey can be installed from PyPI using `pip <http://www.pip-installer.org/en/late
 
     $ pip install huey
 
-
-If you want to enable SQLite and Redis backend automatically, use following command:
-
-.. code-block:: bash
-
-    $ pip install huey[backends]
-
-huey has no dependencies outside the standard library, but currently the only
-fully-implemented storage backend it ships with requires `redis <http://redis.io>`_.
-To use the redis backend, you will need to install the Redis python client:
+huey has no dependencies outside the standard library, but `redis-py <https://github.com/andymccurdy/redis-py>`_
+is required to utilize Redis for your task storage:
 
 .. code-block:: bash
 
     $ pip install redis
 
-If your tasks are IO-bound rather than CPU-bound, you might consider using the ``greenlet`` worker
-type. To use the greenlet workers, you need to install ``gevent``:
+If your tasks are IO-bound rather than CPU-bound, you might consider using the
+``greenlet`` worker type. To use the greenlet workers, you need to
+install ``gevent``:
 
 .. code-block:: bash
 

@@ -4,14 +4,14 @@ Consuming Tasks
 ===============
 
 To run the consumer, simply point it at the "import path" to your application's
-:py:class:`Huey` instance.  For example, here is how I run it on my blog:
+:py:class:`Huey` instance. For example, here is how I run it on my blog:
 
 .. code-block:: bash
 
     huey_consumer.py blog.main.huey --logfile=../logs/huey.log
 
-The concept of the "import path" has been the source of a few questions, but its
-actually quite simple.  It is simply the dotted-path you might use if you were
+The concept of the "import path" has been the source of a few questions, but
+it is quite simple. It is simply the dotted-path you might use if you were
 to try and import the "huey" object in the interactive interpreter:
 
 .. code-block:: pycon
@@ -22,13 +22,17 @@ You may run into trouble though when "blog" is not on your python-path. To
 work around this:
 
 1. Manually specify your pythonpath: ``PYTHONPATH=/some/dir/:$PYTHONPATH huey_consumer.py blog.main.huey``.
-2. Run ``huey_consumer.py`` from the directory your config module is in.  I use
-   supervisord to manage my huey process, so I set the ``directory`` to the root
-   of my site.
+2. Run ``huey_consumer.py`` from the directory your config module is in. I use
+   supervisord to manage my huey process, so I set the ``directory`` to the
+   root of my site.
 3. Create a wrapper and hack ``sys.path``.
 
 .. warning::
-    If you plan to use `supervisord <http://supervisord.org/>`_ to manage your consumer process, be sure that you are running the consumer directly and without any intermediary shell scripts. Shell script wrappers interfere with supervisor's ability to terminate and restart the consumer Python process. For discussion see `GitHub issue 88 <https://github.com/coleifer/huey/issues/88>`_.
+    If you plan to use `supervisord <http://supervisord.org/>`_ to manage your
+    consumer process, be sure that you are running the consumer directly and
+    without any intermediary shell scripts. Shell script wrappers interfere
+    with supervisor's ability to terminate and restart the consumer Python
+    process. For discussion see `GitHub issue 88 <https://github.com/coleifer/huey/issues/88>`_.
 
 .. _consumer-options:
 
@@ -57,9 +61,12 @@ their default values.
 ``-q``, ``--quiet``
     Minimal logging, only errors and their tracebacks will be logged.
 
+``-S``, ``--simple``
+    Use a simple log format consisting only of the time H:M:S and log message.
+
 ``-w``, ``--workers``
     Number of worker threads/processes/greenlets, the default is ``1`` but
-    some applications may want to increase this number for greater throughput.
+    most applications will want to increase this number for greater throughput.
     Even if you have a small workload, you will typically want to increase this
     number to at least 2 just in case one worker gets tied up on a slow task.
     If you have a CPU-intensive workload, you may want to increase the number
@@ -68,8 +75,8 @@ their default values.
     workers as they are extremely lightweight.
 
 ``-k``, ``--worker-type``
-    Choose the worker type, ``thread``, ``process`` or ``greenlet``. The default
-    is ``thread``.
+    Choose the worker type, ``thread``, ``process`` or ``greenlet``. The
+    default is ``thread``.
 
     Depending on your workload, one worker type may perform better than the
     others:
@@ -92,17 +99,17 @@ their default values.
     this option to save a few CPU cycles.
 
 ``-d``, ``--delay``
-    When using a "polling"-type queue backend, the amount of time to wait
-    between polling the backend.  Default is 0.1 seconds. For example, when the
-    consumer starts up it will begin polling every 0.1 seconds. If no tasks are
-    found in the queue, it will multiply the current delay (0.1) by the backoff
-    parameter. When a task is received, the polling interval will reset back to
-    this value.
+    When using a "polling"-type queue backend, this is the number of seconds to
+    wait when polling the backend.  Default is 0.1 seconds. For example, when
+    the consumer starts up it will begin polling every 0.1 seconds. If no tasks
+    are found in the queue, it will multiply the current delay (0.1) by the
+    backoff parameter. When a task is received, the polling interval will reset
+    back to this value.
 
 ``-m``, ``--max-delay``
     The maximum amount of time to wait between polling, if using weighted
-    backoff.  Default is 10 seconds. If your huey consumer doesn't see a lot of
-    action, you can increase this number to reduce CPU usage and Redis traffic.
+    backoff. Default is 10 seconds. If your huey consumer doesn't see a lot of
+    action, you can increase this number to reduce CPU usage.
 
 ``-b``, ``--backoff``
     The amount to back-off when polling for results.  Must be greater than
@@ -132,23 +139,20 @@ their default values.
     The frequency with which the scheduler should run. By default this will run
     every second, but you can increase the interval to as much as 60 seconds.
 
-``-u``, ``--utc``
-    Indicates that the consumer should use UTC time for crontabs.
-    Default is True, so it is not actually necessary to use this option.
-
-``-o``, ``--localtime``
-    Indicates that the consumer should use localtime for crontabs.
-    The default behavior is to use UTC everywhere.
-
 Examples
 ^^^^^^^^
 
-Running the consumer with 8 threads, a logfile for errors only, and a very
-short polling interval:
+Running the consumer with 8 threads and a logfile for errors:
 
 .. code-block:: bash
 
-  huey_consumer.py my.app.huey -l /var/log/app.huey.log -w 8 -b 1.05 -m 1.0
+    huey_consumer.py my.app.huey -l /var/log/app.huey.log -w 8 -q
+
+Using multi-processing to run 4 worker processes.
+
+.. code-block:: bash
+
+    huey_consumer.py my.app.huey -w 4 -k process
 
 Running single-threaded with periodict task support disabled. Additionally,
 logging records are written to stdout.
@@ -157,18 +161,12 @@ logging records are written to stdout.
 
     huey_consumer.py my.app.huey -v -n
 
-Using multi-processing to run 4 worker processes.
-
-.. code-block:: bash
-
-    huey_consumer.py my.app.huey -w 4 -k process
-
-Using greenlets to run 100 workers, with no health checking and a scheduler
+Using greenlets to run 50 workers, with no health checking and a scheduler
 granularity of 60 seconds.
 
 .. code-block:: bash
 
-    huey_consumer.py my.app.huey -w 100 -k greenlet -C -s 60
+    huey_consumer.py my.app.huey -w 50 -k greenlet -C -s 60
 
 .. _consumer-shutdown:
 
@@ -177,7 +175,7 @@ Consumer shutdown
 
 The huey consumer supports graceful shutdown via ``SIGINT``. When the consumer
 process receives ``SIGINT``, workers are allowed to finish up whatever task
-they are currently executing.
+they are currently executing before the process exits.
 
 Alternatively, you can shutdown the consumer using ``SIGTERM`` and any running
 tasks will be interrupted, ensuring the process exits quickly.
@@ -195,7 +193,7 @@ will be allowed to finish before the restart occurs.
     If you are using Python 2.7 and either the thread or greenlet worker model,
     it is strongly recommended that you use a process manager (such as systemd
     or supervisor) to handle running and restarting the consumer. The reason
-    has to do with the potential of Python 2.7, when mixed with threaded/greenlet
+    has to do with the potential of Python 2.7, when mixed with thread/greenlet
     workers, to leak file descriptors. For more information, check out
     `issue 374 <https://github.com/coleifer/huey/issues/374>`_ and
     `PEP 446 <https://www.python.org/dev/peps/pep-0446/>`_.
@@ -219,8 +217,8 @@ These three components coordinate the receipt, scheduling, and execution of
 your tasks, respectively.
 
 1. You call a function -- huey has decorated it, which triggers a message being
-   put into the queue (Redis by default). At this point your application
-   returns immediately, returning a :py:class:`TaskResultWrapper` object.
+   put into the queue (e.g a Redis list). At this point your application
+   returns immediately, returning a :py:class:`Result` object.
 2. In the consumer process, the worker(s) will be listening for new messages
    and one of the workers will receive your message indicating which task to
    run, when to run it, and with what parameters.
@@ -228,13 +226,13 @@ your tasks, respectively.
    was this message "revoked"? Is it scheduled to actually run later?).  If it
    is revoked, the message is thrown out. If it is scheduled to run later, it
    gets added to the schedule. Otherwise, it is executed.
-4. The worker thread executes the task. If the task finishes, any results are
-   published to the result store (provided you have not disabled the result
-   store). If the task fails, the consumer checks to see if the task can be
-   retried. Then, if the task is to be retried, the consumer checks to see if
-   the task is configured to wait a number of seconds before retrying.
-   Depending on the configuration, huey will either re-enqueue the task for
-   execution, or tell the scheduler when to re-enqueue it based on the delay.
+4. The worker executes the task. If the task finishes, any results are stored
+   in the result store. If the task fails, the consumer checks to see if the
+   task can be retried. Then, if the task is to be retried, the consumer checks
+   to see if the task is configured to wait a number of seconds between
+   retries. Depending on the configuration, huey will either re-enqueue the
+   task for execution, or tell the scheduler when to re-enqueue it based on the
+   delay.
 
 While all the above is going on with the Worker(s), the Scheduler is looking at
 its schedule to see if any tasks are ready to be executed.  If a task is ready
@@ -250,8 +248,9 @@ be run. If so, these tasks are enqueued.
     When the consumer is shutdown using SIGTERM, any workers still
     involved in the execution of a task will be interrupted mid-task.
 
-Events
-------
+Signals
+-------
 
-As the consumer processes tasks, it can be configured to emit events. For
-information on consumer-sent events, check out the :ref:`events` documentation.
+The consumer will emit certain :ref:`signals` as it executes tasks. User code
+can register signal handlers to respond to these events. For more information,
+see the :ref:`signals` document.

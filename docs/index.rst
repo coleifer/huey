@@ -11,8 +11,8 @@ huey, a little task queue
 a lightweight alternative, huey is:
 
 * written in python (2.7+, 3.4+)
-* optional dependency on the Python Redis client
 * clean and simple APIs
+* redis, sqlite, or in-memory storage
 
 huey supports:
 
@@ -52,6 +52,12 @@ turn functions into tasks that will be run by the consumer:
     def nightly_backup():
         sync_all_data()
 
+To run the consumer with a single worker thread:
+
+.. code-block:: console
+
+    $ huey_consumer.py my_app.huey
+
 Here's how to run the consumer with four worker processes (good setup for
 CPU-intensive processing):
 
@@ -67,20 +73,20 @@ few of them efficiently:
 
     $ huey_consumer.py my_app.huey -k greenlet -w 32
 
-Redis
------
+Storage
+-------
 
-Huey's design and feature-set are, to a large extent, informed by the
-capabilities of the `Redis <https://redis.io>`_ database. Redis is a fantastic
-fit for a lightweight task queueing library like Huey: it's self-contained,
-versatile, and can be a multi-purpose solution for other web-application tasks
-like caching, event publishing, analytics, rate-limiting, and more.
+Huey's design and feature-set were informed by the capabilities of the
+`Redis <https://redis.io>`_ database. Redis is a fantastic fit for a
+lightweight task queueing library like Huey: it's self-contained, versatile,
+and can be a multi-purpose solution for other web-application tasks like
+caching, event publishing, analytics, rate-limiting, and more.
 
 Although Huey was designed with Redis in mind, the storage system implements a
 simple API and many other tools could be used instead of Redis if that's your
-preference. Huey ships with an alternative storage implementation that uses
-:ref:`sqlite` as well as an in-memory storage engine which can be used when
-running Huey within the main process.
+preference.
+
+Huey comes with builtin support for Redis, Sqlite and in-memory storage.
 
 Table of contents
 -----------------

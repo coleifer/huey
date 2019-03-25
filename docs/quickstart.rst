@@ -7,8 +7,6 @@ The purpose of this document is to present Huey using simple examples that
 cover the most common usage of the library. Detailed documentation can be found
 in the :ref:`API documentation <api>`.
 
-To follow along, make sure you have :ref:`huey installed <installation>`.
-
 Here is a simple example of a task that accepts two numbers and returns their
 sum:
 
@@ -175,30 +173,21 @@ Retrying tasks that fail
 ------------------------
 
 Sometimes we may have a task that we anticipate might fail from time to time,
-and should failure occur the task can be safely retried. Huey supports
-automatically retrying tasks a given number of times, optionally with a delay
-between attempts.
+in which case we should retry it. Huey supports automatically retrying tasks a
+given number of times, optionally with a delay between attempts.
 
-Here we'll declare a task that fails approximately half of the time:
+Here we'll declare a task that fails approximately half of the time. To
+configure this task to be automatically retried, use the ``retries`` parameter
+of the :py:meth:`~Huey.task` decorator:
 
 .. code-block:: python
     import random
 
-    @huey.task()
+    @huey.task(retries=2)  # Retry the task up to 2 times.
     def flaky_task():
         if random.randint(0, 1) == 0:
             raise Exception('failing!')
         return 'OK'
-
-To automatically retry this task in the event of failure, we can modify the
-parameters to the :py:meth:`~Huey.task` decorator, specifying a number of
-retries:
-
-.. code-block:: python
-
-    @huey.task(retries=2)
-    def flaky_task():
-        # ...
 
 Here is what might happen behind-the-scenes if we call this task:
 
@@ -236,8 +225,8 @@ between attempts:
 It is also possible to explicitly retry a task from within the task, by raising
 a :py:class:`RetryTask` exception. When this exception is used, the task will
 be retried regardless of whether it was declared with ``retries``. Similarly,
-the task's remaining retries will (if they were declared) will not be affected
-by raising :py:class:`RetryTask`.
+the task's remaining retries (if they were declared) will not be affected by
+raising :py:class:`RetryTask`.
 
 For more information, see the following API documentation:
 
@@ -247,7 +236,7 @@ For more information, see the following API documentation:
 Canceling or pausing tasks
 --------------------------
 
-It is possible to prevent tasks from executing at runtime. This applies to
+Huey can dynamically cancel tasks from executing at runtime. This applies to
 regular tasks, tasks scheduled to execute in the future, and periodic tasks.
 
 Any task can be canceled ("revoked"), provided the task is not being executed
@@ -352,8 +341,7 @@ Task pipelines
 Huey supports pipelines (or chains) of one or more tasks that should be
 executed sequentially.
 
-To get started with pipelines, let's first look behind-the-scenes at what
-happens when you invoke a ``task``-decorated function:
+To get started, I'll just review the usual method of running a task:
 
 .. code-block:: python
 
@@ -363,9 +351,25 @@ happens when you invoke a ``task``-decorated function:
 
     result = add(1, 2)
 
-    # Is equivalent to:
+A slightly more verbose way of writing that would be to use the
+:py:meth:`~TaskWrapper.s` method to create a :py:class:`Task` instance and then
+enqueue it explicitly:
+
+.. code-block:: python
+
+    # Create a task representing the execution of add(1, 2).
     task = add.s(1, 2)
+
+    # Enqueue the task instance, which returns a Result handle.
     result = huey.enqueue(task)
+
+So the following are equivalent:
+
+.. code-block:: python
+    result = add(1, 2)
+
+    # And:
+    result = huey.enqueue(add.s(1, 2))
 
 The :py:meth:`TaskWrapper.s` method is used to create a :py:class:`Task`
 instance, which represents the execution of the given function. The
@@ -378,13 +382,13 @@ a :py:class:`Task` instance. We can then chain additional tasks using the
 
 .. code-block:: python
 
-    add_task = add.s(1, 2)  # Create Task to represent add() invocation.
+    add_task = add.s(1, 2)  # Create Task to represent add(1, 2) invocation.
 
-    # Add additional tasks to pipeline by calling QueueTask.then().
+    # Add additional tasks to pipeline by calling add_task.then().
     pipeline = (add_task
-                .then(add, 3)  # Call add() with previous result and 3.
-                .then(add, 4)  # etc...
-                .then(add, 5))
+                .then(add, 3)  # Call add() with previous result (1+2) and 3.
+                .then(add, 4)  # Previous result ((1+2)+3) and 4.
+                .then(add, 5)) # Etc.
 
     # When a pipeline is enqueued, a ResultGroup is returned (which is
     # comprised of individual Result instances).
@@ -412,7 +416,7 @@ Note that the return value from the parent task is passed to the next task in
 the pipeline, and so on.
 
 If the value returned by the parent function is a ``tuple``, then the tuple
-will be used to update the ``*args`` for the next task.  Likewise, if the
+will be used to extend the ``*args`` for the next task.  Likewise, if the
 parent function returns a ``dict``, then the dict will be used to update the
 ``**kwargs`` for the next task.
 
@@ -427,11 +431,12 @@ Example of chaining fibonacci calculations:
 
     pipe = (fib.s(1)
             .then(fib)
+            .then(fib)
             .then(fib))
     results = huey.enqueue(pipe)
 
-    print(results(blocking=True))
-    # [(2, 1), (3, 2), (5, 3)]
+    print(results(True))  # Resolve results, blocking until all are finished.
+    # [(2, 1), (3, 2), (5, 3), (8, 5)]
 
 For more information, see the following API docs:
 
