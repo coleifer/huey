@@ -572,6 +572,26 @@ class TestQueue(BaseTestCase):
         self.assertEqual(len(self.huey), 0)
         self.assertEqual(self.huey.result_count(), 0)
 
+        # Now run through and verify that if the task has a retry count, that
+        # it is decremented as we'd expect normally.
+        state = [0]
+        t = task_a.s(1)
+        t.retries = 2
+        r = self.huey.enqueue(t)
+        self.assertTrue(self.execute_next() is None)
+        self.assertRaises(TaskException, r.get)
+        self.assertEqual(state, [1])
+        self.assertEqual(len(self.huey), 1)
+
+        task = self.huey.dequeue()
+        self.assertEqual(task.retries, 1)
+        self.assertEqual(self.huey.execute(task), 2)
+        r.reset()
+        self.assertEqual(r.get(), 2)
+        self.assertEqual(state, [2])
+        self.assertEqual(len(self.huey), 0)
+        self.assertEqual(self.huey.result_count(), 0)
+
     def test_read_schedule(self):
         @self.huey.task()
         def task_a(n):
