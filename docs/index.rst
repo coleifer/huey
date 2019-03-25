@@ -89,7 +89,7 @@ Table of contents
    :maxdepth: 2
 
    installation
-   getting-started
+   quickstart
    consumer
    events
    imports
