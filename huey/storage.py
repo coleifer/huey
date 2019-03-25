@@ -338,7 +338,7 @@ end"""
 class RedisStorage(BaseStorage):
     redis_client = Redis
 
-    def __init__(self, name='huey', blocking=False, read_timeout=1,
+    def __init__(self, name='huey', blocking=True, read_timeout=1,
                  max_errors=1000, connection_pool=None, url=None,
                  client_name=None, **connection_params):
 

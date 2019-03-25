@@ -999,7 +999,7 @@ class MemoryHuey(Huey):
 
 
 class RedisHuey(Huey):
-    def get_storage(self, blocking=False, read_timeout=1, max_errors=1000,
+    def get_storage(self, blocking=True, read_timeout=1, max_errors=1000,
                     connection_pool=None, url=None, **connection_params):
         return RedisStorage(
             name=self.name,
