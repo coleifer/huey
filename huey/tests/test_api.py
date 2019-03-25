@@ -584,7 +584,7 @@ class TestQueue(BaseTestCase):
         self.assertEqual(len(self.huey), 1)
 
         task = self.huey.dequeue()
-        self.assertEqual(task.retries, 1)
+        self.assertEqual(task.retries, 2)  # Unaffected!
         self.assertEqual(self.huey.execute(task), 2)
         r.reset()
         self.assertEqual(r.get(), 2)
