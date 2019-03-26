@@ -8,16 +8,27 @@ Most end-users will interact with the API using the two decorators:
 * :py:meth:`Huey.task`
 * :py:meth:`Huey.periodic_task`
 
-The API documentation will follow the structure of the huey API, starting with
-the highest-level interfaces (the decorators) and eventually discussing the
-lowest-level interfaces, the :py:class:`BaseQueue` and :py:class:`BaseDataStore` objects.
+The API documentation will follow the structure of the huey ``api.py`` module.
 
-.. _function-decorators:
+Huey object
+-----------
 
-Function decorators and helpers
--------------------------------
+.. py:class:: Huey(name='huey', results=True, store_none=False, utc=True, immediate=False, serializer=None, compression=False, immediate_use_memory=True, storage_kwargs)
 
-.. py:class:: Huey(name[, result_store=True[, events=True[, store_none=False[, always_eager=False[, store_errors=True[, blocking=False[, **storage_kwargs]]]]]]])
+    :param str name: the name of the task queue, e.g. your application's name.
+    :param bool results: whether to store task results.
+    :param bool store_none: whether to store ``None`` in the result store.
+    :param bool utc: use UTC internally, convert naive datetimes from local
+        time to UTC (if local time is other than UTC).
+    :param bool immediate: useful for debugging; causes tasks to be executed
+        synchronously in the application.
+    :param Serializer serializer: serializer implementation for tasks and
+        result data. The default implementation uses ``pickle``.
+    :param bool compression: compress tasks and result data.
+    :param bool immediate_use_memory: automatically switch to a local in-memory
+        storage backend whenever immediate-mode is enabled.
+    :param storage_kwargs: arbitrary keyword arguments that will be passed to
+        the storage backend for additional configuration.
 
     Huey executes tasks by exposing function decorators that cause the function
     call to be enqueued for execution by the consumer.
@@ -26,34 +37,50 @@ Function decorators and helpers
     have as many as you like -- the only caveat is that one consumer process
     must be executed for each Huey instance.
 
-    :param name: the name of the huey instance or application.
-    :param bool result_store: whether the results of tasks should be stored.
-    :param bool events: whether events should be emitted by the consumer.
-    :param bool store_none: Flag to indicate whether tasks that return ``None``
-        should store their results in the result store.
-    :param bool always_eager: Useful for testing, this will execute all tasks
-        immediately, without enqueueing them.
-    :param bool store_errors: whether task errors should be stored.
-    :param bool blocking: whether the queue will block (if False, then the queue will poll).
-    :param storage_kwargs: arbitrary kwargs to pass to the storage implementation.
-
     Example usage:
 
     .. code-block:: python
 
-        from huey import RedisHuey, crontab
+        # demo.py
+        from huey import RedisHuey
 
+        # Create a huey instance.
         huey = RedisHuey('my-app')
 
         @huey.task()
-        def slow_function(some_arg):
-            # ... do something ...
-            return some_arg
+        def add_numbers(a, b):
+            return a + b
 
-        @huey.periodic_task(crontab(minute='0', hour='3'))
-        def backup():
-            # do a backup every day at 3am
-            return
+        @huey.periodic_task(crontab(minute='0', hour='2'))
+        def nightly_report():
+            generate_nightly_report()
+
+    To run the consumer with 4 worker threads:
+
+    .. code-block:: console
+
+        $ huey_consumer.py demo.huey -w 4
+
+    To add two numbers, the "huey" way:
+
+    .. code-block:: pycon
+
+        >>> from demo import add_numbers
+        >>> res = add_numbers(1, 2)
+        >>> res(blocking=True)  # Blocks until result is available.
+        3
+
+    To test huey without using a consumer, you can use "immediate" mode.
+    Immediate mode follows all the same code paths as Huey does when running
+    the consumer process, but does so synchronously within the application.
+
+    .. code-block:: pycon
+
+        >>> from demo import add_numbers, huey
+        >>> huey.immediate = True  # Tasks executed immediately.
+        >>> res = add_numbers(2, 3)
+        >>> res()
+        5
 
     .. py:method:: task([retries=0[, retry_delay=0[, retries_as_argument=False[, include_task=False]]]])
 
