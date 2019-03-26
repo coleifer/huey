@@ -226,7 +226,6 @@ class Huey(object):
         return self._registry.create_task(message)
 
     def enqueue(self, task):
-        self._emit(S.SIGNAL_ENQUEUED, task)
         if self._immediate:
             self.execute(task)
             if not self.results:

@@ -2,8 +2,7 @@ import itertools
 
 
 SIGNAL_CANCELED = 'canceled'
-SIGNAL_COMPLETE = 'finished'
-SIGNAL_ENQUEUED = 'enqueued'
+SIGNAL_COMPLETE = 'complete'
 SIGNAL_ERROR = 'error'
 SIGNAL_EXECUTING = 'executing'
 SIGNAL_LOCKED = 'locked'
@@ -27,9 +26,12 @@ class Signal(object):
 
     def disconnect(self, receiver, *signals):
         if not signals:
-            signals = ('any',)
+            signals = list(self.receivers)
         for signal in signals:
-            self.receivers[signal].remove(receiver)
+            try:
+                self.receivers[signal].remove(receiver)
+            except ValueError:
+                pass
 
     def send(self, signal, task, *args, **kwargs):
         receivers = itertools.chain(self.receivers.get(signal, ()),
