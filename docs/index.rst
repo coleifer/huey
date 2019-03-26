@@ -97,7 +97,7 @@ Table of contents
    installation
    quickstart
    consumer
-   events
+   signals
    imports
    troubleshooting
    api

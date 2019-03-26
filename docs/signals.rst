@@ -1,9 +1,11 @@
-.. _events:
+.. _signals:
 
-Consumer Events
----------------
+Signals
+-------
 
-If you specify a :py:class:`RedisEventEmitter` when setting up your :py:class:`Huey` instance (or if you choose to use :py:class:`RedisHuey`), the consumer will publish real-time events about the status of various tasks.  You can subscribe to these events in your own application.
+The consumer will send various signals as it processes tasks. Callbacks can be
+registered as signal handlers, and will be called synchronously by the consumer
+process.
 
 When an event is emitted, the following information is always provided:
 
