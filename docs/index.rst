@@ -98,11 +98,11 @@ Table of contents
    quickstart
    consumer
    imports
-   troubleshooting
-   signals
    shared_resources
+   signals
    api
    contrib
+   troubleshooting
 
 Huey is named in honor of my cat
 

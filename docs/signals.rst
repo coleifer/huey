@@ -1,93 +1,156 @@
 .. _signals:
 
 Signals
--------
+=======
 
 The consumer will send various signals as it processes tasks. Callbacks can be
 registered as signal handlers, and will be called synchronously by the consumer
 process.
 
-When an event is emitted, the following information is always provided:
+The following signals are implemented by Huey:
 
-* ``status``: a String indicating what type of event this is.
-* ``id``: the UUID of the task.
-* ``task``: a user-friendly name indicating what type of task this is.
-* ``retries``: how many retries the task has remaining.
-* ``retry_delay``: how long to sleep before retrying the task in event of failure.
-* ``execute_time``: A unix timestamp indicating when the task is scheduled to
-    execute (this may be ``None``).
+* ``SIGNAL_CANCELED``: task was canceled due to a pre-execute hook raising
+  a :py:class:`CancelExecution` exception.
+* ``SIGNAL_COMPLETE``: task has been executed successfully.
+* ``SIGNAL_ERROR``: task failed due to an unhandled exception.
+* ``SIGNAL_EXECUTING``: task is about to be executed.
+* ``SIGNAL_LOCKED``: failed to acquire lock, aborting task.
+* ``SIGNAL_RETRYING``: task failed, but will be retried.
+* ``SIGNAL_REVOKED``: task is revoked and will not be executed.
+* ``SIGNAL_SCHEDULED``: task is not yet ready to run and has been added to the
+  schedule for future execution.
 
-If an error occurred, then the following data is also provided:
+When a signal handler is called, it will be called with the following
+arguments:
 
-* ``error``: A boolean value indicating if there was an error.
-* ``traceback``: A string traceback of the error, if one occurred.
+* ``signal``: the signal name, e.g. ``'executing'``.
+* ``task``: the :py:class:`Task` instance.
 
-When an event includes other keys, those will be noted below.
+The following signals will include additional arguments:
 
-The following events are emitted by the consumer. I've listed the event name, and in parentheses the process that emits the event and any non-standard metadata it includes.
+* ``SIGNAL_ERROR``: includes a third argument ``exc``, which is the
+  ``Exception`` that was raised while executing the task.
 
-* ``EVENT_CHECKING_PERIODIC`` (Scheduler, ``timestamp``): emitted every minute when the scheduler checks for periodic tasks to execute.
-* ``EVENT_FINISHED`` (Worker, ``duration``): emitted when a task executes successfully and cleanly returns.
-* ``EVENT_RETRYING`` (Worker): emitted after a task failure, when the task will be retried.
-* ``EVENT_REVOKED`` (Worker, ``timestamp``): emitted when a task is pulled from the queue but is not executed due to having been revoked.
-* ``EVENT_LOCKED`` (Worker, ``duration``): emitted when a task could not be executed because a lock was unable to be acquired.
-* ``EVENT_SCHEDULED`` (Worker): emitted when a task specifies a delay or ETA and is not yet ready to run. This can also occur when a task is being retried and specifies a retry delay. The task is added to the schedule for later execution.
-* ``EVENT_SCHEDULING_PERIODIC`` (Schedule, ``timestamp``): emitted when a periodic task is scheduled for execution.
-* ``EVENT_STARTED`` (Worker, ``timestamp``): emitted when a worker begins executing a task.
+To register a signal handler, use the :py:meth:`Huey.signal` method:
 
-Error events:
+.. code-block:: python
+    @huey.signal()
+    def all_signal_handler(signal, task, exc=None):
+        # This handler will be called for every signal.
+        print('%s - %s' % (signal, task.id))
 
-* ``EVENT_ERROR_DEQUEUEING`` (Worker): emitted if an error occurs reading from the backend queue.
-* ``EVENT_ERROR_ENQUEUEING`` (Schedule, Worker): emitted if an error occurs enqueueing a task for execution. This can occur when the scheduler attempts to enqueue a task that had been delayed, or when a worker attempts to retry a task after an error.
-* ``EVENT_ERROR_INTERNAL`` (Worker): emitted if an unspecified error occurs. An example might be the Redis server being offline.
-* ``EVENT_ERROR_SCHEDULING`` (Worker): emitted when an exception occurs enqueueing a task.
-* ``EVENT_ERROR_STORING_RESULT`` (Worker, ``duration``): emitted when an exception occurs attempting to store the result of a task. In this case the task ran to completion, but the result could not be stored.
-* ``EVENT_ERROR_TASK`` (Worker, ``duration``): emitted when an unspecified error occurs in the user's task code.
+    @huey.signal(SIGNAL_ERROR, SIGNAL_LOCKED, SIGNAL_CANCELED, SIGNAL_REVOKED)
+    def task_not_executed_handler(signal, task, exc=None):
+        # This handler will be called for the 4 signals listed, which
+        # correspond to error conditions.
+        print('[%s] %s - not executed' % (signal, task.id))
 
-Listening to events
-^^^^^^^^^^^^^^^^^^^
+    @huey.signal(SIGNAL_COMPLETE)
+    def task_success(signal, task):
+        # This handle will be called for each task that completes successfully.
+        pass
 
-The easiest way to listen for events is by iterating over the ``huey.storage`` object.
+Signal handlers can be unregistered using :py:meth:`Huey.disconnect_signal`.
 
 .. code-block:: python
 
-    from huey.consumer import EVENT_FINISHED
+    # Disconnect the "task_success" signal handler.
+    huey.disconnect_signal(task_success)
 
-    for event in huey.storage:
-        # Do something with the result of the task.
-        if event['status'] == EVENT_FINISHED:
-            result = huey.result(event['id'])
-            process_result(event, result)
+    # Disconnect the "task_not_executed_handler", but just from
+    # handling SIGNAL_LOCKED.
+    huey.disconnect_signal(task_not_executed_handler, SIGNAL_LOCKED)
 
-You can also achieve the same result with a simple loop like this:
+Examples
+^^^^^^^^
+
+We'll use the following tasks to illustrate how signals may be sent:
 
 .. code-block:: python
+    @huey.task()
+    def add(a, b):
+        return a + b
 
-    pubsub = huey.storage.listener()
-    for message in pubsub.listen():
-        event = message['data']  # Actual event data is stored in 'data' key.
-        # Do something with `event` object.
-        process_event(event)
+    @huey.task(retries=2, retry_delay=10)
+    def flaky_task():
+        if random.randint(0, 1) == 0:
+            raise ValueError('uh-oh')
+        return 'OK'
 
-Ordering of events
-^^^^^^^^^^^^^^^^^^
+Here is a simple example of a task execution we would expect to succeed:
 
-For the execution of a simple task, the events emitted would be:
+.. code-block:: pycon
+    >>> result = add(1, 2)
+    >>> result.get(blocking=True)
 
-* ``EVENT_STARTED``
-* ``EVENT_FINISHED``
+The consumer would send the following signals:
 
-If a task was scheduled to be executed in the future, the events would be:
+* ``SIGNAL_EXECUTING`` - the task has been dequeued and will be executed.
+* ``SIGNAL_COMPLETE`` - the task has finished successfully.
 
-* ``EVENT_SCHEDULED``
-* ``EVENT_STARTED``
-* ``EVENT_FINISHED``
+Here is an example of scheduling a task for execution after a short delay:
 
-If an error occurs and the task is configured to be retried, the events would be:
+.. code-block:: pycon
+    >>> result = add.schedule((2, 3), delay=10)
+    >>> result(True)  # same as result.get(blocking=True)
 
-* ``EVENT_STARTED``
-* ``EVENT_ERROR_TASK`` (includes traceback)
-* ``EVENT_RETRYING``
-* ``EVENT_SCHEDULED`` (if there is a retry delay, it will go onto the schedule)
-* ``EVENT_STARTED``
-* ``EVENT_FINISHED`` if task succeeds, otherwise go back to ``EVENT_ERROR_TASK``.
+The following signals would be sent:
+
+* ``SIGNAL_SCHEDULED`` - the task is not yet ready to run, so it has been added
+  to the schedule.
+* After 10 seconds, the consumer will run the task and send
+  the ``SIGNAL_EXECUTING`` signal.
+* ``SIGNAL_COMPLETE``.
+
+Here is an example that may fail, in which case it will be retried
+automatically with a delay of 10 seconds.
+
+.. code-block:: pycon
+    >>> result = flaky_task()
+    >>> try:
+    ...     result.get(blocking=True)
+    ... except TaskException:
+    ...     result.reset()
+    ...     result.get(blocking=True)  # Try again if first time fails.
+    ...
+
+Assuming the task failed the first time and succeeded the second time, we would
+see the following signals being sent:
+
+* ``SIGNAL_EXECUTING`` - the task is being executed.
+* ``SIGNAL_ERROR`` - the task raised an unhandled exception.
+* ``SIGNAL_RETRYING`` - the task will be retried.
+* ``SIGNAL_SCHEDULED`` - the task has been added to the schedule for execution
+  in ~10 seconds.
+* ``SIGNAL_EXECUTING`` - second try running task.
+* ``SIGNAL_COMPLETE`` - task succeeded.
+
+What happens if we revoke the ``add()`` task and then attempt to execute it:
+
+.. code-block:: pycon
+    >>> add.revoke()
+    >>> res = add(1, 2)
+
+The following signal will be sent:
+
+* ``SIGNAL_REVOKED`` - this is sent before the task enters the "executing"
+  state. When a task is revoked, no other signals will be sent.
+
+Performance considerations
+--------------------------
+
+Signal handlers are executed **synchronously** by the consumer as it processes
+tasks. It is important to use care when implementing signal handlers, as one
+slow signal handler can impact the overall responsiveness of the consumer.
+
+For example, if you implement a signal handler that posts some data to REST
+API, everything might work fine until the REST API goes down or stops being
+responsive -- which will cause the signal handler to block, which then prevents
+the consumer from moving on to the next task.
+
+Another consideration is the :ref:`management of shared resources <shared_resources>`
+that may be used by signal handlers, such as database connections or open file
+handles. Signal handlers are called by the consumer workers, which (depending
+on how you are running the consumer) may be separate processes, threads or
+greenlets. As a result, care should be taken to ensure proper initialization
+and cleanup of any resources you plan to use in signal handlers.

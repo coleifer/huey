@@ -8,3 +8,5 @@ from huey.api import RedisHuey
 from huey.api import SqliteHuey
 from huey.api import crontab
 from huey.api import every_between
+from huey.exceptions import CancelExecution
+from huey.exceptions import RetryTask

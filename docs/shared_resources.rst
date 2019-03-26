@@ -6,9 +6,9 @@ Managing shared resources
 Tasks frequently need to make use of shared resources from the application,
 such as a database connection.
 
-The simplest approach is to simply manage the connection yourself. For example,
-Peewee database connections can be used as a context manager, so if we need to
-run some queries inside a task, we might write:
+The simplest approach is to manage the connection yourself. For example, Peewee
+database connections can be used as a context manager, so if we need to run
+some queries inside a task, we might write:
 
 .. code-block:: python
 
@@ -70,15 +70,97 @@ database resource during the execution of a task:
         # Once our task returns, the db_res.close() method will be called.
         return n_records
 
-Pre and post execute hooks
---------------------------
-
-TODO
-
 Startup hooks
 -------------
 
-Another option is to use a connection pool, but where would the pool be
-initialized? Bear in mind that the consumer may be configured to run workers as
-separate processes, and sharing a connection pool across processes will not
-work.
+Huey provides the :py:meth:`Huey.on_startup` decorator, which is used to
+register a callback that is executed once when each worker starts running. This
+hook provides a convenient way to initialize shared resources or perform other
+initializations which should happen within the context of the worker thread or
+process.
+
+As an example, suppose many of our tasks will be executing queries against a
+Postgres database. Rather than opening and closing a connection for every task,
+we will instead open a connection when each worker starts. This connection may
+then be used by any tasks that are executed by that consumer:
+
+.. code-block:: python
+    import peewee
+
+    db = PostgresqlDatabase('my_app')
+
+    @huey.on_startup()
+    def open_db_connection():
+        # If for some reason the db connection appears to already be open,
+        # close it first.
+        if not db.is_closed():
+            db.close()
+        db.connect()
+
+    @huey.task()
+    def run_query(n):
+        db.execute_sql('select pg_sleep(%s)', (n,))
+        return n
+
+.. note::
+    The above code works correctly because `peewee <https://github.com/coleifer/peewee>`_
+    stores connection state in a threadlocal. This is important if we are
+    running the workers in threads (huey's default). Every thread will be
+    sharing the same ``PostgresqlDatabase`` instance, but since the connection
+    state is thread-local, each worker thread will see only its own connection.
+
+Multi-processing
+^^^^^^^^^^^^^^^^
+
+Depending on the consumer worker type, the workers will be either processes,
+threads or greenlets. The choice of worker type can have consequences for the
+way certain shared resources behave.
+
+For example, with the "process" worker type, the consumer starts up the worker
+processes by making a call to ``fork()`` behind-the-scenes. This creates a
+child process with a copy of everything in the parent process' memory --
+potentially including internal state, like database connections, etc.
+
+For this reason, it is especially advisable to initialize shared resources
+using :py:meth:`~Huey.on_startup` hooks.
+
+Pre and post execute hooks
+--------------------------
+
+In addition to the :py:meth:`~Huey.on_startup` hook, Huey also provides
+decorators for registering pre- and post-execute hooks:
+
+* :py:meth:`Huey.pre_execute` - called right before a task is executed. The
+  handler function should accept one argument: the task that will be executed.
+  Pre-execute hooks have an additional feature, which is they can raise a
+  special :py:class:`CancelExecution` exception to signal to the consumer that
+  the task should not be run.
+* :py:meth:`Huey.post_execute` - called after task has finished. The handler
+  function should accept three arguments: the task that was executed, the
+  return value, and the exception (if one occurred, otherwise is ``None``).
+
+Example:
+
+.. code-block:: python
+    from huey import CancelExecution
+
+    @huey.pre_execute()
+    def pre_execute_hook(task):
+        # Pre-execute hooks are passed the task that is about to be run.
+
+        # This pre-execute task will cancel the execution of every task if the
+        # current day is Sunday.
+        if datetime.datetime.now().weekday() == 6:
+            raise CancelExecution('No tasks on sunday!')
+
+    @huey.post_execute()
+    def post_execute_hook(task, task_value, exc):
+        # Post-execute hooks are passed the task, the return value (if the task
+        # succeeded), and the exception (if one occurred).
+        if exc is not None:
+            print('Task "%s" failed with error: %s!' % (task.id, exc))
+
+.. note::
+    Printing the error message is redundant, as the huey logger already logs
+    any unhandled exceptions raised by a task, along with a traceback. These
+    are just examples.
