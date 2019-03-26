@@ -482,6 +482,44 @@ Examples:
         with huey.lock_task('db-backup'):
             do_db_backup()
 
+Signals
+-------
+
+The :py:class:`Consumer` will send :ref:`signals <signals>` as it moves through
+various stages of its operations. The :py:meth:`Huey.signal` method can be used
+to attach a callback to one or more signals, which will be invoked
+synchronously by the consumer when the signal is sent.
+
+For a simple example, we can add a signal handler that simply prints the signal
+name and the ID of the related task.
+
+.. code-block:: python
+
+    @huey.signal()
+    def print_signal_args(signal, task, exc=None):
+        if signal == SIGNAL_ERROR:
+            print('%s - %s - exception: %s' % (signal, task.id, exc))
+        else:
+            print('%s - %s' % (signal, task.id))
+
+The :py:meth:`~Huey.signal` method is used to decorate the signal-handling
+function. It accepts an optional list of signals. If none are provided, as in
+our example, then the handler will be called for any signal.
+
+The callback function (``print_signal_args``) accepts two required arguments,
+which are present on every signal: ``signal`` and ``task``. Additionally, our
+handler accepts an optional third argument ``exc`` which is only included with
+``SIGNAL_ERROR``. ``SIGNAL_ERROR`` is only sent when a task raises an uncaught
+exception during execution.
+
+.. warning::
+    Signal handlers are executed *synchronously* by the consumer, so it is
+    typically a bad idea to introduce any slow operations into a signal
+    handler.
+
+For a complete list of Huey's signals and their meaning, see the :ref:`signals`
+document, and the :py:meth:`Huey.signal` API documentation.
+
 Reading more
 ------------
 
@@ -495,5 +533,7 @@ other aspects of the APIs:
 * :py:meth:`Huey.periodic_task` - decorator to indicate a task that executes at
   periodic intervals.
 * :py:func:`crontab` - define what intervals to execute a periodic command.
+* For information about managing shared resources like database connections,
+  refer to the :ref:`shared resources <shared_resources>` document.
 
 Also check out the :ref:`notes on running the consumer <consuming-tasks>`.

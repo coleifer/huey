@@ -97,9 +97,10 @@ Table of contents
    installation
    quickstart
    consumer
-   signals
    imports
    troubleshooting
+   signals
+   shared_resources
    api
    contrib
 
