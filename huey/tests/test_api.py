@@ -710,6 +710,35 @@ class TestDecorators(BaseTestCase):
         self.assertEqual(task.retries, 3)
         self.assertEqual(task.retry_delay, 10)
 
+    def test_closing_task(self):
+        class DB(object):
+            def __init__(self):
+                self.state = []
+            def open(self):
+                self.state.append('open')
+            def close(self):
+                self.state.append('close')
+            def get_state(self):
+                self.state, ret = [], self.state
+                return ret
+        db = DB()
+        self.assertEqual(db.get_state(), [])
+
+        @self.huey.closing_task(db)
+        def task_c(n):
+            if n < 0:
+                raise ValueError('bad value')
+            return n + 1
+
+        res = task_c(2)
+        self.assertEqual(self.execute_next(), 3)
+        self.assertEqual(db.get_state(), ['open', 'close'])
+
+        res = task_c(-1)
+        self.assertEqual(db.get_state(), [])
+        self.assertTrue(self.execute_next() is None)
+        self.assertEqual(db.get_state(), ['open', 'close'])
+
 
 class TestTaskHooks(BaseTestCase):
     def test_task_hooks(self):
