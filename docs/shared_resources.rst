@@ -3,10 +3,10 @@
 Managing shared resources
 =========================
 
-Tasks frequently need to make use of shared resources from the application,
-such as a database connection.
+Tasks may need to make use of shared resources from the application, such as a
+database connection or an API client.
 
-The simplest approach is to manage the connection yourself. For example, Peewee
+The simplest approach is to manage the resource explicitly. For example, Peewee
 database connections can be used as a context manager, so if we need to run
 some queries inside a task, we might write:
 
@@ -17,6 +17,7 @@ some queries inside a task, we might write:
 
     @huey.task()
     def check_comment_spam(comment_id):
+        # Open DB connection at start of task, close upon exit.
         with database:
             comment = Comment.get(Comment.id == comment_id)
 
@@ -27,57 +28,27 @@ some queries inside a task, we might write:
 Another option would be to write a decorator that acquires the shared resource
 before calling the task function, and then closes it after the task has
 finished. To make this a little simpler, Huey provides a special helper
-:py:meth:`Huey.closing_task` decorator that will call ``open()`` on the given
-object at the start of a task, and ``close()`` after the task has finished
-(regardless of whether an exception occurred).
-
-First let's define a helper class that implements ``open()`` and ``close()``
-for managing a Postgres database connection:
+:py:meth:`Huey.context_task` decorator that accepts an object implementing the
+context-manager API, and automatically wraps the task within the given context:
 
 .. code-block:: python
 
-    # Postgres DB used by our app.
-    db = peewee.PostgresqlDatabase('my_app')
+    # Same as previous example, except we can omit the "with db" block.
+    @huey.context_task(db)
+    def check_comment_spam(comment_id):
+        comment = Comment.get(Comment.id == comment_id)
 
-    # Simple wrapper that implements open/close methods.
-    class DBResource(object):
-        def __init__(self, db):
-            self.db = db
-        def open(self):
-            if not self.db.is_closed():
-                self.db.connect()
-        def close(self):
-            self.db.close()
-
-    db_res = DBResource(db)
-
-Now we can use the :py:meth:`Huey.closing_task` decorator to manage our
-database resource during the execution of a task:
-
-.. code-block:: python
-
-    huey = RedisHuey()
-
-    @huey.closing_task(db_res)
-    def generate_report(report_date, company_id):
-        # At this point, db_res.open() has been called and we can assume
-        # that our database connection is now ready to use.
-
-        # Do some database stuff, etc...
-        query = ...
-        n_records = ...
-
-        # Once our task returns, the db_res.close() method will be called.
-        return n_records
+        if akismet.is_spam(comment.body):
+            comment.is_spam = True
+            comment.save()
 
 Startup hooks
 -------------
 
-Huey provides the :py:meth:`Huey.on_startup` decorator, which is used to
-register a callback that is executed once when each worker starts running. This
-hook provides a convenient way to initialize shared resources or perform other
-initializations which should happen within the context of the worker thread or
-process.
+The :py:meth:`Huey.on_startup` decorator is used to register a callback that is
+executed once when each worker starts running. This hook provides a convenient
+way to initialize shared resources or perform other initializations which
+should happen within the context of the worker thread or process.
 
 As an example, suppose many of our tasks will be executing queries against a
 Postgres database. Rather than opening and closing a connection for every task,
@@ -109,21 +80,6 @@ then be used by any tasks that are executed by that consumer:
     sharing the same ``PostgresqlDatabase`` instance, but since the connection
     state is thread-local, each worker thread will see only its own connection.
 
-Multi-processing
-^^^^^^^^^^^^^^^^
-
-Depending on the consumer worker type, the workers will be either processes,
-threads or greenlets. The choice of worker type can have consequences for the
-way certain shared resources behave.
-
-For example, with the "process" worker type, the consumer starts up the worker
-processes by making a call to ``fork()`` behind-the-scenes. This creates a
-child process with a copy of everything in the parent process' memory --
-potentially including internal state, like database connections, etc.
-
-For this reason, it is especially advisable to initialize shared resources
-using :py:meth:`~Huey.on_startup` hooks.
-
 Pre and post execute hooks
 --------------------------
 
@@ -132,9 +88,9 @@ decorators for registering pre- and post-execute hooks:
 
 * :py:meth:`Huey.pre_execute` - called right before a task is executed. The
   handler function should accept one argument: the task that will be executed.
-  Pre-execute hooks have an additional feature, which is they can raise a
-  special :py:class:`CancelExecution` exception to signal to the consumer that
-  the task should not be run.
+  Pre-execute hooks have an additional feature: they can raise a special
+  :py:class:`CancelExecution` exception to instruct the consumer that the task
+  should not be run.
 * :py:meth:`Huey.post_execute` - called after task has finished. The handler
   function should accept three arguments: the task that was executed, the
   return value, and the exception (if one occurred, otherwise is ``None``).
