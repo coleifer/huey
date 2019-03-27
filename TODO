@@ -1,5 +1,6 @@
-* Request statistics from the consumer.
+* API docs
+* Postgres / MySQL support
 * Priority support?
+* At least once delivery?
 * BZPOPMIN for alternate Redis implementation?
 * Redis streams as viable broker implementation?
-* Named pipes or file-based storage?
