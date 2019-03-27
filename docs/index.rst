@@ -52,14 +52,38 @@ turn functions into tasks that will be run by the consumer:
     def nightly_backup():
         sync_all_data()
 
-To run the consumer with a single worker thread:
+Calling a ``task``-decorated function will enqueue the function call for
+execution by the consumer. A special result handle is returned immediately,
+which can be used to fetch the result once the task is finished:
+
+.. code-block:: pycon
+    >>> from demo import add_numbers
+    >>> res = add_numbers(1, 2)
+    >>> res
+    <Result: task 6b6f36fc-da0d-4069-b46c-c0d4ccff1df6>
+
+    >>> res(blocking=True)  # Block until task has finished, get return value.
+    3
+
+Tasks can be scheduled to run in the future:
+
+.. code-block:: pycon
+    >>> res = add_numbers.schedule((2, 3), delay=10)  # Will be run in ~10s.
+    >>> res(blocking=True)  # Will block until task finishes, in ~10s.
+    5
+
+For much more, check out the :ref:`guide`.
+
+Running the consumer
+^^^^^^^^^^^^^^^^^^^^
+
+To run the consumer with a single worker thread (default):
 
 .. code-block:: console
 
     $ huey_consumer.py my_app.huey
 
-Here's how to run the consumer with four worker processes (good setup for
-CPU-intensive processing):
+Run the consumer with four worker processes:
 
 .. code-block:: console
 
@@ -95,7 +119,7 @@ Table of contents
    :maxdepth: 2
 
    installation
-   quickstart
+   guide
    consumer
    imports
    shared_resources

@@ -161,18 +161,15 @@ class Huey(object):
 
         return decorator
 
-    def closing_task(self, obj, *args, **kwargs):
-        def closing_decorator(fn):
+    def context_task(self, obj, *args, **kwargs):
+        def context_decorator(fn):
             @functools.wraps(fn)
             def inner(*a, **k):
-                try:
-                    obj.open()  # Open the resource.
+                with obj:
                     return fn(*a, **k)
-                finally:
-                    obj.close()  # Close the resource.
             return inner
         def task_decorator(func):
-            return self.task(*args, **kwargs)(closing_decorator(func))
+            return self.task(*args, **kwargs)(context_decorator(func))
         return task_decorator
 
     def pre_execute(self, name=None):
@@ -757,6 +754,9 @@ class Result(object):
         self.huey = huey
         self.task = task
         self._result = EmptyData
+
+    def __repr__(self):
+        return '<Result: task %s>' % self.id
 
     @property
     def id(self):
