@@ -391,6 +391,28 @@ class TestQueue(BaseTestCase):
         self.assertEqual(self.huey.result_count(), 0)
         self.assertEqual(self.huey.scheduled_count(), 0)
 
+    def test_reschedule_no_delay(self):
+        state = []
+
+        @self.huey.task(context=True)
+        def task_s(task=None):
+            state.append(task.id)
+            return True
+
+        res = task_s()
+        res2 = res.reschedule()
+        self.assertTrue(res.id != res2.id)
+
+        self.assertEqual(len(self.huey), 2)
+        self.assertTrue(self.execute_next() is None)
+        self.assertTrue(self.execute_next())
+        self.assertTrue(res2())
+
+        self.assertEqual(state, [res2.id])
+        self.assertEqual(len(self.huey), 0)
+        self.assertEqual(self.huey.result_count(), 0)
+        self.assertEqual(self.huey.scheduled_count(), 0)
+
     def test_task_error(self):
         @self.huey.task()
         def task_e(n):

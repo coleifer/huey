@@ -812,7 +812,8 @@ class Result(object):
         # original task's data is used to enqueue a new task with a new task ID
         # and execution_time.
         self.revoke()
-        eta = normalize_time(eta, delay, self.huey.utc)
+        if eta is not None or delay is not None:
+            eta = normalize_time(eta, delay, self.huey.utc)
         task = type(self.task)(
             self.task.args,
             self.task.kwargs,
@@ -922,65 +923,6 @@ def crontab(minute='*', hour='*', day='*', month='*', day_of_week='*'):
 
         return True
 
-    return validate_date
-
-
-def every_between(interval, start=None, end=None):
-    # Alternate format for describing periodic task schedule, consisting of a
-    # Python `timedelta` and start/end times.
-    nsec = interval.total_seconds()
-    if start is None: start = datetime.time(0)
-    if end is None: end = datetime.time(23, 59, 59)
-    if start > end:
-        start, end = end, start
-        invert = True
-    else:
-        invert = False
-
-    def combine(dt, t):
-        return dt.replace(hour=t.hour, minute=t.minute, second=t.second)
-
-    def validate_date(timestamp):
-        # First we'll check if the given time is within the start/end range.
-        timestamp = timestamp.replace(microsecond=0)
-        ts_time = timestamp.time()
-        if invert:
-            in_range = (ts_time < start) or (ts_time >= end)
-        else:
-            in_range = start <= ts_time < end
-        if not in_range:
-            return False
-
-        # If the function hasn't been initialized yet, we'll initialize it by
-        # setting the "next" timestamp to the beginning of the current window.
-        # So if the valid range is 9A-5P, we would select 9A. If the valid
-        # range is 11P-1A, we would select 11P. Then we increment the next
-        # timestamp by the interval until it is greater-than or equal to the
-        # user-provided timestamp. This gives us the time of the next valid
-        # iteration.
-        if validate_date._next is None:
-            if invert:
-                s = combine(timestamp, end)  # e.g., 23:00.
-                if ts_time < start:
-                    s -= datetime.timedelta(days=1)
-                while s < timestamp:
-                    s += interval
-                validate_date._next = to_timestamp(s)
-            else:
-                s = combine(timestamp, start)
-                while s < timestamp:
-                    s += interval
-                validate_date._next = to_timestamp(s)
-
-        ts = to_timestamp(timestamp)
-        if validate_date._next <= ts:
-            while validate_date._next <= ts:
-                validate_date._next += nsec
-            return True
-        else:
-            return False
-
-    validate_date._next = None
     return validate_date
 
 

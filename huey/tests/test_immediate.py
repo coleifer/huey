@@ -55,6 +55,31 @@ class TestImmediate(BaseTestCase):
         self.assertEqual(self.huey.scheduled_count(), 1)
         self.assertTrue(r.get() is None)
 
+    def test_immediate_reschedule(self):
+        state = []
+
+        @self.huey.task(context=True)
+        def task_s(task=None):
+            state.append(task.id)
+            return 1
+
+        r = task_s.schedule(delay=60)
+        self.assertEqual(len(self.huey), 0)
+        self.assertTrue(r() is None)
+
+        r2 = r.reschedule()
+        self.assertTrue(r.id != r2.id)
+        self.assertEqual(state, [r2.id])
+        self.assertEqual(r2(), 1)
+        self.assertEqual(len(self.huey), 0)
+        self.assertTrue(r.is_revoked())
+
+        # Because the scheduler never picks up the original task (r), its
+        # revocation key sits in the result store and the task is in the
+        # schedule still.
+        self.assertEqual(self.huey.result_count(), 1)
+        self.assertEqual(self.huey.scheduled_count(), 1)
+
     def test_immediate_revoke_restore(self):
         @self.huey.task()
         def task_a(n):
