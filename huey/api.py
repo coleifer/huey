@@ -844,6 +844,8 @@ class ResultGroup(object):
         return [result.get(*args, **kwargs) for result in self._results]
     __call__ = get
 
+    def __getitem__(self, idx):
+        return self._results[idx].get(True)
     def __iter__(self):
         return iter(self._results)
     def __len__(self):

@@ -1,7 +1,7 @@
-.. _quickstart:
+.. _guide:
 
-Quick-start
-===========
+Guide
+=====
 
 The purpose of this document is to present Huey using simple examples that
 cover the most common usage of the library. Detailed documentation can be found
@@ -134,8 +134,9 @@ will check to see if any of the periodic tasks should be called, and if so will
 place a message on the queue, instructing the next available worker to run the
 function.
 
-Because periodic tasks are called independent of any user interaction, they
-should not accept any parameters.
+.. note::
+    Because periodic tasks are called independent of any user interaction, they
+    should not accept any parameters.
 
 Similarly, the return-value for a periodic task is discarded, rather than being
 put into the result store. The reason for this is because there would not be an
@@ -519,6 +520,166 @@ exception during execution.
 
 For a complete list of Huey's signals and their meaning, see the :ref:`signals`
 document, and the :py:meth:`Huey.signal` API documentation.
+
+.. _immediate:
+
+Immediate mode
+--------------
+
+.. note::
+    Immediate mode replaces the *always eager* mode available prior to the
+    release of Huey 2. It offers many improvements over always eager mode,
+    which are described in the :ref:`changes` document.
+
+Huey can be run in a special mode called *immediate* mode, which is very useful
+during testing and development. In immediate mode, Huey will execute task
+functions immediately rather than enqueueing them, while still preserving the
+APIs and behaviors one would expect when running a dedicated consumer process.
+
+Immediate mode can be enabled in two ways:
+
+.. code-block:: python
+
+    huey = RedisHuey('my-app', immediate=True)
+
+    # Or at any time, via the "immediate" attribute:
+    huey = RedisHuey('my-app')
+    huey.immediate = True
+
+To disable immediate mode:
+
+.. code-block:: python
+
+    huey.immediate = False
+
+By default, enabling immediate mode will switch your Huey instance to using
+in-memory storage. This is to prevent accidentally reading or writing to live
+storage while doing development or testing. If you prefer to use immediate mode
+with live storage, you can specify ``immediate_use_memory=False`` when creating
+your :py:class:`Huey` instance:
+
+.. code-block:: python
+
+    huey = RedisHuey('my-app', immediate_use_memory=False)
+
+You can try out immediate mode quite easily in the Python shell. In the
+following example, everything happens within the interpreter -- no separate
+consumer process is needed. In fact, because immediate mode switches to an
+in-memory storage when enabled, we don't even have to be running a Redis
+server:
+
+.. code-block:: pycon
+
+    >>> from huey import RedisHuey
+    >>> huey = RedisHuey()
+    >>> huey.immediate = True
+
+    >>> @huey.task()
+    ... def add(a, b):
+    ...     return a + b
+    ...
+
+    >>> result = add(1, 2)
+    >>> result()
+    3
+
+    >>> add.revoke(revoke_once=True)  # We can revoke tasks.
+    >>> result = add(2, 3)
+    >>> result() is None
+    True
+
+    >>> add(3, 4)()  # No longer revoked, was restored automatically.
+    7
+
+What happens if we try to schedule a task for execution in the future, while
+using immediate mode?
+
+.. code-block:: pycon
+
+    >>> result = add.schedule((4, 5), delay=60)
+    >>> result() is None  # No result.
+    True
+
+As you can see, the task was not executed. So what happened to it? The answer
+is that the task was added to the in-memory storage layer's schedule. We can
+check this by calling :py:meth:`Huey.scheduled`:
+
+.. code-block:: pycon
+
+    >>> huey.scheduled()
+    [__main__.add: 8873...bcbd @2019-03-27 02:50:06]
+
+Since immediate mode is fully synchronous, there is not a separate thread
+monitoring the schedule. The schedule can still be read or written to, but
+scheduled tasks will not automatically be executed.
+
+Tips and tricks
+---------------
+
+To call a task-decorated function in its original form, you can use
+:py:meth:`~TaskWrapper.call_local`:
+
+.. code-block:: python
+    @huey.task()
+    def add(a, b):
+        return a + b
+
+    # Call the add() function in "un-decorated" form, skipping all
+    # the huey stuff:
+    add.call_local(3, 4)  # Returns 7.
+
+It's also worth mentioning that python decorators are just syntactical sugar
+for wrapping a function with another function. Thus, the following two examples
+are equivalent:
+
+.. code-block:: python
+
+    @huey.task()
+    def add(a, b):
+        return a + b
+
+    # Equivalent to:
+    def _add(a, b):
+        return a + b
+
+    add = huey.task()(_add)
+
+Task functions can be applied multiple times to a list (or iterable) of
+parameters using the :py:meth:`~TaskWrapper.map` method:
+
+.. code-block:: pycon
+    >>> @huey.task()
+    ... def add(a, b):
+    ...     return a + b
+    ...
+
+    >>> params = [(i, i ** 2) for i in range(10)]
+    >>> result_group = add.map(params)
+    >>> result_group.get(blocking=True)
+    [0, 2, 6, 12, 20, 30, 42, 56, 72, 90]
+
+The Huey result-store can be used directly if you need a convenient way to
+cache arbitrary key/value data:
+
+.. code-block:: python
+    @huey.task()
+    def calculate_something():
+        # By default, the result store treats get() like a pop(), so in
+        # order to preserve the data so it can be read again, we specify
+        # the second argument, peek=True.
+        prev_results = huey.get('calculate-something.result', peek=True)
+        if prev_results is None:
+            # No previous results found, start from the beginning.
+            data = start_from_beginning()
+        else:
+            # Only calculate what has changed since last time.
+            data = just_what_changed(prev_results)
+
+        # We can store the updated data back in the result store.
+        huey.put('calculate-something.result', data)
+        return data
+
+See :py:meth:`Huey.get` and :py:meth:`Huey.put` for additional details.
 
 Reading more
 ------------
