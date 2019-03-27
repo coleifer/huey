@@ -15,6 +15,7 @@ from huey.constants import EmptyData
 from huey.consumer import Consumer
 from huey.exceptions import CancelExecution
 from huey.exceptions import ConfigurationError
+from huey.exceptions import HueyException
 from huey.exceptions import RetryTask
 from huey.exceptions import TaskException
 from huey.exceptions import TaskLockedException
@@ -793,7 +794,7 @@ class Result(object):
                 if timeout and time.time() - start >= timeout:
                     if revoke_on_timeout:
                         self.revoke()
-                    raise DataStoreTimeout
+                    raise HueyException('timed out waiting for result')
                 if delay > max_delay:
                     delay = max_delay
                 if self._get(preserve) is EmptyData:

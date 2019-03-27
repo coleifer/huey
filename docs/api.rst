@@ -544,15 +544,15 @@ Huey object
 
             For task functions, use :py:meth:`TaskWrapper.is_revoked`.
 
-    .. py:method:: result(task_id[, blocking=False[, timeout=None[, backoff=1.15[, max_delay=1.0[, revoke_on_timeout=False[, preserve=False]]]]]])
+    .. py:method:: result(task_id, blocking=False, timeout=None, backoff=1.15, max_delay=1.0, revoke_on_timeout=False, preserve=False)
 
-        Attempt to retrieve the return value of a task.  By default, :py:meth:`~Huey.result`
-        will simply check for the value, returning ``None`` if it is not ready yet.
-        If you want to wait for a value, you can specify ``blocking=True``.
-        This will loop, backing off up to the provided ``max_delay``, until the
-        value is ready or the ``timeout`` is reached. If the ``timeout``
-        is reached before the result is ready, a :py:class:`DataStoreTimeout`
-        exception will be raised.
+        Attempt to retrieve the return value of a task. By default, :py:meth:`~Huey.result`
+        will simply check for the value, returning ``None`` if it is not ready
+        yet. If you want to wait for a value, specify ``blocking=True``. This
+        will loop, backing off up to the provided ``max_delay``, until the
+        value is ready or the ``timeout`` is reached. If the ``timeout`` is
+        reached before the result is ready, a :py:class:`HueyException` will be
+        raised.
 
         .. note:: If the task failed with an exception, then a
             :py:class:`TaskException` that wraps the original exception will be
@@ -560,7 +560,7 @@ Huey object
 
         .. warning:: By default the result store will delete a task's return
             value after the value has been successfully read (by a successful
-            call to the :py:meth:`~Huey.result` or :py:meth:`TaskResultWrapper.get`
+            call to the :py:meth:`~Huey.result` or :py:meth:`Result.get`
             methods). If you need to use the task result multiple times, you
             must specify ``preserve=True`` when calling these methods.
 
@@ -623,7 +623,7 @@ Huey object
 
         Store a value in the result-store under the given key.
 
-    .. py:method:: get(key[, peek=False])
+    .. py:method:: get(key, peek=False)
 
         :param key: key to read
         :param bool peek: non-destructive read
@@ -632,11 +632,11 @@ Huey object
         are destructive, but to preserve the value you can specify
         ``peek=True``.
 
-    .. py:method:: pending([limit=None])
+    .. py:method:: pending(limit=None)
 
         Return all unexecuted tasks currently in the queue.
 
-    .. py:method:: scheduled([limit=None])
+    .. py:method:: scheduled(limit=None)
 
         Return all unexecuted tasks currently in the schedule.
 
@@ -645,7 +645,7 @@ Huey object
         Return a mapping of task-id to pickled result data for all executed tasks whose return values have not been automatically removed.
 
 
-.. py:class:: TaskWrapper(huey, func[, retries=0[, retry_delay=0[, retries_as_argument=False[, include_task=False[, name=None[, task_base=None[, **task_settings]]]]]]])
+.. py:class:: TaskWrapper(huey, func, retries=0, retry_delay=0, retries_as_argument=False, include_task=False, name=None, task_base=None, **task_settings)
 
     :param Huey huey: A huey instance.
     :param func: User function.
@@ -677,7 +677,7 @@ Huey object
     The wrapper class also has several helper methods for managing and
     enqueueing tasks, which are described below.
 
-    .. py:method:: schedule([args=None[, kwargs=None[, eta=None[, delay=None[, convert_utc=True]]]]])
+    .. py:method:: schedule(args=None, kwargs=None, eta=None, delay=None, convert_utc=True)
 
         Use the ``schedule`` method to schedule the execution of the queue task
         for a given time in the future:
@@ -746,7 +746,7 @@ Huey object
             >>> count_some_beans.call_local(1337)
             'Counted 1337 beans'
 
-    .. py:method:: revoke([revoke_until=None[, revoke_once=False]])
+    .. py:method:: revoke(revoke_until=None, revoke_once=False)
 
         Prevent any instance of the given task from executing.  When no
         parameters are provided the function will not execute again until
@@ -771,7 +771,7 @@ Huey object
             # prevent any invocation for 24 hours.
             count_some_beans.revoke(datetime.datetime.now() + datetime.timedelta(days=1))
 
-    .. py:method:: is_revoked([dt=None])
+    .. py:method:: is_revoked(dt=None)
 
         Check whether the given task is revoked.  If ``dt`` is specified, it
         will check if the task is revoked with respect to the given datetime.
@@ -783,7 +783,7 @@ Huey object
 
         Clears any revoked status and allows the task to run normally.
 
-    .. py:method:: s([*args[, **kwargs]])
+    .. py:method:: s(*args, **kwargs)
 
         Create a task instance representing the invocation of the user function
         with the given arguments and keyword-arguments. The resulting task
@@ -839,7 +839,7 @@ Huey object
             tasks.queuecmd_count_beans
 
 
-.. py:class:: QueueTask([data=None[, task_id=None[, execute_time=None[, retries=None[, retry_delay=None[, on_complete=None]]]]]])
+.. py:class:: QueueTask(data=None, task_id=None, execute_time=None, retries=None, retry_delay=None, on_complete=None)
 
     The ``QueueTask`` class represents the execution of a function. Instances
     of the class are serialized and enqueued for execution by the consumer,
@@ -876,7 +876,7 @@ Huey object
         ret = huey.enqueue(task_instance)  # Enqueue the queue task.
         print(ret.get(blocking=True))  # "3".
 
-    .. py:method:: then(task[, *args[, **kwargs]])
+    .. py:method:: then(task, *args, **kwargs)
 
         :param TaskWrapper task: A ``task()``-decorated function.
         :param args: Arguments to pass to the task.
@@ -1017,7 +1017,7 @@ TaskResultWrapper
 
         Returns the ID of the corresponding task.
 
-    .. py:method:: get([blocking=False[, timeout=None[, backoff=1.15[, max_delay=1.0[, revoke_on_timeout=False[, preserve=False]]]]]])
+    .. py:method:: get(blocking=False, timeout=None, backoff=1.15, max_delay=1.0, revoke_on_timeout=False, preserve=False)
 
         Attempt to retrieve the return value of a task.  By default, :py:meth:`~TaskResultWrapper.get`
         will simply check for the value, returning ``None`` if it is not ready yet.
@@ -1084,7 +1084,7 @@ TaskResultWrapper
 
         See also: :py:meth:`Huey.is_revoked`.
 
-    .. py:method:: reschedule([eta=None[, delay=None[, convert+utc=True]]])
+    .. py:method:: reschedule(eta=None, delay=None, convert+utc=True)
 
         Reschedule the given task. The original task instance will be revoked,
         but **no checks are made** to verify that it hasn't already been
@@ -1113,7 +1113,7 @@ Storage
 
 Huey
 
-.. py:class:: BaseStorage([name='huey'[, **storage_kwargs]])
+.. py:class:: BaseStorage(name='huey', **storage_kwargs)
 
     .. py:meth:: enqueue(data)
 
@@ -1123,7 +1123,7 @@ Huey
 
     .. py:meth:: queue_size()
 
-    .. py:meth:: enqueued_items([limit=None])
+    .. py:meth:: enqueued_items(limit=None)
 
     .. py:meth:: flush_queue()
 
@@ -1133,7 +1133,7 @@ Huey
 
     .. py:meth:: schedule_size()
 
-    .. py:meth:: scheduled_items([limit=None])
+    .. py:meth:: scheduled_items(limit=None)
 
     .. py:meth:: flush_schedule()
 
@@ -1153,7 +1153,7 @@ Huey
 
     .. py:meth:: put_error(metadata)
 
-    .. py:meth:: get_errors([limit=None[, offset=0]])
+    .. py:meth:: get_errors(limit=None, offset=0)
 
     .. py:meth:: flush_errors()
 
