@@ -96,8 +96,12 @@ def normalize_time(eta=None, delay=None, utc=True):
 
 
 if sys.version_info[0] == 2:
+    string_type = basestring
+    text_type = unicode
     def to_timestamp(dt):
         return time.mktime(dt.timetuple())
 else:
+    string_type = (bytes, str)
+    text_type = str
     def to_timestamp(dt):
         return dt.timestamp()

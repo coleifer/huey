@@ -27,6 +27,7 @@ from huey.storage import SqliteStorage
 from huey.utils import Error
 from huey.utils import normalize_time
 from huey.utils import reraise_as
+from huey.utils import string_type
 from huey.utils import to_timestamp
 
 
@@ -161,15 +162,18 @@ class Huey(object):
 
         return decorator
 
-    def context_task(self, obj, *args, **kwargs):
+    def context_task(self, obj, as_argument=False, **kwargs):
         def context_decorator(fn):
             @functools.wraps(fn)
             def inner(*a, **k):
-                with obj:
-                    return fn(*a, **k)
+                with obj as ctx:
+                    if as_argument:
+                        return fn(ctx, *a, **k)
+                    else:
+                        return fn(*a, **k)
             return inner
         def task_decorator(func):
-            return self.task(*args, **kwargs)(context_decorator(func))
+            return self.task(**kwargs)(context_decorator(func))
         return task_decorator
 
     def pre_execute(self, name=None):
@@ -179,6 +183,9 @@ class Huey(object):
         return decorator
 
     def unregister_pre_execute(self, name):
+        if not isinstance(name, string_type):
+            # Assume we were given the function itself.
+            name = name.__name__
         return self._pre_execute.pop(name, None) is not None
 
     def post_execute(self, name=None):
@@ -188,6 +195,9 @@ class Huey(object):
         return decorator
 
     def unregister_post_execute(self, name):
+        if not isinstance(name, string_type):
+            # Assume we were given the function itself.
+            name = name.__name__
         return self._post_execute.pop(name, None) is not None
 
     def on_startup(self, name=None):
@@ -197,6 +207,9 @@ class Huey(object):
         return decorator
 
     def unregister_on_startup(self, name):
+        if not isinstance(name, string_type):
+            # Assume we were given the function itself.
+            name = name.__name__
         return self._startup.pop(name, None) is not None
 
     def signal(self, *signals):

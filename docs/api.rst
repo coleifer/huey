@@ -300,53 +300,55 @@ Huey object
             * :py:meth:`Huey.put`
             * :py:meth:`Huey.get`
 
-    .. py:method:: enqueue(task)
+    .. py:method:: context_task(obj, retries=0, retry_delay=0, context=False, name=None, **kwargs)
 
-        Enqueue the given task. When the result store is enabled (on by
-        default), the return value will be a :py:class:`TaskResultWrapper`
-        which provides access to the result (among other things).
+        :param obj: object that implements the context-manager APIs.
+        :param bool as_argument: pass the context-manager object into the
+            decorated task as the first argument.
+        :param int retries: number of times to retry the function if an
+            unhandled exception occurs when it is executed.
+        :param int retry_delay: number of seconds to wait in-between retries.
+        :param bool context: when the task is executed, include the
+            :py:class:`Task` instance as a parameter.
+        :param str name: name for this task. If not provided, Huey will default
+            to using the module name plus function name.
+        :param kwargs: arbitrary key/value arguments that are passed to the
+            :py:class:`TaskWrapper` instance.
+        :returns: a :py:class:`TaskWrapper` that wraps the decorated function
+            and exposes a number of APIs for enqueueing the task.
 
-        If the task specifies another task to run on completion (see
-        :py:meth:`QueueTask.then`), then the return value will be a ``list`` of
-        :py:class:`TaskResultWrapper` objects, one for each task in the
-        pipeline.
+        This is an extended implementation of the :py:meth:`Huey.task`
+        decorator, which wraps the decorated task in a ``with obj:`` block.
+        Roughly equivalent to:
 
-        .. note::
-            Unless you are executing a pipeline of tasks, it should not
-            typically be necessary to use the :py:meth:`Huey.enqueue` method.
-            Calling (or scheduling) a ``task``-decorated function will
-            automatically enqueue a task for execution.
+        .. code-block:: python
 
-            When you create a task pipeline, however, it is necessary to
-            enqueue the pipeline once it has been set up.
+            db = PostgresqlDatabase(...)
 
-        :param QueueTask task: a :py:class:`QueueTask` instance.
-        :returns: A :py:class:`TaskResultWrapper` object (if result store
-            enabled).
+            @huey.task()
+            def without_context_task(n):
+                with db:
+                    do_something(n)
 
-    .. py:method:: register_pre_execute(name, fn)
+            @huey.context_task(db)
+            def with_context_task(n):
+                return do_something(n)
 
-        Register a pre-execute hook. The callback will be executed before the
-        execution of all tasks. Execution of the task can be cancelled by
-        raising a :py:class:`CancelExecution` exception. Uncaught exceptions
-        will be logged but will not cause the task itself to be cancelled.
+    .. py:method:: pre_execute(name=None)
+
+        :param name: (optional) name for the hook.
+        :returns: a decorator used to wrap the actual pre-execute function.
+
+        Decorator for registering a pre-execute hook. The callback will be
+        executed before the execution of every task. Execution of the task can
+        be cancelled by raising a :py:class:`CancelExecution` exception.
+        Uncaught exceptions will be logged but will not cause the task itself
+        to be cancelled.
 
         The callback function should accept a single task instance, the return
         value is ignored.
 
-        Hooks are executed in the order in which they are registered (which may
-        be implicit if registered using the decorator).
-
-        :param name: Name for the hook.
-        :param fn: Callback function that accepts task to be executed.
-
-    .. py:method:: unregister_pre_execute(name)
-
-        Unregister the specified pre-execute hook.
-
-    .. py:method:: pre_execute([name=None])
-
-        Decorator for registering a pre-execute hook.
+        Hooks are executed in the order in which they are registered.
 
         Usage:
 
@@ -354,37 +356,36 @@ Huey object
 
             @huey.pre_execute()
             def my_pre_execute_hook(task):
-                do_something()
+                if datetime.datetime.now().weekday() == 6:
+                    raise CancelExecution('Sunday -- no work will be done.')
 
-    .. py:method:: register_post_execute(name, fn)
+    .. py:method:: unregister_pre_execute(name_or_fn)
+
+        :param name_or_fn: the name given to the pre-execute hook, or the
+            function object itself.
+        :returns: boolean
+
+        Unregister the specified pre-execute hook.
+
+    .. py:method:: post_execute(name=None)
+
+        :param name: (optional) name for the hook.
+        :returns: a decorator used to wrap the actual post-execute function.
 
         Register a post-execute hook. The callback will be executed after the
-        execution of all tasks. Uncaught exceptions will be logged but will
+        execution of every task. Uncaught exceptions will be logged but will
         have no other effect on the overall operation of the consumer.
 
         The callback function should accept:
 
-        * a task instance
+        * a :py:class:`Task` instance
         * the return value from the execution of the task (which may be None)
         * any exception that was raised during the execution of the task (which
           will be None for tasks that executed normally).
 
         The return value of the callback itself is ignored.
 
-        Hooks are executed in the order in which they are registered (which may
-        be implicit if registered using the decorator).
-
-        :param name: Name for the hook.
-        :param fn: Callback function that accepts task that was executed and
-                   the tasks return value (or None).
-
-    .. py:method:: unregister_post_execute(name)
-
-        Unregister the specified post-execute hook.
-
-    .. py:method:: post_execute([name=None])
-
-        Decorator for registering a post-execute hook.
+        Hooks are executed in the order in which they are registered.
 
         Usage:
 
@@ -394,7 +395,18 @@ Huey object
             def my_post_execute_hook(task, task_value, exc):
                 do_something()
 
-    .. py:method:: register_startup(name, fn)
+    .. py:method:: unregister_post_execute(name_or_fn)
+
+        :param name_or_fn: the name given to the post-execute hook, or the
+            function object itself.
+        :returns: boolean
+
+        Unregister the specified post-execute hook.
+
+    .. py:method:: on_startup(name=None)
+
+        :param name: (optional) name for the hook.
+        :returns: a decorator used to wrap the actual on-startup function.
 
         Register a startup hook. The callback will be executed whenever a
         worker comes online. Uncaught exceptions will be logged but will
@@ -402,7 +414,7 @@ Huey object
 
         The callback function must not accept any parameters.
 
-        This API is provided to simplify setting up global resources that, for
+        This API is provided to simplify setting up shared resources that, for
         whatever reason, should not be created as import-time side-effects. For
         example, your tasks need to write data into a Postgres database. If you
         create the connection at import-time, before the worker processes are
@@ -410,18 +422,6 @@ Huey object
         connection from the child (worker) processes. To avoid this problem,
         you can register a startup hook which executes once when the worker
         starts up.
-
-        :param name: Name for the hook.
-        :param fn: Callback function.
-
-    .. py:method:: unregister_startup(name)
-
-        Unregister the specified startup hook.
-
-    .. py:method:: on_startup([name=None])
-
-        Decorator for registering a startup hook. See
-        :py:meth:`~Huey.register_startup` for information about start hooks.
 
         Usage:
 
@@ -439,100 +439,110 @@ Huey object
                 cursor = db_connection.cursor()
                 # ...
 
-    .. py:method:: revoke(task[, revoke_until=None[, revoke_once=False]])
+    .. py:method:: unregister_on_startup(name_or_fn)
 
-        Prevent the given task **instance** from being executed by the consumer
-        after it has been enqueued. To understand this method, you need to know
-        a bit about how the consumer works. When you call a function decorated
-        by the :py:meth:`Huey.task` method, calls to that function will enqueue
-        a message to the consumer indicating which task to execute, what the
-        parameters are, etc. If the task is not scheduled to execute in the
-        future, and there is a free worker available, the task starts executing
-        immediately. Otherwise if workers are busy, it will wait in line for
-        the next free worker.
+        :param name_or_fn: the name given to the on-startup hook, or the
+            function object itself.
+        :returns: boolean
 
-        When you revoke a task, when the worker picks up the revoked task to
-        start executing it, it will instead just throw it away and get the next
-        available task. So, revoking a task only has affect between the time
-        you call the task and the time the worker actually starts executing the
-        task.
+        Unregister the specified on-startup hook.
 
-        .. warning::
-            This method only revokes a given **instance** of a task. Therefore,
-            this method cannot be used with periodic tasks. To revoke **all**
-            instances of a given task (including periodic tasks), see the
-            :py:meth:`~Huey.revoke_all` method.
+    .. py:method:: signal(*signals)
 
-        This function can be called multiple times, but each call will
-        supercede any previous revoke settings.
+        :param signals: zero or more signals to handle.
+        :returns: a decorator used to wrap the actual signal handler.
 
-        :param datetime revoke_until: Prevent the execution of the task until the
-            given datetime.  If ``None`` it will prevent execution indefinitely.
-        :param bool revoke_once: If ``True`` will only prevent execution the
-            next time it would normally execute.
+        Attach a signal handler callback, which will be executed when the
+        specified signals are sent by the consumer. If no signals are listed,
+        then the handler will be bound to **all** signals. The list of signals
+        and additional information can be found in the :ref:`signals`
+        documentation.
+
+        Example:
+
+        .. code-block:: python
+
+            from huey.signals import SIGNAL_ERROR, SIGNAL_LOCKED
+
+            @huey.signal(SIGNAL_ERROR, SIGNAL_LOCKED)
+            def task_not_run_handler(signal, task, exc=None):
+                # Do something in response to the "ERROR" or "LOCEKD" signals.
+                # Note that the "ERROR" signal includes a third parameter,
+                # which is the unhandled exception that was raised by the task.
+                # Since this parameter is not sent with the "LOCKED" signal, we
+                # provide a default of ``exc=None``.
+                pass
+
+    .. py:method:: disconnect_signal(receiver, *signals)
+
+        :param receiver: the signal handling function to disconnect.
+        :param signals: zero or more signals to stop handling.
+
+        Disconnect the signal handler from the provided signals. If no signals
+        are provided, then the handler is disconnected from any signals it may
+        have been connected to.
+
+    .. py:method:: enqueue(task)
+
+        :param Task task: task instance to enqueue.
+        :returns: :py:class:`Result` handle for the given task.
+
+        Enqueue the given task. When the result store is enabled (default), the
+        return value will be a :py:class:`Result` handle which provides access
+        to the result of the task execution (as well as other things).
+
+        If the task specifies another task to run on completion (see
+        :py:meth:`Task.then`), the return value will be a
+        :py:class:`ResultGroup`, which encapsulates a list of individual
+        :py:class:`Result` instances for the given pipeline.
+
+        .. note::
+            Unless you are executing a pipeline of tasks, it should not
+            be necessary to use the :py:meth:`~Huey.enqueue` method directly.
+            Calling (or scheduling) a ``task``-decorated function will
+            automatically enqueue a task for execution.
+
+            When you create a task pipeline, however, it is necessary to
+            enqueue the pipeline once it has been set up.
+
+    .. py:method:: revoke(task, revoke_until=None, revoke_once=False)
+
+        .. seealso:: Use :py:meth:`Result.revoke` instead.
+
+    .. py:method:: revoke_by_id(task_id, revoke_until=None, revoke_once=False)
+
+        :param str task_id: task instance id.
+        :param datetime revoke_until: optional expiration date for revocation.
+        :param bool revoke_once: revoke once and then re-enable.
+
+        Revoke a :py:class:`Task` instance using the task id.
+
+    .. py:method:: revoke_all(task_class, revoke_until=None, revoke_once=False)
+
+        .. seealso:: Use :py:meth:`TaskWrapper.revoke` instead.
 
     .. py:method:: restore(task)
 
-        Takes a previously revoked task **instance** and restores it, allowing
-        normal execution. If the revoked task was already consumed and
-        discarded by a worker, then restoring will have no effect.
-
-        .. note::
-            If the task class itself has been revoked, restoring a given
-            instance will not have any effect.
-
-    .. py:method:: revoke_by_id(task_id[, revoke_until=None[, revoke_once=False]])
-
-        Exactly the same as :py:meth:`~Huey.revoke`, except it accepts a task
-        instance ID instead of the task instance itself.
+        .. seealso:: Use :py:meth:`Result.restore` instead.
 
     .. py:method:: restore_by_id(task_id)
 
-        Exactly the same as :py:meth:`~Huey.restore`, except it accepts a task
-        instance ID instead of the task instance itself.
+        :param str task_id: task instance id.
+        :returns: boolean indicating success.
 
-    .. py:method:: revoke_all(task_class[, revoke_until=None[, revoke_once=False]])
-
-        Prevent any instance of the given task from being executed by the
-        consumer.
-
-        .. warning::
-            This method affects all instances of a given task.
-
-        This function can be called multiple times, but each call will
-        supercede any previous revoke settings.
-
-        :param datetime revoke_until: Prevent execution of the task until the
-            given datetime.  If ``None`` it will prevent execution indefinitely.
-        :param bool revoke_once: If ``True`` will only prevent execution the
-            next time it would normally execute.
+        Restore a :py:class:`Task` instance using the task id. Returns boolean
+        indicating if the revocation was successfully removed.
 
     .. py:method:: restore_all(task_class)
 
-        Takes a previously revoked task class and restores it, allowing
-        normal execution. Restoring a revoked task class does not have any
-        effect on individually revoked instances of the given task.
+        .. seealso:: Use :py:meth:`TaskWrapper.restore` instead.
 
-        .. note::
-            Restoring a revoked task class does not have any effect on
-            individually revoked instances of the given task.
+    .. py:method:: is_revoked(task, timestamp=None)
 
-    .. py:method:: is_revoked(task[, dt=None])
+        .. seealso::
+            For task instances, use :py:meth:`Result.is_revoked`.
 
-        Returns a boolean indicating whether the given task instance/class is
-        revoked. If the ``dt`` parameter is specified, then the result will
-        indicate whether the task is revoked at that particular datetime.
-
-        .. note::
-            If a task class is specified, the return value will indicate only
-            whether all instances of that task are revoked.
-
-            If a task instance/ID is specified, the return value will indicate
-            whether the given instance **or** the task class itself has been
-            revoked.
-
-        :param task: Either a task class, task instance or task ID.
-        :return: Boolean indicating whether the aforementioned task is revoked.
+            For task functions, use :py:meth:`TaskWrapper.is_revoked`.
 
     .. py:method:: result(task_id[, blocking=False[, timeout=None[, backoff=1.15[, max_delay=1.0[, revoke_on_timeout=False[, preserve=False]]]]]])
 
