@@ -225,20 +225,9 @@ class Huey(object):
     def enqueue(self, task):
         if self._immediate:
             self.execute(task)
-            if not self.results:
-                return
+        else:
+            self.storage.enqueue(self.serialize_task(task))
 
-            if task.on_complete:
-                current = task
-                results = []
-                while current is not None:
-                    results.append(Result(self, current))
-                    current = current.on_complete
-                return ResultGroup(results)
-            else:
-                return Result(self, task)
-
-        self.storage.enqueue(self.serialize_task(task))
         if not self.results:
             return
 
