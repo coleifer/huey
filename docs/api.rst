@@ -82,108 +82,176 @@ Huey object
         >>> res()
         5
 
-    .. py:method:: task([retries=0[, retry_delay=0[, retries_as_argument=False[, include_task=False]]]])
+    .. py:attribute:: immediate
 
-        Function decorator that marks the decorated function for processing by the
-        consumer. Calls to the decorated function will do the following:
+        The ``immediate`` property is used to enable and disable :ref:`immediate mode <immediate>`.
+        When immediate mode is enabled, task-decorated functions are executed
+        synchronously by the caller, making it very useful for development and
+        testing. Calling a task function still returns a :py:class:`Result`
+        handle, but the task itself is executed immediately.
 
-        1. Serialize the function call into a message suitable for storing in the queue.
-        2. Enqueue the message for execution by the consumer.
-        3. If a ``result_store`` has been configured, return a :py:class:`TaskResultWrapper`
-           instance which can retrieve the result of the function, or ``None`` if not
-           using a result store.
+        By default, when immediate mode is enabled, Huey will switch to using
+        in-memory storage. This is to help prevent accidentally writing to a
+        live Redis server while testing. To disable this functionality, specify
+        ``immediate_use_memory=False`` when initializing :py:class:`Huey`.
 
-        .. note::
-            Huey can be configured to execute the function immediately by
-            instantiating it with ``always_eager = True`` -- this is useful for
-            running in debug mode or when you do not wish to run the consumer.
-
-        Here is how you might use the ``task`` decorator:
+        Enabling immediate mode:
 
         .. code-block:: python
 
-            # assume that we've created a huey object
+            huey = RedisHuey()
+
+            # Enable immediate mode. Tasks now executed synchronously.
+            # Additionally, huey will now use in-memory storage.
+            huey.immediate = True
+
+            # Disable immediate mode. Tasks will now be enqueued in a Redis
+            # queue.
+            huey.immediate = False
+
+        Immediate mode can also be specified when your Huey instance is
+        created:
+
+        .. code-block:: python
+
+            huey = RedisHuey(immediate=True)
+
+    .. py:method:: task(retries=0, retry_delay=0, context=False, name=None, **kwargs)
+
+        :param int retries: number of times to retry the function if an
+            unhandled exception occurs when it is executed.
+        :param int retry_delay: number of seconds to wait in-between retries.
+        :param bool context: when the task is executed, include the
+            :py:class:`Task` instance as a parameter.
+        :param str name: name for this task. If not provided, Huey will default
+            to using the module name plus function name.
+        :param kwargs: arbitrary key/value arguments that are passed to the
+            :py:class:`TaskWrapper` instance.
+        :returns: a :py:class:`TaskWrapper` that wraps the decorated function
+            and exposes a number of APIs for enqueueing the task.
+
+        Function decorator that marks the decorated function for processing by
+        the consumer. Calls to the decorated function will do the following:
+
+        1. Serialize the function call into a :py:class:`Message` suitable for
+           storing in the queue.
+        2. Enqueue the message for execution by the consumer.
+        3. Return a :py:class:`Result` handle, which can be used to check the
+           result of the task function, revoke the task (assuming it hasn't
+           started yet), reschedule the task, and more.
+
+        .. note::
+            Huey can be configured to execute the function immediately by
+            instantiating Huey with ``immediate=True`` -- this is useful for
+            running in debug mode or when you do not wish to run the consumer.
+
+            For more information, see the :ref:`immediate mode <immediate>`
+            section of the guide.
+
+        The ``task()`` decorator returns a :py:class:`TaskWrapper`, which
+        implements special methods for enqueueing the decorated function. These
+        methods are used to :py:meth:`~TaskWrapper.schedule` the task to run in
+        the future, chain tasks to form a pipeline, and more.
+
+        Example:
+
+        .. code-block:: python
             from huey import RedisHuey
 
             huey = RedisHuey()
 
             @huey.task()
-            def count_some_beans(num):
-                # do some counting!
-                return 'Counted %s beans' % num
+            def add(a, b):
+                return a + b
 
-        Now, whenever you call this function in your application, the actual
-        processing will occur when the consumer dequeues the message and your
-        application will continue along on its way.
-
-        With a result store:
+        Whenever the ``add()`` function is called, the actual execution will
+        occur when the consumer dequeues the message.
 
         .. code-block:: pycon
 
-            >>> res = count_some_beans(1000000)
+            >>> res = add(1, 2)
             >>> res
-            <huey.api.TaskResultWrapper object at 0xb7471a4c>
+            <Result: task 6b6f36fc-da0d-4069-b46c-c0d4ccff1df6>
             >>> res()
-            'Counted 1000000 beans'
+            3
 
-        Without a result store:
+        To further illustrate this point:
+
+        .. code-block:: python
+            @huey.task()
+            def slow(n):
+                time.sleep(n)
+                return n
+
+        Calling the ``slow()`` task will return immediately. We can, however,
+        block until the task finishes by waiting for the result:
 
         .. code-block:: pycon
 
-            >>> res = count_some_beans(1000000)
-            >>> res is None
-            True
-
-        :param int retries: number of times to retry the task if an exception occurs
-        :param int retry_delay: number of seconds to wait between retries
-        :param boolean retries_as_argument: whether the number of retries should
-            be passed in to the decorated function as an argument.
-        :param boolean include_task: whether the task instance itself should be
-            passed in to the decorated function as the ``task`` argument.
-        :returns: A callable :py:class:`TaskWrapper` instance.
-        :rtype: TaskWrapper
-
-        The return value of any calls to the decorated function depends on whether
-        the :py:class:`Huey` instance is configured with a ``result_store``.  If a
-        result store is configured, the decorated function will return
-        an :py:class:`TaskResultWrapper` object which can fetch the result of the call from
-        the result store -- otherwise it will simply return ``None``.
-
-        The ``task`` decorator also does one other important thing -- it adds
-        a special methods **onto** the decorated function, which makes it possible
-        to *schedule* the execution for a certain time in the future, create
-        task pipelines, etc. For more information, see:
-
-        * :py:meth:`TaskWrapper.schedule`
-        * :py:meth:`TaskWrapper.s`
-        * :py:meth:`TaskWrapper.revoke`
-        * :py:meth:`TaskWrapper.is_revoked`
-        * :py:meth:`TaskWrapper.restore`
-
-    .. py:method:: periodic_task(validate_datetime)
-
-        Function decorator that marks the decorated function for processing by
-        the consumer *at a specific interval*. The ``periodic_task`` decorator
-        serves to **mark a function as needing to be executed periodically** by
-        the consumer.
+            >>> res = slow(10)  # Returns immediately.
+            >>> res(blocking=True)  # Block until task finishes, ~10s.
+            10
 
         .. note::
-            By default, the consumer will schedule and enqueue periodic task
-            functions.  To disable the enqueueing of periodic tasks, run the
-            consumer with ``-n`` or ``--no-periodic``.
+            The return value of any calls to the decorated function depends on
+            whether the :py:class:`Huey` instance is configured to store the
+            results of tasks (``results=True`` is the default). When the result
+            store is disabled, calling a task-decorated function will return
+            ``None`` instead of a result handle.
 
-        The ``validate_datetime`` parameter is a function which accepts a datetime
-        object and returns a boolean value whether or not the decorated function
-        should execute at that time or not.  The consumer will send a datetime to
-        the function every minute, giving it the same granularity as the linux
-        crontab, which it was designed to mimic.
+        In some cases, it may be useful to receive the :py:class:`Task`
+        instance itself as an argument.
 
-        For simplicity, there is a special function :py:func:`crontab`, which can
-        be used to quickly specify intervals at which a function should execute.  It
-        is described below.
+        .. code-block:: python
+            @huey.task(context=True)  # Include task as an argument.
+            def print_a_task_id(message, task=None):
+                print('%s: %s' % (message, task.id))
+
+
+            print_a_task_id('hello')
+            print_a_task_id('goodbye')
+
+        This would cause the consumer would print something like::
+
+            hello: e724a743-e63e-4400-ac07-78a2fa242b41
+            goodbye: 606f36fc-da0d-4069-b46c-c0d4ccff1df6
+
+        For more information, see :py:class:`TaskWrapper`, :py:class:`Task`,
+        and :py:class:`Result`.
+
+    .. py:method:: periodic_task(validate_datetime, retries=0, retry_delay=0, context=False, name=None, **kwargs)
+
+        :param function validate_datetime: function which accepts a
+            ``datetime`` instance and returns whether the task should be
+            executed at the given time.
+        :param int retries: number of times to retry the function if an
+            unhandled exception occurs when it is executed.
+        :param int retry_delay: number of seconds to wait in-between retries.
+        :param bool context: when the task is executed, include the
+            :py:class:`Task` instance as a parameter.
+        :param str name: name for this task. If not provided, Huey will default
+            to using the module name plus function name.
+        :param kwargs: arbitrary key/value arguments that are passed to the
+            :py:class:`TaskWrapper` instance.
+        :returns: a :py:class:`TaskWrapper` that wraps the decorated function
+            and exposes a number of APIs for enqueueing the task.
+
+        The ``periodic_task()`` decorator marks a function for automatic
+        execution by the consumer *at a specific interval*, like ``cron``.
+
+        The ``validate_datetime`` parameter is a function which accepts a
+        ``datetime`` object and returns a boolean value whether or not the
+        decorated function should execute at that time or not. The consumer
+        will send a datetime to the function once per minute, giving it the
+        same granularity as the ``cron``.
+
+        For simplicity, there is a special function :py:func:`crontab`, which
+        can be used to quickly specify intervals at which a function should
+        execute. It is described below.
 
         Here is an example of how you might use the ``periodic_task`` decorator
-        and the ``crontab`` helper:
+        and the :py:func:`crontab`` helper. The following task will be executed
+        every three hours, on the hour:
 
         .. code-block:: python
 
@@ -192,26 +260,22 @@ Huey object
 
             huey = RedisHuey()
 
-            @huey.periodic_task(crontab(minute='*/5'))
-            def every_five_minutes():
-                # this function gets executed every 5 minutes by the consumer
-                print("It's been five minutes")
+            @huey.periodic_task(crontab(minute='0', hour='*/3'))
+            def update_feeds():
+                for feed in my_list_of_feeds:
+                    fetch_feed_data(feed)
 
         .. note::
             Because functions decorated with ``periodic_task`` are meant to be
-            executed at intervals in isolation, they should not take any required
-            parameters nor should they be expected to return a meaningful value.
-            This is the same regardless of whether or not you are using a result store.
-
-        :param validate_datetime: a callable which takes a ``datetime`` and returns
-            a boolean whether the decorated function should execute at that time or not
-        :returns: A callable :py:class:`TaskWrapper` instance.
-        :rtype: :py:class:`PeriodicQueueTask`
+            executed at intervals in isolation, they should not take any
+            required parameters nor should they be expected to return a
+            meaningful value.
 
         Like :py:meth:`~Huey.task`, the periodic task decorator adds helpers
-        to the decorated function. These helpers allow you to "revoke" and "restore" the
-        periodic task, effectively enabling you to pause it or prevent its execution.
-        For more information, see :py:class:`TaskWrapper`.
+        to the decorated function. These helpers allow you to
+        :py:meth:`~TaskWrapper.revoke` and :py:meth:`~TaskWrapper.restore` the
+        periodic task, enabling you to pause it or prevent its execution. For
+        more information, see :py:class:`TaskWrapper`.
 
         .. note::
             The result (return value) of a periodic task is not stored in the

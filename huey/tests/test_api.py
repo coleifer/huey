@@ -732,6 +732,18 @@ class TestDecorators(BaseTestCase):
         self.assertEqual(task.retries, 3)
         self.assertEqual(task.retry_delay, 10)
 
+    def test_call_periodic_task(self):
+        @self.huey.periodic_task(crontab(minute='1'))
+        def task_p():
+            return 123
+
+        res = task_p()
+        self.assertEqual(len(self.huey), 1)
+        self.assertEqual(self.execute_next(), 123)
+
+        # Result-store is not used for periodic task results.
+        self.assertTrue(res() is None)
+
     def test_context_task(self):
         class DB(object):
             def __init__(self):
