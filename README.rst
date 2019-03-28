@@ -6,15 +6,15 @@ huey - a little task queue
 a lightweight alternative.
 
 * written in python (2.7+, 3.4+)
-* optional dependency on the Python Redis client
 * clean and simple APIs
+* redis, sqlite, or in-memory storage
 
 huey supports:
 
 * multi-process, multi-thread or greenlet task execution models
 * schedule tasks to execute at a given time, or after a given delay
 * schedule recurring tasks, like a crontab
-* retry tasks that fail automatically
+* automatically retry tasks that fail
 * task result storage
 * task locking
 * task pipelines and chains
@@ -23,8 +23,8 @@ huey supports:
 
 .. image:: https://api.travis-ci.org/coleifer/huey.svg?branch=master
 
-Huey's API
-----------
+At a glance
+-----------
 
 .. code-block:: python
 
@@ -46,58 +46,65 @@ Huey's API
     def nightly_backup():
         sync_all_data()
 
-To run the consumer with 4 worker processes:
+Calling a ``task``-decorated function will enqueue the function call for
+execution by the consumer. A special result handle is returned immediately,
+which can be used to fetch the result once the task is finished:
+
+.. code-block:: pycon
+    >>> from demo import add_numbers
+    >>> res = add_numbers(1, 2)
+    >>> res
+    <Result: task 6b6f36fc-da0d-4069-b46c-c0d4ccff1df6>
+
+    >>> res(blocking=True)  # Block until task has finished, get return value.
+    3
+
+Tasks can be scheduled to run in the future:
+
+.. code-block:: pycon
+    >>> res = add_numbers.schedule((2, 3), delay=10)  # Will be run in ~10s.
+    >>> res(blocking=True)  # Will block until task finishes, in ~10s.
+    5
+
+For much more, check out the `guide <https://huey.readthedocs.io/en/latest/guide.html>`_.
+
+Running the consumer
+^^^^^^^^^^^^^^^^^^^^
+
+Run the consumer with four worker processes:
 
 .. code-block:: console
 
     $ huey_consumer.py my_app.huey -k process -w 4
 
-To enqueue a task to add two numbers and print the result:
+To run the consumer with a single worker thread (default):
 
-.. code-block:: python
+.. code-block:: console
 
-    res = add_numbers(1, 2)  # Enqueues task.
-    print(res())  # Prints "3".
+    $ huey_consumer.py my_app.huey
 
-To schedule two numbers to be added in 10 seconds:
+If your work-loads are mostly IO-bound, you can run the consumer with threads
+or greenlets instead. Because greenlets are so lightweight, you can run quite a
+few of them efficiently:
 
-.. code-block:: python
+.. code-block:: console
 
-    res = add_numbers.schedule((1, 2), delay=10)
+    $ huey_consumer.py my_app.huey -k greenlet -w 32
 
-    # Attempt to get result without blocking.
-    print(res())  # returns None.
-
-    # Block until result is ready and print.
-    print(res(blocking=True))  # Prints "3" after a few seconds.
-
-Brokers
+Storage
 -------
 
-To use Huey with Redis (**recommended**):
+Huey's design and feature-set were informed by the capabilities of the
+`Redis <https://redis.io>`_ database. Redis is a fantastic fit for a
+lightweight task queueing library like Huey: it's self-contained, versatile,
+and can be a multi-purpose solution for other web-application tasks like
+caching, event publishing, analytics, rate-limiting, and more.
 
-.. code-block:: python
+Although Huey was designed with Redis in mind, the storage system implements a
+simple API and many other tools could be used instead of Redis if that's your
+preference.
 
-    from huey import RedisHuey
-
-    huey = RedisHuey()
-
-To use Huey with SQLite:
-
-.. code-block:: python
-
-    from huey import SqliteHuey
-
-    huey = SqliteHuey('my-app-queue.db')
-
-To use Huey within the main process using an in-memory storage layer:
-
-.. code-block:: python
-
-    from huey import MemoryHuey
-
-    huey = MemoryHuey()
-    huey.start()  # Starts workers and scheduler, returns immediately.
+Huey comes with builtin support for Redis, Sqlite and in-memory storage.
 
 Documentation
 ----------------
