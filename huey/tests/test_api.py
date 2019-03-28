@@ -1128,3 +1128,32 @@ class TestDisableResultStore(BaseTestCase):
 
         self.assertEqual(len(self.huey), 0)
         self.assertEqual(self.huey.result_count(), 0)
+
+
+class TestStorageWrappers(BaseTestCase):
+    def test_storage_wrappers(self):
+        @self.huey.task()
+        def task_a(n):
+            return n + 1
+
+        def assertTasks(tasks, id_list):
+            self.assertEqual([t.id for t in tasks], id_list)
+
+        assertTasks(self.huey.pending(), [])
+        assertTasks(self.huey.scheduled(), [])
+        self.assertEqual(self.huey.all_results(), {})
+
+        r1 = task_a(1)
+        r2 = task_a.schedule((2,), delay=60)
+        r3 = task_a(3)
+
+        assertTasks(self.huey.pending(), [r1.id, r2.id, r3.id])
+        assertTasks(self.huey.scheduled(), [])
+        self.assertEqual(self.huey.all_results(), {})
+
+        self.execute_next()
+        self.execute_next()
+
+        assertTasks(self.huey.pending(), [r3.id])
+        assertTasks(self.huey.scheduled(), [r2.id])
+        self.assertEqual(list(self.huey.all_results()), [r1.id])
