@@ -57,6 +57,7 @@ execution by the consumer. A special result handle is returned immediately,
 which can be used to fetch the result once the task is finished:
 
 .. code-block:: pycon
+
     >>> from demo import add_numbers
     >>> res = add_numbers(1, 2)
     >>> res
@@ -68,6 +69,7 @@ which can be used to fetch the result once the task is finished:
 Tasks can be scheduled to run in the future:
 
 .. code-block:: pycon
+
     >>> res = add_numbers.schedule((2, 3), delay=10)  # Will be run in ~10s.
     >>> res(blocking=True)  # Will block until task finishes, in ~10s.
     5

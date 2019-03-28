@@ -11,6 +11,7 @@ Here is a simple example of a task that accepts two numbers and returns their
 sum:
 
 .. code-block:: python
+
     # demo.py
     from huey import SqliteHuey
 
@@ -162,6 +163,7 @@ Multiple rules can be expressed by separating the individual rules with a
 comma, for example:
 
 .. code-block:: python
+
     # Runs every 10 minutes between 9a and 11a, and 4p-6p.
     crontab(minute='*/10', hour='9-11,16-18')
 
@@ -182,6 +184,7 @@ configure this task to be automatically retried, use the ``retries`` parameter
 of the :py:meth:`~Huey.task` decorator:
 
 .. code-block:: python
+
     import random
 
     @huey.task(retries=2)  # Retry the task up to 2 times.
@@ -216,6 +219,7 @@ argument. The task will be retried up-to two times, with a delay of 10 seconds
 between attempts:
 
 .. code-block:: python
+
     @huey.task(retries=2, retry_delay=10)
     def flaky_task():
         # ...
@@ -246,6 +250,7 @@ already been processed and discarded by the consumer. To do this we will use
 the :py:meth:`Result.revoke` and :py:meth:`Result.restore` methods:
 
 .. code-block:: python
+
     # Schedule a task to execute in 60 seconds.
     res = add.schedule((1, 2), delay=60)
 
@@ -266,6 +271,7 @@ To revoke *all* instances of a given task, use the
 the task function itself:
 
 .. code-block:: python
+
     # Prevent all instances of the add() task from running.
     add.revoke()
 
@@ -315,6 +321,7 @@ mail server goes down and won't be fixed for a while. We can revoke the task
 for a couple of hours, after which time it will start executing again:
 
 .. code-block:: python
+
     @huey.periodic_task(crontab(minute='0', hour='*'))
     def send_notification_emails():
         # ... code to send emails ...
@@ -322,6 +329,7 @@ for a couple of hours, after which time it will start executing again:
 Here is how we might revoke the task for the next 3 hours:
 
 .. code-block:: pycon
+
     >>> now = datetime.datetime.now()
     >>> eta = now + datetime.timedelta(hours=3)
     >>> send_notification_emails.revoke(revoke_until=eta)
@@ -330,6 +338,7 @@ Alternatively, we could use ``revoke_once=True`` to just skip the next
 execution of the task:
 
 .. code-block:: pycon
+
     >>> send_notification_emails.revoke(revoke_once=True)
 
 At any time, the task can be restored using the usual
@@ -367,6 +376,7 @@ enqueue it explicitly:
 So the following are equivalent:
 
 .. code-block:: python
+
     result = add(1, 2)
 
     # And:
@@ -620,6 +630,7 @@ To call a task-decorated function in its original form, you can use
 :py:meth:`~TaskWrapper.call_local`:
 
 .. code-block:: python
+
     @huey.task()
     def add(a, b):
         return a + b
@@ -648,6 +659,7 @@ Task functions can be applied multiple times to a list (or iterable) of
 parameters using the :py:meth:`~TaskWrapper.map` method:
 
 .. code-block:: pycon
+
     >>> @huey.task()
     ... def add(a, b):
     ...     return a + b
@@ -662,6 +674,7 @@ The Huey result-store can be used directly if you need a convenient way to
 cache arbitrary key/value data:
 
 .. code-block:: python
+
     @huey.task()
     def calculate_something():
         # By default, the result store treats get() like a pop(), so in

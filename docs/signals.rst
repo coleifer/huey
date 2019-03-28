@@ -34,6 +34,7 @@ The following signals will include additional arguments:
 To register a signal handler, use the :py:meth:`Huey.signal` method:
 
 .. code-block:: python
+
     @huey.signal()
     def all_signal_handler(signal, task, exc=None):
         # This handler will be called for every signal.
@@ -67,6 +68,7 @@ Examples
 We'll use the following tasks to illustrate how signals may be sent:
 
 .. code-block:: python
+
     @huey.task()
     def add(a, b):
         return a + b
@@ -80,6 +82,7 @@ We'll use the following tasks to illustrate how signals may be sent:
 Here is a simple example of a task execution we would expect to succeed:
 
 .. code-block:: pycon
+
     >>> result = add(1, 2)
     >>> result.get(blocking=True)
 
@@ -91,6 +94,7 @@ The consumer would send the following signals:
 Here is an example of scheduling a task for execution after a short delay:
 
 .. code-block:: pycon
+
     >>> result = add.schedule((2, 3), delay=10)
     >>> result(True)  # same as result.get(blocking=True)
 
@@ -106,6 +110,7 @@ Here is an example that may fail, in which case it will be retried
 automatically with a delay of 10 seconds.
 
 .. code-block:: pycon
+
     >>> result = flaky_task()
     >>> try:
     ...     result.get(blocking=True)
@@ -128,6 +133,7 @@ see the following signals being sent:
 What happens if we revoke the ``add()`` task and then attempt to execute it:
 
 .. code-block:: pycon
+
     >>> add.revoke()
     >>> res = add(1, 2)
 

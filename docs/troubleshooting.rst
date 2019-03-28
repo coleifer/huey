@@ -57,6 +57,7 @@ Testing projects using Huey
     Use ``immediate=True``:
 
     .. code-block:: python
+
         test_mode = os.environ.get('TEST_MODE')
 
         # When immediate=True, Huey will default to using an in-memory

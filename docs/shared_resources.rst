@@ -56,6 +56,7 @@ we will instead open a connection when each worker starts. This connection may
 then be used by any tasks that are executed by that consumer:
 
 .. code-block:: python
+
     import peewee
 
     db = PostgresqlDatabase('my_app')
@@ -98,6 +99,7 @@ decorators for registering pre- and post-execute hooks:
 Example:
 
 .. code-block:: python
+
     from huey import CancelExecution
 
     @huey.pre_execute()

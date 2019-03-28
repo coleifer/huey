@@ -193,6 +193,7 @@ Huey object
         Example:
 
         .. code-block:: python
+
             from huey import RedisHuey
 
             huey = RedisHuey()
@@ -215,6 +216,7 @@ Huey object
         To further illustrate this point:
 
         .. code-block:: python
+
             @huey.task()
             def slow(n):
                 time.sleep(n)
@@ -240,6 +242,7 @@ Huey object
         instance itself as an argument.
 
         .. code-block:: python
+
             @huey.task(context=True)  # Include task as an argument.
             def print_a_task_id(message, task=None):
                 print('%s: %s' % (message, task.id))
@@ -324,6 +327,7 @@ Huey object
             use your own storage or use the storage APIs directly:
 
             .. code-block:: python
+
                 @huey.periodic_task(crontab(minute='*/10'))
                 def my_task():
                     # do some work...
@@ -1058,7 +1062,7 @@ Result
             raise TaskException(result.metadata)
         huey.exceptions.TaskException: Exception('I failed',)
 
-    .. py:attr:: id
+    .. py:attribute:: id
 
         Returns the unique id of the corresponding task.
 
@@ -1218,40 +1222,40 @@ Huey
 
 .. py:class:: BaseStorage(name='huey', **storage_kwargs)
 
-    .. py:meth:: enqueue(data)
+    .. py:method:: enqueue(data)
 
-    .. py:meth:: dequeue()
+    .. py:method:: dequeue()
 
-    .. py:meth:: unqueue(data)
+    .. py:method:: unqueue(data)
 
-    .. py:meth:: queue_size()
+    .. py:method:: queue_size()
 
-    .. py:meth:: enqueued_items(limit=None)
+    .. py:method:: enqueued_items(limit=None)
 
-    .. py:meth:: flush_queue()
+    .. py:method:: flush_queue()
 
-    .. py:meth:: add_to_schedule(data, timestamp)
+    .. py:method:: add_to_schedule(data, timestamp)
 
-    .. py:meth:: read_schedule(timestamp)
+    .. py:method:: read_schedule(timestamp)
 
-    .. py:meth:: schedule_size()
+    .. py:method:: schedule_size()
 
-    .. py:meth:: scheduled_items(limit=None)
+    .. py:method:: scheduled_items(limit=None)
 
-    .. py:meth:: flush_schedule()
+    .. py:method:: flush_schedule()
 
-    .. py:meth:: put_data(key, value)
+    .. py:method:: put_data(key, value)
 
-    .. py:meth:: peek_data(key)
+    .. py:method:: peek_data(key)
 
-    .. py:meth:: pop_data(key)
+    .. py:method:: pop_data(key)
 
-    .. py:meth:: put_if_empty(key, value)
+    .. py:method:: put_if_empty(key, value)
 
-    .. py:meth:: has_data_for_key(key)
+    .. py:method:: has_data_for_key(key)
 
-    .. py:meth:: result_store_size()
+    .. py:method:: result_store_size()
 
-    .. py:meth:: result_items()
+    .. py:method:: result_items()
 
-    .. py:meth:: flush_results()
+    .. py:method:: flush_results()
