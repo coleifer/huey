@@ -127,6 +127,7 @@ Table of contents
    api
    contrib
    troubleshooting
+   changes
 
 Huey is named in honor of my cat
 

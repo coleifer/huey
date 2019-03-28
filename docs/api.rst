@@ -10,6 +10,43 @@ Most end-users will interact with the API using the two decorators:
 
 The API documentation will follow the structure of the huey ``api.py`` module.
 
+Huey types
+----------
+
+.. py:class:: RedisHuey
+
+    Huey that utilizes `redis <https://redis.io/>`_ for queue and result
+    storage. Requires `redis-py <https://github.com/andymccurdy/redis-py>`_.
+
+    Additional arguments:
+
+    :param bool blocking: Use blocking-pop when reading from the queue (as
+        opposed to polling). Default is true.
+    :param read_timeout: Timeout to use when performing a blocking pop, default
+        is 1 second.
+    :param connection_pool: a redis-py ``ConnectionPool`` instance.
+    :param url: url for Redis connection.
+    :param host: hostname of Redis server.
+    :param int port: port number of Redis server.
+
+.. py:class:: SqliteHuey
+
+    Huey that utilizes sqlite3 for queue and result storage. Only requirement
+    is the standard library ``sqlite3`` module.
+
+    Additional arguments:
+
+    :param str filename: filename for database, defaults to 'huey.db'.
+    :param int cache_mb: megabytes of memory to allow for sqlite page-cache.
+    :param bool fsync: use durable writes. Slower but more resilient to
+        corruption in the event of sudden power loss. Defaults to false.
+
+.. py:class:: MemoryHuey
+
+    Huey that uses in-memory storage. Only should be used when testing or when
+    using ``immediate`` mode.
+
+
 Huey object
 -----------
 
@@ -1115,6 +1152,64 @@ Result
         Call :py:meth:`~Result.get` on each individual :py:meth:`Result`
         instance in the group and returns a list of return values. Any keyword
         arguments are passed along.
+
+Serializer
+----------
+
+.. py:class:: Serializer(compression=False, compression_level=6)
+
+    :param bool compression: use gzip compression
+    :param int compression_level: 0 for least, 9 for most.
+
+    The Serializer class implements a simple interface that can be extended to
+    provide your own serialization format. The default implementation uses
+    ``pickle``.
+
+    To override, the following methods should be implemented. Compression is
+    handled transparently elsewhere in the API.
+
+    .. py:method:: _serialize(data)
+
+        :param data: arbitrary Python object to serialize.
+        :rtype bytes:
+
+    .. py:method:: _deserialize(data)
+
+        :param bytes data: serialized data.
+        :returns: the deserialized object.
+
+.. _exceptions:
+
+Exceptions
+----------
+
+.. py:class:: HueyException
+
+    General exception class.
+
+.. py:class:: ConfigurationError
+
+    Raised when Huey encounters a configuration problem.
+
+.. py:class:: TaskLockdException
+
+    Raised by the consumer when a task lock cannot be acquired.
+
+.. py:class:: CancelExecution
+
+    Should be raised by user code within a :py:meth:`~Huey.pre_execute` hook to
+    signal to the consumer that the task shall be cancelled.
+
+.. py:class:: RetryTask
+
+    Raised by user code from within a :py:meth:`~Huey.task` function to force a
+    retry. When this exception is raised, the task will be retried irrespective
+    of whether it is configured with automatic retries.
+
+.. py:class:: TaskException
+
+    General exception raised by :py:class:`Result` handles when reading the
+    result of a task that failed due to an error.
 
 Storage
 -------

@@ -959,13 +959,12 @@ class MemoryHuey(Huey):
 
 
 class RedisHuey(Huey):
-    def get_storage(self, blocking=True, read_timeout=1, max_errors=1000,
-                    connection_pool=None, url=None, **connection_params):
+    def get_storage(self, blocking=True, read_timeout=1, connection_pool=None,
+                    url=None, **connection_params):
         return RedisStorage(
             name=self.name,
             blocking=blocking,
             read_timeout=read_timeout,
-            max_errors=max_errors,
             connection_pool=connection_pool,
             url=url,
             **connection_params)
