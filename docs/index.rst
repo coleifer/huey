@@ -29,8 +29,8 @@ huey supports:
 At a glance
 -----------
 
-Use the :py:meth:`~Huey.task` and :py:meth:`~Huey.periodic_task` decorators to
-turn functions into tasks that will be run by the consumer:
+:py:meth:`~Huey.task` and :py:meth:`~Huey.periodic_task` decorators turn
+functions into tasks executed by the consumer:
 
 .. code-block:: python
 
@@ -63,7 +63,7 @@ which can be used to fetch the result once the task is finished:
     >>> res
     <Result: task 6b6f36fc-da0d-4069-b46c-c0d4ccff1df6>
 
-    >>> res(blocking=True)  # Block until task has finished, get return value.
+    >>> res()
     3
 
 Tasks can be scheduled to run in the future:
