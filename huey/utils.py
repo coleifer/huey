@@ -1,4 +1,5 @@
 from collections import namedtuple
+import calendar
 import datetime
 import sys
 import time
@@ -8,37 +9,17 @@ Error = namedtuple('Error', ('metadata',))
 
 
 class UTC(datetime.tzinfo):
-    """
-    UTC implementation taken from Python's docs.
-    Used only when pytz isn't available.
-    """
+    zero = datetime.timedelta(0)
 
     def __repr__(self):
         return "<UTC>"
-
     def utcoffset(self, dt):
-        return datetime.timedelta(0)
-
+        return self.zero
     def tzname(self, dt):
         return "UTC"
-
     def dst(self, dt):
-        return datetime.timedelta(0)
-
-
-def is_naive(dt):
-    """
-    Determines if a given datetime.datetime is naive.
-    The concept is defined in Python's docs:
-    http://docs.python.org/library/datetime.html#datetime.tzinfo
-    Assuming value.tzinfo is either None or a proper datetime.tzinfo,
-    value.utcoffset() implements the appropriate logic.
-    """
-    return dt.utcoffset() is None
-
-
-def is_aware(dt):
-    return not is_naive(dt)
+        return self.zero
+_UTC = UTC()
 
 
 def load_class(s):
@@ -53,20 +34,32 @@ def reraise_as(new_exc_class):
     raise new_exc_class('%s: %s' % (exc_class.__name__, exc))
 
 
+def is_naive(dt):
+    """
+    Determines if a given datetime.datetime is naive.
+    The concept is defined in Python's docs:
+    http://docs.python.org/library/datetime.html#datetime.tzinfo
+    Assuming value.tzinfo is either None or a proper datetime.tzinfo,
+    value.utcoffset() implements the appropriate logic.
+    """
+    return dt.utcoffset() is None
+
+
 def make_naive(dt):
     """
-    Makes an aware datetime.datetime naive in its time zone.
+    Makes an aware datetime.datetime naive in local time zone.
     """
-    return dt.replace(tzinfo=None)
+    tt = dt.utctimetuple()
+    ts = calendar.timegm(tt)
+    local_tt = time.localtime(ts)
+    return datetime.datetime(*local_tt[:6])
 
 
 def aware_to_utc(dt):
     """
     Converts an aware datetime.datetime in UTC time zone.
     """
-    dt = dt.astimezone(UTC())
-    assert not is_naive(dt), 'Must be a time zone aware datetime'
-    return make_naive(dt)
+    return dt.astimezone(_UTC).replace(tzinfo=None)
 
 
 def local_to_utc(dt):
@@ -84,13 +77,14 @@ def normalize_time(eta=None, delay=None, utc=True):
                   datetime.datetime.now)
         return method() + datetime.timedelta(seconds=delay)
     elif eta:
-        if is_naive(eta) and utc:
-            # Convert naive local datetime into naive UTC datetime.
-            eta = local_to_utc(eta)
-        elif is_aware(eta) and utc:
-            # Convert tz-aware datetime into naive UTC datetime.
-            eta = aware_to_utc(eta)
-        elif is_aware(eta) and not utc:
+        has_tz = not is_naive(eta)
+        if utc:
+            if not has_tz:
+                eta = local_to_utc(eta)
+            else:
+                eta = aware_to_utc(eta)
+        elif has_tz:
+            # Convert TZ-aware into naive localtime.
             eta = make_naive(eta)
         return eta
 
