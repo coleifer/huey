@@ -3,7 +3,9 @@ huey - a little task queue
 
 .. image:: http://media.charlesleifer.com/blog/photos/huey-logo.png
 
-a lightweight alternative.
+*a lightweight alternative*.
+
+huey is:
 
 * written in python (2.7+, 3.4+)
 * clean and simple APIs

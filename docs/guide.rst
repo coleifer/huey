@@ -7,8 +7,7 @@ The purpose of this document is to present Huey using simple examples that
 cover the most common usage of the library. Detailed documentation can be found
 in the :ref:`API documentation <api>`.
 
-Here is a simple example of a task that accepts two numbers and returns their
-sum:
+Example :py:meth:`~Huey.task` that adds two numbers:
 
 .. code-block:: python
 
@@ -21,14 +20,13 @@ sum:
     def add(a, b):
         return a + b
 
-We can test out huey by running the consumer, specifying the import path to our
-``huey`` instance:
+To test, run the consumer, specifying the import path to the ``huey`` object:
 
 .. code-block:: console
 
     $ huey_consumer.py demo.huey
 
-In a separate terminal, we can use the Python shell to call our ``add`` task:
+In a Python shell, we can call our ``add`` task:
 
 .. code-block:: pycon
 
@@ -48,16 +46,16 @@ In a separate terminal, we can use the Python shell to call our ``add`` task:
         >>> r(blocking=True, timeout=5)  # Wait up to 5 seconds for result.
         3
 
-Here is an explanation of what happened:
+What happens when we call a task function?
 
-1. When the ``add()`` function was called, a message representing the function
-   call is placed in a queue.
+1. When the ``add()`` function is called, a message representing the call is
+   placed in a queue.
 2. The function returns immediately without actually running, and returns a
-   special :py:class:`Result` object, which we can use to retrieve the result
-   once the task has been executed.
+   :py:class:`Result` handle, which can be used to retrieve the result once the
+   task has been executed by the consumer.
 3. The consumer process sees that a message has arrived, and a worker will call
    the ``add()`` function and place the return value into the result store.
-4. We use the :py:class:`Result` object to then read the return value from the
+4. We can use the :py:class:`Result` handle to read the return value from the
    result store.
 
 For more information, see the :py:meth:`~Huey.task` decorator documentation.
@@ -65,9 +63,10 @@ For more information, see the :py:meth:`~Huey.task` decorator documentation.
 Scheduling tasks
 ----------------
 
-Tasks can be scheduled to execute at a certain time, or after a delay. In the
-following example, we will schedule a call to ``add()`` to run in 10 seconds,
-and then will block until the result becomes available:
+Tasks can be scheduled to execute at a certain time, or after a delay.
+
+In the following example, we will schedule a call to ``add()`` to run in 10
+seconds, and then will block until the result becomes available:
 
 .. code-block:: pycon
 
@@ -76,8 +75,8 @@ and then will block until the result becomes available:
     7
 
 If we wished to schedule the task to run at a particular time, we can use the
-``eta`` parameter instead. The following example will also be run after a 10
-second delay:
+``eta`` parameter instead. The following example will run after a 10 second
+delay:
 
 .. code-block:: pycon
 
@@ -86,22 +85,19 @@ second delay:
     >>> r(blocking=True)  # Will block for ~10 seconds.
     9
 
-Here is an explanation of what happened:
+What happens when we schedule a task?
 
-1. When we call the :py:meth:`~TaskWrapper.schedule` method, a message
-   representing the function call (including details about when the function
-   should be scheduled) is placed in the queue.
-2. The function returns immediately without actually running, and returns a
-   special :py:class:`Result` object, which we can use to retrieve the result
-   once the task has been executed.
+1. When we call :py:meth:`~TaskWrapper.schedule`, a message is placed on the
+   queue instructing the consumer to call the ``add()`` function in 10 seconds.
+2. The function returns immediately, and returns a :py:class:`Result` handle.
 3. The consumer process sees that a message has arrived, and will notice that
    the message is not yet ready to be executed, but should be run in ~10s.
 4. The consumer adds the message to a schedule.
 5. In ~10 seconds, the scheduler will pick-up the message and place it back
    into the queue for execution.
-6. A worker will dequeue the message and this time it is ready to execute, so
-   the function will be called and the result placed in the result store.
-7. The :py:class:`Result` object from step 2 will now be able to read the
+6. A worker will dequeue the message, execute the ``add()`` function, and place
+   the return value in the result store.
+7. The :py:class:`Result` handle from step 2 will now be able to read the
    return value from the task.
 
 For more details, see the :py:meth:`~TaskWrapper.schedule` API documentation.
@@ -110,9 +106,10 @@ Periodic tasks
 --------------
 
 Huey provides crontab-like functionality that enables functions to be executed
-automatically on a given schedule. In this example we will declare a periodic
-task that executes every 3 minutes and prints a message in the consumer process
-stdout:
+automatically on a given schedule.
+
+In the following example, we will declare a :py:meth:`~Huey.periodic_task` that
+executes every 3 minutes and prints a message on consumer process stdout:
 
 .. code-block:: python
 
@@ -129,20 +126,17 @@ stdout:
     def every_three_minutes():
         print('This task runs every three minutes')
 
-The same scheduler that handles enqueueing tasks which are scheduled to run in
-the future also handles enqueueing periodic tasks. Once a minute, the scheduler
-will check to see if any of the periodic tasks should be called, and if so will
-place a message on the queue, instructing the next available worker to run the
-function.
+Once a minute, the scheduler will check to see if any of the periodic tasks
+should be called. If so, the task will be enqueued for execution.
 
 .. note::
     Because periodic tasks are called independent of any user interaction, they
-    should not accept any parameters.
+    do not accept any arguments.
 
-Similarly, the return-value for a periodic task is discarded, rather than being
-put into the result store. The reason for this is because there would not be an
-obvious way for an application to obtain a :py:class:`Result` handle to access
-the result of a given periodic task execution.
+Similarly, the return-value for periodic tasks is discarded, rather than being
+put into the result store. This is because there is not an obvious way for an
+application to obtain a :py:class:`Result` handle to access the result of a
+given periodic task execution.
 
 The :py:func:`crontab` function accepts the following arguments:
 
@@ -193,12 +187,12 @@ of the :py:meth:`~Huey.task` decorator:
             raise Exception('failing!')
         return 'OK'
 
-Here is what might happen behind-the-scenes if we call this task:
+What happens when we call this task?
 
-1. Message is placed on the queue indicating that our task should be called,
-   just like usual, and a :py:class:`Result` handle is returned to the caller.
+1. Message is placed on the queue and a :py:class:`Result` handle is returned
+   to the caller.
 2. Consumer picks up the message and attempts to run the task, but the call to
-   ``random.randint()`` happened to return ``0``, so an exception is raised.
+   ``random.randint()`` happens to return ``0``, raising an ``Exception``.
 3. The consumer puts the error into the result store and the exception is
    logged. If the caller resolves the :py:class:`Result` now, a
    :py:class:`TaskException` will be raised which contains information about
@@ -207,8 +201,8 @@ Here is what might happen behind-the-scenes if we call this task:
    the retry count and re-enqueues it for execution.
 5. The consumer picks up the message again and runs the task. This time, the
    task succeeds! The new return value is placed into the result store ("OK").
-6. We can reset our :py:class:`Result` wrapper by calling
-   :py:meth:`~Result.reset` and then re-resolve it. The result object will now
+6. We can reset our :py:class:`Result` handle by calling
+   :py:meth:`~Result.reset` and then re-resolve it. The result handle will now
    give us the new value, "OK".
 
 Should the task fail on the first invocation, it will be retried up-to two
@@ -241,13 +235,14 @@ For more information, see the following API documentation:
 Canceling or pausing tasks
 --------------------------
 
-Huey can dynamically cancel tasks from executing at runtime. This applies to
-regular tasks, tasks scheduled to execute in the future, and periodic tasks.
+Huey tasks can be cancelled dynamically at runtime. This applies to regular
+tasks, tasks scheduled to execute in the future, and periodic tasks.
 
-Any task can be canceled ("revoked"), provided the task is not being executed
-by the consumer. Similarly, a revoked task can be restored, provided it has not
-already been processed and discarded by the consumer. To do this we will use
-the :py:meth:`Result.revoke` and :py:meth:`Result.restore` methods:
+Any task can be canceled ("revoked"), provided the task has not started
+executing yet. Similarly, a revoked task can be restored, provided it has not
+already been processed and discarded by the consumer.
+
+Using the :py:meth:`Result.revoke` and :py:meth:`Result.restore` methods:
 
 .. code-block:: python
 
@@ -291,9 +286,9 @@ the task function itself:
     # Is the add() task enabled again?
     add.is_revoked()  # -> False
 
-So as you can see, Huey provides APIs to control revoke / restore on both
-individual instances of a task, as well as all instances of the task. For more
-information, see the following API docs:
+Huey provides APIs to revoke / restore on both individual instances of a task,
+as well as all instances of the task. For more information, see the following
+API docs:
 
 * :py:meth:`Result.revoke` and :py:meth:`Result.restore` for revoking
   individual instances of a task.
@@ -307,7 +302,7 @@ Canceling or pausing periodic tasks
 -----------------------------------
 
 The ``revoke()`` and ``restore()`` methods support some additional options
-which may be especially useful when used with :py:meth:`~Huey.periodic_task`.
+which may be especially useful for :py:meth:`~Huey.periodic_task`.
 
 The :py:meth:`~TaskWrapper.revoke` method accepts two optional parameters:
 
@@ -351,7 +346,7 @@ Task pipelines
 Huey supports pipelines (or chains) of one or more tasks that should be
 executed sequentially.
 
-To get started, I'll just review the usual method of running a task:
+To get started, let's review the usual way we execute tasks:
 
 .. code-block:: python
 
@@ -361,9 +356,8 @@ To get started, I'll just review the usual method of running a task:
 
     result = add(1, 2)
 
-A slightly more verbose way of writing that would be to use the
-:py:meth:`~TaskWrapper.s` method to create a :py:class:`Task` instance and then
-enqueue it explicitly:
+An equivalent, but more verbose, way is to use the :py:meth:`~TaskWrapper.s`
+method to create a :py:class:`Task` instance and then enqueue it explicitly:
 
 .. code-block:: python
 
@@ -383,9 +377,8 @@ So the following are equivalent:
     result = huey.enqueue(add.s(1, 2))
 
 The :py:meth:`TaskWrapper.s` method is used to create a :py:class:`Task`
-instance, which represents the execution of the given function. The
-``Task`` is what gets serialized and enqueued, then dequeued, deserialized and
-executed by the consumer.
+instance (which represents the execution of the given function). The
+``Task`` is what gets serialized and sent to the consumer.
 
 To create a pipeline, we will use the :py:meth:`TaskWrapper.s` method to create
 a :py:class:`Task` instance. We can then chain additional tasks using the
@@ -419,9 +412,9 @@ a :py:class:`Task` instance. We can then chain additional tasks using the
 
 When enqueueing a task pipeline, the return value will be a
 :py:class:`ResultGroup`, which encapsulates the :py:class:`Result` objects for
-the individual task invocations. :py:class:`ResultGroup` can be iterated over
-to yield individual :py:class:`Result` items, or you can use the
-:py:meth:`ResultGroup.get` method to get all the task return values as a list.
+the individual tasks. :py:class:`ResultGroup` can be iterated over or you can
+use the :py:meth:`ResultGroup.get` method to get all the task return values as
+a list.
 
 Note that the return value from the parent task is passed to the next task in
 the pipeline, and so on.
@@ -459,23 +452,20 @@ Locking tasks
 -------------
 
 Task locking can be accomplished using the :py:meth:`Huey.lock_task` method,
-which acts can be used as a context-manager or decorator.
+which can be used as a context-manager or decorator.
 
-This lock is designed to be used to prevent multiple invocations of a task from
-running concurrently. If using the lock as a decorator, place it directly above
-the function declaration.
+This lock prevents multiple invocations of a task from running concurrently.
 
 If a second invocation occurs and the lock cannot be acquired, then a special
 :py:class:`TaskLockedException` is raised and the task will not be executed.
-If the task is configured to be retried, then it will be retried normally, but
-the failure to acquire the lock is not considered an error.
+If the task is configured to be retried, then it will be retried normally.
 
 Examples:
 
 .. code-block:: python
 
     @huey.periodic_task(crontab(minute='*/5'))
-    @huey.lock_task('reports-lock')
+    @huey.lock_task('reports-lock')  # Goes *after* the task decorator.
     def generate_report():
         # If a report takes longer than 5 minutes to generate, we do
         # not want to kick off another until the previous invocation
@@ -493,13 +483,15 @@ Examples:
         with huey.lock_task('db-backup'):
             do_db_backup()
 
+See :py:meth:`Huey.lock_task` for API documentation.
+
 Signals
 -------
 
-The :py:class:`Consumer` will send :ref:`signals <signals>` as it moves through
-various stages of its operations. The :py:meth:`Huey.signal` method can be used
-to attach a callback to one or more signals, which will be invoked
-synchronously by the consumer when the signal is sent.
+The :py:class:`Consumer` sends :ref:`signals <signals>` as it processes tasks.
+The :py:meth:`Huey.signal` method can be used to attach a callback to one or
+more signals, which will be invoked synchronously by the consumer when the
+signal is sent.
 
 For a simple example, we can add a signal handler that simply prints the signal
 name and the ID of the related task.

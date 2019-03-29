@@ -8,7 +8,9 @@ huey, a little task queue
 
 .. image:: http://media.charlesleifer.com/blog/photos/huey-logo.png
 
-a lightweight alternative, huey is:
+*a lightweight alternative*.
+
+huey is:
 
 * written in python (2.7+, 3.4+)
 * clean and simple APIs
@@ -79,17 +81,17 @@ For much more, check out the :ref:`guide`.
 Running the consumer
 ^^^^^^^^^^^^^^^^^^^^
 
-To run the consumer with a single worker thread (default):
-
-.. code-block:: console
-
-    $ huey_consumer.py my_app.huey
-
 Run the consumer with four worker processes:
 
 .. code-block:: console
 
     $ huey_consumer.py my_app.huey -k process -w 4
+
+To run the consumer with a single worker thread (default):
+
+.. code-block:: console
+
+    $ huey_consumer.py my_app.huey
 
 If your work-loads are mostly IO-bound, you can run the consumer with threads
 or greenlets instead. Because greenlets are so lightweight, you can run quite a
@@ -99,20 +101,7 @@ few of them efficiently:
 
     $ huey_consumer.py my_app.huey -k greenlet -w 32
 
-Storage
--------
-
-Huey's design and feature-set were informed by the capabilities of the
-`Redis <https://redis.io>`_ database. Redis is a fantastic fit for a
-lightweight task queueing library like Huey: it's self-contained, versatile,
-and can be a multi-purpose solution for other web-application tasks like
-caching, event publishing, analytics, rate-limiting, and more.
-
-Although Huey was designed with Redis in mind, the storage system implements a
-simple API and many other tools could be used instead of Redis if that's your
-preference.
-
-Huey comes with builtin support for Redis, Sqlite and in-memory storage.
+For more information, see the :ref:`consuming-tasks` document.
 
 Table of contents
 -----------------

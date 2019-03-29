@@ -339,8 +339,8 @@ class RedisStorage(BaseStorage):
     redis_client = Redis
 
     def __init__(self, name='huey', blocking=True, read_timeout=1,
-                 max_errors=1000, connection_pool=None, url=None,
-                 client_name=None, **connection_params):
+                 connection_pool=None, url=None, client_name=None,
+                 **connection_params):
 
         if Redis is None:
             raise ConfigurationError('"redis" python module not found, cannot '
@@ -375,7 +375,6 @@ class RedisStorage(BaseStorage):
 
         self.blocking = blocking
         self.read_timeout = read_timeout
-        self.max_errors = max_errors
 
     def clean_name(self, name):
         return re.sub('[^a-z0-9]', '', name)

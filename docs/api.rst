@@ -18,28 +18,35 @@ Huey types
     Huey that utilizes `redis <https://redis.io/>`_ for queue and result
     storage. Requires `redis-py <https://github.com/andymccurdy/redis-py>`_.
 
-    Additional arguments:
+    Commonly-used keyword arguments for storage configuration:
 
     :param bool blocking: Use blocking-pop when reading from the queue (as
         opposed to polling). Default is true.
-    :param read_timeout: Timeout to use when performing a blocking pop, default
-        is 1 second.
     :param connection_pool: a redis-py ``ConnectionPool`` instance.
     :param url: url for Redis connection.
-    :param host: hostname of Redis server.
-    :param int port: port number of Redis server.
+    :param host: hostname of the Redis server.
+    :param port: port number.
+    :param password: password for Redis.
+    :param int db: Redis database to use (typically 0-15, default is 0).
+
+    The `redis-py documentation <https://redis-py.readthedocs.io/en/latest/>`_
+    contains the complete list of arguments supported by the Redis client.
+
+    .. seealso:: :py:class:`RedisStorage`
 
 .. py:class:: SqliteHuey
 
     Huey that utilizes sqlite3 for queue and result storage. Only requirement
     is the standard library ``sqlite3`` module.
 
-    Additional arguments:
+    Commonly-used keyword arguments:
 
     :param str filename: filename for database, defaults to 'huey.db'.
     :param int cache_mb: megabytes of memory to allow for sqlite page-cache.
     :param bool fsync: use durable writes. Slower but more resilient to
         corruption in the event of sudden power loss. Defaults to false.
+
+    .. seealso:: :py:class:`SqliteStorage`
 
 .. py:class:: MemoryHuey
 
@@ -157,9 +164,9 @@ Huey object
 
         :param int retries: number of times to retry the function if an
             unhandled exception occurs when it is executed.
-        :param int retry_delay: number of seconds to wait in-between retries.
+        :param int retry_delay: number of seconds to wait between retries.
         :param bool context: when the task is executed, include the
-            :py:class:`Task` instance as a parameter.
+            :py:class:`Task` instance as a keyword argument.
         :param str name: name for this task. If not provided, Huey will default
             to using the module name plus function name.
         :param kwargs: arbitrary key/value arguments that are passed to the
@@ -1218,7 +1225,36 @@ Exceptions
 Storage
 -------
 
-Huey
+Huey comes with several built-in storage implementations:
+
+.. py:class:: RedisStorage(name='huey', blocking=True, read_timeout=1, connection_pool=None, url=None, client_name=None, **connection_params)
+
+    :param bool blocking: Use blocking-pop when reading from the queue (as
+        opposed to polling). Default is true.
+    :param read_timeout: Timeout to use when performing a blocking pop, default
+        is 1 second.
+    :param connection_pool: a redis-py ``ConnectionPool`` instance.
+    :param url: url for Redis connection.
+    :param client_name: name used to identify Redis clients used by Huey.
+
+    Additional keyword arguments will be passed directly to the Redis client
+    constructor. See the `redis-py documentation <https://redis-py.readthedocs.io/en/latest/>`_
+    for the complete list of arguments supported by the Redis client.
+
+.. py:class:: SqliteStorage(filename='huey.db', name='huey', cache_mb=8, fsync=False, **kwargs)
+
+    :param str filename: sqlite database filename.
+    :param int cache_mb: sqlite page-cache size in megabytes.
+    :param bool fsync: if enabled, all writes to the Sqlite database will be
+        synchonized. This provides greater safety from database corruption in
+        the event of sudden power-loss.
+    :param kwargs: Additional keyword arguments passed to the ``sqlite3``
+        connection constructor.
+
+.. py:class:: MemoryStorage()
+
+    In-memory storage engine for use when testing or developing. Designed for
+    use with :ref:`immediate mode <immediate>`.
 
 .. py:class:: BaseStorage(name='huey', **storage_kwargs)
 

@@ -15,13 +15,6 @@ release.
 Summary
 -------
 
-The events APIs have been removed and replaced by a :ref:`signals` system.
-Signal handlers are executed synchronously by the worker(s) as they run.
-
-Errors are no longer stored in a separate list. Should a task fail due to an
-unhandled exception, the exception will be placed in the result store, and can
-be introspected using the task's :py:class:`Result` handle.
-
 The ``always_eager`` mode has been renamed :ref:`immediate`. As the new name
 implies, tasks are run immediately instead of being enqueued. Immediate mode is
 designed to be used during testing and development. When immediate mode is
@@ -30,6 +23,24 @@ accidental writes to a live storage. Immediate mode improves greatly on
 ``always_eager`` mode, as it no longer requires special-casing and follows the
 same code-paths used when Huey is in live mode. See :ref:`immediate` for more
 details.
+
+Previously, the Huey consumer accepted options to run in UTC or local-time.
+Various APIs, particularly around scheduling and task revocation, needed to be
+compatible with however the consumer was configured, and it could easily get
+confusing. As of 2.0, UTC-vs-localtime is specified when instantiating Huey,
+and all conversion happens internally, hopefully making things easier to think
+about -- that is, you don't have to think about it.
+
+The events APIs have been removed and replaced by a :ref:`signals` system.
+Signal handlers are executed synchronously by the worker(s) as they run, so
+it's a bit different, but hopefully a lot easier to actually utilize, as the
+events API required a dedicated listener thread if you were to make any use of
+it (since it used a pub/sub approach). Events could be built on-top of the
+signals, but currently I have no plans for this.
+
+Errors are no longer stored in a separate list. Should a task fail due to an
+unhandled exception, the exception will be placed in the result store, and can
+be introspected using the task's :py:class:`Result` handle.
 
 Details
 -------
@@ -89,6 +100,9 @@ Changes to :py:func:`crontab`:
 
 Miscellaneous:
 
+* ``RedisHuey`` defaults to using a blocking pop on the queue, which should
+  improve latency and reduce chatter. To go back to the old polling default,
+  specify ``blocking=False`` when creating your huey instance.
 * ``SqliteHuey`` no longer has any third-party dependencies and has been moved
   into the main ``huey`` module.
 * The ``SimpleStorage`` contrib module has been removed.

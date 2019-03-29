@@ -393,12 +393,16 @@ class Huey(object):
         return ':'.join((key, self._registry.task_to_string(task_class)))
 
     def revoke_all(self, task_class, revoke_until=None, revoke_once=False):
+        if revoke_until is not None:
+            revoke_until = normalize_time(revoke_until, utc=self.utc)
         self.put(self._task_key(task_class, 'rt'), (revoke_until, revoke_once))
 
     def restore_all(self, task_class):
         return self.get_raw(self._task_key(task_class, 'rt')) is not EmptyData
 
     def revoke(self, task, revoke_until=None, revoke_once=False):
+        if revoke_until is not None:
+            revoke_until = normalize_time(revoke_until, utc=self.utc)
         self.put(task.revoke_id, (revoke_until, revoke_once))
 
     def restore(self, task):
@@ -423,6 +427,9 @@ class Huey(object):
             return False, False
 
         revoke_until, revoke_once = res
+        if revoke_until is not None and timestamp is None:
+            timestamp = self._get_timestamp()
+
         if revoke_once:
             # This task *was* revoked for one run, but now it should be
             # restored to normal execution (unless we are just peeking).
