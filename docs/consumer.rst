@@ -88,10 +88,12 @@ their default values.
     * IO heavy loads: use "greenlet". For example, tasks that crawl websites or
       which spend a lot of time waiting to read/write to a socket, will get a
       huge boost from using the greenlet worker model. Because greenlets are so
-      cheap in terms of memory, you can easily run tens or hundreds of them.
+      cheap in terms of memory, you can easily run a large number of workers.
     * Anything else: use "thread". You get the benefits of pre-emptive
       multi-tasking without the overhead of multiple processes. A safe choice
       and the default.
+
+    See the :ref:`worker-types` section for additional information.
 
 ``-n``, ``--no-periodic``
     Indicate that this consumer process should *not* enqueue periodic tasks.
@@ -167,6 +169,75 @@ granularity of 60 seconds.
 .. code-block:: bash
 
     huey_consumer.py my.app.huey -w 50 -k greenlet -C -s 60
+
+.. _worker-types:
+
+Worker types
+------------
+
+The consumer consists of a main process, a scheduler, and one or more workers.
+These individual components all run concurrently, and Huey supports three
+different mechanisms to achieve this concurrency.
+
+* *thread*, the default - uses OS threads. Due to Python's global interpreter
+  lock, only one thread can be running at a time, but this is actually less of
+  a limitation than it might sound. The Python runtime can intelligently switch
+  the running thread when an I/O occurs or when a thread is idle. If the worker
+  is CPU-bound, the runtime will pre-emptively switch threads after a given
+  number of operations, ensuring each thread gets a chance to make progress.
+  Threads provide a good balance of performance and memory efficiency.
+* *process* - runs the scheduler and worker(s) in their own process. The main
+  benefit over threads is the absence of the global interpreter lock, which
+  allows CPU-bound workers to execute in parallel. Since each process maintains
+  its own copy of the code in memory, it is likely that processes will require
+  more memory than threads or greenlets. Processes are a good choice for tasks
+  that perform CPU-intensive work.
+* *greenlet* - runs the scheduler and worker(s) in greenlets. Requires `gevent <https://gevent.org/>`_,
+  a cooperative multi-tasking library. When a task performs an operation that
+  would be blocking (read or write on a socket), the file descriptor is added
+  to an event loop managed by gevent, and the scheduler will switch tasks.
+  Since gevent uses cooperative multi-tasking, a task that is CPU-bound will
+  not yield control to the gevent scheduler, limiting concurrency. For this
+  reason, gevent is a good choice for tasks that perform lots of socket I/O,
+  but may give worse performance for tasks that are CPU-bound (e.g., parsing
+  large files, manipulating images, generating reports, etc).
+
+When in doubt, the default setting (``thread``) is a safe choice.
+
+Using gevent
+^^^^^^^^^^^^
+
+Gevent works by monkey-patching various Python modules, such as ``socket``,
+``ssl``, ``time``, etc. In order for your application to be able to switch
+tasks reliably, you should apply the monkey-patch at the very beginning of
+your code -- before anything else gets loaded.
+
+Suppose we have defined an entrypoint for our application named
+``main.py``, which imports our :py:class:`Huey` instance, our tasks, and
+the other essential parts of our application (the WSGI app, database
+connection, etc).
+
+We would place the monkey-patch at the top of ``main.py``, before all the
+other imports:
+
+.. code-block:: python
+
+    # main.py
+    from gevent import monkey; monkey.patch_all()  # Apply monkey-patch.
+
+    from .app import wsgi_app  # Import our WSGI app.
+    from .db import database  # Database connection.
+    from .queue import huey  # Huey instance for our app.
+    from .tasks import *  # Import all tasks, so they are discoverable.
+
+To run the consumer:
+
+.. code-block:: console
+
+    $ huey_consumer.py main.huey -k greenlet -w 16
+
+You should have a good understanding of how gevent works, its strengths and
+limitations, before using the greenlet worker type.
 
 .. _consumer-shutdown:
 
