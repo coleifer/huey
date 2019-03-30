@@ -11,7 +11,8 @@ master
 
 [View commits](https://github.com/coleifer/huey/compare/1.11.0...2.0.0)
 
-This section describes the changes in the 2.0.0 release.
+This section describes the changes in the 2.0.0 release. A detailed list of
+changes can be found here: https://huey.readthedocs.io/en/latest/changes.html
 
 Overview of changes:
 
