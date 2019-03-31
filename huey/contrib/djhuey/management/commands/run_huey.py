@@ -40,6 +40,10 @@ class Command(BaseCommand):
                 kwargs.setdefault('default', None)
                 parser.add_argument(full, short, **kwargs)
 
+        parser.add_argument('-A', '--disable-autoload', action='store_true',
+                            dest='disable_autoload',
+                            help='Do not autoload "tasks.py"')
+
     def handle(self, *args, **options):
         from huey.contrib.djhuey import HUEY
 
@@ -57,7 +61,8 @@ class Command(BaseCommand):
         consumer_options.setdefault('verbose',
                                     consumer_options.pop('huey_verbose', None))
 
-        autodiscover_modules("tasks")
+        if not options.get('disable_autoload'):
+            autodiscover_modules("tasks")
 
         config = ConsumerConfig(**consumer_options)
         config.validate()

@@ -130,6 +130,9 @@ listed here.
     specify tens or hundreds of workers since they are extremely lightweight
     compared to threads/processes. *See note below on using gevent/greenlet*.
 
+``-A``, ``--disable-autload``
+    Disable automatic loading of tasks modules.
+
 .. note::
     Due to a conflict with Django's base option list, the "verbose" option is
     set using ``-V`` or ``--huey-verbose``. When enabled, huey logs at the
