@@ -23,6 +23,7 @@ from huey.registry import Registry
 from huey.serializer import Serializer
 from huey.storage import BlackHoleStorage
 from huey.storage import MemoryStorage
+from huey.storage import PriorityRedisStorage
 from huey.storage import RedisStorage
 from huey.storage import SqliteStorage
 from huey.utils import Error
@@ -974,6 +975,18 @@ class RedisHuey(Huey):
     def get_storage(self, blocking=True, read_timeout=1, connection_pool=None,
                     url=None, **connection_params):
         return RedisStorage(
+            name=self.name,
+            blocking=blocking,
+            read_timeout=read_timeout,
+            connection_pool=connection_pool,
+            url=url,
+            **connection_params)
+
+
+class PriorityRedisHuey(Huey):
+    def get_storage(self, blocking=True, read_timeout=1, connection_pool=None,
+                    url=None, **connection_params):
+        return PriorityRedisStorage(
             name=self.name,
             blocking=blocking,
             read_timeout=read_timeout,

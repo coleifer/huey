@@ -7,6 +7,7 @@ try:
     import sqlite3
 except ImportError:
     sqlite3 = None
+import struct
 import threading
 import time
 
@@ -26,17 +27,25 @@ from huey.utils import to_timestamp
 
 
 class BaseStorage(object):
+    """
+    Base storage-layer interface. Subclasses should implement all methods.
+    """
     blocking = False  # Does dequeue() block until ready, or should we poll?
+    priority = True
 
     def __init__(self, name='huey', **storage_kwargs):
         self.name = name
 
-    def enqueue(self, data):
+    def enqueue(self, data, priority=None):
         """
         Given an opaque chunk of data, add it to the queue.
 
         :param bytes data: Task data.
+        :param float priority: Priority, higher priorities processed first.
         :return: No return value.
+
+        Some storage may not implement support for priority. In that case, the
+        storage may raise a NotImplementedError for non-None priority values.
         """
         raise NotImplementedError
 
@@ -46,20 +55,6 @@ class BaseStorage(object):
         is returned.
 
         :return: Opaque binary task data or None if queue is empty.
-        """
-        raise NotImplementedError
-
-    def unqueue(self, data):
-        """
-        Atomically remove the given data from the queue, if it is present. This
-        method is used to "delete" a task without executing it. It is not
-        expected that this method will be used very often. Up to the
-        implementation whether more than one instance of the task can be
-        deleted, but typically each chunk of data is unique because it has a
-        UUID4 task id.
-
-        :param bytes data: Task data to remove.
-        :return: Number of tasks deleted.
         """
         raise NotImplementedError
 
@@ -219,9 +214,8 @@ class BaseStorage(object):
 
 
 class BlackHoleStorage(BaseStorage):
-    def enqueue(self, data): pass
+    def enqueue(self, data, priority=None): pass
     def dequeue(self): pass
-    def unqueue(self, data): pass
     def queue_size(self): return 0
     def enqueued_items(self, limit=None): return []
     def flush_queue(self): pass
@@ -242,36 +236,37 @@ class BlackHoleStorage(BaseStorage):
 class MemoryStorage(BaseStorage):
     def __init__(self, *args, **kwargs):
         super(MemoryStorage, self).__init__(*args, **kwargs)
-        self._queue = deque()
+        self._c = 0  # Counter to ensure FIFO behavior for queue.
+        self._queue = []
         self._results = {}
         self._schedule = []
         self._lock = threading.RLock()
 
-    def enqueue(self, data):
-        self._queue.append(data)
+    def enqueue(self, data, priority=None):
+        with self._lock:
+            self._c += 1
+            priority = 0 if priority is None else -priority
+            heapq.heappush(self._queue, (priority, self._c, data))
 
     def dequeue(self):
-        with self._lock:
-            if self._queue:
-                return self._queue.popleft()
-
-    def unqueue(self, data):
         try:
-            self._queue.remove(data)
-        except ValueError:
+            _, _, data = heapq.heappop(self._queue)
+        except IndexError:
             pass
+        else:
+            return data
 
     def queue_size(self):
         return len(self._queue)
 
     def enqueued_items(self, limit=None):
-        items = list(self._queue)
+        items = [data for _, _, data in sorted(self._queue)]
         if limit:
             items = items[:limit]
         return items
 
     def flush_queue(self):
-        self._queue = deque()
+        self._queue = []
 
     def add_to_schedule(self, data, ts):
         heapq.heappush(self._schedule, (ts, data))
@@ -336,6 +331,7 @@ end"""
 
 
 class RedisStorage(BaseStorage):
+    priority = False  # Use PriorityRedisStorage instead. Requires Redis>=5.0.
     redis_client = Redis
 
     def __init__(self, name='huey', blocking=True, read_timeout=1,
@@ -382,7 +378,10 @@ class RedisStorage(BaseStorage):
     def convert_ts(self, ts):
         return time.mktime(ts.timetuple())
 
-    def enqueue(self, data):
+    def enqueue(self, data, priority=None):
+        if priority:
+            raise NotImplementedError('Task priorities are not supported by '
+                                      'this storage.')
         self.conn.lpush(self.queue_key, data)
 
     def dequeue(self):
@@ -397,9 +396,6 @@ class RedisStorage(BaseStorage):
                 return None
         else:
             return self.conn.rpop(self.queue_key)
-
-    def unqueue(self, data):
-        return self.conn.lrem(self.queue_key, 0, data)
 
     def queue_size(self):
         return self.conn.llen(self.queue_key)
@@ -465,6 +461,46 @@ class RedisStorage(BaseStorage):
         self.conn.delete(self.result_key)
 
 
+class PriorityRedisStorage(RedisStorage):
+    priority = True
+
+    def enqueue(self, data, priority=None):
+        priority = 0 if priority is None else -priority
+        # Prefix the message with an encoded timestamp to ensure that messages
+        # created with the same priority are stored in the correct order. Since
+        # the underlying data-type is a sorted-set, this also prevents multiple
+        # identical messages, except they are enqueued on the same microsecond,
+        # from being treated as a single item.
+        prefix = struct.pack('>Q', int(time.time() * 1e6))
+        self.conn.zadd(self.queue_key, {prefix + data: priority})
+
+    def dequeue(self):
+        if self.blocking:
+            try:
+                # BZPOPMIN returns (key, data, score).
+                _, res, _ = self.conn.bzpopmin(
+                    self.queue_key,
+                    timeout=self.read_timeout)
+            except (ConnectionError, TypeError, IndexError):
+                # Unfortunately, there is no way to differentiate a socket
+                # timing out and a host being unreachable.
+                return
+            else:
+                return res[8:]
+        else:
+            # ZPOPMIN returns a list of (data, score) 2-tuples.
+            items = self.conn.zpopmin(self.queue_key, count=1)
+            if items:
+                return items[0][0][8:]  # [(prefix+data, score)].
+
+    def queue_size(self):
+        return self.conn.zcard(self.queue_key)
+
+    def enqueued_items(self, limit=None):
+        items = self.conn.zrange(self.queue_key, 0, limit or -1)
+        return [item[8:] for item in items]  # Unprefix the data.
+
+
 class _ConnectionState(object):
     def __init__(self, **kwargs):
         super(_ConnectionState, self).__init__(**kwargs)
@@ -493,8 +529,10 @@ class SqliteStorage(BaseStorage):
                    'on schedule (queue, timestamp)')
     table_task = ('create table if not exists task ('
                   'id integer not null primary key, queue text not null, '
-                  'data blob not null)')
-    ddl = [table_kv, table_sched, index_sched, table_task]
+                  'data blob not null, priority real not null default 0.0)')
+    index_task = ('create index if not exists task_priority_id on task '
+                  '(priority desc, id asc)')
+    ddl = [table_kv, table_sched, index_sched, table_task, index_task]
 
     def __init__(self, filename='huey.db', name='huey', cache_mb=8,
                  fsync=False, **kwargs):
@@ -547,15 +585,21 @@ class SqliteStorage(BaseStorage):
             for sql in self.ddl:
                 conn.execute(sql)
 
-    def enqueue(self, data):
-        with self.db(commit=True) as conn:
-            conn.execute('insert into task (queue, data) values (?, ?)',
-                         (self.name, to_blob(data)))
+    def sql(self, query, params=None, commit=False, results=False):
+        with self.db(commit=commit) as conn:
+            curs = conn.execute(query, params or ())
+            if results:
+                return curs.fetchall()
+
+    def enqueue(self, data, priority=None):
+        self.sql('insert into task (queue, data, priority) values (?, ?, ?)',
+                 (self.name, to_blob(data), priority or 0), commit=True)
 
     def dequeue(self):
         with self.db(commit=True) as conn:
             curs = conn.execute('select id, data from task where queue = ? '
-                                'order by id limit 1', (self.name,))
+                                'order by priority desc, id limit 1',
+                                (self.name,))
             result = curs.fetchone()
             if result is not None:
                 tid, data = result
@@ -563,38 +607,26 @@ class SqliteStorage(BaseStorage):
                 if curs.rowcount == 1:
                     return to_bytes(data)
 
-    def unqueue(self, data):
-        with self.db(commit=True) as conn:
-            conn.execute('delete from task where queue = ? and data = ?',
-                         (self.name, to_blob(data)))
-
     def queue_size(self):
-        with self.db() as conn:
-            curs = conn.execute('select count(id) from task where queue = ?',
-                                (self.name,))
-            return curs.fetchone()[0]
+        return self.sql('select count(id) from task where queue=?',
+                        (self.name,), results=True)[0][0]
 
     def enqueued_items(self, limit=None):
-        with self.db() as conn:
-            sql = 'select data from task where queue = ? order by id'
-            if limit is None:
-                params = (self.name,)
-            else:
-                sql += ' limit ?'
-                params = (self.name, limit)
-            curs = conn.execute(sql, params)
-            return [to_bytes(data) for data, in curs.fetchall()]
+        sql = 'select data from task where queue=? order by priority desc, id'
+        params = (self.name,)
+        if limit is not None:
+            sql += ' limit ?'
+            params = (self.name, limit)
+
+        return [to_bytes(i) for i, in self.sql(sql, params, results=True)]
 
     def flush_queue(self):
-        with self.db(commit=True) as conn:
-            conn.execute('delete from task where queue = ?', (self.name,))
+        self.sql('delete from task where queue=?', (self.name,), commit=True)
 
     def add_to_schedule(self, data, ts):
-        with self.db(commit=True) as conn:
-            data = to_blob(data)
-            ts = to_timestamp(ts)
-            conn.execute('insert into schedule (queue, data, timestamp) '
-                         'values (?, ?, ?)', (self.name, data, ts))
+        params = (self.name, to_blob(data), to_timestamp(ts))
+        self.sql('insert into schedule (queue, data, timestamp) '
+                 'values (?, ?, ?)', params, commit=True)
 
     def read_schedule(self, ts):
         with self.db(commit=True) as conn:
@@ -612,39 +644,29 @@ class SqliteStorage(BaseStorage):
             return data
 
     def schedule_size(self):
-        with self.db() as conn:
-            curs = conn.execute('select count(id) from schedule '
-                                'where queue = ?', (self.name,))
-            return curs.fetchone()[0]
+        return self.sql('select count(id) from schedule where queue=?',
+                        (self.name,), results=True)[0][0]
 
     def scheduled_items(self, limit=None):
-        with self.db() as conn:
-            sql = 'select data from schedule where queue=? order by timestamp'
-            if limit is None:
-                params = (self.name,)
-            else:
-                params = (self.name, limit)
-                sql += ' limit ?'
-            curs = conn.execute(sql, params)
-            return [to_bytes(data) for data, in curs.fetchall()]
+        sql = 'select data from schedule where queue=? order by timestamp'
+        params = (self.name,)
+        if limit is not None:
+            sql += ' limit ?'
+            params = (self.name, limit)
+
+        return [to_bytes(i) for i, in self.sql(sql, params, results=True)]
 
     def flush_schedule(self):
-        with self.db(commit=True) as conn:
-            conn.execute('delete from schedule where queue = ?', (self.name,))
+        self.sql('delete from schedule where queue = ?', (self.name,), True)
 
     def put_data(self, key, value):
-        with self.db(commit=True) as conn:
-            conn.execute('insert or replace into kv (queue, key, value) '
-                         'values (?, ?, ?)', (self.name, key, to_blob(value)))
+        self.sql('insert or replace into kv (queue, key, value) '
+                 'values (?, ?, ?)', (self.name, key, to_blob(value)), True)
 
     def peek_data(self, key):
-        with self.db() as conn:
-            curs = conn.execute('select value from kv where queue = ? '
-                                'and key = ?', (self.name, key))
-            result = curs.fetchone()
-            if result is None:
-                return EmptyData
-            return to_bytes(result[0])
+        res = self.sql('select value from kv where queue = ? and key = ?',
+                       (self.name, key), results=True)
+        return to_bytes(res[0][0]) if res else EmptyData
 
     def pop_data(self, key):
         with self.db(commit=True) as conn:
@@ -659,10 +681,8 @@ class SqliteStorage(BaseStorage):
             return EmptyData
 
     def has_data_for_key(self, key):
-        with self.db() as conn:
-            curs = conn.execute('select 1 from kv where queue=? and key=?',
-                                (self.name, key))
-            return curs.fetchone() is not None
+        return bool(self.sql('select 1 from kv where queue=? and key=?',
+                             (self.name, key), results=True))
 
     def put_if_empty(self, key, value):
         try:
@@ -676,17 +696,13 @@ class SqliteStorage(BaseStorage):
             return True
 
     def result_store_size(self):
-        with self.db() as conn:
-            curs = conn.execute('select count(*) from kv where queue = ?',
-                                (self.name,))
-            return curs.fetchone()[0]
+        return self.sql('select count(*) from kv where queue=?', (self.name,),
+                        results=True)[0][0]
 
     def result_items(self):
-        with self.db() as conn:
-            curs = conn.execute('select key, value from kv where queue = ?',
-                                (self.name,))
-            return dict((k, to_bytes(v)) for k, v in curs.fetchall())
+        res = self.sql('select key, value from kv where queue=?', (self.name,),
+                       results=True)
+        return dict((k, to_bytes(v)) for k, v in res)
 
     def flush_results(self):
-        with self.db(commit=True) as conn:
-            conn.execute('delete from kv where queue = ?', (self.name,))
+        self.sql('delete from kv where queue=?', (self.name,), True)

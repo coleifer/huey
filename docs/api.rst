@@ -1241,6 +1241,24 @@ Huey comes with several built-in storage implementations:
     constructor. See the `redis-py documentation <https://redis-py.readthedocs.io/en/latest/>`_
     for the complete list of arguments supported by the Redis client.
 
+
+.. py:class:: PriorityRedisStorage(name='huey', blocking=True, read_timeout=1, connection_pool=None, url=None, client_name=None, **connection_params)
+
+    :param bool blocking: Use blocking-zpopmin when reading from the queue (as
+        opposed to polling). Default is true.
+    :param read_timeout: Timeout to use when performing a blocking pop, default
+        is 1 second.
+    :param connection_pool: a redis-py ``ConnectionPool`` instance.
+    :param url: url for Redis connection.
+    :param client_name: name used to identify Redis clients used by Huey.
+
+    Additional keyword arguments will be passed directly to the Redis client
+    constructor. See the `redis-py documentation <https://redis-py.readthedocs.io/en/latest/>`_
+    for the complete list of arguments supported by the Redis client.
+
+    .. warning:: This storage engine requires Redis 5.0 or newer.
+
+
 .. py:class:: SqliteStorage(filename='huey.db', name='huey', cache_mb=8, fsync=False, **kwargs)
 
     :param str filename: sqlite database filename.
@@ -1251,18 +1269,18 @@ Huey comes with several built-in storage implementations:
     :param kwargs: Additional keyword arguments passed to the ``sqlite3``
         connection constructor.
 
+
 .. py:class:: MemoryStorage()
 
     In-memory storage engine for use when testing or developing. Designed for
     use with :ref:`immediate mode <immediate>`.
 
+
 .. py:class:: BaseStorage(name='huey', **storage_kwargs)
 
-    .. py:method:: enqueue(data)
+    .. py:method:: enqueue(data, priority=None)
 
     .. py:method:: dequeue()
-
-    .. py:method:: unqueue(data)
 
     .. py:method:: queue_size()
 

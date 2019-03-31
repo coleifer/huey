@@ -25,7 +25,7 @@ class TestConsumerIntegration(BaseTestCase):
 
         with self.consumer_context():
             result = task_a(1)
-            self.assertEqual(result.get(blocking=True), 2)
+            self.assertEqual(result.get(blocking=True, timeout=2), 2)
 
     def work_on_tasks(self, consumer, n=1, now=None):
         worker, _ = consumer.worker_threads[0]

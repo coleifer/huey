@@ -4,8 +4,10 @@ import os
 import unittest
 
 from redis.connection import ConnectionPool
+from redis import Redis
 
 from huey.api import MemoryHuey
+from huey.api import PriorityRedisHuey
 from huey.api import RedisHuey
 from huey.api import SqliteHuey
 from huey.constants import EmptyData
@@ -29,12 +31,12 @@ class StorageTests(object):
             self.s.enqueue(b'item-%d' % i)
 
         # Remove two items (this API is not used, but we'll test it anyways).
-        self.s.unqueue(b'item-1')
-        self.s.unqueue(b'item-x')
-        self.assertEqual(self.s.queue_size(), 2)
-        self.assertEqual(self.s.enqueued_items(), [b'item-0', b'item-2'])
         self.assertEqual(self.s.dequeue(), b'item-0')
+        self.assertEqual(self.s.queue_size(), 2)
+        self.assertEqual(self.s.enqueued_items(), [b'item-1', b'item-2'])
+        self.assertEqual(self.s.dequeue(), b'item-1')
         self.assertEqual(self.s.dequeue(), b'item-2')
+        self.assertTrue(self.s.dequeue() is None)
 
         self.assertEqual(self.s.queue_size(), 0)
 
@@ -102,6 +104,19 @@ class StorageTests(object):
         self.assertEqual(self.s.result_store_size(), 0)
         self.assertEqual(self.s.result_items(), {})
 
+    def test_priority(self):
+        if not self.s.priority:
+            raise unittest.SkipTest('priority support required')
+
+        priorities = (1, None, 5, None, 3, None, 9, None, 7, 0)
+        for i, priority in enumerate(priorities):
+            item = 'i%s-%s' % (i, priority)
+            self.s.enqueue(item.encode('utf8'), priority)
+
+        expected = [b'i6-9', b'i8-7', b'i2-5', b'i4-3', b'i0-1',
+                    b'i1-None', b'i3-None', b'i5-None', b'i7-None', b'i9-0']
+        self.assertEqual([self.s.dequeue() for _ in range(10)], expected)
+
     def test_consumer_integration(self):
         @self.huey.task()
         def task_a(n):
@@ -136,6 +151,16 @@ class TestRedisStorage(StorageTests, BaseTestCase):
         combinations = itertools.combinations(options.items(), 2)
         for kwargs in (dict(item) for item in combinations):
             self.assertRaises(ConfigurationError, lambda: RedisHuey(**kwargs))
+
+
+def get_redis_version():
+    return int(Redis().info()['redis_version'].split('.', 1)[0])
+
+
+@unittest.skipIf(get_redis_version() < 5, 'Requires Redis >= 5.0')
+class TestPriorityRedisStorage(TestRedisStorage):
+    def get_huey(self):
+        return PriorityRedisHuey(utc=False)
 
 
 class TestSqliteStorage(StorageTests, BaseTestCase):
