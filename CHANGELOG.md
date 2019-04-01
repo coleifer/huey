@@ -28,6 +28,7 @@ Overview of changes:
 * A new serialization format is used in 2.0.0, however consumers running 2.0
   will continue to be able to read and deserialize messages enqueued by Huey
   version 1.11.0 for backwards compatibility.
+* Support for [task priorities](https://huey.readthedocs.io/en/latest/guide.html#task-priority).
 * New `Serializer` abstraction allows users to customize the serialization
   format used when reading and writing tasks.
 * Huey consumer and scheduler can be more easily run within the application

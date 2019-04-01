@@ -42,6 +42,8 @@ Errors are no longer stored in a separate list. Should a task fail due to an
 unhandled exception, the exception will be placed in the result store, and can
 be introspected using the task's :py:class:`Result` handle.
 
+Huey now supports :ref:`priority`.
+
 Details
 -------
 
