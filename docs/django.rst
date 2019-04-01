@@ -45,14 +45,13 @@ options with their default values:
 
     # settings.py
     HUEY = {
+        'huey_class': 'huey.RedisHuey',  # Huey implementation to use.
         'name': settings.DATABASES['default']['NAME'],  # Use db name for huey.
-        'result_store': True,  # Store return values of tasks.
-        'events': True,  # Consumer emits events allowing real-time monitoring.
+        'results': True,  # Store return values of tasks.
         'store_none': False,  # If a task returns None, do not save to results.
-        'always_eager': settings.DEBUG,  # If DEBUG=True, run synchronously.
-        'store_errors': True,  # Store error info if task throws exception.
-        'blocking': False,  # Poll the queue rather than do blocking pop.
-        'backend_class': 'huey.RedisHuey',  # Use path to redis huey by default,
+        'immediate': settings.DEBUG,  # If DEBUG=True, run synchronously.
+        'utc': True,  # Use UTC for all times internally.
+        'blocking': True,  # Perform blocking pop rather than poll Redis.
         'connection': {
             'host': 'localhost',
             'port': 6379,
@@ -71,13 +70,19 @@ options with their default values:
             'initial_delay': 0.1,  # Smallest polling interval, same as -d.
             'backoff': 1.15,  # Exponential backoff using this rate, -b.
             'max_delay': 10.0,  # Max possible polling interval, -m.
-            'utc': True,  # Treat ETAs and schedules as UTC datetimes.
             'scheduler_interval': 1,  # Check schedule every second, -s.
             'periodic': True,  # Enable crontab feature.
             'check_worker_health': True,  # Enable worker health checks.
             'health_check_interval': 1,  # Check worker health every second.
         },
     }
+
+The following ``huey_class`` implementations are provided out-of-the-box:
+
+* ``huey.RedisHuey`` - default.
+* ``huey.PriorityRedisHuey`` - uses Redis but adds support for :ref:`priority`.
+  Requires redis server 5.0 or newer.
+* ``huey.SqliteHuey`` - uses Sqlite, full support for task priorities.
 
 Alternatively, you can simply set ``settings.HUEY`` to a :py:class:`Huey`
 instance and do your configuration directly. In the example below, I've also
@@ -216,19 +221,28 @@ automatically close the connection for you.
 DEBUG and Synchronous Execution
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-When ``settings.DEBUG = True``, tasks will be executed **synchronously** just like
-regular function calls. The purpose of this is to avoid running both Redis and
-an additional consumer process while developing or running tests. If, however,
-you would like to enqueue tasks regardless of whether ``DEBUG = True``, then
-explicitly specify ``always_eager=False`` in your huey settings:
+When ``settings.DEBUG = True``, tasks will be executed **synchronously** just
+like regular function calls. The purpose of this is to avoid running both Redis
+and an additional consumer process while developing or running tests. If you
+prefer to use a live storage engine when ``DEBUG`` is enabled, you can specify
+``immediate_use_memory=False`` - which still runs Huey in immediate mode, but
+using a live storage API. To completely disable immediate mode when ``DEBUG``
+is set, specify ``immediate=False`` in your settings.
 
 .. code-block:: python
 
     # settings.py
     HUEY = {
         'name': 'my-app',
-        # Other settings ...
-        'always_eager': False,
+
+        # To run Huey in "immediate" mode with a live storage API, specify
+        # immediate_use_memory=False.
+        'immediate_use_memory': False,
+
+        # OR:
+        # To run Huey in "live" mode regardless of whether DEBUG is enabled,
+        # specify immediate=False.
+        'immediate': False,
     }
 
 Configuration Examples

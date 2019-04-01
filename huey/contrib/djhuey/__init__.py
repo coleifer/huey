@@ -31,7 +31,7 @@ HUEY = {
 }
 
 If you would like to configure Huey's logger using Django's integrated logging
-settings, the logger used by consumer is named "huey.consumer".
+settings, the logger used by consumer is named "huey".
 
 Alternatively you can simply assign `settings.HUEY` to an actual `Huey`
 object instance:
@@ -79,7 +79,9 @@ if HUEY is None:
 if isinstance(HUEY, dict):
     huey_config = HUEY.copy()  # Operate on a copy.
     name = huey_config.pop('name', default_queue_name())
-    backend_path = huey_config.pop('backend_class', default_backend_path)
+    if 'backend_class' in huey_config:
+        huey_config['huey_class'] = huey_config.pop('backend_class')
+    backend_path = huey_config.pop('huey_class', default_backend_path)
     conn_kwargs = huey_config.pop('connection', {})
     try:
         del huey_config['consumer']  # Don't need consumer opts here.

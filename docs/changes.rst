@@ -42,7 +42,11 @@ Errors are no longer stored in a separate list. Should a task fail due to an
 unhandled exception, the exception will be placed in the result store, and can
 be introspected using the task's :py:class:`Result` handle.
 
-Huey now supports :ref:`priority`.
+Huey now supports :ref:`priority`. To use priorities with Redis, you need to be
+running Redis 5.0 or newer, and should use :py:class:`PriorityRedisHuey`. The
+original :py:class:`RedisHuey` continues to support older versions of Redis.
+:py:class:`SqliteHuey` and the in-memory storage used for dev/testing provide
+full support for task priorities.
 
 Details
 -------
@@ -108,3 +112,8 @@ Miscellaneous:
 * ``SqliteHuey`` no longer has any third-party dependencies and has been moved
   into the main ``huey`` module.
 * The ``SimpleStorage`` contrib module has been removed.
+
+Django-specific:
+
+* The ``backend_class`` setting has been renamed to ``huey_class`` (used to
+  specify import-path to Huey implementation, e.g. ``huey.RedisHuey``).
