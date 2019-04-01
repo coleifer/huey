@@ -6,7 +6,7 @@
 huey, a little task queue
 =========================
 
-.. image:: http://media.charlesleifer.com/blog/photos/huey-logo.png
+.. image:: http://media.charlesleifer.com/blog/photos/huey2-logo.png
 
 *a lightweight alternative*.
 
