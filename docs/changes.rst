@@ -111,6 +111,8 @@ Miscellaneous:
   specify ``blocking=False`` when creating your huey instance.
 * ``SqliteHuey`` no longer has any third-party dependencies and has been moved
   into the main ``huey`` module.
+* The :py:class:`MiniHuey` contrib module has been renamed to
+  ``huey.contrib.mini``.
 * The ``SimpleStorage`` contrib module has been removed.
 
 Django-specific:
