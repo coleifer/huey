@@ -133,20 +133,22 @@ class Huey(object):
     def create_consumer(self, **options):
         return Consumer(self, **options)
 
-    def task(self, retries=0, retry_delay=0, context=False, name=None, **kw):
+    def task(self, retries=0, retry_delay=0, priority=None, context=False,
+             name=None, **kwargs):
         def decorator(func):
             return TaskWrapper(
                 self,
                 func.func if isinstance(func, TaskWrapper) else func,
                 retries=retries,
                 retry_delay=retry_delay,
+                default_priority=priority,
                 context=context,
                 name=name,
-                **kw)
+                **kwargs)
         return decorator
 
     def periodic_task(self, validate_datetime, retries=0, retry_delay=0,
-                      context=False, name=None, **kw):
+                      priority=None, context=False, name=None, **kwargs):
         def decorator(func):
             def method_validate(self, timestamp):
                 return validate_datetime(timestamp)
@@ -158,9 +160,10 @@ class Huey(object):
                 name=name,
                 default_retries=retries,
                 default_retry_delay=retry_delay,
+                default_priority=priority,
                 validate_datetime=method_validate,
                 task_base=PeriodicTask,
-                **kw)
+                **kwargs)
 
         return decorator
 
@@ -241,7 +244,7 @@ class Huey(object):
         if self._immediate:
             self.execute(task)
         else:
-            self.storage.enqueue(self.serialize_task(task))
+            self.storage.enqueue(self.serialize_task(task), task.priority)
 
         if not self.results:
             return
@@ -541,11 +544,13 @@ class Huey(object):
 
 
 class Task(object):
+    default_priority = None
     default_retries = 0
     default_retry_delay = 0
 
     def __init__(self, args=None, kwargs=None, id=None, eta=None, retries=None,
-                 retry_delay=None, on_complete=None, on_error=None):
+                 retry_delay=None, priority=None, on_complete=None,
+                 on_error=None):
         self.name = type(self).__name__
         self.args = () if args is None else args
         self.kwargs = {} if kwargs is None else kwargs
@@ -555,6 +560,8 @@ class Task(object):
         self.retries = retries if retries is not None else self.default_retries
         self.retry_delay = retry_delay if retry_delay is not None else \
                 self.default_retry_delay
+        self.priority = priority if priority is not None else \
+                self.default_priority
 
         self.on_complete = on_complete
         self.on_error = on_error
@@ -567,6 +574,8 @@ class Task(object):
         rep = '%s.%s: %s' % (self.__module__, self.name, self.id)
         if self.eta:
             rep += ' @%s' % self.eta
+        if self.priority:
+            rep += ' p=%s' % self.priority
         if self.retries:
             rep += ' %s retries' % self.retries
         if self.on_complete:
@@ -675,7 +684,8 @@ class TaskWrapper(object):
     def restore(self):
         return self.huey.restore_all(self.task_class)
 
-    def schedule(self, args=None, kwargs=None, eta=None, delay=None, id=None):
+    def schedule(self, args=None, kwargs=None, eta=None, delay=None,
+                 priority=None, id=None):
         if eta is None and delay is None:
             if isinstance(args, (int, float)):
                 delay = args
@@ -697,7 +707,8 @@ class TaskWrapper(object):
             id=id,
             eta=eta,
             retries=self.retries,
-            retry_delay=self.retry_delay)
+            retry_delay=self.retry_delay,
+            priority=priority)
         return self.huey.enqueue(task)
 
     def _apply(self, it):
@@ -714,7 +725,8 @@ class TaskWrapper(object):
 
     def s(self, *args, **kwargs):
         return self.task_class(args, kwargs, retries=self.retries,
-                               retry_delay=self.retry_delay)
+                               retry_delay=self.retry_delay,
+                               priority=kwargs.pop('priority', None))
 
 
 class TaskLock(object):

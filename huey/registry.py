@@ -4,7 +4,8 @@ from huey.exceptions import HueyException
 
 
 Message = namedtuple('Message', ('id', 'name', 'eta', 'retries', 'retry_delay',
-                                 'args', 'kwargs', 'on_complete', 'on_error'))
+                                 'priority', 'args', 'kwargs', 'on_complete',
+                                 'on_error'))
 
 
 class Registry(object):
@@ -66,6 +67,7 @@ class Registry(object):
             task.eta,
             task.retries,
             task.retry_delay,
+            task.priority,
             task.args,
             task.kwargs,
             on_complete,
@@ -75,7 +77,7 @@ class Registry(object):
         # Compatibility with Huey 1.11 message format.
         if not isinstance(message, Message) and isinstance(message, tuple):
             tid, name, eta, retries, retry_delay, (args, kwargs), oc = message
-            message = Message(tid, name, eta, retries, retry_delay, args,
+            message = Message(tid, name, eta, retries, retry_delay, None, args,
                               kwargs, oc, None)
 
         TaskClass = self.string_to_task(message.name)
@@ -95,6 +97,7 @@ class Registry(object):
             message.eta,
             message.retries,
             message.retry_delay,
+            message.priority,
             on_complete,
             on_error)
 
