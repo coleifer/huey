@@ -22,6 +22,7 @@ huey supports:
 * schedule tasks to execute at a given time, or after a given delay
 * schedule recurring tasks, like a crontab
 * automatically retry tasks that fail
+* task prioritization
 * task result storage
 * task locking
 * task pipelines and chains

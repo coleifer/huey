@@ -232,6 +232,106 @@ For more information, see the following API documentation:
 * :py:meth:`~Huey.task` and :py:meth:`~Huey.periodic_task`
 * :py:class:`Result`
 
+.. _priority:
+
+Task priority
+-------------
+
+.. note::
+    Priority support for Redis requires Redis 5.0 or newer. To use task
+    priorities with Redis, use the :py:class:`PriorityRedisHuey` instead of
+    :py:class:`RedisHuey`.
+
+    Task prioritization is fully supported by :py:class:`SqliteHuey` and the
+    in-memory storage layer used when :ref:`immediate` is enabled.
+
+Huey tasks can be given a priority, allowing you to ensure that your most
+important tasks do not get delayed when the workers are busy.
+
+Priorities can be assigned to a task function, in which case all invocations of
+the task will default to the given priority. Additionally, individual task
+invocations can be assigned a priority on a one-off basis.
+
+.. note::
+    When no priority is given, the task will default to a priority of ``0``.
+
+To see how this works, lets define a task that has a priority (``10``):
+
+.. code-block:: python
+
+    @huey.task(priority=10)
+    def send_email(to, subj, body):
+        return mailer.send(to, 'webmaster@myapp.com', subj, body)
+
+When we invoke this task, it will be processed *before* any other pending tasks
+whose priority is less than 10. So we could imagine our queue looking something
+like this:
+
+* ``process_payment`` - priority = 50
+* ``check_spam`` - priority = 1
+* ``make_thumbnail`` - priority = 0 (default)
+
+Invoke the ``send_email()`` task:
+
+.. code-block:: python
+
+    send_email('new_user@foo.com', 'Welcome', 'blah blah')
+
+Now the queue of pending tasks would be:
+
+* ``process_payment`` - priority = 50
+* ``send_email`` - priority = 10
+* ``check_spam`` - priority = 1
+* ``make_thumbnail`` - priority = 0
+
+We can override the default priority by passing ``priority=`` as a keyword
+argument to the task function:
+
+.. code-block:: python
+
+    send_email('boss@mycompany.com', 'Important!', 'etc', priority=90)
+
+Now the queue of pending tasks would be:
+
+* ``send_email`` (to boss) - priority = 90
+* ``process_payment`` - priority = 50
+* ``send_email`` - priority = 10
+* ``check_spam`` - priority = 1
+* ``make_thumbnail`` - priority = 0
+
+Task priority only affects the ordering of tasks as they are pulled from the
+queue of pending tasks. If there are periods of time where your workers are not
+able to keep up with the influx of tasks, Huey's ``priority`` feature can
+ensure that your most important tasks do not get delayed.
+
+Task-specific priority overrides can also be specified when scheduling a task
+to run in the future:
+
+.. code-block:: python
+
+    # Uses priority=10, since that was the default we used when
+    # declaring the send_email task:
+    send_email.schedule(('foo@bar.com', 'subj', 'msg'), delay=60)
+
+    # Override, specifying priority=50 for this task.
+    send_email.schedule(('bar@foo.com', 'subj', 'msg'), delay=60, priority=50)
+
+Lastly, we can specify priority on :py:class:`~Huey.periodic_task`:
+
+.. code-block:: python
+
+    @huey.periodic_task(crontab(minute='0', hour='*/3'), priority=10)
+    def some_periodic_task():
+        # ...
+
+For more information:
+
+* :py:class:`PriorityRedisHuey` - Huey implementation that adds support for
+  task priorities with the Redis storage layer. *Requires Redis 5.0 or newer*.
+* :py:class:`SqliteHuey` and the in-memory storage used when immediate-mode is
+  enabled have full support for task priorities.
+* :py:meth:`~Huey.task` and :py:meth:`~Huey.periodic_task`
+
 Canceling or pausing tasks
 --------------------------
 

@@ -32,7 +32,20 @@ Huey types
     The `redis-py documentation <https://redis-py.readthedocs.io/en/latest/>`_
     contains the complete list of arguments supported by the Redis client.
 
+    .. note::
+        RedisHuey does not support task priorities. If you wish to use task
+        periorities with Redis, use :py:class:`PriorityRedisHuey`.
+
     .. seealso:: :py:class:`RedisStorage`
+
+.. py:class:: PriorityRedisHuey
+
+    Huey that utilizes `redis <https://redis.io/>`_ for queue and result
+    storage. Requires `redis-py <https://github.com/andymccurdy/redis-py>`_.
+    Accepts the same arguments as :py:class:`RedisHuey`.
+
+    PriorityRedisHuey supports :ref:`task priorities <priority>`, and requires
+    Redis 5.0 or newer.
 
 .. py:class:: SqliteHuey
 
@@ -46,12 +59,14 @@ Huey types
     :param bool fsync: use durable writes. Slower but more resilient to
         corruption in the event of sudden power loss. Defaults to false.
 
+    SqliteHuey fully supports task priorities.
+
     .. seealso:: :py:class:`SqliteStorage`
 
 .. py:class:: MemoryHuey
 
     Huey that uses in-memory storage. Only should be used when testing or when
-    using ``immediate`` mode.
+    using ``immediate`` mode. MemoryHuey fully supports task priorities.
 
 
 Huey object
@@ -160,11 +175,13 @@ Huey object
 
             huey = RedisHuey(immediate=True)
 
-    .. py:method:: task(retries=0, retry_delay=0, context=False, name=None, **kwargs)
+    .. py:method:: task(retries=0, retry_delay=0, priority=None, context=False, name=None, **kwargs)
 
         :param int retries: number of times to retry the function if an
             unhandled exception occurs when it is executed.
         :param int retry_delay: number of seconds to wait between retries.
+        :param int priority: priority assigned to task, higher numbers are
+            processed first by the consumer when there is a backlog.
         :param bool context: when the task is executed, include the
             :py:class:`Task` instance as a keyword argument.
         :param str name: name for this task. If not provided, Huey will default
@@ -266,7 +283,7 @@ Huey object
         For more information, see :py:class:`TaskWrapper`, :py:class:`Task`,
         and :py:class:`Result`.
 
-    .. py:method:: periodic_task(validate_datetime, retries=0, retry_delay=0, context=False, name=None, **kwargs)
+    .. py:method:: periodic_task(validate_datetime, retries=0, retry_delay=0, priority=None, context=False, name=None, **kwargs)
 
         :param function validate_datetime: function which accepts a
             ``datetime`` instance and returns whether the task should be
@@ -274,6 +291,8 @@ Huey object
         :param int retries: number of times to retry the function if an
             unhandled exception occurs when it is executed.
         :param int retry_delay: number of seconds to wait in-between retries.
+        :param int priority: priority assigned to task, higher numbers are
+            processed first by the consumer when there is a backlog.
         :param bool context: when the task is executed, include the
             :py:class:`Task` instance as a parameter.
         :param str name: name for this task. If not provided, Huey will default
@@ -814,6 +833,8 @@ Huey object
 
         :param args: Arguments for task function.
         :param kwargs: Keyword arguments for task function.
+        :param int priority: assign priority override to task, higher numbers
+            are processed first by the consumer when there is a backlog.
         :returns: a :py:class:`Task` instance representing the execution of the
             task function with the given arguments.
 
@@ -892,6 +913,8 @@ Huey object
     :param datetime eta: time at which task should be executed.
     :param int retries: automatic retry attempts.
     :param int retry_delay: seconds to wait before retrying a failed task.
+    :param int priority: priority assigned to task, higher numbers are
+        processed first by the consumer when there is a backlog.
     :param Task on_complete: Task to execute upon completion of this task.
     :param Task on_error: Task to execute upon failure / error.
 
