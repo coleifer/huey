@@ -1,12 +1,10 @@
-huey - a little task queue
-==========================
-
 .. image:: http://media.charlesleifer.com/blog/photos/huey2-logo.png
 
 *a lightweight alternative*.
 
 huey is:
 
+* a task queue (**2019-04-01**: `version 2.0 released <https://huey.readthedocs.io/en/latest/changes.html>`_)
 * written in python (2.7+, 3.4+)
 * clean and simple APIs
 * redis, sqlite, or in-memory storage
