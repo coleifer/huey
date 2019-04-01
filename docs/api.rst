@@ -34,7 +34,7 @@ Huey types
 
     .. note::
         RedisHuey does not support task priorities. If you wish to use task
-        periorities with Redis, use :py:class:`PriorityRedisHuey`.
+        priorities with Redis, use :py:class:`PriorityRedisHuey`.
 
     .. seealso:: :py:class:`RedisStorage`
 
@@ -45,7 +45,7 @@ Huey types
     Accepts the same arguments as :py:class:`RedisHuey`.
 
     PriorityRedisHuey supports :ref:`task priorities <priority>`, and requires
-    Redis 5.0 or newer.
+    Redis **5.0 or newer**.
 
 .. py:class:: SqliteHuey
 
