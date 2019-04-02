@@ -6,8 +6,9 @@ huey is:
 
 * a task queue (**2019-04-01**: `version 2.0 released <https://huey.readthedocs.io/en/latest/changes.html>`_)
 * written in python (2.7+, 3.4+)
-* clean and simple APIs
+* clean and simple API
 * redis, sqlite, or in-memory storage
+* `example code <https://github.com/coleifer/huey/tree/master/examples/>`_.
 
 huey supports:
 
@@ -69,7 +70,8 @@ Tasks can be scheduled to run in the future:
     >>> res(blocking=True)  # Will block until task finishes, in ~10s.
     5
 
-For much more, check out the `guide <https://huey.readthedocs.io/en/latest/guide.html>`_.
+For much more, check out the `guide <https://huey.readthedocs.io/en/latest/guide.html>`_
+or take a look at the `example code <https://github.com/coleifer/huey/tree/master/examples/>`_.
 
 Running the consumer
 ^^^^^^^^^^^^^^^^^^^^
