@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Flask example</title>
+</head>
+<body>
+  <h2>Flask example</h2>
+  {% if message %}
+    <h4 style="color: #282;">{{ message }}</h4>
+  {% endif %}
+  <p>
+    Submitting the form will cause an example task to be enqueued and executed
+    by the consumer.
+  </p>
+  <form action="{{ url_for('home') }}" method="post">
+    <label>Enter a number</label>
+    <input name="n" type="text" />
+    <button type="submit">Run task</button>
+  </form>
+  <hr />
+  <p>Links</p>
+  <ul>
+    <li><a href="https://huey.readthedocs.io/en/latest/">Huey documentation</a></li>
+    <li><a href="https://github.com/coleifer/huey/">Source code</a></li>
+  </ul>
+</body>
+</html>
