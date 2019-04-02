@@ -1,15 +1,11 @@
 Changelog
 =========
 
-master
-------
+## master
 
 [View commits](https://github.com/coleifer/huey/compare/2.0.0...HEAD)
 
-2.0.0
-=====
-
-[View commits](https://github.com/coleifer/huey/compare/1.11.0...2.0.0)
+# 2.0.0
 
 This section describes the changes in the 2.0.0 release. A detailed list of
 changes can be found here: https://huey.readthedocs.io/en/latest/changes.html
@@ -42,10 +38,9 @@ Overview of changes:
   [peewee](https://github.com/coleifer/peewee) was removed and the Sqlite
   storage engine uses the Python `sqlite3` driver directly.
 
-1.11.0
-------
+[View commits](https://github.com/coleifer/huey/compare/1.11.0...2.0.0)
 
-[View commits](https://github.com/coleifer/huey/compare/1.10.5...1.11.0)
+## 1.11.0
 
 **Backwards-incompatible changes**
 
@@ -80,18 +75,16 @@ task. Going forward, `always_eager` tasks will return `EagerTaskResultWrapper`,
 which implements the same `get()` API that is typically used to retrieve task
 return values.
 
-v1.10.5
--------
+[View commits](https://github.com/coleifer/huey/compare/1.10.5...1.11.0)
 
-[View commits](https://github.com/coleifer/huey/compare/1.10.4...1.10.5)
+### v1.10.5
 
 * Compatibility with redis-py 3.0, updated requirements / dependencies.
 * Add pre-/post- hooks into the djhuey namespace.
 
-v1.10.4
--------------------
+[View commits](https://github.com/coleifer/huey/compare/1.10.4...1.10.5)
 
-[View commits](https://github.com/coleifer/huey/compare/1.10.3...1.10.4)
+### v1.10.4
 
 * Log time taken to execute tasks at default log level.
 * Fix missing import in SQLite storage backend.
@@ -99,10 +92,9 @@ v1.10.4
   driver / client implementation.
 * Fix failing tests for simpledb storage backend.
 
-v1.10.3
--------------------
+[View commits](https://github.com/coleifer/huey/compare/1.10.3...1.10.4)
 
-[View commits](https://github.com/coleifer/huey/compare/1.10.2...1.10.3)
+### v1.10.3
 
 * Fixed regression where in *always eager* mode exceptions within tasks were
   being swallowed instead of raised.
@@ -110,17 +102,15 @@ v1.10.3
   This simplifies creating global/process-wide shared resources, such as a
   connection pool or database client. [Documentation](https://huey.readthedocs.io/en/latest/api.html#Huey.on_startup).
 
-v1.10.2
--------------------
+[View commits](https://github.com/coleifer/huey/compare/1.10.2...1.10.3)
 
-[View commits](https://github.com/coleifer/huey/compare/1.10.1...1.10.2)
+### v1.10.2
 
 * More granular "extras" installation options.
 
-v1.10.1
--------------------
+[View commits](https://github.com/coleifer/huey/compare/1.10.1...1.10.2)
 
-[View commits](https://github.com/coleifer/huey/compare/1.10.0...1.10.1)
+### v1.10.1
 
 * Remove call to SimpleDB Client.connect(), as the `simpledb` APIs have
   changed and no longer use this method.
@@ -129,28 +119,27 @@ v1.10.1
 * Gracefully stop Huey consumer when SIGINT is received.
 * Improved continuous integration, now testing on Python 3.7 as well.
 
-v1.10.0
--------------------
+[View commits](https://github.com/coleifer/huey/compare/1.10.0...1.10.1)
 
-[View commits](https://github.com/coleifer/huey/compare/1.9.1...1.10.0)
+## v1.10.0
 
 * Ensure that the default SIGINT handler is registered. This fixes an edge-case
   that arises when the consumer is run without job control, which causes
   interrupt signals to be ignored.
 * Restarts (SIGHUP) are now graceful by default.
 
-v1.9.1
-------
+[View commits](https://github.com/coleifer/huey/compare/1.9.1...1.10.0)
 
-[View commits](https://github.com/coleifer/huey/compare/1.9.0...1.9.1)
+### v1.9.1
 
 * Ensure the scheduler loop does not drift (fixes #304).
 * Add `TaskResultWrapper.reset()` to enable resetting the results of tasks that
   failed and are subsequently being retried.
 * Allow task-decorated functions to be also decorated as periodic tasks.
 
-v1.9.0
-------
+[View commits](https://github.com/coleifer/huey/compare/1.9.0...1.9.1)
+
+## v1.9.0
 
 [View commits](https://github.com/coleifer/huey/compare/1.8.0...1.9.0)
 
@@ -165,8 +154,7 @@ Django integration in Huey 1.9.0 will work the same as it had previously in
 Apologies, I should have reviewed the patch more thoroughly and insisted on
 better test coverage.
 
-v1.8.0
-------
+## v1.8.0
 
 [View commits](https://github.com/coleifer/huey/compare/1.7.0...1.8.0)
 
@@ -181,10 +169,7 @@ recommend that you take a look at the docs and switch over to it:
 
 [Django integration documentation](http://huey.readthedocs.io/en/latest/contrib.html#django)
 
-v1.7.0
-------
-
-[View commits](https://github.com/coleifer/huey/compare/1.6.1...1.7.0)
+## v1.7.0
 
 #### Backwards-incompatible change
 
@@ -193,20 +178,17 @@ a failed task within the `result_store`, regardless of whether `store_errors`
 was true or not. As of 1.7.0, task exceptions will only be stored in the result
 store if `store_errors` is True. See #290 for discussion.
 
-v1.6.1
-------
+[View commits](https://github.com/coleifer/huey/compare/1.6.1...1.7.0)
 
-[View commits](https://github.com/coleifer/huey/compare/1.6.0...1.6.1)
+### v1.6.1
 
 * Add backwards-compatibility to queue serialization protocol so that 1.6
   consumers can continue to work with tasks enqueued by huey versions 1.5 and
   lower.
 
+[View commits](https://github.com/coleifer/huey/compare/1.6.0...1.6.1)
 
-v1.6.0
-------
-
-[View commits](https://github.com/coleifer/huey/compare/1.5.6...1.6.0)
+## v1.6.0
 
 * Support for [task pipelining](http://huey.readthedocs.io/en/latest/getting-started.html#task-pipelines) and task function partials
   (which is not compatible with 1.5's task serialization format see note below).
@@ -228,65 +210,58 @@ piece of metadata. As a result, tasks enqueued with huey versions previous to
 At present there is a workaround available in 1.6.1, but it will be removed
 when 1.7.0 is released later.
 
-v1.5.6
-------
+[View commits](https://github.com/coleifer/huey/compare/1.5.6...1.6.0)
 
-[View commits](https://github.com/coleifer/huey/compare/1.5.5...1.5.6)
+### v1.5.6
 
 * Allow arbitrary settings to be specified in ``task()`` decorators.
 * New task name format includes function module as part of task name.
 * Fix for operating systems that do not implement SIGHUP.
 * Fix bug in `contrib.minimal` task scheduler timing.
 
-v1.5.5
-------
+[View commits](https://github.com/coleifer/huey/compare/1.5.5...1.5.6)
 
-[View commits](https://github.com/coleifer/huey/compare/1.5.4...1.5.5)
+### v1.5.5
 
 * Implemented [pre-execute](http://huey.readthedocs.io/en/latest/api.html#Huey.register_pre_execute)
   and [post-execute](http://huey.readthedocs.io/en/latest/api.html#Huey.register_pre_execute)
   hooks.
 * Implemented task cancellation mechanism as part of pre-execute hooks.
 
-v1.5.4
-------
+[View commits](https://github.com/coleifer/huey/compare/1.5.4...1.5.5)
 
-[View commits](https://github.com/coleifer/huey/compare/1.5.3...1.5.4)
+### v1.5.4
 
 * Implemented atomic "set if not exists" for Redis and SQLite, which is used by
   the locking APIs.
 
-v1.5.3
-------
+[View commits](https://github.com/coleifer/huey/compare/1.5.3...1.5.4)
 
-[View commits](https://github.com/coleifer/huey/compare/1.5.2...1.5.3)
+### v1.5.3
 
 * Includes addition of `TaskLock` and `Huey.lock_task()` helpers.
 * Extend `Huey` API to add method for creating the consumer.
 
-v1.5.2
-------
+[View commits](https://github.com/coleifer/huey/compare/1.5.2...1.5.3)
 
-[View commits](https://github.com/coleifer/huey/compare/1.5.1...1.5.2)
+### v1.5.2
 
 * Added support for gracefully restarting the consumer using SIGHUP.
 * Fixed a bug where periodic tasks were not being given unique task IDs when
   executed by the consumer. Periodic tasks now receive a unique ID each time
   they are invoked.
 
-v1.5.1
-------
+[View commits](https://github.com/coleifer/huey/compare/1.5.1...1.5.2)
 
-[View commits](https://github.com/coleifer/huey/compare/1.5.0...1.5.1)
+### v1.5.1
 
 Added support for specifying a `retry` and `retry_delay` on periodic tasks.
 Simply pass the desired values into the `periodic_task()` decorator after the
 validation function, as keyword arguments.
 
-v1.5.0
-------
+[View commits](https://github.com/coleifer/huey/compare/1.5.0...1.5.1)
 
-[View commits](https://github.com/coleifer/huey/compare/1.4.1...1.5.0)
+## v1.5.0
 
 * Allow all instances of a task to be revoked/restored by adding the
   `revoke()`, `restore()` and `is_revoked()` methods to all decorated tasks
@@ -301,21 +276,18 @@ v1.5.0
 
 Thanks to @mindojo-victor and @nachtmaar for help with some of the above items.
 
-v1.4.1
-------
+[View commits](https://github.com/coleifer/huey/compare/1.4.1...1.5.0)
 
-[View commits](https://github.com/coleifer/huey/compare/1.4.0...1.4.1)
+### v1.4.1
 
 * Support using `7` to represent *Sunday* when doing day-of-week calculations
   in the `crontab` helper.
 * Fix bug #243, wherein Django interpreted boolean CLI arguments as having a
   boolean default value.
 
+[View commits](https://github.com/coleifer/huey/compare/1.4.0...1.4.1)
 
-v1.4.0
-------
-
-[View commits](https://github.com/coleifer/huey/compare/1.3.1...1.4.0)
+## v1.4.0
 
 Fixed a subtle bug in the way Huey calculated when to run the periodic task
 scheduler. If you had configured the consumer to check the schedule at an
@@ -340,10 +312,9 @@ Documentation clean-ups and additions, particularly around the logic used to
 handle datetime conversion. Also added docs on shutdown modes for huey
 consumer.
 
-v1.3.1
-------
+[View commits](https://github.com/coleifer/huey/compare/1.3.1...1.4.0)
 
-[View commits](https://github.com/coleifer/huey/compare/1.3.0...1.3.1)
+### v1.3.1
 
 Smarter conversion between datetimes, so that huey will correctly interpret
 naive or timezone-aware datetimes and properly convert to UTC when configured
@@ -352,10 +323,9 @@ to do so. Previously, huey only operated on naive datetimes. Many thanks to
 
 Documentation clean-ups and additions.
 
-v1.3.0
-------
+[View commits](https://github.com/coleifer/huey/compare/1.3.0...1.3.1)
 
-[View commits](https://github.com/coleifer/huey/compare/1.2.3...1.3.0)
+## v1.3.0
 
 Adds flag to preserve result-store value in certain circumstances. Contains yet
 more hacking at the consumer configuration options, specifically hard-coded
@@ -367,26 +337,23 @@ older (officially unsupported) versions of Django.
 Added a `sqlitedb` contrib module that uses a local SQLite database instead of
 Redis for Queue persistence, task scheduling and result-storage.
 
-v1.2.3
-------
+[View commits](https://github.com/coleifer/huey/compare/1.2.3...1.3.0)
 
-[View commits](https://github.com/coleifer/huey/compare/1.2.2...1.2.3)
+### v1.2.3
 
 Contains an attempt at fixing the django management command handling of the
 `default` option.
 
-v1.2.2
-------
+[View commits](https://github.com/coleifer/huey/compare/1.2.2...1.2.3)
 
-[View commits](https://github.com/coleifer/huey/compare/1.2.0...1.2.2)
+### v1.2.2
 
 Contains small bugfix for an earlier bugfix meant to prevent time.sleep() from
 being called with a negative time interval.
 
-v1.2.0
-------
+[View commits](https://github.com/coleifer/huey/compare/1.2.0...1.2.2)
 
-[View commits](https://github.com/coleifer/huey/compare/1.1.2...1.2.0)
+## v1.2.0
 
 Removed the metadata APIs added in 1.1.0, as they seemed poorly-designed and
 altogether a decent idea terribly implemented. Perhaps something I'll revisit,
@@ -400,10 +367,9 @@ APIs.
 * Change the default consumer log handler from RotatingFileHandler to the
   vanilla FileHandler class.
 
-v1.1.2
-------
+[View commits](https://github.com/coleifer/huey/compare/1.1.2...1.2.0)
 
-[View commits](https://github.com/coleifer/huey/compare/1.1.1...1.1.2)
+### v1.1.2
 
 I've added a new API for fetching a task's result given on the task's ID. You
 can now call `huey.result(task_id)` and retrieve the result if the task has
@@ -415,10 +381,9 @@ There is also a new parameter on the above methods, ``preserve=False``. By
 default, the result store will delete a task result once it has been read. Specifying
 ``preserve=True`` ensures the data is not removed.
 
-v1.1.1
-------
+[View commits](https://github.com/coleifer/huey/compare/1.1.1...1.1.2)
 
-[View commits](https://github.com/coleifer/huey/compare/1.1.0...1.1.1)
+### v1.1.1
 
 This is a small release with a couple minor bugfixes.
 
@@ -427,8 +392,9 @@ This is a small release with a couple minor bugfixes.
 * Updated [getting started documentation](https://huey.readthedocs.io/en/latest/getting-started.html)
   to reflect changes in the 1.x APIs.
 
-v1.1.0
-------
+[View commits](https://github.com/coleifer/huey/compare/1.1.0...1.1.1)
+
+## v1.1.0
 
 * Big changes to simplify the way ``Huey`` is instantiated. No changes should
   be necessary if already using ``RedisHuey``.
@@ -444,8 +410,7 @@ v1.1.0
 * Many new events are emitted by the consumer, and some have parameters. These
   are documented [here](https://huey.readthedocs.io/en/latest/events.html).
 
-v1.0.0
-------
+# v1.0.0
 
 What follows is a description of the changes between 0.4.9 and 1.0.0. There are
 some backwards-incompatible changes to be aware of as well as new options for
