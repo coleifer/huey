@@ -133,10 +133,10 @@ should be called. If so, the task will be enqueued for execution.
     Because periodic tasks are called independent of any user interaction, they
     do not accept any arguments.
 
-Similarly, the return-value for periodic tasks is discarded, rather than being
-put into the result store. This is because there is not an obvious way for an
-application to obtain a :py:class:`Result` handle to access the result of a
-given periodic task execution.
+    Similarly, the return-value for periodic tasks is discarded, rather than
+    being put into the result store. This is because there is not an obvious
+    way for an application to obtain a :py:class:`Result` handle to access the
+    result of a given periodic task execution.
 
 The :py:func:`crontab` function accepts the following arguments:
 
