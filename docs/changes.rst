@@ -54,9 +54,13 @@ Details
 Changes when initializing :py:class:`Huey`:
 
 * ``result_store`` parameter has been renamed to ``results``.
-* ``events``, ``store_errors`` and ``global_registry``  parameters have all
-  been removed. Events have been replaced by :ref:`signals`, and the task
-  registry is local to the Huey instance.
+* ``events`` parameter is removed. Events have been replaced by :ref:`signals`.
+* ``store_errors`` paramter is removed. Huey no longer maintains a separate
+  list of recent errors. Unhandled errors that occur when running a task are
+  stored in the result store.
+* ``global_registry`` parameter is removed. Tasks are no longer registered to a
+  global registry - tasks are registered to the Huey instance with which they
+  are decorated.
 * ``always_eager`` has been renamed ``immediate``.
 
 New initialization arguments:
@@ -106,6 +110,8 @@ Changes to :py:func:`crontab`:
 
 Miscellaneous:
 
+* Huey no longer uses a global registry for task functions. Task functions are
+  only visible to the huey instance they are decorated by.
 * ``RedisHuey`` defaults to using a blocking pop on the queue, which should
   improve latency and reduce chatter. To go back to the old polling default,
   specify ``blocking=False`` when creating your huey instance.
