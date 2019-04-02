@@ -36,6 +36,12 @@ Huey types
         RedisHuey does not support task priorities. If you wish to use task
         priorities with Redis, use :py:class:`PriorityRedisHuey`.
 
+    RedisHuey uses a Redis LIST to store the queue of pending tasks. Redis
+    lists are a natural fit, as they offer O(1) append and pop from either end
+    of the list. Redis also provides blocking-pop commands which allow the
+    consumer to react to a new message as soon as it is available without
+    resorting to polling.
+
     .. seealso:: :py:class:`RedisStorage`
 
 .. py:class:: PriorityRedisHuey
@@ -46,6 +52,14 @@ Huey types
 
     PriorityRedisHuey supports :ref:`task priorities <priority>`, and requires
     Redis **5.0 or newer**.
+
+    PriorityRedisHuey uses a Redis SORTED SET to store the queue of pending
+    tasks. Sorted sets consist of a unique value and a numeric score. In
+    addition to being sorted by numeric score, Redis also orders the items
+    within the set lexicographically. Huey takes advantage of these two
+    characteristics to implement the priority queue. Redis 5.0 added a new
+    command, ZPOPMIN, which pops the lowest-scoring item from the sorted set
+    (and BZPOPMIN, the blocking variety).
 
 .. py:class:: SqliteHuey
 
