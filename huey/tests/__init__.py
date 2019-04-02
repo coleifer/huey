@@ -5,5 +5,6 @@ from huey.tests.test_immediate import *
 from huey.tests.test_priority import *
 from huey.tests.test_registry import *
 from huey.tests.test_signals import *
+from huey.tests.test_sqlstorage import *
 from huey.tests.test_storage import *
 from huey.tests.test_utils import *
