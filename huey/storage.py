@@ -36,6 +36,14 @@ class BaseStorage(object):
     def __init__(self, name='huey', **storage_kwargs):
         self.name = name
 
+    def close(self):
+        """
+        Close or release any objects/handles used by storage layer.
+
+        :returns: (optional) boolean indicating success
+        """
+        pass
+
     def enqueue(self, data, priority=None):
         """
         Given an opaque chunk of data, add it to the queue.
