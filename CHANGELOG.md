@@ -3,6 +3,10 @@ Changelog
 
 ## master
 
+* Added new contrib module `sql_huey`, which uses `peewee <https://github.com/coleifer/peewee>`_
+  to provide storage layer using any of the supported databases (sqlite, mysql
+  or postgresql).
+
 [View commits](https://github.com/coleifer/huey/compare/2.0.1...HEAD)
 
 ### 2.0.1
