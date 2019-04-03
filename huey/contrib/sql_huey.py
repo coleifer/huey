@@ -24,8 +24,7 @@ class SqlStorage(BaseStorage):
             self.database = db_url_connect(database)
 
         self.KV, self.Schedule, self.Task = self.create_models()
-        with self.database:
-            self.database.create_tables([self.KV, self.Schedule, self.Task])
+        self.create_tables()
 
     def create_models(self):
         class Base(Model):
@@ -54,6 +53,14 @@ class SqlStorage(BaseStorage):
         Task.add_index(Task.priority.desc(), Task.id)
 
         return (KV, Schedule, Task)
+
+    def create_tables(self):
+        with self.database:
+            self.database.create_tables([self.KV, self.Schedule, self.Task])
+
+    def drop_tables(self):
+        with self.database:
+            self.database.drop_tables([self.KV, self.Schedule, self.Task])
 
     def close(self):
         return self.database.close()
