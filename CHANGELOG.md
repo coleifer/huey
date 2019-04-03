@@ -3,7 +3,13 @@ Changelog
 
 ## master
 
-[View commits](https://github.com/coleifer/huey/compare/2.0.0...HEAD)
+[View commits](https://github.com/coleifer/huey/compare/2.0.1...HEAD)
+
+### 2.0.1
+
+* Small fixes, fixed typo in Exception class being caught by scheduler.
+
+[View commits](https://github.com/coleifer/huey/compare/2.0.0...2.0.1)
 
 # 2.0.0
 
