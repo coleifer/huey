@@ -7,8 +7,8 @@ except ImportError:
     peewee = None
 
 try:
-    from huey.contrib.sqlstorage import SqlHuey
-    from huey.contrib.sqlstorage import SqlStorage
+    from huey.contrib.sql_huey import SqlHuey
+    from huey.contrib.sql_huey import SqlStorage
 except ImportError:
     if peewee is not None:
         raise

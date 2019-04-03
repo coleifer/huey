@@ -1,5 +1,4 @@
 import operator
-import sys
 
 from peewee import *
 from playhouse.db_url import connect as db_url_connect
@@ -29,29 +28,30 @@ class SqlStorage(BaseStorage):
             self.database.create_tables([self.KV, self.Schedule, self.Task])
 
     def create_models(self):
-        class KV(Model):
+        class Base(Model):
+            class Meta:
+                database = self.database
+
+        class KV(Base):
             queue = CharField()
             key = CharField()
             value = BytesBlobField()
             class Meta:
-                database = self.database
                 primary_key = CompositeKey('queue', 'key')
 
-        class Schedule(Model):
+        class Schedule(Base):
             queue = CharField()
             data = BytesBlobField()
             timestamp = TimestampField(resolution=1000)
             class Meta:
-                database = self.database
                 indexes = ((('queue', 'timestamp'), False),)
 
-        class Task(Model):
+        class Task(Base):
             queue = CharField()
             data = BytesBlobField()
             priority = FloatField(default=0.0)
-            class Meta:
-                database = self.database
-                indexes = ((('priority', 'id'), False),)
+
+        Task.add_index(Task.priority.desc(), Task.id)
 
         return (KV, Schedule, Task)
 
@@ -72,17 +72,21 @@ class SqlStorage(BaseStorage):
         self.Task.create(queue=self.name, data=data, priority=priority or 0)
 
     def dequeue(self):
-        try:
-            task = (self.tasks(self.Task.id, self.Task.data)
-                    .order_by(self.Task.priority.desc(), self.Task.id)
-                    .limit(1)
-                    .get())
-        except self.Task.DoesNotExist:
-            return
+        query = (self.tasks(self.Task.id, self.Task.data)
+                 .order_by(self.Task.priority.desc(), self.Task.id)
+                 .limit(1))
+        if self.database.for_update:
+            query = query.for_update()
 
-        nrows = self.Task.delete().where(self.Task.id == task.id).execute()
-        if nrows == 1:
-            return task.data
+        with self.database.atomic():
+            try:
+                task = query.get()
+            except self.Task.DoesNotExist:
+                return
+
+            nrows = self.Task.delete().where(self.Task.id == task.id).execute()
+            if nrows == 1:
+                return task.data
 
     def queue_size(self):
         return self.tasks().count()
@@ -104,17 +108,21 @@ class SqlStorage(BaseStorage):
         query = (self.schedule(self.Schedule.id, self.Schedule.data)
                  .where(self.Schedule.timestamp <= timestamp)
                  .tuples())
-        id_list, data = [], []
-        for task_id, task_data in query:
-            id_list.append(task_id)
-            data.append(task_data)
+        if self.database.for_update:
+            query = query.for_update()
 
-        if id_list:
+        with self.database.atomic():
+            results = list(query)
+            if not results:
+                return []
+
+            id_list, data = zip(*results)
             (self.Schedule
              .delete()
              .where(self.Schedule.id.in_(id_list))
              .execute())
-        return data
+
+            return list(data)
 
     def schedule_size(self):
         return self.schedule().count()
@@ -150,15 +158,20 @@ class SqlStorage(BaseStorage):
             return kv.value
 
     def pop_data(self, key):
-        try:
-            kv = self.kv().where(self.KV.key == key).get()
-        except self.KV.DoesNotExist:
-            return EmptyData
-        else:
-            dq = self.KV.delete().where(
-                (self.KV.queue == self.name) &
-                (self.KV.key == key))
-            return kv.value if dq.execute() == 1 else EmptyData
+        query = self.kv().where(self.KV.key == key)
+        if self.database.for_update:
+            query = query.for_update()
+
+        with self.database.atomic():
+            try:
+                kv = query.get()
+            except self.KV.DoesNotExist:
+                return EmptyData
+            else:
+                dq = self.KV.delete().where(
+                    (self.KV.queue == self.name) &
+                    (self.KV.key == key))
+                return kv.value if dq.execute() == 1 else EmptyData
 
     def has_data_for_key(self, key):
         return self.kv().where(self.KV.key == key).exists()
