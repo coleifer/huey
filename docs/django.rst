@@ -61,7 +61,6 @@ options with their default values:
 
             # huey-specific connection parameters.
             'read_timeout': 1,  # If not polling (blocking pop), use timeout.
-            'max_errors': 1000,  # Only store the 1000 most recent errors.
             'url': None,  # Allow Redis config via a DSN.
         },
         'consumer': {
