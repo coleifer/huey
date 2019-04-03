@@ -14,7 +14,7 @@ matrix:
       sudo: true
 services:
   - redis
-install: "pip install redis"
+install: "pip install redis peewee"
 script: "python runtests.py"
 notifications:
   email: true
