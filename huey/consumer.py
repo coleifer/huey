@@ -142,7 +142,7 @@ class Scheduler(BaseProcess):
 
         try:
             task_list = self.huey.read_schedule(now)
-        except ScheduleReadException:
+        except Exception:
             self._logger.exception('Error reading schedule.')
         else:
             for task in task_list:
