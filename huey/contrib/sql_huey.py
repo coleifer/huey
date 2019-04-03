@@ -103,7 +103,7 @@ class SqlStorage(BaseStorage):
                                                     self.Task.id)
         if limit is not None:
             query = query.limit(limit)
-        return map(operator.itemgetter(0), query.tuples())
+        return list(map(operator.itemgetter(0), query.tuples()))
 
     def flush_queue(self):
         self.Task.delete().where(self.Task.queue == self.name).execute()
@@ -138,7 +138,7 @@ class SqlStorage(BaseStorage):
         tasks = (self.schedule(self.Schedule.data)
                  .order_by(self.Schedule.timestamp)
                  .tuples())
-        return map(operator.itemgetter(0), tasks)
+        return list(map(operator.itemgetter(0), tasks))
 
     def flush_schedule(self):
         (self.Schedule
