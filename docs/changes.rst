@@ -55,9 +55,10 @@ Changes when initializing :py:class:`Huey`:
 
 * ``result_store`` parameter has been renamed to ``results``.
 * ``events`` parameter is removed. Events have been replaced by :ref:`signals`.
-* ``store_errors`` paramter is removed. Huey no longer maintains a separate
+* ``store_errors`` parameter is removed. Huey no longer maintains a separate
   list of recent errors. Unhandled errors that occur when running a task are
-  stored in the result store.
+  stored in the result store. Also the ``max_errors`` parameter of the Redis
+  storage engine is removed.
 * ``global_registry`` parameter is removed. Tasks are no longer registered to a
   global registry - tasks are registered to the Huey instance with which they
   are decorated.
