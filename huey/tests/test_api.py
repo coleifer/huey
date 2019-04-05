@@ -956,6 +956,39 @@ class TestTaskChaining(BaseTestCase):
         self.assertEqual(self.execute_next(), 1337)
         self.assertEqual(state, ['TestError(0)'])
 
+    def test_pipeline_error_midway(self):
+        @self.huey.task()
+        def task_a(n):
+            if n < 0:
+                raise TestError('below zero')
+            return n - 1
+
+        # 1, 0, -1, ??.
+        pipe = task_a.s(1).then(task_a).then(task_a).then(task_a)
+        r1, r2, r3, r4 = self.huey.enqueue(pipe)
+        self.assertEqual(self.execute_next(), 0)
+        self.assertEqual(self.execute_next(), -1)
+        self.assertTrue(self.execute_next() is None)
+        self.assertRaises(TaskException, r3.get)
+
+        # Was r4 enqueued? -- No.
+        self.assertEqual(len(self.huey), 0)
+
+    def test_pipeline_revoke_midway(self):
+        @self.huey.task()
+        def task_a(n):
+            return n + 1
+
+        pipe = task_a.s(1).then(task_a).then(task_a).then(task_a)
+        r1, r2, r3, r4 = self.huey.enqueue(pipe)
+        r3.revoke()
+        self.assertEqual(self.execute_next(), 2)
+        self.assertEqual(self.execute_next(), 3)
+        self.assertTrue(r3.is_revoked())
+        self.assertTrue(self.execute_next() is None)
+        self.assertEqual(len(self.huey), 0)
+        self.assertFalse(r3.is_revoked())  # Cleared when it was handled.
+
     def test_chain_errors(self):
         state1, state2 = [], []
 
