@@ -61,6 +61,34 @@ Huey types
     command, ZPOPMIN, which pops the lowest-scoring item from the sorted set
     (and BZPOPMIN, the blocking variety).
 
+.. py:class:: RedisExpireHuey
+
+    Identical to :py:class:`RedisHuey` except for the way task result values
+    are stored. RedisHuey keeps all task results in a Redis hash, and whenever
+    a task result is read (via the result handle), it is also removed from the
+    result hash. This is done to prevent the task result storage from growing
+    without bound. Additionally, using a Redis hash for all results helps avoid
+    cluttering up the Redis keyspace and utilizes less RAM for storing the keys
+    themselves.
+
+    ``RedisExpireHuey`` uses a different approach: task results are stored in
+    ordinary Redis keys with a special prefix. Result keys are then given a
+    time-to-live, and will be expired automatically by the Redis server. This
+    removes the necessity to remove results from the result store after they
+    are read once.
+
+    Commonly-used keyword arguments for storage configuration:
+
+    :param int expire_time: Expire time in seconds, default is 86400 (1 day).
+    :param bool blocking: Use blocking-pop when reading from the queue (as
+        opposed to polling). Default is true.
+    :param connection_pool: a redis-py ``ConnectionPool`` instance.
+    :param url: url for Redis connection.
+    :param host: hostname of the Redis server.
+    :param port: port number.
+    :param password: password for Redis.
+    :param int db: Redis database to use (typically 0-15, default is 0).
+
 .. py:class:: SqliteHuey
 
     Huey that utilizes sqlite3 for queue and result storage. Only requirement

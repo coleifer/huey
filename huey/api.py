@@ -276,6 +276,10 @@ class Huey(object):
     def put(self, key, data):
         return self.storage.put_data(key, self.serializer.serialize(data))
 
+    def put_result(self, key, data):
+        return self.storage.put_data(key, self.serializer.serialize(data),
+                                     is_result=True)
+
     def put_if_empty(self, key, data):
         return self.storage.put_if_empty(key, self.serializer.serialize(data))
 
@@ -354,12 +358,12 @@ class Huey(object):
                 except AttributeError:  # Seems to only happen on 3.4.
                     tb = '- unable to resolve traceback on Python 3.4 -'
 
-                self.put(task.id, Error({
+                self.put_result(task.id, Error({
                     'error': repr(exception),
                     'retries': task.retries,
                     'traceback': tb}))
             elif task_value is not None or self.store_none:
-                self.put(task.id, task_value)
+                self.put_result(task.id, task_value)
 
         if self._post_execute:
             self._run_post_execute(task, task_value, exception)

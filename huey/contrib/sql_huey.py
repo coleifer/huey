@@ -146,7 +146,7 @@ class SqlStorage(BaseStorage):
          .where(self.Schedule.queue == self.name)
          .execute())
 
-    def put_data(self, key, value):
+    def put_data(self, key, value, is_result=False):
         if isinstance(self.database, PostgresqlDatabase):
             (self.KV
              .insert(queue=self.name, key=key, value=value)

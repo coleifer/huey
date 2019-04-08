@@ -181,10 +181,14 @@ class TestRedisExpireStorage(StorageTests, BaseTestCase):
 
     def test_expire_results(self):
         self.s.put_data(b'k1', b'v1')
-        self.s.put_data(b'k2', b'v2')
+        self.s.put_data(b'k2', b'v2', is_result=True)
 
         conn = self.s.conn  # Underlying Redis client.
-        self.assertEqual(conn.ttl(self.s.result_key(b'k1')), 3600)
+
+        # By default the put_data() API treats keys as being persistent. If we
+        # specifically included the "is_result=True" flag, then the key will be
+        # given a TTL.
+        self.assertEqual(conn.ttl(self.s.result_key(b'k1')), -1)
         self.assertEqual(conn.ttl(self.s.result_key(b'k2')), 3600)
 
         # Non-existant keys return -2. See redis docs for TTL command.

@@ -140,12 +140,14 @@ class BaseStorage(object):
         """
         raise NotImplementedError
 
-    def put_data(self, key, value):
+    def put_data(self, key, value, is_result=False):
         """
         Store an arbitrary key/value pair.
 
         :param bytes key: lookup key
         :param bytes value: value
+        :param bool is_result: indicate if we are storing a (volatile) task
+            result versus metadata like a task revocation key or lock.
         :return: No return value.
         """
         raise NotImplementedError
@@ -242,7 +244,7 @@ class BlackHoleStorage(BaseStorage):
     def schedule_size(self): return 0
     def scheduled_items(self, limit=None): return []
     def flush_schedule(self): pass
-    def put_data(self, key, value): pass
+    def put_data(self, key, value, is_result=False): pass
     def peek_data(self, key): return EmptyData
     def pop_data(self, key): return EmptyData
     def has_data_for_key(self, key): return False
@@ -314,7 +316,7 @@ class MemoryStorage(BaseStorage):
     def flush_schedule(self):
         self._schedule = []
 
-    def put_data(self, key, value):
+    def put_data(self, key, value, is_result=False):
         self._results[key] = value
 
     def peek_data(self, key):
@@ -445,7 +447,7 @@ class RedisStorage(BaseStorage):
     def flush_schedule(self):
         self.conn.delete(self.schedule_key)
 
-    def put_data(self, key, value):
+    def put_data(self, key, value, is_result=False):
         self.conn.hset(self.result_key, key, value)
 
     def peek_data(self, key):
@@ -492,8 +494,13 @@ class RedisExpireStorage(RedisStorage):
         encode = lambda s: s if isinstance(s, bytes) else s.encode('utf8')
         self.result_key = lambda k: rp + encode(k)
 
-    def put_data(self, key, value):
-        self.conn.setex(self.result_key(key), self._expire_time, value)
+    def put_data(self, key, value, is_result=False):
+        if is_result:
+            # We only want to expire task result data. If we are storing an
+            # important metadata like a revocation key, we need to preserve it.
+            self.conn.setex(self.result_key(key), self._expire_time, value)
+        else:
+            self.conn.set(self.result_key(key), value)
 
     def peek_data(self, key):
         res = self.conn.get(self.result_key(key))
@@ -511,11 +518,7 @@ class RedisExpireStorage(RedisStorage):
         return self.conn.exists(self.result_key(key)) != 0
 
     def put_if_empty(self, key, value):
-        rkey = self.result_key(key)
-        if not self.conn.setnx(rkey, value):
-            return False
-        self.conn.expire(rkey, self._expire_time)
-        return True
+        return self.conn.setnx(self.result_key(key), value)
 
     def _result_keys(self):
         return self.conn.scan_iter(match=self.result_prefix + b'*')
@@ -736,7 +739,7 @@ class SqliteStorage(BaseStorage):
     def flush_schedule(self):
         self.sql('delete from schedule where queue = ?', (self.name,), True)
 
-    def put_data(self, key, value):
+    def put_data(self, key, value, is_result=False):
         self.sql('insert or replace into kv (queue, key, value) '
                  'values (?, ?, ?)', (self.name, key, to_blob(value)), True)
 
