@@ -10,6 +10,7 @@ except ImportError:
 import struct
 import threading
 import time
+import warnings
 
 try:
     from redis import ConnectionPool
@@ -166,6 +167,15 @@ class BaseStorage(object):
         :return: Associated value, if key exists, or ``EmptyData``.
         """
         raise NotImplementedError
+
+    def delete_data(self, key):
+        """
+        Delete the value at the given key, if it exists.
+
+        :param bytes key: Key to delete.
+        :return: boolean success or failure.
+        """
+        return self.pop_data(key) is not EmptyData
 
     def has_data_for_key(self, key):
         """
@@ -467,6 +477,65 @@ class RedisStorage(BaseStorage):
 
     def flush_results(self):
         self.conn.delete(self.result_key)
+
+
+class RedisExpireStorage(RedisStorage):
+    # Redis storage subclass that adds expiration to task result values. Since
+    # the Redis server handles deleting our results after the expiration time,
+    # this storage layer will not delete the results when they are read.
+    def __init__(self, name='huey', expire_time=86400, *args, **kwargs):
+        super(RedisExpireStorage, self).__init__(name, *args, **kwargs)
+
+        self._expire_time = expire_time
+
+        self.result_prefix = rp = b'huey.r.%s.' % self.name.encode('utf8')
+        encode = lambda s: s if isinstance(s, bytes) else s.encode('utf8')
+        self.result_key = lambda k: rp + encode(k)
+
+    def put_data(self, key, value):
+        self.conn.setex(self.result_key(key), self._expire_time, value)
+
+    def peek_data(self, key):
+        res = self.conn.get(self.result_key(key))
+        return res if res is not None else EmptyData
+
+    # Here we explicitly prevent result items from being removed by using the
+    # same implementation for "pop" (get and delete) as we do for "peek"
+    # (non-destructive read).
+    pop_data = peek_data
+
+    def delete_data(self, key):
+        return self.conn.delete(self.result_key(key))
+
+    def has_data_for_key(self, key):
+        return self.conn.exists(self.result_key(key)) != 0
+
+    def put_if_empty(self, key, value):
+        rkey = self.result_key(key)
+        if not self.conn.setnx(rkey, value):
+            return False
+        self.conn.expire(rkey, self._expire_time)
+        return True
+
+    def _result_keys(self):
+        return self.conn.scan_iter(match=self.result_prefix + b'*')
+
+    def result_store_size(self):
+        return len(list(self._result_keys()))
+
+    def result_items(self):
+        keys = list(self._result_keys())
+        accum = {}
+        if keys:
+            pfx_len = len(self.result_prefix)
+            for key, value in zip(keys, self.conn.mget(keys)):
+                accum[key[pfx_len:]] = value
+        return accum
+
+    def flush_results(self):
+        keys = list(self._result_keys())
+        if keys:
+            self.conn.delete(*keys)
 
 
 class PriorityRedisStorage(RedisStorage):

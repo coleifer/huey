@@ -290,6 +290,9 @@ class Huey(object):
         if data is not EmptyData:
             return self.serializer.deserialize(data)
 
+    def delete(self, key):
+        return self.storage.delete_data(key)
+
     def _get_timestamp(self):
         return (datetime.datetime.utcnow() if self.utc else
                 datetime.datetime.now())
@@ -416,7 +419,7 @@ class Huey(object):
         self.put(self._task_key(task_class, 'rt'), (revoke_until, revoke_once))
 
     def restore_all(self, task_class):
-        return self.get_raw(self._task_key(task_class, 'rt')) is not EmptyData
+        return self.delete(self._task_key(task_class, 'rt'))
 
     def revoke(self, task, revoke_until=None, revoke_once=False):
         if revoke_until is not None:
@@ -425,7 +428,7 @@ class Huey(object):
 
     def restore(self, task):
         # Return value indicates whether the task was in fact revoked.
-        return self.get_raw(task.revoke_id) is not EmptyData
+        return self.delete(task.revoke_id)
 
     def revoke_by_id(self, id, revoke_until=None, revoke_once=False):
         return self.revoke(Task(id=id), revoke_until, revoke_once)
@@ -536,7 +539,7 @@ class Huey(object):
     def flush_locks(self):
         flushed = set()
         for lock_key in self._locks:
-            if self.get_raw(lock_key) is not EmptyData:
+            if self.delete(lock_key):
                 flushed.add(lock_key.split('.lock.', 1)[-1])
         return flushed
 
@@ -761,7 +764,7 @@ class TaskLock(object):
             raise TaskLockedException('unable to set lock: %s' % self._name)
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self._huey.get_raw(self._key)
+        self._huey.delete(self._key)
 
 
 class Result(object):
@@ -997,6 +1000,19 @@ class RedisHuey(Huey):
                     url=None, **connection_params):
         return RedisStorage(
             name=self.name,
+            blocking=blocking,
+            read_timeout=read_timeout,
+            connection_pool=connection_pool,
+            url=url,
+            **connection_params)
+
+
+class RedisExpireHuey(RedisHuey):
+    def get_storage(self, expire_time=86400, blocking=True, read_timeout=1,
+                    connection_pool=None, url=None, **connection_params):
+        return RedisExpireStorage(
+            name=self.name,
+            expire_time=expire_time,
             blocking=blocking,
             read_timeout=read_timeout,
             connection_pool=connection_pool,

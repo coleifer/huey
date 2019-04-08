@@ -13,10 +13,13 @@ from huey.api import SqliteHuey
 from huey.constants import EmptyData
 from huey.consumer import Consumer
 from huey.exceptions import ConfigurationError
+from huey.storage import RedisExpireStorage
 from huey.tests.base import BaseTestCase
 
 
 class StorageTests(object):
+    destructive_reads = True
+
     def setUp(self):
         super(StorageTests, self).setUp()
         self.s = self.huey.storage
@@ -84,7 +87,11 @@ class StorageTests(object):
         self.s.put_data(b'k1', b'v1-x')
         self.assertEqual(self.s.peek_data(b'k1'), b'v1-x')
         self.assertEqual(self.s.pop_data(b'k1'), b'v1-x')
-        self.assertTrue(self.s.pop_data(b'k1') is EmptyData)
+        if self.destructive_reads:
+            self.assertTrue(self.s.pop_data(b'k1') is EmptyData)
+        else:
+            self.assertEqual(self.s.pop_data(b'k1'), b'v1-x')
+            self.assertTrue(self.s.delete_data(b'k1'))
 
         self.assertFalse(self.s.has_data_for_key(b'k1'))
         self.assertTrue(self.s.has_data_for_key(b'k2'))
@@ -94,6 +101,11 @@ class StorageTests(object):
         self.assertTrue(self.s.put_if_empty(b'k1', b'v1-y'))
         self.assertFalse(self.s.put_if_empty(b'k1', b'v1-z'))
         self.assertEqual(self.s.peek_data(b'k1'), b'v1-y')
+
+        # Test deletion.
+        self.assertTrue(self.s.put_if_empty(b'k3', b'v3'))
+        self.assertTrue(self.s.delete_data(b'k3'))
+        self.assertFalse(self.s.delete_data(b'k3'))
 
         # Test introspection.
         state = self.s.result_items()  # Normalize keys to unicode strings.
@@ -151,6 +163,80 @@ class TestRedisStorage(StorageTests, BaseTestCase):
         combinations = itertools.combinations(options.items(), 2)
         for kwargs in (dict(item) for item in combinations):
             self.assertRaises(ConfigurationError, lambda: RedisHuey(**kwargs))
+
+
+class TestRedisExpireStorage(StorageTests, BaseTestCase):
+    # Note that this does not subclass the StorageTests. This is partly because
+    # the functionality should already be covered by the TestRedisStorage, as
+    # the RedisExpireStorage is a subclass of RedisStorage -- but also because
+    # the way the result store functions is fundamentally different, relying on
+    # the database to handle result removal via expiration.
+    destructive_reads = False
+
+    def get_huey(self):
+        class RedisExpireHuey(RedisHuey):
+            def get_storage(self, *args, **kwargs):
+                return RedisExpireStorage(name=self.name, *args, **kwargs)
+        return RedisExpireHuey(expire_time=3600, utc=False)
+
+    def test_expire_results(self):
+        self.s.put_data(b'k1', b'v1')
+        self.s.put_data(b'k2', b'v2')
+
+        conn = self.s.conn  # Underlying Redis client.
+        self.assertEqual(conn.ttl(self.s.result_key(b'k1')), 3600)
+        self.assertEqual(conn.ttl(self.s.result_key(b'k2')), 3600)
+
+        # Non-existant keys return -2. See redis docs for TTL command.
+        self.assertEqual(conn.ttl(self.s.result_key(b'k3')), -2)
+
+        # Non-expired keys return -1.
+        conn.set(self.s.result_key(b'k3'), b'v3')
+        self.assertEqual(conn.ttl(self.s.result_key(b'k3')), -1)
+
+        # Verify behavior of put_if_empty and has_data_for_key.
+        self.assertTrue(self.s.has_data_for_key(b'k2'))
+        self.assertFalse(self.s.put_if_empty(b'k2', b'v2-x'))
+        self.assertFalse(self.s.has_data_for_key(b'k4'))
+        self.assertTrue(self.s.put_if_empty(b'k4', b'v4'))
+
+        # Verify behavior of delete.
+        self.assertTrue(self.s.delete_data(b'k2'))
+        self.assertFalse(self.s.delete_data(b'k2'))
+
+        # Check the result items.
+        self.assertEqual(self.s.result_items(), {
+            b'k1': b'v1',
+            b'k3': b'v3',
+            b'k4': b'v4'})
+        self.assertEqual(self.s.result_store_size(), 3)
+
+    def test_integration_2(self):
+        @self.huey.task()
+        def task_a(n):
+            return n + 1
+
+        r1, r2, r3 = [task_a(i) for i in (1, 2, 3)]
+        r2.revoke()
+        self.assertTrue(r2.is_revoked())
+        self.assertEqual(self.huey.result_count(), 1)  # Revoke key.
+
+        self.assertEqual(self.execute_next(), 2)
+        self.assertEqual(self.huey.result_count(), 2)  # Revoke key and r1.
+
+        self.assertTrue(self.execute_next() is None)
+        self.assertEqual(self.huey.result_count(), 1)  # Just r1 now.
+        self.assertFalse(r2.is_revoked())
+
+        self.assertEqual(self.execute_next(), 4)
+        self.assertEqual(self.huey.result_count(), 2)  # r1 and r3.
+
+        for _ in range(3):
+            self.assertEqual(r1(), 2)
+            self.assertEqual(r3(), 4)
+            r1.reset()
+            r3.reset()
+        self.assertEqual(self.huey.result_count(), 2)  # r1 and r3 still there.
 
 
 def get_redis_version():
