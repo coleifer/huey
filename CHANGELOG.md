@@ -6,6 +6,11 @@ Changelog
 * Added new contrib module `sql_huey`, which uses `peewee <https://github.com/coleifer/peewee>`_
   to provide storage layer using any of the supported databases (sqlite, mysql
   or postgresql).
+* Added `RedisExpireHuey`, which modifies the usual Redis result storage logic
+  to use an expire time for task result values. A consequence of this is that
+  this storage implementation must keep all result keys at the top-level Redis
+  keyspace. There are some small changes to the storage APIs as well, but will
+  only possibly affect maintainers of alternative storage layers.
 
 [View commits](https://github.com/coleifer/huey/compare/2.0.1...HEAD)
 
