@@ -24,6 +24,7 @@ from huey.serializer import Serializer
 from huey.storage import BlackHoleStorage
 from huey.storage import MemoryStorage
 from huey.storage import PriorityRedisStorage
+from huey.storage import RedisExpireStorage
 from huey.storage import RedisStorage
 from huey.storage import SqliteStorage
 from huey.utils import Error
