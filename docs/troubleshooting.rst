@@ -65,4 +65,4 @@ Testing projects using Huey
         huey = RedisHuey(immediate=test_mode)
 
         # Alternatively, you can set the `immediate` attribute:
-        huey.immediate = True if test_model else False
+        huey.immediate = True if test_mode else False
