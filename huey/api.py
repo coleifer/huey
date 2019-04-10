@@ -1,5 +1,4 @@
 import datetime
-import functools
 import inspect
 import logging
 import re
@@ -9,6 +8,8 @@ import uuid
 import warnings
 
 from collections import OrderedDict
+from functools import partial
+from functools import wraps
 
 from huey import signals as S
 from huey.constants import EmptyData
@@ -76,7 +77,7 @@ class Huey(object):
     def __init__(self, name='huey', results=True, store_none=False, utc=True,
                  immediate=False, serializer=None, compression=False,
                  immediate_use_memory=True, always_eager=None,
-                 **storage_kwargs):
+                 storage_class=None, **storage_kwargs):
         if always_eager is not None:
             warnings.warn('"always_eager" parameter is deprecated, use '
                           '"immediate" instead', DeprecationWarning)
@@ -101,6 +102,7 @@ class Huey(object):
 
         # Initialize storage.
         self.storage_kwargs = storage_kwargs
+        self.storage_class = storage_class
         self.storage = self.create_storage()
 
         self._locks = set()
@@ -124,8 +126,13 @@ class Huey(object):
         return MemoryStorage(self.name)
 
     def get_storage(self, **kwargs):
-        raise NotImplementedError('Storage API not implemented in the base '
-                                  'Huey class. Use `RedisHuey` instead.')
+        if self.storage_class is None:
+            warnings.warn('storage_class not specified when initializing '
+                          'huey, will default to RedisStorage.')
+            Storage = RedisStorage
+        else:
+            Storage = self.storage_class
+        return Storage(self.name, **kwargs)
 
     @property
     def immediate(self):
@@ -179,7 +186,7 @@ class Huey(object):
 
     def context_task(self, obj, as_argument=False, **kwargs):
         def context_decorator(fn):
-            @functools.wraps(fn)
+            @wraps(fn)
             def inner(*a, **k):
                 with obj as ctx:
                     if as_argument:
@@ -758,7 +765,7 @@ class TaskLock(object):
         self._huey._locks.add(self._key)
 
     def __call__(self, fn):
-        @functools.wraps(fn)
+        @wraps(fn)
         def inner(*args, **kwargs):
             with self:
                 return fn(*args, **kwargs)
@@ -990,53 +997,11 @@ def _unsupported(name, library):
     return UnsupportedHuey
 
 
-class BlackHoleHuey(Huey):
-    def get_storage(self, **kwargs):
-        return BlackHoleStorage(name=self.name, **kwargs)
+# Convenience wrappers for the various storage implementations.
+BlackHoleHuey = partial(Huey, storage_class=BlackHoleStorage)
+MemoryHuey = partial(Huey, storage_class=MemoryStorage)
+SqliteHuey = partial(Huey, storage_class=SqliteStorage)
 
-
-class MemoryHuey(Huey):
-    def get_storage(self, **kwargs):
-        return MemoryStorage(name=self.name, **kwargs)
-
-
-class RedisHuey(Huey):
-    def get_storage(self, blocking=True, read_timeout=1, connection_pool=None,
-                    url=None, **connection_params):
-        return RedisStorage(
-            name=self.name,
-            blocking=blocking,
-            read_timeout=read_timeout,
-            connection_pool=connection_pool,
-            url=url,
-            **connection_params)
-
-
-class RedisExpireHuey(RedisHuey):
-    def get_storage(self, expire_time=86400, blocking=True, read_timeout=1,
-                    connection_pool=None, url=None, **connection_params):
-        return RedisExpireStorage(
-            name=self.name,
-            expire_time=expire_time,
-            blocking=blocking,
-            read_timeout=read_timeout,
-            connection_pool=connection_pool,
-            url=url,
-            **connection_params)
-
-
-class PriorityRedisHuey(Huey):
-    def get_storage(self, blocking=True, read_timeout=1, connection_pool=None,
-                    url=None, **connection_params):
-        return PriorityRedisStorage(
-            name=self.name,
-            blocking=blocking,
-            read_timeout=read_timeout,
-            connection_pool=connection_pool,
-            url=url,
-            **connection_params)
-
-
-class SqliteHuey(Huey):
-    def get_storage(self, filename='huey.db', **kwargs):
-        return SqliteStorage(filename=filename, name=self.name, **kwargs)
+RedisHuey = partial(Huey, storage_class=RedisStorage)
+RedisExpireHuey = partial(Huey, storage_class=RedisExpireStorage)
+PriorityRedisHuey = partial(Huey, storage_class=PriorityRedisStorage)

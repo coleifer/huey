@@ -39,7 +39,7 @@ class TestSqlStorage(StorageTests, BaseTestCase):
             os.unlink(cls.db_file)
 
     def get_huey(self):
-        return SqlHuey(SQLHUEY_URL, utc=False)
+        return SqlHuey(database=SQLHUEY_URL, utc=False)
 
     def test_sql_huey_basic(self):
         @self.huey.task()

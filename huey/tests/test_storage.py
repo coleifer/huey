@@ -8,6 +8,7 @@ from redis import Redis
 
 from huey.api import MemoryHuey
 from huey.api import PriorityRedisHuey
+from huey.api import RedisExpireHuey
 from huey.api import RedisHuey
 from huey.api import SqliteHuey
 from huey.constants import EmptyData
@@ -174,9 +175,6 @@ class TestRedisExpireStorage(StorageTests, BaseTestCase):
     destructive_reads = False
 
     def get_huey(self):
-        class RedisExpireHuey(RedisHuey):
-            def get_storage(self, *args, **kwargs):
-                return RedisExpireStorage(name=self.name, *args, **kwargs)
         return RedisExpireHuey(expire_time=3600, utc=False)
 
     def test_expire_results(self):

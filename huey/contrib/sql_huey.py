@@ -1,3 +1,4 @@
+from functools import partial
 import operator
 
 from peewee import *
@@ -5,6 +6,7 @@ from playhouse.db_url import connect as db_url_connect
 
 from huey.api import Huey
 from huey.constants import EmptyData
+from huey.exceptions import ConfigurationError
 from huey.storage import BaseStorage
 
 
@@ -14,8 +16,13 @@ class BytesBlobField(BlobField):
 
 
 class SqlStorage(BaseStorage):
-    def __init__(self, database, name='huey', **kwargs):
+    def __init__(self, name='huey', database=None, **kwargs):
         super(SqlStorage, self).__init__(name)
+
+        if database is None:
+            raise ConfigurationError('Use of SqlStorage requires a '
+                                     'database= argument, which should be a '
+                                     'peewee database or a connection string.')
 
         if isinstance(database, Database):
             self.database = database
@@ -203,13 +210,4 @@ class SqlStorage(BaseStorage):
         self.KV.delete().where(self.KV.queue == self.name).execute()
 
 
-class SqlHuey(Huey):
-    def __init__(self, database, *args, **kwargs):
-        # Parameter juju to make database the first required parameter of the
-        # SqlHuey object, but then to pass it back to the storage like a
-        # regular keyword argument.
-        kwargs['database'] = database
-        super(SqlHuey, self).__init__(*args, **kwargs)
-
-    def get_storage(self, database=None, **kwargs):
-        return SqlStorage(database, name=self.name, **kwargs)
+SqlHuey = partial(Huey, storage_class=SqlStorage)

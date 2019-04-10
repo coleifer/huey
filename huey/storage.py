@@ -614,7 +614,7 @@ class SqliteStorage(BaseStorage):
                   '(priority desc, id asc)')
     ddl = [table_kv, table_sched, index_sched, table_task, index_task]
 
-    def __init__(self, filename='huey.db', name='huey', cache_mb=8,
+    def __init__(self, name='huey', filename='huey.db', cache_mb=8,
                  fsync=False, **kwargs):
         super(SqliteStorage, self).__init__(name)
         self.filename = filename
