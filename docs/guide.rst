@@ -786,6 +786,59 @@ cache arbitrary key/value data:
 
 See :py:meth:`Huey.get` and :py:meth:`Huey.put` for additional details.
 
+Dynamic periodic tasks
+^^^^^^^^^^^^^^^^^^^^^^
+
+To create periodic tasks dynamically we need to register them so that they are
+added to the in-memory schedule managed by the consumer's scheduler thread.
+Since this registry is in-memory, any dynamically defined tasks must be
+registered within the process that will ultimately schedule them: the consumer.
+
+.. warning::
+    The following example will not work with the **process** worker-type
+    option, since there is currently no way to interact with the scheduler
+    process. When threads or greenlets are used, the worker threads share the
+    same in-memory schedule as the scheduler thread, allowing modification to
+    take place.
+
+Example:
+
+.. code-block:: python
+
+    def dynamic_ptask(message):
+        print('dynamically-created periodic task: "%s"' % message)
+
+    @huey.task()
+    def schedule_message(message, cron_minutes, cron_hours='*'):
+        # Create a new function that represents the application
+        # of the "dynamic_ptask" with the provided message.
+        def wrapper():
+            dynamic_ptask(message)
+
+        # The schedule that was specified for this task.
+        schedule = crontab(cron_minutes, cron_hour)
+
+        # Need to provide a unique name for the task. There are any number of
+        # ways you can do this -- based on the arguments, etc. -- but for our
+        # example we'll just use the time at which it was declared.
+        task_name = 'dynamic_ptask_%s' % int(time.time())
+
+        huey.periodic_task(schedule, name=task_name)(wrapper)
+
+Assuming the consumer is running, we can now set up as many instances as we
+like of the "dynamic ptask" function:
+
+.. code-block:: pycon
+
+    >>> from demo import schedule_message
+    >>> schedule_message('I run every 5 minutes', '*/5')
+    <Result: task ...>
+    >>> schedule_message('I run between 0-15 and 30-45', '0-15,30-45')
+    <Result: task ...>
+
+When the consumer executes the "schedule_message" tasks, our new periodic task
+will be registered and added to the schedule.
+
 Reading more
 ------------
 

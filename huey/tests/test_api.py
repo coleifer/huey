@@ -773,6 +773,34 @@ class TestDecorators(BaseTestCase):
         self.assertTrue(self.execute_next() is None)
         self.assertEqual(db.get_state(), ['open', 'close'])
 
+    def test_dynamic_periodic_tasks(self):
+        def ptask(): pass
+
+        @self.huey.task()
+        def make_ptask(every_n):
+            name = 'ptask_%s' % every_n
+            sched = crontab('*/%s' % every_n)
+            self.huey.periodic_task(sched, name=name)(ptask)
+
+        # Create two tasks dynamically.
+        make_ptask(5)
+        make_ptask(10)
+
+        def assertPeriodic(dt, names):
+            ptasks = self.huey.read_periodic(dt)
+            self.assertEqual(len(ptasks), len(names))
+            self.assertEqual(sorted([t.name for t in ptasks]), names)
+
+        dt = datetime.datetime(2019, 1, 1, 0, 0, 0)
+        assertPeriodic(dt, [])
+
+        self.execute_next()
+        self.execute_next()
+
+        assertPeriodic(dt, ['ptask_10', 'ptask_5'])
+        assertPeriodic(datetime.datetime(2019, 1, 1, 0, 5), ['ptask_5'])
+        assertPeriodic(datetime.datetime(2019, 1, 1, 0, 6), [])
+
 
 class TestTaskHooks(BaseTestCase):
     def test_task_hooks(self):
