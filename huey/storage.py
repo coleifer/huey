@@ -541,7 +541,7 @@ class RedisExpireStorage(RedisStorage):
             self.conn.delete(*keys)
 
 
-class PriorityRedisStorage(RedisStorage):
+class _PriorityRedisImpl(object):
     priority = True
 
     def enqueue(self, data, priority=None):
@@ -579,6 +579,12 @@ class PriorityRedisStorage(RedisStorage):
     def enqueued_items(self, limit=None):
         items = self.conn.zrange(self.queue_key, 0, limit or -1)
         return [item[8:] for item in items]  # Unprefix the data.
+
+
+class PriorityRedisStorage(_PriorityRedisImpl, RedisStorage): pass
+
+
+class PriorityRedisExpireStorage(_PriorityRedisImpl, RedisExpireStorage): pass
 
 
 class _ConnectionState(object):

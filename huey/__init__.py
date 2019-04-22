@@ -4,6 +4,7 @@ __version__ = '2.0.1'
 
 from huey.api import BlackHoleHuey
 from huey.api import MemoryHuey
+from huey.api import PriorityRedisExpireHuey
 from huey.api import PriorityRedisHuey
 from huey.api import RedisExpireHuey
 from huey.api import RedisHuey

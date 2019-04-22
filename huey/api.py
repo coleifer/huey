@@ -24,6 +24,7 @@ from huey.registry import Registry
 from huey.serializer import Serializer
 from huey.storage import BlackHoleStorage
 from huey.storage import MemoryStorage
+from huey.storage import PriorityRedisExpireStorage
 from huey.storage import PriorityRedisStorage
 from huey.storage import RedisExpireStorage
 from huey.storage import RedisStorage
@@ -1005,3 +1006,5 @@ SqliteHuey = partial(Huey, storage_class=SqliteStorage)
 RedisHuey = partial(Huey, storage_class=RedisStorage)
 RedisExpireHuey = partial(Huey, storage_class=RedisExpireStorage)
 PriorityRedisHuey = partial(Huey, storage_class=PriorityRedisStorage)
+PriorityRedisExpireHuey = partial(Huey,
+                                  storage_class=PriorityRedisExpireStorage)
