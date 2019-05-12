@@ -39,7 +39,7 @@ def _constant_time_compare(val1, val2):
 
 class SignedSerializer(Serializer):
     def __init__(self, secret="", salt="huey", **kwargs):
-        super().__init__(**kwargs)
+        super(SignedSerializer, self).__init__(**kwargs)
 
         if not secret:
             raise ConfigurationError("A secret is required")
@@ -54,7 +54,7 @@ class SignedSerializer(Serializer):
         # any of [a-zA-Z0-9]
         self.separator = b":"
 
-    def _signature(self, message: bytes):
+    def _signature(self, message):
         # same key derivation as django.utils.crypto.salted_hmac
         key = hashlib.sha1(self.salt + self.secret).digest()
         signature = hmac.new(key, msg=message, digestmod=hashlib.sha1)
@@ -62,11 +62,11 @@ class SignedSerializer(Serializer):
         # we need to make sure that our digest can't contain the separator
         return signature.hexdigest().encode("utf-8")
 
-    def _sign(self, message: bytes) -> bytes:
+    def _sign(self, message):
         signature = self._signature(message)
         return message + self.separator + signature
 
-    def _unsign(self, signed_value: bytes) -> bytes:
+    def _unsign(self, signed_value):
         if self.separator not in signed_value:
             raise ValueError('Separator "%s" not found in value' % self.separator)
 
@@ -78,9 +78,9 @@ class SignedSerializer(Serializer):
         raise ValueError('Signature "%s" does not match' % sig)
 
     def _serialize(self, data):
-        serialized = super()._serialize(data)
+        serialized = super(SignedSerializer, self)._serialize(data)
         return self._sign(serialized)
 
     def _deserialize(self, data):
         unsigned = self._unsign(data)
-        return super()._deserialize(unsigned)
+        return super(SignedSerializer, self)._deserialize(unsigned)
