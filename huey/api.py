@@ -52,7 +52,8 @@ class Huey(object):
         synchronously in the application.
     :param Serializer serializer: serializer implementation for tasks and
         result data. The default implementation uses pickle.
-    :param bool compression: compress tasks and result data.
+    :param bool compression: compress tasks and result data (gzip by default).
+    :param bool use_zlib: use zlib for compression instead of gzip.
     :param bool immediate_use_memory: automatically switch to a local in-memory
         storage backend when immediate-mode is enabled.
     :param storage_kwargs: arbitrary keyword arguments that will be passed to

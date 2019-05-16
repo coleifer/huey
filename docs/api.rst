@@ -114,7 +114,7 @@ Huey types
 Huey object
 -----------
 
-.. py:class:: Huey(name='huey', results=True, store_none=False, utc=True, immediate=False, serializer=None, compression=False, immediate_use_memory=True, storage_kwargs)
+.. py:class:: Huey(name='huey', results=True, store_none=False, utc=True, immediate=False, serializer=None, compression=False, use_zlib=False, immediate_use_memory=True, storage_kwargs)
 
     :param str name: the name of the task queue, e.g. your application's name.
     :param bool results: whether to store task results.
@@ -126,6 +126,7 @@ Huey object
     :param Serializer serializer: serializer implementation for tasks and
         result data. The default implementation uses ``pickle``.
     :param bool compression: compress tasks and result data.
+    :param bool use_zlib: use zlib for compression instead of gzip.
     :param bool immediate_use_memory: automatically switch to a local in-memory
         storage backend whenever immediate-mode is enabled.
     :param storage_kwargs: arbitrary keyword arguments that will be passed to
@@ -1232,10 +1233,11 @@ Result
 Serializer
 ----------
 
-.. py:class:: Serializer(compression=False, compression_level=6)
+.. py:class:: Serializer(compression=False, compression_level=6, use_zlib=False)
 
     :param bool compression: use gzip compression
     :param int compression_level: 0 for least, 9 for most.
+    :param bool use_zlib: use zlib for compression instead of gzip.
 
     The Serializer class implements a simple interface that can be extended to
     provide your own serialization format. The default implementation uses
