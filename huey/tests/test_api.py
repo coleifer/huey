@@ -549,7 +549,7 @@ class TestQueue(BaseTestCase):
         self.assertEqual(task.retries, 1)
         self.assertFalse(self.huey.ready_to_run(task))
 
-        dt = datetime.datetime.utcnow() + datetime.timedelta(seconds=61)
+        dt = datetime.datetime.now() + datetime.timedelta(seconds=61)
         self.assertTrue(self.huey.ready_to_run(task, dt))
 
     def test_retry_delay_periodic(self):
@@ -568,7 +568,7 @@ class TestQueue(BaseTestCase):
         self.assertEqual(task.retries, 1)
         self.assertFalse(self.huey.ready_to_run(task))
 
-        dt = datetime.datetime.utcnow() + datetime.timedelta(seconds=61)
+        dt = datetime.datetime.now() + datetime.timedelta(seconds=61)
         self.assertTrue(self.huey.ready_to_run(task, dt))
 
     def test_retrytask_explicit(self):
