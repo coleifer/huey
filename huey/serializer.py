@@ -7,8 +7,28 @@ try:
 except ImportError:
     zlib = None
 import pickle
+import sys
 
 from huey.exceptions import ConfigurationError
+
+
+if gzip is not None:
+    if sys.version_info[0] > 2:
+        gzip_compress = gzip.compress
+        gzip_decompress = gzip.decompress
+    else:
+        from io import BytesIO
+
+        def gzip_compress(data, comp_level):
+            buf = BytesIO()
+            with gzip.open(buf, 'wb', comp_level) as fh:
+                fh.write(data)
+            return buf.getvalue()
+
+        def gzip_decompress(data):
+            buf = BytesIO(data)
+            with gzip.open(buf, 'rb') as fh:
+                return fh.read()
 
 
 class Serializer(object):
@@ -33,12 +53,16 @@ class Serializer(object):
     def serialize(self, data):
         data = self._serialize(data)
         if self.comp:
-            compress = zlib.compress if self.use_zlib else gzip.compress
-            data = compress(data, self.comp_level)
+            if self.use_zlib:
+                data = zlib.compress(data, self.comp_level)
+            else:
+                data = gzip_compress(data, self.comp_level)
         return data
 
     def deserialize(self, data):
         if self.comp:
-            decompress = zlib.decompress if self.use_zlib else gzip.decompress
-            data = decompress(data)
+            if self.use_zlib:
+                data = zlib.decompress(data)
+            else:
+                data = gzip_decompress(data)
         return self._deserialize(data)
