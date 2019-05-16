@@ -21,14 +21,19 @@ if gzip is not None:
 
         def gzip_compress(data, comp_level):
             buf = BytesIO()
-            with gzip.open(buf, 'wb', comp_level) as fh:
-                fh.write(data)
+            fh = gzip.GzipFile(fileobj=buf, mode='wb',
+                               compresslevel=comp_level)
+            fh.write(data)
+            fh.close()
             return buf.getvalue()
 
         def gzip_decompress(data):
             buf = BytesIO(data)
-            with gzip.open(buf, 'rb') as fh:
+            fh = gzip.GzipFile(fileobj=buf, mode='rb')
+            try:
                 return fh.read()
+            finally:
+                fh.close()
 
 
 class Serializer(object):
