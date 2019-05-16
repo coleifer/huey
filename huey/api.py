@@ -78,7 +78,7 @@ class Huey(object):
                           'global_registry')
     def __init__(self, name='huey', results=True, store_none=False, utc=True,
                  immediate=False, serializer=None, compression=False,
-                 immediate_use_memory=True, always_eager=None,
+                 use_zlib=False, immediate_use_memory=True, always_eager=None,
                  storage_class=None, **storage_kwargs):
         if always_eager is not None:
             warnings.warn('"always_eager" parameter is deprecated, use '
@@ -98,9 +98,9 @@ class Huey(object):
         self.utc = utc
         self._immediate = immediate
         self.immediate_use_memory = immediate_use_memory
-        self.serializer = serializer or Serializer()
-        if compression:
-            self.serializer.compression = True
+        if serializer is None:
+            serializer = Serializer(compression, use_zlib=use_zlib)
+        self.serializer = serializer
 
         # Initialize storage.
         self.storage_kwargs = storage_kwargs
