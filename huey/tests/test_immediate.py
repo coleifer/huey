@@ -129,7 +129,7 @@ class NoUseException(Exception): pass
 class NoUseStorage(BlackHoleStorage):
     def enqueue(self, data, priority=None): raise NoUseException()
     def dequeue(self): raise NoUseException()
-    def add_to_schedule(self, data, ts): raise NoUseException()
+    def add_to_schedule(self, data, ts, utc): raise NoUseException()
     def read_schedule(self, ts): raise NoUseException()
     def put_data(self, key, value): raise NoUseException()
     def peek_data(self, key): raise NoUseException()

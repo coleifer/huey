@@ -93,13 +93,14 @@ class BaseStorage(object):
         """
         raise NotImplementedError
 
-    def add_to_schedule(self, data, ts):
+    def add_to_schedule(self, data, ts, utc):
         """
         Add the given task data to the schedule, to be executed at the given
         timestamp.
 
         :param bytes data: Task data.
         :param datetime ts: Timestamp at which task should be executed.
+        :param bool utc: Whether huey is in UTC-mode or local mode.
         :return: No return value.
         """
         raise NotImplementedError
@@ -239,7 +240,7 @@ class BlackHoleStorage(BaseStorage):
     def queue_size(self): return 0
     def enqueued_items(self, limit=None): return []
     def flush_queue(self): pass
-    def add_to_schedule(self, data, ts): pass
+    def add_to_schedule(self, data, ts, utc): pass
     def read_schedule(self, ts): return []
     def schedule_size(self): return 0
     def scheduled_items(self, limit=None): return []
@@ -288,7 +289,7 @@ class MemoryStorage(BaseStorage):
     def flush_queue(self):
         self._queue = []
 
-    def add_to_schedule(self, data, ts):
+    def add_to_schedule(self, data, ts, utc):
         heapq.heappush(self._schedule, (ts, data))
 
     def read_schedule(self, ts):
@@ -396,7 +397,7 @@ class RedisStorage(BaseStorage):
         return re.sub('[^a-z0-9]', '', name)
 
     def convert_ts(self, ts):
-        return time.mktime(ts.timetuple())
+        return time.mktime(ts.timetuple()) + (ts.microsecond * 1e-6)
 
     def enqueue(self, data, priority=None):
         if priority:
@@ -427,7 +428,7 @@ class RedisStorage(BaseStorage):
     def flush_queue(self):
         self.conn.delete(self.queue_key)
 
-    def add_to_schedule(self, data, ts):
+    def add_to_schedule(self, data, ts, utc):
         self.conn.zadd(self.schedule_key, {data: self.convert_ts(ts)})
 
     def read_schedule(self, ts):
@@ -709,7 +710,7 @@ class SqliteStorage(BaseStorage):
     def flush_queue(self):
         self.sql('delete from task where queue=?', (self.name,), commit=True)
 
-    def add_to_schedule(self, data, ts):
+    def add_to_schedule(self, data, ts, utc):
         params = (self.name, to_blob(data), to_timestamp(ts))
         self.sql('insert into schedule (queue, data, timestamp) '
                  'values (?, ?, ?)', params, commit=True)
