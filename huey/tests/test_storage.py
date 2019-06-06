@@ -1,11 +1,13 @@
 import datetime
 import itertools
 import os
+import shutil
 import unittest
 
 from redis.connection import ConnectionPool
 from redis import Redis
 
+from huey.api import Huey
 from huey.api import MemoryHuey
 from huey.api import PriorityRedisHuey
 from huey.api import RedisExpireHuey
@@ -14,6 +16,8 @@ from huey.api import SqliteHuey
 from huey.constants import EmptyData
 from huey.consumer import Consumer
 from huey.exceptions import ConfigurationError
+from huey.storage import FileStorageMethods
+from huey.storage import MemoryStorage
 from huey.storage import RedisExpireStorage
 from huey.tests.base import BaseTestCase
 
@@ -259,3 +263,19 @@ class TestSqliteStorage(StorageTests, BaseTestCase):
 
     def get_huey(self):
         return SqliteHuey(filename='huey_storage.db')
+
+
+class MemFileStorage(FileStorageMethods, MemoryStorage): pass
+
+
+class TestFileStorageMethods(StorageTests, BaseTestCase):
+    path = '/tmp/test-huey-storage'
+
+    def tearDown(self):
+        super(TestFileStorageMethods, self).tearDown()
+        if os.path.exists(self.path):
+            shutil.rmtree(self.path)
+
+    def get_huey(self):
+        return Huey('test-file-storage', storage_class=MemFileStorage,
+                    path=self.path, levels=1)

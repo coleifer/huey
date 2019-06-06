@@ -1,8 +1,12 @@
 from collections import deque
 import contextlib
+import hashlib
 import heapq
+import itertools
 import json
+import os
 import re
+import shutil
 try:
     import sqlite3
 except ImportError:
@@ -24,6 +28,7 @@ except ImportError:
 
 from huey.constants import EmptyData
 from huey.exceptions import ConfigurationError
+from huey.utils import text_type
 from huey.utils import to_timestamp
 
 
@@ -542,7 +547,7 @@ class RedisExpireStorage(RedisStorage):
             self.conn.delete(*keys)
 
 
-class _PriorityRedisImpl(object):
+class RedisPriorityQueue(object):
     priority = True
 
     def enqueue(self, data, priority=None):
@@ -582,10 +587,10 @@ class _PriorityRedisImpl(object):
         return [item[8:] for item in items]  # Unprefix the data.
 
 
-class PriorityRedisStorage(_PriorityRedisImpl, RedisStorage): pass
+class PriorityRedisStorage(RedisPriorityQueue, RedisStorage): pass
 
 
-class PriorityRedisExpireStorage(_PriorityRedisImpl, RedisExpireStorage): pass
+class PriorityRedisExpireStorage(RedisPriorityQueue, RedisExpireStorage): pass
 
 
 class _ConnectionState(object):
@@ -793,3 +798,92 @@ class SqliteStorage(BaseStorage):
 
     def flush_results(self):
         self.sql('delete from kv where queue=?', (self.name,), True)
+
+
+class FileStorageMethods(object):
+    """
+    Mixin class implementing the result-store APIs using the filesystem.
+    """
+    def __init__(self, name, path, levels=2, **storage_kwargs):
+        super(FileStorageMethods, self).__init__(name, **storage_kwargs)
+        self.path = path
+        if os.path.exists(self.path) and not os.path.isdir(self.path):
+            raise ValueError('path "%s" is not a directory' % path)
+        if levels < 0 or levels > 4:
+            raise ValueError('%s levels must be between 0 and 4' % self)
+        self.levels = levels
+
+    def path_for_key(self, key):
+        if isinstance(key, text_type):
+            key = key.encode('utf8')
+        checksum = hashlib.md5(key).hexdigest()
+        prefix = checksum[:self.levels]
+        prefix_filename = itertools.chain(prefix, (checksum,))
+        return os.path.join(self.path, *prefix_filename)
+
+    def put_data(self, key, value, is_result=False):
+        if isinstance(key, text_type):
+            key = key.encode('utf8')
+
+        filename = self.path_for_key(key)
+        dirname = os.path.dirname(filename)
+        if not os.path.exists(dirname):
+            os.makedirs(dirname)
+
+        with open(self.path_for_key(key), 'wb') as fh:
+            key_len = len(key)
+            fh.write(struct.pack('>I', key_len))
+            fh.write(key)
+            fh.write(value)
+
+    def _unpack_result(self, data):
+        key_len, = struct.unpack('>I', data[:4])
+        key = data[4:4 + key_len]
+        if len(key) != key_len:
+            return None, None
+        return key, data[4 + key_len:]
+
+    def peek_data(self, key):
+        filename = self.path_for_key(key)
+        if not os.path.exists(filename):
+            return EmptyData
+
+        with open(filename, 'rb') as fh:
+            _, value = self._unpack_result(fh.read())
+
+        # If file is corrupt or has been tampered with, return EmptyData.
+        return value if value is not None else EmptyData
+
+    def pop_data(self, key):
+        filename = self.path_for_key(key)
+        if not os.path.exists(filename):
+            return EmptyData
+
+        with open(filename, 'rb') as fh:
+            _, value = self._unpack_result(fh.read())
+
+        os.unlink(filename)
+
+        # If file is corrupt or has been tampered with, return EmptyData.
+        return value if value is not None else EmptyData
+
+    def has_data_for_key(self, key):
+        return os.path.exists(self.path_for_key(key))
+
+    def result_store_size(self):
+        return sum(len(filenames) for _, _, filenames in os.walk(self.path))
+
+    def result_items(self):
+        accum = {}
+        for root, _, filenames in os.walk(self.path):
+            for filename in filenames:
+                path = os.path.join(root, filename)
+                with open(path, 'rb') as fh:
+                    key, value = self._unpack_result(fh.read())
+                accum[key] = value
+        return accum
+
+    def flush_results(self):
+        if os.path.exists(self.path):
+            shutil.rmtree(self.path)
+            os.makedirs(self.path)
