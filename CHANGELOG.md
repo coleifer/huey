@@ -3,6 +3,10 @@ Changelog
 
 ## master
 
+[View commits](https://github.com/coleifer/huey/compare/2.1.0...HEAD)
+
+## 2.1.0
+
 * Added new contrib module `sql_huey`, which uses `peewee <https://github.com/coleifer/peewee>`_
   to provide storage layer using any of the supported databases (sqlite, mysql
   or postgresql).
@@ -11,8 +15,17 @@ Changelog
   this storage implementation must keep all result keys at the top-level Redis
   keyspace. There are some small changes to the storage APIs as well, but will
   only possibly affect maintainers of alternative storage layers.
+* Also added a `PriorityRedisExpireHuey` which combines the priority-queue
+  support from `PriorityRedisHuey` with the result-store expiration mechanism
+  of `RedisExpireHuey`.
+* Fix gzip compatibility issue when using Python 2.x.
+* Add option to `Huey` to use `zlib` as the compression method instead of gzip.
+* Added `FileStorageMethods` storage mixin, which uses the filesystem for task
+  result-store APIs (put, peek, pop).
+* The storage-specific `Huey` implementations (e.g. `RedisHuey`) are no longer
+  subclasses, but instead are partial applications of the `Huey` constructor.
 
-[View commits](https://github.com/coleifer/huey/compare/2.0.1...HEAD)
+[View commits](https://github.com/coleifer/huey/compare/2.0.1...2.1.0)
 
 ### 2.0.1
 
