@@ -1,4 +1,5 @@
 import datetime
+import hashlib
 import itertools
 import os
 import shutil
@@ -278,4 +279,31 @@ class TestFileStorageMethods(StorageTests, BaseTestCase):
 
     def get_huey(self):
         return Huey('test-file-storage', storage_class=MemFileStorage,
-                    path=self.path, levels=1)
+                    path=self.path, levels=2)
+
+    def test_filesystem_result_store(self):
+        s = self.huey.storage
+        self.assertEqual(s.result_items(), {})
+
+        keys = (b'k1', b'k2', b'kx')
+        for key in keys:
+            checksum = hashlib.md5(key).hexdigest()
+            # Default is to use two levels.
+            key_path = os.path.join(self.path, checksum[0], checksum[1])
+            key_filename = os.path.join(key_path, checksum)
+
+            self.assertFalse(os.path.exists(key_filename))
+            self.assertFalse(os.path.exists(key_path))
+
+            s.put_data(key, b'test-%s' % key)
+            self.assertTrue(os.path.exists(key_path))
+            self.assertTrue(os.path.exists(key_filename))
+
+            self.assertEqual(s.pop_data(key), b'test-%s' % key)
+            self.assertTrue(os.path.exists(key_path))
+            self.assertFalse(os.path.exists(key_filename))
+
+        # Flushing the results blows away everything.
+        s.flush_results()
+        self.assertTrue(os.path.exists(self.path))
+        self.assertEqual(os.listdir(self.path), [])

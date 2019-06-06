@@ -1309,6 +1309,19 @@ Huey comes with several built-in storage implementations:
     for the complete list of arguments supported by the Redis client.
 
 
+.. py:class:: RedisExpireStorage(name='huey', expire_time=86400, blocking=True, read_timeout=1, connection_pool=None, url=None, client_name=None, **connection_params)
+
+    :param int expire_time: TTL for results of individual tasks.
+
+    Subclass of :py:class:`RedisStorage` that implements the result store APIs
+    using normal Redis keys with a TTL, so that unread results will
+    automatically be cleaned-up. :py:class:`RedisStorage` uses a *HASH* for the
+    result store, which has the benefit of keeping the Redis keyspace orderly,
+    but which comes with the downside that unread task results can build up
+    over time. This storage implementation trades keyspace sprawl for automatic
+    clean-up.
+
+
 .. py:class:: PriorityRedisStorage(name='huey', blocking=True, read_timeout=1, connection_pool=None, url=None, client_name=None, **connection_params)
 
     :param bool blocking: Use blocking-zpopmin when reading from the queue (as
@@ -1319,11 +1332,24 @@ Huey comes with several built-in storage implementations:
     :param url: url for Redis connection.
     :param client_name: name used to identify Redis clients used by Huey.
 
+    Redis storage that uses a different data-structure for the task queue in
+    order to support task priorities.
+
     Additional keyword arguments will be passed directly to the Redis client
     constructor. See the `redis-py documentation <https://redis-py.readthedocs.io/en/latest/>`_
     for the complete list of arguments supported by the Redis client.
 
     .. warning:: This storage engine requires Redis 5.0 or newer.
+
+
+.. py:class:: PriorityRedisExpireStorage(name='huey', expire_time=86400, ...)
+
+    :param int expire_time: TTL for results of individual tasks.
+
+    Combination of :py:class:`PriorityRedisStorage`, which supports task
+    priorities, and :py:class:`RedisExpireStorage`, which stores task results
+    as top-level Redis keys in order set a TTL so that unread results are
+    automatically cleaned-up.
 
 
 .. py:class:: SqliteStorage(filename='huey.db', name='huey', cache_mb=8, fsync=False, **kwargs)
@@ -1337,10 +1363,54 @@ Huey comes with several built-in storage implementations:
         connection constructor.
 
 
+.. py:class:: FileStorageMethods(name, path, levels=2, **storage_kwargs)
+
+    :param str name: (unused by the file storage API)
+    :param str path: directory path used to store task results. Will be created
+        if it does not exist.
+    :param int levels: number of levels in cache-file directory structure to
+        ensure a given directory does not contain an unmanageable number of
+        files.
+    :param storage_kwargs: Additional keyword arguments for the parent storage.
+
+    Unlike the other storage implementations described, the
+    :py:class:`FileStorageMethods` class is intended to be used as a mixin
+    alongside another storage engine. This class implements the result store
+    APIs (put, peek, pop), which are used for task result storage among other
+    things.
+
+    Example of using Redis for the queue and the file-system for the result
+    store:
+
+    .. code-block:: python
+
+        from huey import Huey
+        from huey.storage import FileStorageMethods, RedisStorage
+
+
+        # Use the file-system for result storage, Redis for everything else.
+        class RedisFileStorage(FileStorageMethods, RedisStorage):
+            pass
+
+        huey = Huey(
+            'my-app',
+            storage_class=RedisFileStorage,
+            path='/var/lib/my-app/huey-results/',  # File storage params.
+            levels=2,
+            url='redis://localhost:6379/15',  # Redis storage params.
+            client_name='my-app-huey')
+
+
 .. py:class:: MemoryStorage()
 
     In-memory storage engine for use when testing or developing. Designed for
     use with :ref:`immediate mode <immediate>`.
+
+
+.. py:class:: BlackHoleStorage()
+
+    Storage class that discards all data written to it, and thus always appears
+    to be empty. Intended for testing only.
 
 
 .. py:class:: BaseStorage(name='huey', **storage_kwargs)
