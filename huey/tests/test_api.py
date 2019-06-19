@@ -13,6 +13,7 @@ from huey.exceptions import ConfigurationError
 from huey.exceptions import RetryTask
 from huey.exceptions import TaskException
 from huey.exceptions import TaskLockedException
+from huey.serializer import SignedSerializer
 from huey.tests.base import BaseTestCase
 
 
@@ -1112,6 +1113,10 @@ class TestHueyAPIs(BaseTestCase):
         self.assertEqual(ta, S(ta))
         self.assertEqual(tb, S(tb))
         self.assertEqual(tp, S(tp))
+
+    def test_serialize_deserialize_signed(self):
+        self.huey.serializer = SignedSerializer(secret='test secret')
+        self.test_serialize_deserialize()
 
     def test_put_get(self):
         tests = ('v1', 1, 1., 0, None,

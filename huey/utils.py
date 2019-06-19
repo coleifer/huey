@@ -99,3 +99,12 @@ else:
     text_type = str
     def to_timestamp(dt):
         return dt.timestamp()
+
+
+def encode(s):
+    if isinstance(s, bytes):
+        return s
+    elif isinstance(s, text_type):
+        return s.encode('utf8')
+    elif s is not None:
+        return text_type(s).encode('utf8')

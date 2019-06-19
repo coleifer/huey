@@ -6,10 +6,13 @@ try:
     import zlib
 except ImportError:
     zlib = None
+import hashlib
+import hmac
 import pickle
 import sys
 
 from huey.exceptions import ConfigurationError
+from huey.utils import encode
 
 
 if gzip is not None:
@@ -71,3 +74,43 @@ class Serializer(object):
             else:
                 data = gzip_decompress(data)
         return self._deserialize(data)
+
+
+def constant_time_compare(s1, s2):
+    return hmac.compare_digest(s1, s2)
+
+
+class SignedSerializer(Serializer):
+    def __init__(self, secret=None, salt='huey', **kwargs):
+        super(SignedSerializer, self).__init__(**kwargs)
+        if not secret or not salt:
+            raise ConfigurationError('The secret and salt parameters are '
+                                     'required by %r' % type(self))
+        self.secret = encode(secret)
+        self.salt = encode(salt)
+        self.separator = b':'
+        self._key = hashlib.sha1(self.salt + self.secret).digest()
+
+    def _signature(self, message):
+        signature = hmac.new(self._key, msg=message, digestmod=hashlib.sha1)
+        return signature.hexdigest().encode('utf8')
+
+    def _sign(self, message):
+        return message + self.separator + self._signature(message)
+
+    def _unsign(self, signed):
+        if self.separator not in signed:
+            raise ValueError('Separator "%s" not found' % self.separator)
+
+        msg, sig = signed.rsplit(self.separator, 1)
+        if constant_time_compare(sig, self._signature(msg)):
+            return msg
+
+        raise ValueError('Signature "%s" mismatch!' % sig)
+
+    def _serialize(self, message):
+        data = super(SignedSerializer, self)._serialize(message)
+        return self._sign(data)
+
+    def _deserialize(self, data):
+        return super(SignedSerializer, self)._deserialize(self._unsign(data))
