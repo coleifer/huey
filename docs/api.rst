@@ -100,6 +100,7 @@ Huey types
     :param int cache_mb: megabytes of memory to allow for sqlite page-cache.
     :param bool fsync: use durable writes. Slower but more resilient to
         corruption in the event of sudden power loss. Defaults to false.
+    :param bool wal: use Write-Ahead Log mode. Defaults to false.
 
     SqliteHuey fully supports task priorities.
 
@@ -1352,13 +1353,16 @@ Huey comes with several built-in storage implementations:
     automatically cleaned-up.
 
 
-.. py:class:: SqliteStorage(filename='huey.db', name='huey', cache_mb=8, fsync=False, **kwargs)
+.. py:class:: SqliteStorage(filename='huey.db', name='huey', cache_mb=8, fsync=False, wal=False, **kwargs)
 
     :param str filename: sqlite database filename.
     :param int cache_mb: sqlite page-cache size in megabytes.
     :param bool fsync: if enabled, all writes to the Sqlite database will be
         synchonized. This provides greater safety from database corruption in
         the event of sudden power-loss.
+    :param bool wal: if enabled, Write-Ahead Log journal mode will be used.
+        This provides more concurrency but requires processes using the database
+        to be on the same host computer.
     :param kwargs: Additional keyword arguments passed to the ``sqlite3``
         connection constructor.
 

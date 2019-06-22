@@ -627,11 +627,12 @@ class SqliteStorage(BaseStorage):
     ddl = [table_kv, table_sched, index_sched, table_task, index_task]
 
     def __init__(self, name='huey', filename='huey.db', cache_mb=8,
-                 fsync=False, **kwargs):
+                 fsync=False, wal=False, **kwargs):
         super(SqliteStorage, self).__init__(name)
         self.filename = filename
         self._cache_mb = cache_mb
         self._fsync = fsync
+        self._wal = wal
         self._conn_kwargs = kwargs
         self._state = _ConnectionLocal()
         self.initialize_schema()
@@ -673,6 +674,7 @@ class SqliteStorage(BaseStorage):
                 self._state.reset()
 
     def initialize_schema(self):
+        self.sql('pragma journal_mode=%s' % ("WAL" if self._wal else "delete"))
         with self.db(commit=True, close=True) as conn:
             for sql in self.ddl:
                 conn.execute(sql)
