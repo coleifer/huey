@@ -268,11 +268,11 @@ class TestSqliteStorage(StorageTests, BaseTestCase):
 
 class TestSqliteStorageWithWriteAheadLogEnabled(TestSqliteStorage):
     def get_huey(self):
-        return SqliteHuey(filename='huey_storage_wal.db', wal=True)
+        return SqliteHuey(filename='huey_storage.db', wal=True)
 
     def test_journal_mode(self):
-        journal_mode = self.s.sql("pragma journal_mode", results=True)[0][0]
-        self.assertEqual(journal_mode, "wal")
+        journal_mode = self.s.sql('pragma journal_mode', results=True)[0][0]
+        self.assertEqual(journal_mode, 'wal')
 
 
 class MemFileStorage(FileStorageMethods, MemoryStorage): pass

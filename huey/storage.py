@@ -674,7 +674,7 @@ class SqliteStorage(BaseStorage):
                 self._state.reset()
 
     def initialize_schema(self):
-        self.sql('pragma journal_mode=%s' % ("wal" if self._wal else "delete"))
+        self.sql('pragma journal_mode=%s' % ('wal' if self._wal else 'delete'))
         with self.db(commit=True, close=True) as conn:
             for sql in self.ddl:
                 conn.execute(sql)
