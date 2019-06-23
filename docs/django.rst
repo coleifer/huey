@@ -194,6 +194,17 @@ two tasks:
     def every_five_mins():
         print('Every five minutes this will be printed by the consumer')
 
+The ``huey.contrib.djhuey`` module exposes a number of additional helpers:
+
+* :py:meth:`~Huey.lock_task`
+* :py:meth:`~Huey.enqueue`
+* :py:meth:`~Huey.restore`, :py:meth:`~Huey.restore_all`, :py:meth:`~Huey.restore_by_id`
+* :py:meth:`~Huey.revoke`, :py:meth:`~Huey.revoke_all`, :py:meth:`~Huey.revoke_by_id`
+* :py:meth:`~Huey.is_revoked`
+* :py:meth:`~Huey.on_startup`
+* :py:meth:`~Huey.pre_execute`
+* :py:meth:`~Huey.post_execute`
+* :py:meth:`~Huey.signal` and :py:meth:`~Huey.disconnect_signal`
 
 Tasks that execute queries
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
