@@ -118,6 +118,8 @@ is_revoked = HUEY.is_revoked
 on_startup = HUEY.on_startup
 pre_execute = HUEY.pre_execute
 post_execute = HUEY.post_execute
+signal = HUEY.signal
+disconnect_signal = HUEY.disconnect_signal
 
 
 def close_db(fn):
