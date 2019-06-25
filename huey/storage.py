@@ -610,7 +610,62 @@ to_bytes = lambda b: bytes(b) if not isinstance(b, bytes) else b
 to_blob = lambda b: sqlite3.Binary(b)
 
 
-class SqliteStorage(BaseStorage):
+class BaseSqlStorage(BaseStorage):
+    begin_sql = 'begin'
+    ddl = []
+
+    def __init__(self, *args, **kwargs):
+        super(BaseSqlStorage, self).__init__(*args, **kwargs)
+        self._state = _ConnectionLocal()
+        self.initialize_schema()
+
+    def close(self):
+        if self._state.closed: return False
+        self._state.conn.close()
+        self._state.reset()
+        return True
+
+    @property
+    def conn(self):
+        if self._state.closed:
+            self._state.set_connection(self._create_connection())
+        return self._state.conn
+
+    def _create_connection(self):
+        raise NotImplementedError
+
+    @contextlib.contextmanager
+    def db(self, commit=False, close=False):
+        conn = self.conn
+        cursor = conn.cursor()
+        try:
+            if commit: cursor.execute(self.begin_sql)
+            yield cursor
+        except Exception:
+            if commit: conn.rollback()
+            raise
+        else:
+            if commit: conn.commit()
+        finally:
+            cursor.close()
+            if close:
+                conn.close()
+                self._state.reset()
+
+    def initialize_schema(self):
+        with self.db(commit=True, close=True) as curs:
+            for sql in self.ddl:
+                curs.execute(sql)
+
+    def sql(self, query, params=None, commit=False, results=False):
+        with self.db(commit=commit) as curs:
+            curs.execute(query, params or ())
+            if results:
+                return curs.fetchall()
+
+
+class SqliteStorage(BaseSqlStorage):
+    begin_sql = 'begin exclusive'
     table_kv = ('create table if not exists kv ('
                 'queue text not null, key text not null, value blob not null, '
                 'primary key(queue, key))')
@@ -628,26 +683,12 @@ class SqliteStorage(BaseStorage):
 
     def __init__(self, name='huey', filename='huey.db', cache_mb=8,
                  fsync=False, journal_mode='wal', **kwargs):
-        super(SqliteStorage, self).__init__(name)
         self.filename = filename
         self._cache_mb = cache_mb
         self._fsync = fsync
         self._journal_mode = journal_mode
         self._conn_kwargs = kwargs
-        self._state = _ConnectionLocal()
-        self.initialize_schema()
-
-    def close(self):
-        if self._state.closed: return False
-        self._state.conn.close()
-        self._state.reset()
-        return True
-
-    @property
-    def conn(self):
-        if self._state.closed:
-            self._state.set_connection(self._create_connection())
-        return self._state.conn
+        super(SqliteStorage, self).__init__(name)
 
     def _create_connection(self):
         conn = sqlite3.connect(self.filename, timeout=5, **self._conn_kwargs)
@@ -658,46 +699,18 @@ class SqliteStorage(BaseStorage):
         conn.execute('pragma synchronous=%s' % (2 if self._fsync else 0))
         return conn
 
-    @contextlib.contextmanager
-    def db(self, commit=False, close=False):
-        conn = self.conn
-        try:
-            if commit: conn.execute('begin exclusive')
-            yield conn
-        except Exception:
-            if commit: conn.rollback()
-            raise
-        else:
-            if commit: conn.commit()
-        finally:
-            if close:
-                conn.close()
-                self._state.reset()
-
-    def initialize_schema(self):
-        with self.db(commit=True, close=True) as conn:
-            for sql in self.ddl:
-                conn.execute(sql)
-
-    def sql(self, query, params=None, commit=False, results=False):
-        with self.db(commit=commit) as conn:
-            curs = conn.execute(query, params or ())
-            if results:
-                return curs.fetchall()
-
     def enqueue(self, data, priority=None):
         self.sql('insert into task (queue, data, priority) values (?, ?, ?)',
                  (self.name, to_blob(data), priority or 0), commit=True)
 
     def dequeue(self):
-        with self.db(commit=True) as conn:
-            curs = conn.execute('select id, data from task where queue = ? '
-                                'order by priority desc, id limit 1',
-                                (self.name,))
+        with self.db(commit=True) as curs:
+            curs.execute('select id, data from task where queue = ? '
+                         'order by priority desc, id limit 1', (self.name,))
             result = curs.fetchone()
             if result is not None:
                 tid, data = result
-                curs = conn.execute('delete from task where id = ?', (tid,))
+                curs.execute('delete from task where id = ?', (tid,))
                 if curs.rowcount == 1:
                     return to_bytes(data)
 
@@ -723,17 +736,17 @@ class SqliteStorage(BaseStorage):
                  'values (?, ?, ?)', params, commit=True)
 
     def read_schedule(self, ts):
-        with self.db(commit=True) as conn:
+        with self.db(commit=True) as curs:
             params = (self.name, to_timestamp(ts))
-            curs = conn.execute('select id, data from schedule where '
-                                'queue = ? and timestamp <= ?', params)
+            curs.execute('select id, data from schedule where '
+                         'queue = ? and timestamp <= ?', params)
             id_list, data = [], []
             for task_id, task_data in curs.fetchall():
                 id_list.append(task_id)
                 data.append(to_bytes(task_data))
             if id_list:
                 plist = ','.join('?' * len(id_list))
-                conn.execute('delete from schedule where id IN (%s)' % plist,
+                curs.execute('delete from schedule where id IN (%s)' % plist,
                              id_list)
             return data
 
@@ -763,13 +776,13 @@ class SqliteStorage(BaseStorage):
         return to_bytes(res[0][0]) if res else EmptyData
 
     def pop_data(self, key):
-        with self.db(commit=True) as conn:
-            curs = conn.execute('select value from kv where queue = ? '
-                                'and key = ?', (self.name, key))
+        with self.db(commit=True) as curs:
+            curs.execute('select value from kv where queue = ? and key = ?',
+                         (self.name, key))
             result = curs.fetchone()
             if result is not None:
-                curs = conn.execute('delete from kv where queue=? and key=?',
-                                    (self.name, key))
+                curs.execute('delete from kv where queue=? and key=?',
+                             (self.name, key))
                 if curs.rowcount == 1:
                     return to_bytes(result[0])
             return EmptyData
@@ -780,8 +793,8 @@ class SqliteStorage(BaseStorage):
 
     def put_if_empty(self, key, value):
         try:
-            with self.db(commit=True) as conn:
-                conn.execute('insert or abort into kv '
+            with self.db(commit=True) as curs:
+                curs.execute('insert or abort into kv '
                              '(queue, key, value) values (?, ?, ?)',
                              (self.name, key, to_blob(value)))
         except sqlite3.IntegrityError:
