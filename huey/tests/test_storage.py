@@ -170,6 +170,9 @@ class TestRedisStorage(StorageTests, BaseTestCase):
         for kwargs in (dict(item) for item in combinations):
             self.assertRaises(ConfigurationError, lambda: RedisHuey(**kwargs))
 
+        # None values are fine, however.
+        RedisHuey(host=None, port=None, db=None, url='redis://localhost')
+
 
 class TestRedisExpireStorage(StorageTests, BaseTestCase):
     # Note that this does not subclass the StorageTests. This is partly because

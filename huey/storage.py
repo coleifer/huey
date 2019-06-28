@@ -369,6 +369,11 @@ class RedisStorage(BaseStorage):
                                      'use Redis storage backend. Run "pip '
                                      'install redis" to install.')
 
+        # Drop common empty values from the connection_params.
+        for p in ('host', 'port', 'db'):
+            if p in connection_params and connection_params[p] is None:
+                del connection_params[p]
+
         if sum(1 for p in (url, connection_pool, connection_params) if p) > 1:
             raise ConfigurationError(
                 'The connection configuration is over-determined. '
