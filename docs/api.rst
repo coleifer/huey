@@ -729,7 +729,7 @@ Huey object
         .. code-block:: python
 
             @huey.periodic_task(crontab(minute='*/5'))
-            @huey.lock_task('reports-lock')
+            @huey.lock_task('reports-lock')  # Goes *after* the task decorator.
             def generate_report():
                 # If a report takes longer than 5 minutes to generate, we do
                 # not want to kick off another until the previous invocation
