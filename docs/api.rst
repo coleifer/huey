@@ -323,18 +323,19 @@ Huey object
             hello: e724a743-e63e-4400-ac07-78a2fa242b41
             goodbye: 606f36fc-da0d-4069-b46c-c0d4ccff1df6
 
-        When using other decorators on task functions, make sure that you
-        understand when they will be evaluated. In the following example
-        the decorator `a` will be evaluated in the calling process, while `b`
-        will be evaluated in the worker process.
+        .. note::
+            When using other decorators on task functions, make sure that you
+            understand when they will be evaluated. In the following example
+            the decorator ``a`` will be evaluated in the calling process, while
+            ``b`` will be evaluated in the worker process.
 
-        .. code-block:: python
+            .. code-block:: python
 
-            @a
-            @huey.task()
-            @b
-            def task():
-                pass
+                @a
+                @huey.task()
+                @b
+                def task():
+                    pass
 
         For more information, see :py:class:`TaskWrapper`, :py:class:`Task`,
         and :py:class:`Result`.
