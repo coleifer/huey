@@ -816,7 +816,7 @@ Example:
             dynamic_ptask(message)
 
         # The schedule that was specified for this task.
-        schedule = crontab(cron_minutes, cron_hour)
+        schedule = crontab(cron_minutes, cron_hours)
 
         # Need to provide a unique name for the task. There are any number of
         # ways you can do this -- based on the arguments, etc. -- but for our
