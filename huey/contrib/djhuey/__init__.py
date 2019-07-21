@@ -113,6 +113,7 @@ revoke = HUEY.revoke
 revoke_all = HUEY.revoke_all
 revoke_by_id = HUEY.revoke_by_id
 is_revoked = HUEY.is_revoked
+result = HUEY.result
 
 # Hooks.
 on_startup = HUEY.on_startup
