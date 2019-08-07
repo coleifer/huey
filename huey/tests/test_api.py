@@ -1,4 +1,5 @@
 import datetime
+import inspect
 
 from huey.api import MemoryHuey
 from huey.api import PeriodicTask
@@ -1223,3 +1224,18 @@ class TestStorageWrappers(BaseTestCase):
         assertTasks(self.huey.pending(), [r3.id])
         assertTasks(self.huey.scheduled(), [r2.id])
         self.assertEqual(list(self.huey.all_results()), [r1.id])
+
+
+class TestDocstring(BaseTestCase):
+    def test_docstring_preserved(self):
+        @self.huey.task()
+        def add(a, b):
+            'Adds two numbers.'
+            return a + b
+
+        @self.huey.periodic_task(crontab(minute='*'))
+        def ptask():
+            'Sample periodic task.'
+
+        self.assertEqual(inspect.getdoc(add), 'Adds two numbers.')
+        self.assertEqual(inspect.getdoc(ptask), 'Sample periodic task.')
