@@ -3,7 +3,20 @@ Changelog
 
 ## master
 
-[View commits](https://github.com/coleifer/huey/compare/2.1.0...HEAD)
+[View commits](https://github.com/coleifer/huey/compare/2.1.1...HEAD)
+
+## 2.1.1
+
+* Ensure that `task()`-decorated functions retain their docstrings.
+* Fix logger setup so that the consumer log configuration is only applied to
+  the `huey` namespace, rather than the root logger.
+* Expose `result`, `signal` and `disconnect_signal` in the Django huey
+  extension.
+* Add `SignedSerializer`, which signs and validates task messages.
+* Refactor the `SqliteStorage` so that it can be more easily extended to
+  support other databases.
+
+[View commits](https://github.com/coleifer/huey/compare/2.1.0...2.1.1)
 
 ## 2.1.0
 
