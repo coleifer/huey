@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import logging
 import os
 import sys
 
@@ -41,7 +42,10 @@ def consumer_main():
     config.validate()
 
     huey_instance = load_huey(args[0])
-    config.setup_logger()
+
+    # Set up logging for the "huey" namespace.
+    logger = logging.getLogger('huey')
+    config.setup_logger(logger)
 
     consumer = huey_instance.create_consumer(**config.values)
     consumer.run()

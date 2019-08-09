@@ -64,9 +64,11 @@ class Command(BaseCommand):
         if not options.get('disable_autoload'):
             autodiscover_modules("tasks")
 
+        logger = logging.getLogger('huey')
+
         config = ConsumerConfig(**consumer_options)
         config.validate()
-        config.setup_logger()
+        config.setup_logger(logger)
 
         consumer = Consumer(HUEY, **config.values)
         consumer.run()

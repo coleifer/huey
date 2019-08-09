@@ -665,6 +665,7 @@ class TaskWrapper(object):
 
     def __init__(self, huey, func, retries=None, retry_delay=None,
                  context=False, name=None, task_base=None, **settings):
+        self.__doc__ = getattr(func, '__doc__', None)
         self.huey = huey
         self.func = func
         self.retries = retries
