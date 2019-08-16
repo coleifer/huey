@@ -18,6 +18,10 @@ from huey.api import crontab
 logger = logging.getLogger('huey.mini')
 
 
+class MiniHueyResult(AsyncResult):
+    __call__ = AsyncResult.get
+
+
 class MiniHuey(object):
     def __init__(self, name='huey', interval=1, pool_size=None):
         self.name = name
@@ -40,7 +44,7 @@ class MiniHuey(object):
         def decorator(fn):
             @wraps(fn)
             def _inner(*args, **kwargs):
-                async_result = AsyncResult()
+                async_result = MiniHueyResult()
                 self._enqueue(fn, args, kwargs, async_result)
                 return async_result
 
@@ -51,7 +55,7 @@ class MiniHuey(object):
                 if eta is None:
                     raise ValueError('Either a delay (in seconds) or an '
                                      'eta (datetime) must be specified.')
-                async_result = AsyncResult()
+                async_result = MiniHueyResult()
                 heapq.heappush(self._scheduled_tasks,
                                (eta, fn, args, kwargs, async_result))
                 return async_result
