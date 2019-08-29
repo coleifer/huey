@@ -108,3 +108,12 @@ def encode(s):
         return s.encode('utf8')
     elif s is not None:
         return text_type(s).encode('utf8')
+
+
+def decode(s):
+    if isinstance(s, text_type):
+        return s
+    elif isinstance(s, bytes):
+        return s.decode('utf8')
+    elif s is not None:
+        return text_type(s)
