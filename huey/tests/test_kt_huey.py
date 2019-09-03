@@ -1,4 +1,5 @@
 import os
+import subprocess as sp
 import unittest
 
 try:
@@ -16,8 +17,11 @@ except ImportError:
 from huey.tests.base import BaseTestCase
 from huey.tests.test_storage import StorageTests
 
+has_ktserver = sp.call(['which', 'ktserver'], stdout=sp.PIPE) == 0
+
 
 @unittest.skipIf(ukt is None, 'requires ukt')
+@unittest.skipIf(not has_ktserver, 'kyototycoon server not installed')
 class TestKyotoTycoonHuey(StorageTests, BaseTestCase):
     @classmethod
     def setUpClass(cls):
