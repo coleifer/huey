@@ -687,16 +687,18 @@ class SqliteStorage(BaseSqlStorage):
     ddl = [table_kv, table_sched, index_sched, table_task, index_task]
 
     def __init__(self, name='huey', filename='huey.db', cache_mb=8,
-                 fsync=False, journal_mode='wal', **kwargs):
+                 fsync=False, journal_mode='wal', timeout=5, **kwargs):
         self.filename = filename
         self._cache_mb = cache_mb
         self._fsync = fsync
         self._journal_mode = journal_mode
+        self._timeout = timeout  # Busy timeout in seconds, default is 5.
         self._conn_kwargs = kwargs
         super(SqliteStorage, self).__init__(name)
 
     def _create_connection(self):
-        conn = sqlite3.connect(self.filename, timeout=5, **self._conn_kwargs)
+        conn = sqlite3.connect(self.filename, timeout=self._timeout,
+                               **self._conn_kwargs)
         conn.isolation_level = None  # Autocommit mode.
         conn.execute('pragma journal_mode="%s"' % self._journal_mode)
         if self._cache_mb:

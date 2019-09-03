@@ -266,7 +266,12 @@ class TestSqliteStorage(StorageTests, BaseTestCase):
             os.unlink('huey_storage.db')
 
     def get_huey(self):
-        return SqliteHuey(filename='huey_storage.db')
+        return SqliteHuey(filename='huey_storage.db', timeout=3)
+
+    def test_timeout(self):
+        self.assertEqual(self.s._timeout, 3)
+        curs = self.s.conn.execute('pragma busy_timeout')
+        self.assertEqual(curs.fetchone(), (3000,))
 
 
 class MemFileStorage(FileStorageMethods, MemoryStorage): pass
