@@ -41,3 +41,23 @@ class TestKyotoTycoonHuey(StorageTests, BaseTestCase):
 
     def get_huey(self):
         return KyotoTycoonHuey(client=self.db, utc=False)
+
+    def test_expire_results(self):
+        huey = KyotoTycoonHuey(client=self.db, utc=False,
+                               result_expire_time=3600)
+        s = huey.storage
+
+        s.put_data(b'k1', b'v1')
+        s.put_data(b'k2', b'v2', is_result=True)
+        self.assertEqual(s.pop_data(b'k1'), b'v1')
+        self.assertEqual(s.pop_data(b'k2'), b'v2')
+
+        self.assertTrue(s.has_data_for_key(b'k2'))
+        self.assertFalse(s.put_if_empty(b'k2', b'v2-x'))
+        self.assertFalse(s.has_data_for_key(b'k3'))
+        self.assertTrue(s.put_if_empty(b'k3', b'v3'))
+
+        self.assertTrue(s.delete_data(b'k2'))
+        self.assertFalse(s.delete_data(b'k2'))
+        self.assertEqual(s.result_items(), {b'k1': b'v1', b'k3': b'v3'})
+        self.assertEqual(s.result_store_size(), 2)

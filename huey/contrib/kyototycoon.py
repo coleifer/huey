@@ -15,13 +15,15 @@ class KyotoTycoonStorage(BaseStorage):
 
     def __init__(self, name='huey', host='127.0.0.1', port=1978, db=None,
                  timeout=None, max_age=3600, queue_db=0, client=None,
-                 blocking=False):
+                 blocking=False, result_expire_time=None):
         super(KyotoTycoonStorage, self).__init__(name)
         if client is None:
             client = KyotoTycoon(host, port, timeout, db, serializer=KT_NONE,
                                  max_age=max_age)
 
         self.blocking = blocking
+        self.expire_time = result_expire_time
+
         self.kt = client
         if db is not None:
             self.kt.set_database(db)
@@ -72,13 +74,17 @@ class KyotoTycoonStorage(BaseStorage):
         return '%s.%s' % (self.qname, decode(key))
 
     def put_data(self, key, value, is_result=False):
-        self.kt.set(self.prefix_key(key), value)
+        xt = self.expire_time if is_result else None
+        self.kt.set(self.prefix_key(key), value, expire_time=xt)
 
     def peek_data(self, key):
         result = self.kt.get_bytes(self.prefix_key(key))
         return EmptyData if result is None else result
 
     def pop_data(self, key):
+        if self.expire_time is not None:
+            return self.peek_data(key)
+
         result = self.kt.seize(self.prefix_key(key))
         return EmptyData if result is None else result
 
