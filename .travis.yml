@@ -3,18 +3,17 @@ python:
   - 2.7
   - 3.5
   - 3.6
-dist: trusty
-matrix:
-  include:
-    - python: 3.7
-      dist: xenial
-      sudo: true
-    - python: 3.8-dev
-      dist: xenial
-      sudo: true
+  - 3.7
+  - 3.8-dev
+dist: xenial
+addons:
+  apt:
+    packages:
+      - kyototycoon
+      - libkyototycoon-dev
 services:
   - redis
-install: "pip install redis peewee"
+install: "pip install gevent redis peewee ukt"
 script: "python runtests.py"
 notifications:
   email: true
