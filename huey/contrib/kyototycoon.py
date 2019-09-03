@@ -11,7 +11,7 @@ from huey.utils import decode
 
 
 class KyotoTycoonStorage(BaseStorage):
-    priority = False
+    priority = True
 
     def __init__(self, name='huey', host='127.0.0.1', port=1978, db=None,
                  timeout=None, max_age=3600, queue_db=0, client=None,
@@ -33,7 +33,7 @@ class KyotoTycoonStorage(BaseStorage):
         self.s = self.kt.Schedule(self.sname, queue_db)
 
     def enqueue(self, data, priority=None):
-        self.q.add(data)
+        self.q.add(data, priority)
 
     def dequeue(self):
         if self.blocking:
