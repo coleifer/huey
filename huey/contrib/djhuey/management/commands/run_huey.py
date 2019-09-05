@@ -68,7 +68,12 @@ class Command(BaseCommand):
 
         config = ConsumerConfig(**consumer_options)
         config.validate()
-        config.setup_logger(logger)
+
+        # Only configure the "huey" logger if it has no handlers. For example,
+        # some users may configure the huey logger via the Django global
+        # logging config. This prevents duplicating log messages:
+        if not logger.handlers:
+            config.setup_logger(logger)
 
         consumer = Consumer(HUEY, **config.values)
         consumer.run()

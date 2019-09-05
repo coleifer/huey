@@ -3,7 +3,23 @@ Changelog
 
 ## master
 
-[View commits](https://github.com/coleifer/huey/compare/2.1.1...HEAD)
+[View commits](https://github.com/coleifer/huey/compare/2.1.2...HEAD)
+
+## 2.1.2
+
+* Allow `AsyncResult` object used in `MiniHuey` to support the `__call__()`
+  method to block and resolve the task result.
+* When running the django `run_huey` management command, the huey loggers will
+  not be configured if another logging handler is already registered to the
+  huey namespace.
+* Added experimental contrib storage engine using `kyoto tycoon <http://fallabs.com/kyototycoon>`_
+  which supports task priority and the option to do automatic result
+  expiration. Requires the `ukt <https://github.com/coleifer/ukt>`_ python
+  package and a custom kyototycoon lua script.
+* Allow the Sqlite storage engine busy timeout to be configured when
+  instantiating `SqliteHuey`.
+
+[View commits](https://github.com/coleifer/huey/compare/2.1.1...2.1.2)
 
 ## 2.1.1
 
