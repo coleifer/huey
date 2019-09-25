@@ -359,7 +359,6 @@ class Huey(object):
             self._emit(S.SIGNAL_ERROR, task, exc)
         else:
             logger.info('%s executed in %0.3fs', task, duration)
-            self._emit(S.SIGNAL_COMPLETE, task)
 
         if self.results and not isinstance(task, PeriodicTask):
             if exception is not None:
@@ -377,6 +376,10 @@ class Huey(object):
 
         if self._post_execute:
             self._run_post_execute(task, task_value, exception)
+
+        if exception is None:
+            # Task executed successfully, send the COMPLETE signal.
+            self._emit(S.SIGNAL_COMPLETE, task)
 
         if task.on_complete and exception is None:
             next_task = task.on_complete
