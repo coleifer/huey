@@ -222,7 +222,6 @@ class ProcessEnvironment(Environment):
 WORKER_TO_ENVIRONMENT = {
     WORKER_THREAD: ThreadEnvironment,
     WORKER_GREENLET: GreenletEnvironment,
-    'gevent': GreenletEnvironment,  # Preserved for backwards-compat.
     WORKER_PROCESS: ProcessEnvironment,
 }
 
@@ -261,6 +260,7 @@ class Consumer(object):
             raise ConfigurationError('Scheduler interval must be a factor '
                                      'of 60, e.g. 1, 2, 3, 4, 5, 6, 10, 12...')
 
+        if worker_type == 'gevent': worker_type = WORKER_GREENLET
         self.worker_type = worker_type  # What process model are we using?
 
         # Configure health-check and consumer main-loop attributes.
@@ -331,6 +331,9 @@ class Consumer(object):
         exceptions in the `loop()` method will cause the process to terminate.
         """
         def _run():
+            if self.worker_type == WORKER_PROCESS:
+                self._set_child_signal_handlers()
+
             process.initialize()
             try:
                 while not self.stop_flag.is_set():
@@ -350,6 +353,7 @@ class Consumer(object):
                 'Consumer cannot be run with Huey instances where immediate '
                 'is enabled. Please check your configuration and ensure that '
                 '"huey.immediate = False".')
+
         # Log startup message.
         self._logger.info('Huey consumer started with %s %s, PID %s at %s',
                           self.workers, self.worker_type, os.getpid(),
@@ -359,28 +363,19 @@ class Consumer(object):
         self._logger.info('Periodic tasks are %s.',
                           'enabled' if self.periodic else 'disabled')
 
-        self._set_signal_handlers()
-
         msg = ['The following commands are available:']
         for command in self.huey._registry._registry:
             msg.append('+ %s' % command)
 
         self._logger.info('\n'.join(msg))
 
-        # We'll temporarily ignore SIGINT and SIGHUP (so that it is inherited
-        # by the child-processes). Once the child processes are created, we
-        # restore the handler.
-        original_sigint_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
-        if hasattr(signal, 'SIGHUP'):
-            original_sighup_handler = signal.signal(signal.SIGHUP, signal.SIG_IGN)
-
+        # Start the scheduler and workers.
         self.scheduler.start()
         for _, worker_process in self.worker_threads:
             worker_process.start()
 
-        signal.signal(signal.SIGINT, original_sigint_handler)
-        if hasattr(signal, 'SIGHUP'):
-            signal.signal(signal.SIGHUP, original_sighup_handler)
+        # Finally set the signal handlers for main process.
+        self._set_signal_handlers()
 
     def stop(self, graceful=False):
         """
@@ -487,3 +482,18 @@ class Consumer(object):
         self._logger.info('Received SIGHUP, will restart')
         self._received_signal = True
         self._restart = True
+
+    def _set_child_signal_handlers(self):
+        # Install signal handlers in child process. We ignore SIGHUP (restart)
+        # and SIGINT (graceful shutdown), as these are handled by the main
+        # process. Upon a TERM signal, we raise a KeyboardInterrupt, which is
+        # caught below (and in the worker execute() code), to allow immediate
+        # shutdown.
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
+        signal.signal(signal.SIGTERM, self._handle_stop_signal_worker)
+        if hasattr(signal, 'SIGHUP'):
+            signal.signal(signal.SIGHUP, signal.SIG_IGN)
+
+    def _handle_stop_signal_worker(self, sig_num, frame):
+        # Raise an interrupt in the subprocess' main loop.
+        raise KeyboardInterrupt
