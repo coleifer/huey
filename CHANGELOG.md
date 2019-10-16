@@ -3,7 +3,22 @@ Changelog
 
 ## master
 
-[View commits](https://github.com/coleifer/huey/compare/2.1.2...HEAD)
+[View commits](https://github.com/coleifer/huey/compare/2.1.3...HEAD)
+
+## 2.1.3
+
+* Fix semantics of `SIGNAL_COMPLETE` so that it is not sent until the result is
+  ready.
+* Use classes for the specific Huey implementations (e.g. `RedisHuey`) so that
+  it is easier to subclass / extend. Previously we just used a partial
+  application of the constructor, which could be confusing.
+* Fix shutdown logic in consumer when using multiprocess worker model.
+  Previously the consumer would perform a "graceful" shutdown, even when an
+  immediate shutdown was requested (SIGTERM). Also cleans up the
+  signal-handling code and ensures that interrupted tasks log a warning
+  properly to indicate they were interrupted.
+
+[View commits](https://github.com/coleifer/huey/compare/2.1.2...2.1.3)
 
 ## 2.1.2
 
