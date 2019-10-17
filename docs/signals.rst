@@ -79,7 +79,7 @@ We'll use the following tasks to illustrate how signals may be sent:
             raise ValueError('uh-oh')
         return 'OK'
 
-Here is a simple example of a task execution we would expect to succeed:
+**Here is a simple example of a task execution we would expect to succeed**:
 
 .. code-block:: pycon
 
@@ -91,7 +91,7 @@ The consumer would send the following signals:
 * ``SIGNAL_EXECUTING`` - the task has been dequeued and will be executed.
 * ``SIGNAL_COMPLETE`` - the task has finished successfully.
 
-Here is an example of scheduling a task for execution after a short delay:
+**Here is an example of scheduling a task for execution after a short delay**:
 
 .. code-block:: pycon
 
@@ -106,7 +106,19 @@ The following signals would be sent:
   the ``SIGNAL_EXECUTING`` signal.
 * ``SIGNAL_COMPLETE``.
 
-Here is an example that may fail, in which case it will be retried
+**Here is an example of how to get the result of a task** from a signal function:
+
+.. code-block:: pycon
+    @huey.signal(SIGNAL_COMPLETE)
+    def task_success(signal, task):
+      print(task)
+      print(huey.result(task.id))
+    
+    # Output (in huey queue, after a successful task):
+    # demo.add: 5cfd64a7-5f2b-40cd-a555-c966e276af68
+    # 5
+
+**Here is an example that may fail**, in which case it will be retried
 automatically with a delay of 10 seconds.
 
 .. code-block:: pycon
