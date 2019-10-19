@@ -35,6 +35,21 @@ class TestSignals(BaseTestCase):
         self.assertTrue(self.execute_next() is None)
         self.assertSignals([SIGNAL_EXECUTING, SIGNAL_ERROR])
 
+    def test_signal_complete_result_ready(self):
+        @self.huey.task()
+        def task_a(n):
+            return n + 1
+
+        results = []
+
+        @self.huey.signal(SIGNAL_COMPLETE)
+        def on_complete(sig, task, *_):
+            results.append(self.huey.result(task.id))
+
+        r = task_a(2)
+        self.assertEqual(self.execute_next(), 3)
+        self.assertEqual(results, [3])
+
     def test_signals_on_retry(self):
         @self.huey.task(retries=1)
         def task_a(n):

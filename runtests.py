@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import glob
 import optparse
 import os
 import sys
@@ -40,8 +41,8 @@ if __name__ == '__main__':
     options, args = parser.parse_args()
     suite = collect_tests(args)
     failures, errors = runtests(suite, options.verbosity, options.failfast)
-    if os.path.exists('huey.db'):
-        os.unlink('huey.db')
+    for f in glob.glob('huey*.db*'):
+        os.unlink(f)
 
     if errors or failures:
         sys.exit(1)

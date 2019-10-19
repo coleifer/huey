@@ -74,8 +74,10 @@ class Huey(object):
         def nightly_report():
             generate_nightly_report()
     """
+    storage_class = None
     _deprecated_params = ('result_store', 'events', 'store_errors',
                           'global_registry')
+
     def __init__(self, name='huey', results=True, store_none=False, utc=True,
                  immediate=False, serializer=None, compression=False,
                  use_zlib=False, immediate_use_memory=True, always_eager=None,
@@ -104,7 +106,8 @@ class Huey(object):
 
         # Initialize storage.
         self.storage_kwargs = storage_kwargs
-        self.storage_class = storage_class
+        if storage_class is not None:
+            self.storage_class = storage_class
         self.storage = self.create_storage()
 
         self._locks = set()
@@ -359,7 +362,6 @@ class Huey(object):
             self._emit(S.SIGNAL_ERROR, task, exc)
         else:
             logger.info('%s executed in %0.3fs', task, duration)
-            self._emit(S.SIGNAL_COMPLETE, task)
 
         if self.results and not isinstance(task, PeriodicTask):
             if exception is not None:
@@ -377,6 +379,10 @@ class Huey(object):
 
         if self._post_execute:
             self._run_post_execute(task, task_value, exception)
+
+        if exception is None:
+            # Task executed successfully, send the COMPLETE signal.
+            self._emit(S.SIGNAL_COMPLETE, task)
 
         if task.on_complete and exception is None:
             next_task = task.on_complete
@@ -1001,12 +1007,23 @@ def _unsupported(name, library):
 
 
 # Convenience wrappers for the various storage implementations.
-BlackHoleHuey = partial(Huey, storage_class=BlackHoleStorage)
-MemoryHuey = partial(Huey, storage_class=MemoryStorage)
-SqliteHuey = partial(Huey, storage_class=SqliteStorage)
+class BlackHoleHuey(Huey):
+    storage_class = BlackHoleStorage
 
-RedisHuey = partial(Huey, storage_class=RedisStorage)
-RedisExpireHuey = partial(Huey, storage_class=RedisExpireStorage)
-PriorityRedisHuey = partial(Huey, storage_class=PriorityRedisStorage)
-PriorityRedisExpireHuey = partial(Huey,
-                                  storage_class=PriorityRedisExpireStorage)
+class MemoryHuey(Huey):
+    storage_class = MemoryStorage
+
+class SqliteHuey(Huey):
+    storage_class = SqliteStorage
+
+class RedisHuey(Huey):
+    storage_class = RedisStorage
+
+class RedisExpireHuey(Huey):
+    storage_class = RedisExpireStorage
+
+class PriorityRedisHuey(Huey):
+    storage_class = PriorityRedisStorage
+
+class PriorityRedisExpireHuey(Huey):
+    storage_class = PriorityRedisExpireStorage
