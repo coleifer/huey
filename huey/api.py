@@ -613,7 +613,7 @@ class Task(object):
         if self.on_complete:
             rep += ' -> %s' % self.on_complete
         if self.on_error:
-            rep += ', on error %s' % self.on_complete
+            rep += ', on error %s' % self.on_error
         return rep
 
     def create_id(self):
