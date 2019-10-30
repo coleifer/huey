@@ -373,7 +373,9 @@ class Huey(object):
                 self.put_result(task.id, Error({
                     'error': repr(exception),
                     'retries': task.retries,
-                    'traceback': tb}))
+                    'traceback': tb,
+                    'task_id': task.id,
+                }))
             elif task_value is not None or self.store_none:
                 self.put_result(task.id, task_value)
 
