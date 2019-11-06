@@ -1283,7 +1283,7 @@ Exceptions
 
     Raised when Huey encounters a configuration problem.
 
-.. py:class:: TaskLockdException
+.. py:class:: TaskLockedException
 
     Raised by the consumer when a task lock cannot be acquired.
 
