@@ -435,8 +435,15 @@ class RedisStorage(BaseStorage):
         limit = limit or -1
         return self.conn.lrange(self.queue_key, 0, limit)[::-1]
 
+    @property
+    def delete_key(self):
+        delete_method = getattr(self.conn, "unlink", None)
+        if delete_method is None:
+            delete_method = self.conn.delete
+        return delete_method
+
     def flush_queue(self):
-        self.conn.delete(self.queue_key)
+        self.delete_key(self.queue_key)
 
     def add_to_schedule(self, data, ts, utc):
         self.conn.zadd(self.schedule_key, {data: self.convert_ts(ts)})
@@ -456,7 +463,7 @@ class RedisStorage(BaseStorage):
         return self.conn.zrange(self.schedule_key, 0, limit, withscores=False)
 
     def flush_schedule(self):
-        self.conn.delete(self.schedule_key)
+        self.delete_key(self.schedule_key)
 
     def put_data(self, key, value, is_result=False):
         self.conn.hset(self.result_key, key, value)
@@ -489,7 +496,7 @@ class RedisStorage(BaseStorage):
         return self.conn.hgetall(self.result_key)
 
     def flush_results(self):
-        self.conn.delete(self.result_key)
+        self.delete_key(self.result_key)
 
 
 class RedisExpireStorage(RedisStorage):
@@ -523,7 +530,7 @@ class RedisExpireStorage(RedisStorage):
     pop_data = peek_data
 
     def delete_data(self, key):
-        return self.conn.delete(self.result_key(key))
+        self.delete_key(self.result_key(key))
 
     def has_data_for_key(self, key):
         return self.conn.exists(self.result_key(key)) != 0
@@ -549,7 +556,7 @@ class RedisExpireStorage(RedisStorage):
     def flush_results(self):
         keys = list(self._result_keys())
         if keys:
-            self.conn.delete(*keys)
+            self.delete_key(*keys)
 
 
 class RedisPriorityQueue(object):
