@@ -351,11 +351,15 @@ class RedisStorage(BaseStorage):
         limit = limit or -1
         return self.conn.zrange(self.schedule_key, 0, limit, withscores=False)
 
-    def flush_schedule(self):
+    @property
+    def flush_method(self):
         delete_method = getattr(self.conn, "unlink", None)
         if delete_method is None:
             delete_method = self.conn.delete
-        delete_method(self.schedule_key)
+        return delete_method
+
+    def flush_schedule(self):
+        self.flush_method(self.schedule_key)
 
     def put_data(self, key, value):
         self.conn.hset(self.result_key, key, value)
@@ -388,10 +392,7 @@ class RedisStorage(BaseStorage):
         return self.conn.hgetall(self.result_key)
 
     def flush_results(self):
-        delete_method = getattr(self.conn, "unlink", None)
-        if delete_method is None:
-            delete_method = self.conn.delete
-        delete_method(self.result_key)
+        self.flush_method(self.result_key)
 
     def put_error(self, metadata):
         self.conn.lpush(self.error_key, metadata)
@@ -404,10 +405,7 @@ class RedisStorage(BaseStorage):
         return self.conn.lrange(self.error_key, offset, limit)
 
     def flush_errors(self):
-        delete_method = getattr(self.conn, "unlink", None)
-        if delete_method is None:
-            delete_method = self.conn.delete
-        delete_method(self.error_key)
+        self.flush_method(self.error_key)
 
     def emit(self, message):
         self.conn.publish(self.name, message)
