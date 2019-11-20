@@ -188,7 +188,7 @@ class ThreadEnvironment(Environment):
         return t
 
     def is_alive(self, proc):
-        return proc.isAlive()
+        return proc.is_alive()
 
 
 class GreenletEnvironment(Environment):
