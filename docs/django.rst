@@ -134,7 +134,7 @@ listed here.
     specify tens or hundreds of workers since they are extremely lightweight
     compared to threads/processes. *See note below on using gevent/greenlet*.
 
-``-A``, ``--disable-autload``
+``-A``, ``--disable-autoload``
     Disable automatic loading of tasks modules.
 
 .. note::
