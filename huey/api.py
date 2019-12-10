@@ -761,7 +761,8 @@ class TaskWrapper(object):
     def s(self, *args, **kwargs):
         return self.task_class(args, kwargs, retries=self.retries,
                                retry_delay=self.retry_delay,
-                               priority=kwargs.pop('priority', None))
+                               priority=kwargs.pop('priority', None),
+                               id=kwargs.pop('id', None))
 
 
 class TaskLock(object):
