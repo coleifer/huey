@@ -146,5 +146,7 @@ def db_task(*args, **kwargs):
 
 def db_periodic_task(*args, **kwargs):
     def decorator(fn):
-        return periodic_task(*args, **kwargs)(close_db(fn))
+        ret = periodic_task(*args, **kwargs)(close_db(fn))
+        ret.call_local = fn
+        return ret
     return decorator
