@@ -48,7 +48,7 @@ if sys.version_info[0] == 2:
         return data and (data[0] == b'\x1f' or data[0] == b'\x78')
 else:
     def is_compressed(data):
-        return data and data[0] == 0x1for data[0] == 0x78
+        return data and data[0] == 0x1f or data[0] == 0x78
 
 
 class Serializer(object):
