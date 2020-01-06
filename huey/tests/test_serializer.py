@@ -34,3 +34,12 @@ class TestSerializer(BaseTestCase):
     @unittest.skipIf(zlib is None, 'zlib module not installed')
     def test_serializer_zlib(self):
         self._test_serializer(Serializer(compression=True, use_zlib=True))
+
+    @unittest.skipIf(zlib is None, 'zlib module not installed')
+    @unittest.skipIf(gzip is None, 'gzip module not installed')
+    def test_mismatched_compression(self):
+        for use_zlib in (False, True):
+            s = Serializer()
+            scomp = Serializer(compression=True, use_zlib=use_zlib)
+            for item in self.data:
+                self.assertEqual(scomp.deserialize(s.serialize(item)), item)

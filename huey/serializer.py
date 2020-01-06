@@ -8,11 +8,15 @@ except ImportError:
     zlib = None
 import hashlib
 import hmac
+import logging
 import pickle
 import sys
 
 from huey.exceptions import ConfigurationError
 from huey.utils import encode
+
+
+logger = logging.getLogger('huey.serializer')
 
 
 if gzip is not None:
@@ -39,11 +43,21 @@ if gzip is not None:
                 fh.close()
 
 
+if sys.version_info[0] == 2:
+    def is_compressed(data):
+        return data and (data[0] == b'\x1f' or data[0] == b'\x78')
+else:
+    def is_compressed(data):
+        return data and data[0] == 0x1for data[0] == 0x78
+
+
 class Serializer(object):
-    def __init__(self, compression=False, compression_level=6, use_zlib=False):
+    def __init__(self, compression=False, compression_level=6, use_zlib=False,
+                 pickle_protocol=pickle.HIGHEST_PROTOCOL):
         self.comp = compression
         self.comp_level = compression_level
         self.use_zlib = use_zlib
+        self.pickle_protocol = pickle_protocol or pickle.HIGHEST_PROTOCOL
         if self.comp:
             if self.use_zlib and zlib is None:
                 raise ConfigurationError('use_zlib specified, but zlib module '
@@ -53,7 +67,7 @@ class Serializer(object):
                                          'compression.')
 
     def _serialize(self, data):
-        return pickle.dumps(data, pickle.HIGHEST_PROTOCOL)
+        return pickle.dumps(data, self.pickle_protocol)
 
     def _deserialize(self, data):
         return pickle.loads(data)
@@ -69,7 +83,10 @@ class Serializer(object):
 
     def deserialize(self, data):
         if self.comp:
-            if self.use_zlib:
+            if not is_compressed(data):
+                logger.warning('compression enabled but message data does not '
+                               'appear to be compressed.')
+            elif self.use_zlib:
                 data = zlib.decompress(data)
             else:
                 data = gzip_decompress(data)
