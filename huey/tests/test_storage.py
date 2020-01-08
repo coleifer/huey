@@ -26,6 +26,7 @@ from huey.storage import FileStorage
 from huey.storage import MemoryStorage
 from huey.storage import RedisExpireStorage
 from huey.tests.base import BaseTestCase
+from huey.tests.base import TRAVIS
 
 
 class StorageTests(object):
@@ -321,6 +322,7 @@ class TestFileStorageMethods(StorageTests, BaseTestCase):
         self.assertTrue(os.path.exists(self.result_path))
         self.assertEqual(os.listdir(self.result_path), [])
 
+    @unittest.skipIf(TRAVIS, 'skipping test that is flaky on travis-ci')
     def test_fs_multithreaded(self):
         def create_tasks(t, n, q):
             for i in range(n):

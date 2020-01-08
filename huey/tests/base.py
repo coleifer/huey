@@ -1,5 +1,6 @@
 import contextlib
 import logging
+import os
 import unittest
 
 from huey.api import MemoryHuey
@@ -13,6 +14,8 @@ class NullHandler(logging.Handler):
 
 logger = logging.getLogger('huey')
 logger.addHandler(NullHandler())
+
+TRAVIS = bool(os.environ.get('HUEY_TRAVIS'))
 
 
 class BaseTestCase(unittest.TestCase):
