@@ -119,4 +119,5 @@ class KyotoTycoonStorage(BaseStorage):
         self.flush_results()
 
 
-KyotoTycoonHuey = partial(Huey, storage_class=KyotoTycoonStorage)
+class KyotoTycoonHuey(Huey):
+    storage_class = KyotoTycoonStorage
