@@ -2,6 +2,7 @@ from huey.tests.test_api import *
 from huey.tests.test_consumer import *
 from huey.tests.test_crontab import *
 from huey.tests.test_immediate import *
+from huey.tests.test_kt_huey import *
 from huey.tests.test_priority import *
 from huey.tests.test_registry import *
 from huey.tests.test_serializer import *

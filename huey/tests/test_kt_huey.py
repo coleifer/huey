@@ -63,5 +63,5 @@ class TestKyotoTycoonHuey(StorageTests, BaseTestCase):
 
         self.assertTrue(s.delete_data(b'k2'))
         self.assertFalse(s.delete_data(b'k2'))
-        self.assertEqual(s.result_items(), {b'k1': b'v1', b'k3': b'v3'})
+        self.assertEqual(s.result_items(), {'k1': b'v1', 'k3': b'v3'})
         self.assertEqual(s.result_store_size(), 2)
