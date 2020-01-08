@@ -1,6 +1,8 @@
 from collections import namedtuple
 import calendar
 import datetime
+import errno
+import os
 import sys
 import time
 
@@ -117,3 +119,40 @@ def decode(s):
         return s.decode('utf8')
     elif s is not None:
         return text_type(s)
+
+
+class FileLock(object):
+    def __init__(self, filename, interval=0.01):
+        self.filename = filename
+        self.interval = interval
+        self.fd = None
+
+        dirname = os.path.dirname(filename)
+        if not os.path.exists(dirname):
+            os.makedirs(dirname)
+        elif os.path.exists(self.filename):
+            os.unlink(self.filename)
+
+    def acquire(self):
+        flags = os.O_CREAT | os.O_EXCL | os.O_RDWR
+        while True:
+            try:
+                self.fd = os.open(self.filename, flags)
+                break
+            except OSError as exc:
+                if exc.errno != errno.EEXIST:
+                    raise
+                time.sleep(self.interval)
+
+    def release(self):
+        if self.fd is not None:
+            os.close(self.fd)
+            os.unlink(self.filename)
+            self.fd = None
+
+    def __enter__(self):
+        self.acquire()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.release()

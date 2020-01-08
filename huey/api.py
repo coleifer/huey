@@ -23,6 +23,7 @@ from huey.exceptions import TaskLockedException
 from huey.registry import Registry
 from huey.serializer import Serializer
 from huey.storage import BlackHoleStorage
+from huey.storage import FileStorage
 from huey.storage import MemoryStorage
 from huey.storage import PriorityRedisExpireStorage
 from huey.storage import PriorityRedisStorage
@@ -1029,3 +1030,6 @@ class PriorityRedisHuey(Huey):
 
 class PriorityRedisExpireHuey(Huey):
     storage_class = PriorityRedisExpireStorage
+
+class FileHuey(Huey):
+    storage_class = FileStorage
