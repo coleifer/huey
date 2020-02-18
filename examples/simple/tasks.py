@@ -1,3 +1,5 @@
+import os
+import threading
 import time
 from huey import crontab
 
@@ -49,3 +51,17 @@ def every_other_minute():
 @huey.periodic_task(crontab(minute='*/5'))
 def every_five_mins():
     tprint('This task runs every 5 minutes.', 34)
+
+
+@huey.on_startup()
+def startup_hook():
+    pid = os.getpid()
+    tid = threading.get_ident()
+    print('process %s, thread %s - startup hook' % (pid, tid))
+
+
+@huey.on_shutdown()
+def shutdown_hook():
+    pid = os.getpid()
+    tid = threading.get_ident()
+    print('process %s, thread %s - shutdown hook' % (pid, tid))
