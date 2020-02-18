@@ -115,6 +115,7 @@ class Huey(object):
         self._pre_execute = OrderedDict()
         self._post_execute = OrderedDict()
         self._startup = OrderedDict()
+        self._shutdown = OrderedDict()
         self._registry = Registry()
         self._signal = S.Signal()
 
@@ -239,6 +240,18 @@ class Huey(object):
             # Assume we were given the function itself.
             name = name.__name__
         return self._startup.pop(name, None) is not None
+
+    def on_shutdown(self, name=None):
+        def decorator(fn):
+            self._shutdown[name or fn.__name__] = fn
+            return fn
+        return decorator
+
+    def unregister_on_shutdown(self, name=None):
+        if not isinstance(name, string_type):
+            # Assume we were given the function itself.
+            name = name.__name__
+        return self._shutdown.pop(name, None) is not None
 
     def signal(self, *signals):
         def decorator(fn):

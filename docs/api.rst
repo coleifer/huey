@@ -589,6 +589,27 @@ Huey object
 
         Unregister the specified on-startup hook.
 
+    .. py:method:: on_shutdown(name=None)
+
+        :param name: (optional) name for the hook.
+        :returns: a decorator used to wrap the actual on-shutdown function.
+
+        Register a shutdown hook. The callback will be executed by a worker
+        immediately before it goes offline. Uncaught exceptions will be logged
+        but will have no other effect on the overall shutdown of the worker.
+
+        The callback function must not accept any parameters.
+
+        This API is provided to simplify cleaning-up shared resources.
+
+    .. py:method:: unregister_on_shutdown(name_or_fn)
+
+        :param name_or_fn: the name given to the on-shutdown hook, or the
+            function object itself.
+        :returns: boolean
+
+        Unregister the specified on-shutdown hook.
+
     .. py:method:: signal(*signals)
 
         :param signals: zero or more signals to handle.
