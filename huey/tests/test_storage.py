@@ -347,7 +347,7 @@ class TestFileStorageMethods(StorageTests, BaseTestCase):
             threads.append(t)
 
         for t in threads: t.start()
-        for t in threads: t.join()
+        for t in threads: t.join(timeout=10.)
 
         self.assertEqual(self.huey.pending_count(), nthreads * ntasks)
 
@@ -359,7 +359,7 @@ class TestFileStorageMethods(StorageTests, BaseTestCase):
             threads.append(t)
 
         for t in threads: t.start()
-        for t in threads: t.join()
+        for t in threads: t.join(timeout=10.)
 
         self.assertEqual(out_q.qsize(), nthreads * ntasks)
         self.assertEqual(self.huey.pending_count(), 0)
@@ -368,3 +368,7 @@ class TestFileStorageMethods(StorageTests, BaseTestCase):
         # which they are dequeued.
         for i in range(nthreads * ntasks):
             self.assertEqual(in_q.get(), out_q.get())
+
+    @unittest.skipIf(TRAVIS, 'skipping test that is flaky on travis-ci')
+    def test_consumer_integration(self):
+        return super(TestFileStorageMethods, self).test_consumer_integration()
