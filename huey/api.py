@@ -653,14 +653,24 @@ class Task(object):
         if self.on_complete:
             self.on_complete.then(task, *args, **kwargs)
         else:
-            self.on_complete = task.s(*args, **kwargs)
+            if isinstance(task, Task):
+                if args: task.extend_data(args)
+                if kwargs: task.extend_data(kwargs)
+            else:
+                task = task.s(*args, **kwargs)
+            self.on_complete = task
         return self
 
     def error(self, task, *args, **kwargs):
         if self.on_error:
             self.on_error.error(task, *args, **kwargs)
         else:
-            self.on_error = task.s(*args, **kwargs)
+            if isinstance(task, Task):
+                if args: task.extend_data(args)
+                if kwargs: task.extend_data(kwargs)
+            else:
+                task = task.s(*args, **kwargs)
+            self.on_error = task
         return self
 
     def execute(self):

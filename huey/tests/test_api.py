@@ -958,6 +958,36 @@ class TestTaskChaining(BaseTestCase):
         pipe = add.s(1, 2).then(mul, 4).then(add, -5).then(mul, 3).then(add, 8)
         self.assertPipe(pipe, [3, 12, 7, 21, 29])
 
+    def test_mixed_tasks_instances(self):
+        @self.huey.task()
+        def add(a, b):
+            return a + b
+        @self.huey.task()
+        def mul(a, b):
+            return a * b
+
+        t1 = add.s(1, 2)
+        t2 = add.s(3)
+        t3 = mul.s(4)
+        t4 = mul.s()
+        p1 = t1.then(t2)
+        p2 = p1.then(t3).then(t4, 5)
+        self.assertPipe(p2, [3, 6, 24, 120])
+
+    def test_task_instances_args_kwargs(self):
+        @self.huey.task()
+        def add(a, b, c=None):
+            s = a + b
+            if c is not None:
+                s += c
+            return s
+
+        t1 = add.s(1, 2)
+        t2 = add.s()
+        t3 = add.s()
+        p1 = t1.then(t2, 3).then(t3, 4, c=5)
+        self.assertPipe(p1, [3, 6, 15])
+
     def assertPipe(self, pipeline, expected):
         results = self.huey.enqueue(pipeline)
         for _ in range(len(results)):
@@ -965,6 +995,7 @@ class TestTaskChaining(BaseTestCase):
             self.execute_next()
 
         self.assertEqual(len(self.huey), 0)
+        self.assertEqual(len(results), len(expected))
         self.assertEqual([r() for r in results], expected)
 
     def test_error_callback(self):
