@@ -156,7 +156,7 @@ Using multi-processing to run 4 worker processes.
 
     huey_consumer.py my.app.huey -w 4 -k process
 
-Running single-threaded with periodict task support disabled. Additionally,
+Running single-threaded with periodic task support disabled. Additionally,
 logging records are written to stdout.
 
 .. code-block:: bash
