@@ -13,10 +13,16 @@ The API documentation will follow the structure of the huey ``api.py`` module.
 Huey types
 ----------
 
+Implementations of :py:class:`Huey` which handle task and result persistence.
+
+.. note::
+    See the documentation for :py:class:`Huey` for the list of initialization
+    parameters common to all Huey implementations.
+
 .. py:class:: RedisHuey
 
-    Huey that utilizes `redis <https://redis.io/>`_ for queue and result
-    storage. Requires `redis-py <https://github.com/andymccurdy/redis-py>`_.
+    :py:class:`Huey` that utilizes `redis <https://redis.io/>`_ for queue and
+    result storage. Requires `redis-py <https://github.com/andymccurdy/redis-py>`_.
 
     Commonly-used keyword arguments for storage configuration:
 
@@ -46,8 +52,8 @@ Huey types
 
 .. py:class:: PriorityRedisHuey
 
-    Huey that utilizes `redis <https://redis.io/>`_ for queue and result
-    storage. Requires `redis-py <https://github.com/andymccurdy/redis-py>`_.
+    :py:class:`Huey` that utilizes `redis <https://redis.io/>`_ for queue and
+    result storage. Requires `redis-py <https://github.com/andymccurdy/redis-py>`_.
     Accepts the same arguments as :py:class:`RedisHuey`.
 
     PriorityRedisHuey supports :ref:`task priorities <priority>`, and requires
@@ -91,8 +97,8 @@ Huey types
 
 .. py:class:: SqliteHuey
 
-    Huey that utilizes sqlite3 for queue and result storage. Only requirement
-    is the standard library ``sqlite3`` module.
+    :py:class:`Huey` that utilizes sqlite3 for queue and result storage. Only
+    requirement is the standard library ``sqlite3`` module.
 
     Commonly-used keyword arguments:
 
@@ -107,13 +113,14 @@ Huey types
 
 .. py:class:: MemoryHuey
 
-    Huey that uses in-memory storage. Only should be used when testing or when
-    using ``immediate`` mode. MemoryHuey fully supports task priorities.
+    :py:class:`Huey` that uses in-memory storage. Only should be used when
+    testing or when using ``immediate`` mode. MemoryHuey fully supports task
+    priorities.
 
 .. py:class:: FileHuey
 
-    Huey that uses the file-system for storage. Should not be used in
-    high-throughput, highly-concurrent environments, as the
+    :py:class:`Huey` that uses the file-system for storage. Should not be used
+    in high-throughput, highly-concurrent environments, as the
     :py:class:`FileStorage` utilizes exclusive locks around all file-system
     operations.
 
