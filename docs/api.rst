@@ -1412,13 +1412,22 @@ Huey comes with several built-in storage implementations:
     automatically cleaned-up.
 
 
-.. py:class:: SqliteStorage(filename='huey.db', name='huey', cache_mb=8, fsync=False, **kwargs)
+.. py:class:: SqliteStorage(filename='huey.db', name='huey', cache_mb=8, fsync=False, timeout=5, strict_fifo=False, **kwargs)
 
     :param str filename: sqlite database filename.
     :param int cache_mb: sqlite page-cache size in megabytes.
     :param bool fsync: if enabled, all writes to the Sqlite database will be
         synchonized. This provides greater safety from database corruption in
         the event of sudden power-loss.
+    :param str journal_mode: sqlite journaling mode to use. Defaults to using
+        write-ahead logging, which enables readers to coexist with a single
+        writer.
+    :param int timeout: busy timeout (in seconds), amount of time to wait to
+        acquire the write lock when another thread / connection holds it.
+    :param bool strict_fifo: ensure that the task queue behaves as a strict
+        FIFO. By default, Sqlite may reuse rowids for deleted tasks, which can
+        cause tasks to be run in a different order than the order in which they
+        were enqueued.
     :param kwargs: Additional keyword arguments passed to the ``sqlite3``
         connection constructor.
 

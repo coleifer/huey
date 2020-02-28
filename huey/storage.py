@@ -689,13 +689,26 @@ class SqliteStorage(BaseSqlStorage):
     ddl = [table_kv, table_sched, index_sched, table_task, index_task]
 
     def __init__(self, name='huey', filename='huey.db', cache_mb=8,
-                 fsync=False, journal_mode='wal', timeout=5, **kwargs):
+                 fsync=False, journal_mode='wal', timeout=5, strict_fifo=False,
+                 **kwargs):
         self.filename = filename
         self._cache_mb = cache_mb
         self._fsync = fsync
         self._journal_mode = journal_mode
         self._timeout = timeout  # Busy timeout in seconds, default is 5.
         self._conn_kwargs = kwargs
+
+        # By default Sqlite may reuse rowids when rows are removed. This means
+        # that SqliteHuey may not strictly be a FIFO. If strict FIFO ordering
+        # is needed, then we will utilize Sqlite's AUTOINCREMENT functionality,
+        # which prevents deleted rowids from being reused.
+        # NOTE: changing an existing database is not supported, so you will
+        # need to delete and re-create it to change this value.
+        if strict_fifo:
+            self.ddl[3] = self.table_task.replace(
+                'primary key',
+                'primary key autoincrement')
+
         super(SqliteStorage, self).__init__(name)
 
     def _create_connection(self):
