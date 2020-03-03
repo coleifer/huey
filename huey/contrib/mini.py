@@ -90,6 +90,7 @@ class MiniHuey(object):
             ret = fn(*args, **kwargs)
         except Exception as exc:
             logger.exception('task %s failed' % fn.__name__)
+            async_result.set_exception(exc)
             raise
         else:
             duration = time.time() - start
