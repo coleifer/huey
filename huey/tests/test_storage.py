@@ -62,7 +62,7 @@ class StorageTests(object):
         self.assertEqual(self.s.queue_size(), 0)
 
     def test_schedule_methods(self):
-        timestamp = datetime.datetime(2000, 1, 2, 3, 4, 5)
+        timestamp = datetime.datetime(2000, 1, 2, 3, 4, 5, tzinfo=datetime.timezone.utc)
         second = datetime.timedelta(seconds=1)
 
         items = ((b'p1', timestamp + second),
@@ -80,10 +80,10 @@ class StorageTests(object):
 
         self.assertEqual(self.s.scheduled_items(), [b'p1', b'p2'])
         self.assertEqual(self.s.schedule_size(), 2)
-        sched = self.s.read_schedule(datetime.datetime.now())
+        sched = self.s.read_schedule(datetime.datetime.now(datetime.timezone.utc))
         self.assertEqual(sched, [b'p1', b'p2'])
         self.assertEqual(self.s.schedule_size(), 0)
-        self.assertEqual(self.s.read_schedule(datetime.datetime.now()), [])
+        self.assertEqual(self.s.read_schedule(datetime.datetime.now(datetime.timezone.utc)), [])
 
     def test_result_store_methods(self):
         # Put and peek at data. Verify missing keys return EmptyData sentinel.
