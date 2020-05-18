@@ -350,7 +350,7 @@ class Huey(object):
                 self._emit(S.SIGNAL_CANCELED, task)
                 return
 
-        start = time.time()
+        start = time.monotonic()
         exception = None
         task_value = None
 
@@ -358,7 +358,7 @@ class Huey(object):
             try:
                 task_value = task.execute()
             finally:
-                duration = time.time() - start
+                duration = time.monotonic() - start
         except TaskLockedException as exc:
             logger.warning('Task %s not run, unable to acquire lock.', task.id)
             exception = exc
@@ -872,10 +872,10 @@ class Result(object):
             if res is not EmptyData:
                 return res
         else:
-            start = time.time()
+            start = time.monotonic()
             delay = .1
             while self._result is EmptyData:
-                if timeout and time.time() - start >= timeout:
+                if timeout and time.monotonic() - start >= timeout:
                     if revoke_on_timeout:
                         self.revoke()
                     raise HueyException('timed out waiting for result')

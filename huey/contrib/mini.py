@@ -85,7 +85,7 @@ class MiniHuey(object):
     def _execute(self, fn, args, kwargs, async_result):
         args = args or ()
         kwargs = kwargs or {}
-        start = time.time()
+        start = time.monotonic()
         try:
             ret = fn(*args, **kwargs)
         except Exception as exc:
@@ -93,7 +93,7 @@ class MiniHuey(object):
             async_result.set_exception(exc)
             raise
         else:
-            duration = time.time() - start
+            duration = time.monotonic() - start
 
         if async_result is not None:
             async_result.set(ret)
@@ -102,7 +102,7 @@ class MiniHuey(object):
     def _run(self):
         logger.info('task runner started.')
         while not self._shutdown.is_set():
-            start = time.time()
+            start = time.monotonic()
             now = datetime.datetime.now()
             if self._last_check + self._periodic_interval <= now:
                 logger.debug('checking periodic task schedule')

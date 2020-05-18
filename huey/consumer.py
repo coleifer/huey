@@ -144,13 +144,13 @@ class Scheduler(BaseProcess):
         self.interval = min(interval, 60)
 
         self.periodic = periodic
-        self._next_loop = time.time()
-        self._next_periodic = time.time()
+        self._next_loop = time.monotonic()
+        self._next_periodic = time.monotonic()
 
     def loop(self, now=None):
         current = self._next_loop
         self._next_loop += self.interval
-        if self._next_loop < time.time():
+        if self._next_loop < time.monotonic():
             self._logger.debug('scheduler skipping iteration to avoid race.')
             return
 
@@ -165,7 +165,7 @@ class Scheduler(BaseProcess):
 
         if self.periodic:
             current_p = self._next_periodic
-            if current_p <= time.time():
+            if current_p <= time.monotonic():
                 self._next_periodic += 60
                 self.enqueue_periodic_tasks(now, current)
 
@@ -419,7 +419,7 @@ class Consumer(object):
         """
         self.start()
         timeout = self._stop_flag_timeout
-        health_check_ts = time.time()
+        health_check_ts = time.monotonic()
 
         while True:
             try:
@@ -438,7 +438,7 @@ class Consumer(object):
                 break
 
             if self._health_check:
-                now = time.time()
+                now = time.monotonic()
                 if now >= health_check_ts + self._health_check_interval:
                     health_check_ts = now
                     self.check_worker_health()

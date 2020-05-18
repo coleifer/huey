@@ -35,8 +35,8 @@ class TestConsumerIntegration(BaseTestCase):
 
     def schedule_tasks(self, consumer, now=None):
         scheduler = consumer._create_scheduler()
-        scheduler._next_loop = time.time() + 60
-        scheduler._next_periodic = time.time() - 60
+        scheduler._next_loop = time.monotonic() + 60
+        scheduler._next_periodic = time.monotonic() - 60
         scheduler.loop(now)
 
     def test_consumer_schedule_task(self):
