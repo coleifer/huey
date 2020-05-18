@@ -34,6 +34,7 @@ from huey.utils import Error
 from huey.utils import normalize_time
 from huey.utils import reraise_as
 from huey.utils import string_type
+from huey.utils import time_clock
 from huey.utils import to_timestamp
 
 
@@ -350,7 +351,7 @@ class Huey(object):
                 self._emit(S.SIGNAL_CANCELED, task)
                 return
 
-        start = time.time()
+        start = time_clock()
         exception = None
         task_value = None
 
@@ -358,7 +359,7 @@ class Huey(object):
             try:
                 task_value = task.execute()
             finally:
-                duration = time.time() - start
+                duration = time_clock() - start
         except TaskLockedException as exc:
             logger.warning('Task %s not run, unable to acquire lock.', task.id)
             exception = exc
@@ -872,10 +873,10 @@ class Result(object):
             if res is not EmptyData:
                 return res
         else:
-            start = time.time()
+            start = time_clock()
             delay = .1
             while self._result is EmptyData:
-                if timeout and time.time() - start >= timeout:
+                if timeout and time_clock() - start >= timeout:
                     if revoke_on_timeout:
                         self.revoke()
                     raise HueyException('timed out waiting for result')

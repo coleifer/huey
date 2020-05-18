@@ -156,3 +156,9 @@ class FileLock(object):
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.release()
+
+
+if sys.version_info[0] < 3:
+    time_clock = time.time
+else:
+    time_clock = time.monotonic

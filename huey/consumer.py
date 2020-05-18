@@ -21,6 +21,7 @@ from huey.constants import WORKER_PROCESS
 from huey.constants import WORKER_THREAD
 from huey.constants import WORKER_TYPES
 from huey.exceptions import ConfigurationError
+from huey.utils import time_clock
 
 
 class BaseProcess(object):
@@ -167,11 +168,11 @@ class Scheduler(BaseProcess):
             current_p = self._next_periodic
             if current_p <= time.time():
                 self._next_periodic += 60
-                self.enqueue_periodic_tasks(now, current)
+                self.enqueue_periodic_tasks(now)
 
         self.sleep_for_interval(current, self.interval)
 
-    def enqueue_periodic_tasks(self, now, start):
+    def enqueue_periodic_tasks(self, now):
         self._logger.debug('Checking periodic tasks')
         for task in self.huey.read_periodic(now):
             self._logger.info('Enqueueing periodic task %s.', task)
@@ -419,7 +420,7 @@ class Consumer(object):
         """
         self.start()
         timeout = self._stop_flag_timeout
-        health_check_ts = time.time()
+        health_check_ts = time_clock()
 
         while True:
             try:
@@ -438,7 +439,7 @@ class Consumer(object):
                 break
 
             if self._health_check:
-                now = time.time()
+                now = time_clock()
                 if now >= health_check_ts + self._health_check_interval:
                     health_check_ts = now
                     self.check_worker_health()
