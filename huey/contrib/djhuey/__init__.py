@@ -1,10 +1,13 @@
 from functools import wraps
 from importlib import import_module
+import datetime
 import sys
 import traceback
+import types
 
 from django.conf import settings
 from django.db import close_old_connections
+from django.utils import timezone
 
 
 configuration_message = """
@@ -98,6 +101,11 @@ if isinstance(HUEY, dict):
                      % traceback.format_exc())
 
     HUEY = backend_cls(name, **huey_config)
+
+def _django_get_timestamp(self):
+    return datetime.datetime.utcnow() if self.utc else timezone.localtime()
+HUEY._get_timestamp = types.MethodType(_django_get_timestamp, HUEY)
+
 
 # Function decorators.
 task = HUEY.task
