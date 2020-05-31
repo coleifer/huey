@@ -339,8 +339,8 @@ class Huey(object):
             logger.warning('Task %s was revoked, not executing', task)
             self._emit(S.SIGNAL_REVOKED, task)
         else:
-            logger.info('Executing %s', task)
             self._emit(S.SIGNAL_EXECUTING, task)
+            logger.info('Executing %s', task)
             return self._execute(task, timestamp)
 
     def _execute(self, task, timestamp):
