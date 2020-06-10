@@ -298,6 +298,8 @@ class Consumer(object):
         # a lock, this ensures that all locks are flushed before starting.
         if flush_locks:
             self.flush_locks()
+        else:
+            self.check_locks()
 
         # Create the scheduler process (but don't start it yet).
         scheduler = self._create_scheduler()
@@ -313,6 +315,14 @@ class Consumer(object):
             # The worker impl is not currently referenced in any consumer code,
             # but it is referenced in the test-suite.
             self.worker_threads.append((worker, process))
+
+    def check_locks(self):
+        locks = self.huey.get_locks()
+        if locks:
+            self._logger.warning(
+                "Found potential stale locks: %s\n"
+                "You can use -f to flush stale locks on startup." % (
+                    ", ".join(key for key in flushed)))
 
     def flush_locks(self):
         self._logger.debug('Flushing locks before starting up.')

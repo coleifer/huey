@@ -573,6 +573,13 @@ class Huey(object):
     def lock_task(self, lock_name):
         return TaskLock(self, lock_name)
 
+    def get_locks(self):
+        locks = set()
+        for lock_key in self._locks:
+            if self.get_raw(lock_key) is not EmptyData:
+                locks.add(lock_key.split(".lock.", 1)[-1])
+        return locks
+
     def flush_locks(self):
         flushed = set()
         for lock_key in self._locks:
