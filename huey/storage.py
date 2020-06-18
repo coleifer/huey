@@ -516,8 +516,11 @@ class RedisExpireStorage(RedisStorage):
             self.conn.set(self.result_key(key), value)
 
     def peek_data(self, key):
-        res = self.conn.get(self.result_key(key))
-        return res if res is not None else EmptyData
+        pipe = self.conn.pipeline()
+        pipe.exists(self.result_key(key))
+        pipe.get(self.result_key(key))
+        exists, val = pipe.execute()
+        return EmptyData if not exists else val
 
     # Here we explicitly prevent result items from being removed by using the
     # same implementation for "pop" (get and delete) as we do for "peek"
