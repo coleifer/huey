@@ -322,20 +322,23 @@ class TestFileStorageMethods(StorageTests, BaseTestCase):
         self.assertTrue(os.path.exists(self.result_path))
         self.assertEqual(os.listdir(self.result_path), [])
 
-    @unittest.skipIf(TRAVIS, 'skipping test that is flaky on travis-ci')
     def test_fs_multithreaded(self):
+        l = threading.Lock()
+
         def create_tasks(t, n, q):
             for i in range(n):
-                message = str((t * n) + i)
-                self.huey.storage.enqueue(message.encode('utf8'))
-                q.put(message)
+                with l:
+                    message = str((t * n) + i)
+                    self.huey.storage.enqueue(message.encode('utf8'))
+                    q.put(message)
 
         def dequeue_tasks(q):
             while True:
-                data = self.huey.storage.dequeue()
-                if data is None:
-                    break
-                q.put(data.decode('utf8'))
+                with l:
+                    data = self.huey.storage.dequeue()
+                    if data is None:
+                        break
+                    q.put(data.decode('utf8'))
 
         nthreads = 10
         ntasks = 50
