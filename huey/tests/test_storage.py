@@ -364,10 +364,10 @@ class TestFileStorageMethods(StorageTests, BaseTestCase):
         self.assertEqual(out_q.qsize(), nthreads * ntasks)
         self.assertEqual(self.huey.pending_count(), 0)
 
-        # Ensure that the order in which tasks were enqueued is the order in
-        # which they are dequeued.
-        for i in range(nthreads * ntasks):
-            self.assertEqual(in_q.get(), out_q.get())
+        in_data = [in_q.get() for _ in range(nthreads * ntasks)]
+        out_data = [out_q.get() for _ in range(nthreads * ntasks)]
+        self.assertEqual(len(set(out_data)), nthreads * ntasks)
+        self.assertEqual(set(in_data), set(out_data))
 
     @unittest.skipIf(TRAVIS, 'skipping test that is flaky on travis-ci')
     def test_consumer_integration(self):
