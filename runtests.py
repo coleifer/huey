@@ -9,7 +9,7 @@ import unittest
 from huey import tests
 
 
-def collect_tests(args):
+def collect_tests(args=None):
     suite = unittest.TestSuite()
 
     if not args:

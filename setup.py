@@ -37,7 +37,7 @@ setup(
         'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
     ],
-    test_suite='runtests.runtests',
+    test_suite='runtests.collect_tests',
     entry_points={
         'console_scripts': [
             'huey_consumer = huey.bin.huey_consumer:consumer_main'
