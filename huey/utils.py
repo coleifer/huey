@@ -147,8 +147,8 @@ class FileLock(object):
     def release(self):
         if self.fd is not None:
             os.close(self.fd)
-            os.unlink(self.filename)
             self.fd = None
+            os.unlink(self.filename)
 
     def __enter__(self):
         self.acquire()
