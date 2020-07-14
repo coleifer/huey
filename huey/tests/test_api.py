@@ -433,6 +433,22 @@ class TestQueue(BaseTestCase):
         self.assertEqual(self.huey.result_count(), 0)
         self.assertEqual(len(self.huey), 0)
 
+    def test_subtask_error(self):
+        @self.huey.task()
+        def task_i(a):
+            raise TestError(a)
+
+        @self.huey.task()
+        def task_o(a):
+            res = task_i(a)
+            self.execute_next()
+            return res.get(blocking=True)
+
+        r = task_o(1)
+        self.assertTrue(self.execute_next() is None)
+        exc = self.trap_exception(r)
+        self.assertEqual(exc.metadata['error'], 'TaskException()')
+
     def test_retry(self):
         class TestException(Exception):
             counter = 0
