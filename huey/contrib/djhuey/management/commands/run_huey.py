@@ -1,4 +1,5 @@
 import logging
+import sys
 
 from django.conf import settings
 from django.core.management.base import BaseCommand
@@ -46,6 +47,12 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         from huey.contrib.djhuey import HUEY
+
+        # Python 3.8+ on MacOS uses an incompatible multiprocess model. In this
+        # case we must explicitly configure mp to use fork().
+        if sys.version_info >= (3, 8) and sys.platform == 'darwin':
+            import multiprocessing
+            multiprocessing.set_start_method('fork')
 
         consumer_options = {}
         try:
