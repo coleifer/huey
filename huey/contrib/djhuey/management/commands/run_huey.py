@@ -47,6 +47,10 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         from huey.contrib.djhuey import HUEY
 
+        if sys.version_info >= (3, 8) and sys.platform == "darwin":
+            import multiprocessing
+            multiprocessing.set_start_method("fork")
+
         consumer_options = {}
         try:
             if isinstance(settings.HUEY, dict):
