@@ -3,7 +3,19 @@ Changelog
 
 ## master
 
-[View commits](https://github.com/coleifer/huey/compare/2.2.0...HEAD)
+[View commits](https://github.com/coleifer/huey/compare/2.3.0...HEAD)
+
+## 2.3.0
+
+* Use monotonic clock for timing operations within the consumer.
+* Ensure internal state is cleaned up on file-lock when released.
+* Support passing around TaskException as a pickled value.
+* Set the multiprocessing mode to "fork" on MacOS and Python 3.8 or newer.
+* Added option to enforce FIFO behavior when using Sqlite as storage.
+* Added the `on_shutdown` handler to djhuey namespace.
+* Ensure exception is set on AsyncResult in mini-huey.
+
+[View commits](https://github.com/coleifer/huey/compare/2.2.0...2.3.0)
 
 ## 2.2.0
 
