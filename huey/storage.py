@@ -27,6 +27,11 @@ try:
 except ImportError:
     ConnectionPool = Redis = ConnectionError = None
 
+try:
+    import pika
+except ImportError:
+    pika = None
+
 from huey.constants import EmptyData
 from huey.exceptions import ConfigurationError
 from huey.utils import FileLock
@@ -1065,3 +1070,108 @@ class FileStorage(BaseStorage):
 
     def flush_results(self):
         self._flush_dir(self.result_path)
+
+
+class AMQPStorage(BaseStorage):
+    amqp_client = pika
+
+    def __init__(self, name='huey', blocking=True, read_timeout=1,
+                 client_name=None, **connection_params):
+
+        if pika is None:
+            raise ConfigurationError('"pika" python module not found, cannot '
+                                     'use RabbitMQ/AMQP storage backend. Run "pip '
+                                     'install pika" to install.')
+
+        self.conn = pika.BlockingConnection(
+            (pika.ConnectionParameters(**connection_params),)
+        )
+
+        self.name = self.clean_name(name)
+        self.queue_key = 'huey.amqp.%s' % self.name
+        self.schedule_key = 'huey.schedule.%s' % self.name
+        self.result_key = 'huey.results.%s' % self.name
+        self.error_key = 'huey.errors.%s' % self.name
+
+        self.channel = self.conn.channel()
+        self._declare(passive=False)
+
+    def _declare(self, passive=True)
+        return self.channel.queue_declare(self.queue_key, passive=passive)
+
+    def clean_name(self, name):
+        return re.sub('[^a-z0-9]', '', name)
+
+    def convert_ts(self, ts):
+        return time.mktime(ts.timetuple()) + (ts.microsecond * 1e-6)
+
+    def enqueue(self, data, priority=None):
+        if priority:
+            raise NotImplementedError('Task priorities are not supported by '
+                                      'this storage.')
+        self.channel.basic_publish(
+            exchange="",
+            routing_key=self.queue_key,
+            body=data
+        )
+
+    def dequeue(self):
+        if self.blocking:
+            try:
+                method_frame, header_frame, body = self.channel.basic_get(self.queue_key)
+                return body
+            except (ConnectionError, TypeError, IndexError):
+                # Unfortunately, there is no way to differentiate a socket
+                # timing out and a host being unreachable.
+                return None
+        else:
+            method_frame, header_frame, body = self.channel.basic_get(self.queue_key)
+            return body
+
+    def queue_size(self):
+        return self._declare().method.message_count
+
+    def enqueued_items(self, limit=None):
+        raise NotImplementedError()
+
+    def flush_queue(self):
+        self.channel.queue_purge(self.queue_key)
+
+    def add_to_schedule(self, data, ts, utc):
+        raise NotImplementedError()
+
+    def read_schedule(self, ts):
+        raise NotImplementedError()
+
+    def schedule_size(self):
+        raise NotImplementedError()
+
+    def scheduled_items(self, limit=None):
+        raise NotImplementedError()
+
+    def flush_schedule(self):
+        raise NotImplementedError()
+
+    def put_data(self, key, value, is_result=False):
+        raise NotImplementedError()
+
+    def peek_data(self, key):
+        raise NotImplementedError()
+
+    def pop_data(self, key):
+        raise NotImplementedError()
+
+    def has_data_for_key(self, key):
+        raise NotImplementedError()
+
+    def put_if_empty(self, key, value):
+        raise NotImplementedError()
+
+    def result_store_size(self):
+        raise NotImplementedError()
+
+    def result_items(self):
+        raise NotImplementedError()
+
+    def flush_results(self):
+        raise NotImplementedError()
