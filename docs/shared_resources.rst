@@ -34,7 +34,7 @@ context-manager API, and automatically wraps the task within the given context:
 .. code-block:: python
 
     # Same as previous example, except we can omit the "with db" block.
-    @huey.context_task(db)
+    @huey.context_task(database)
     def check_comment_spam(comment_id):
         comment = Comment.get(Comment.id == comment_id)
 
