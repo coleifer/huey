@@ -1132,6 +1132,31 @@ Huey object
         you can create a periodic task that runs once per minute, and from that
         task, schedule any number of sub-tasks to run after the desired delays.
 
+
+.. py:class:: TaskLock(huey, name)
+
+    This class should not be instantiated directly, but is instead returned by
+    :py:meth:`Huey.lock_task`. This object implements a context-manager or
+    decorator which can be used to ensure only one instance of the wrapped task
+    is executed at a given time.
+
+    If the consumer executes a task and encounters the
+    :py:class:`TaskLockedException`, then the task will not be retried, an
+    error will be logged by the consumer, and a ``SIGNAL_LOCKED`` signal will
+    be emitted.
+
+    See :py:meth:`Huey.lock_task` for example usage.
+
+    .. py:method:: clear()
+
+        Helper method to manually clear the lock. This method is provided to
+        allow the lock to be flushed in the event that the consumer process was
+        killed while executing a task holding the lock.
+
+        Alternatively, at start-up time you can execute the consumer with the
+        ``-f`` method which will flush all locks before beginning to execute
+        tasks.
+
 Result
 ------
 

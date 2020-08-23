@@ -814,6 +814,9 @@ class TaskLock(object):
     def __exit__(self, exc_type, exc_val, exc_tb):
         self._huey.delete(self._key)
 
+    def clear(self):
+        return self._huey.delete(self._key)
+
 
 class Result(object):
     """
