@@ -137,6 +137,10 @@ their default values.
     feel comfortable saying that it's perfectly fine to use this option and
     disable worker health checks.
 
+``-f``, ``--flush-locks``
+    Flush all locks when starting the consumer. This may be useful if the
+    consumer was killed abruptly while executing a locked task.
+
 ``-s``, ``--scheduler-interval``
     The frequency with which the scheduler should run. By default this will run
     every second, but you can increase the interval to as much as 60 seconds.
