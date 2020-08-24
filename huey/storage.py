@@ -379,7 +379,7 @@ class RedisStorage(BaseStorage):
         if sum(1 for p in (url, connection_pool, connection_params) if p) > 1:
             raise ConfigurationError(
                 'The connection configuration is over-determined. '
-                'Please specify only one of the the following: '
+                'Please specify only one of the following: '
                 '"url", "connection_pool", or "connection_params"')
 
         if url:
