@@ -307,7 +307,9 @@ your tasks, respectively.
    to see if the task is configured to wait a number of seconds between
    retries. Depending on the configuration, huey will either re-enqueue the
    task for execution, or tell the scheduler when to re-enqueue it based on the
-   delay.
+   delay. If the consumer is killed abruptly or the machine powers off
+   unexpectedly, any tasks that are currently being run by a worker will be
+   "lost".
 
 While all the above is going on with the Worker(s), the Scheduler is looking at
 its schedule to see if any tasks are ready to be executed.  If a task is ready
