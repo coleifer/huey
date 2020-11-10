@@ -189,7 +189,7 @@ class TestRedisExpireStorage(StorageTests, BaseTestCase):
     destructive_reads = False
 
     def get_huey(self):
-        return RedisExpireHuey(expire_time=3600, utc=False)
+        return RedisExpireHuey(expire_time=3600, utc=False, blocking=False)
 
     def test_expire_results(self):
         self.s.put_data(b'k1', b'v1')
@@ -263,6 +263,12 @@ def get_redis_version():
 class TestPriorityRedisStorage(TestRedisStorage):
     def get_huey(self):
         return PriorityRedisHuey(utc=False)
+
+
+@unittest.skipIf(get_redis_version() < 5, 'Requires Redis >= 5.0')
+class TestPriorityRedisStorageNotBlocking(TestRedisStorage):
+    def get_huey(self):
+        return PriorityRedisHuey(utc=False, blocking=False)
 
 
 class TestSqliteStorage(StorageTests, BaseTestCase):
