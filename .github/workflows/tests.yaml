@@ -25,4 +25,4 @@ jobs:
       - name: runtests
         env:
           HUEY_TRAVIS: '1'
-        run: python runtests.py
+        run: python runtests.py -v 2
