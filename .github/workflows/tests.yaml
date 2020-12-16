@@ -1,0 +1,28 @@
+name: Tests
+on: [push]
+jobs:
+  tests:
+    name: ${{ matrix.python-version }}
+    runs-on: ubuntu-16.04
+    services:
+      redis:
+        image: redis
+        ports:
+          - 6379:6379
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: [2.7, 3.6, 3.8, 3.9]
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: package deps
+        run: sudo apt-get install kyototycoon libkyototycoon-dev
+      - name: pip deps
+        run: pip install gevent redis peewee ukt
+      - name: runtests
+        env:
+          HUEY_TRAVIS: '1'
+        run: python runtests.py
