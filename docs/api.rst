@@ -761,9 +761,9 @@ Huey object
         Utilize the Storage key/value APIs to implement simple locking.
 
         This lock is designed to be used to prevent multiple invocations of a
-        task from running concurrently. Can be used as either a context-manager
-        or as a task decorator. If using as a decorator, place it directly
-        above the function declaration.
+        task from running concurrently. Can be used either within the task as a 
+        context-manager or as a task decorator. If using as a decorator, place 
+        it directly above the function declaration.
 
         If a second invocation occurs and the lock cannot be acquired, then a
         :py:class:`TaskLockedException` is raised, which is handled by the
@@ -774,7 +774,6 @@ Huey object
         Examples:
 
         .. code-block:: python
-
             @huey.periodic_task(crontab(minute='*/5'))
             @huey.lock_task('reports-lock')  # Goes *after* the task decorator.
             def generate_report():
@@ -782,6 +781,14 @@ Huey object
                 # not want to kick off another until the previous invocation
                 # has finished.
                 run_report()
+                
+            def do_code_backup():
+                # Backup code
+                pass
+                
+            def do_db_backup():
+                # Backup database
+                pass
 
             @huey.periodic_task(crontab(minute='0'))
             def backup():
@@ -789,7 +796,8 @@ Huey object
                 do_code_backup()
 
                 # Generate database backup. Since this may take longer than an
-                # hour, we want to ensure that it is not run concurrently.
+                # hour, we want to ensure that it is not run concurrently with
+                # another instance of the backup() task.
                 with huey.lock_task('db-backup'):
                     do_db_backup()
 
