@@ -762,8 +762,8 @@ Huey object
 
         This lock is designed to be used to prevent multiple invocations of a
         task from running concurrently. Can be used as either a context-manager
-        or as a task decorator. If using as a decorator, place it directly
-        above the function declaration.
+        within the task, or as a task decorator. If using as a decorator, place
+        it directly above the function declaration.
 
         If a second invocation occurs and the lock cannot be acquired, then a
         :py:class:`TaskLockedException` is raised, which is handled by the
