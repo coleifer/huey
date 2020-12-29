@@ -19,7 +19,8 @@ The following signals are implemented by Huey:
 * ``SIGNAL_REVOKED``: task is revoked and will not be executed.
 * ``SIGNAL_SCHEDULED``: task is not yet ready to run and has been added to the
   schedule for future execution.
-* ``SIGNAL_INTERRUPTED``: task is interrupted when consumer exits
+* ``SIGNAL_INTERRUPTED``: task is interrupted when consumer exits - **only
+  available when using the `process` worker model.**
 
 When a signal handler is called, it will be called with the following
 arguments:
