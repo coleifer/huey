@@ -370,6 +370,7 @@ class Huey(object):
             exception = exc
         except KeyboardInterrupt:
             logger.warning('Received exit signal, %s did not finish.', task.id)
+            self._emit(S.SIGNAL_INTERRUPTED, task)
             return
         except Exception as exc:
             logger.exception('Unhandled exception in task %s.', task.id)
