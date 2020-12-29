@@ -444,6 +444,8 @@ class Consumer(object):
                     health_check_ts = now
                     self.check_worker_health()
 
+        self.huey.notify_interrupted_tasks()
+
         if self._restart:
             self._logger.info('Consumer will restart.')
             python = sys.executable

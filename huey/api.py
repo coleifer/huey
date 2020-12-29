@@ -119,6 +119,7 @@ class Huey(object):
         self._shutdown = OrderedDict()
         self._registry = Registry()
         self._signal = S.Signal()
+        self._tasks_in_flight = set()
 
     def create_storage(self):
         # When using immediate mode, the default behavior is to use an
@@ -254,6 +255,11 @@ class Huey(object):
             name = name.__name__
         return self._shutdown.pop(name, None) is not None
 
+    def notify_interrupted_tasks(self):
+        while self._tasks_in_flight:
+            task = self._tasks_in_flight.pop()
+            self._emit(S.SIGNAL_INTERRUPTED, task)
+
     def signal(self, *signals):
         def decorator(fn):
             self._signal.connect(fn, *signals)
@@ -356,9 +362,11 @@ class Huey(object):
         task_value = None
 
         try:
+            self._tasks_in_flight.add(task)
             try:
                 task_value = task.execute()
             finally:
+                self._tasks_in_flight.remove(task)
                 duration = time_clock() - start
         except TaskLockedException as exc:
             logger.warning('Task %s not run, unable to acquire lock.', task.id)
@@ -633,6 +641,9 @@ class Task(object):
         if self.on_error:
             rep += ', on error %s' % self.on_error
         return rep
+
+    def __hash__(self):
+        return hash(self.id)
 
     def create_id(self):
         return str(uuid.uuid4())
