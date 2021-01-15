@@ -715,6 +715,42 @@ Since immediate mode is fully synchronous, there is not a separate thread
 monitoring the schedule. The schedule can still be read or written to, but
 scheduled tasks will not automatically be executed.
 
+.. _logging:
+
+Logging
+-------
+
+Huey uses the standard library ``logging`` module to log information about task
+execution and consumer activity. Messages are logged to the ``huey`` namespace,
+with consumer-specific messages being logged to ``huey.consumer``.
+
+When the consumer is run, it binds a default ``StreamHandler()`` to the huey
+namespace so that all messages are logged to the console. The consumer logging
+can be configured using the following consumer options:
+
+* ``-l FILE, --logfile=FILE`` - log to a file.
+* ``-v, --verbose`` - verbose logging (includes DEBUG level)
+* ``-q, --quiet`` - minimal logging
+* ``-S, --simple`` - simple logging format ("time message")
+
+If you would like to get email alerts when an error occurs, you can attach a
+``logging.handlers.SMTPHandler`` to the ``huey`` namespace at level ``ERROR``:
+
+.. code:: python
+
+    from logging.handlers import SMTPHandler
+    import logging
+
+    mail_handler = SMTPHandler(
+        mailhost=('smtp.gmail.com', 587),
+        fromaddr='errors@myapp.com',
+        toaddrs=['developers@myapp.com'],
+        subject='Huey error log',
+        credentials=('errors@myapp.com', 'secret_password'),
+        secure=())
+    mail_handler.setLevel(logging.ERROR)
+    logging.getLogger('huey').addHandler(mail_handler)
+
 Tips and tricks
 ---------------
 
