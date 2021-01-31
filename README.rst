@@ -111,6 +111,10 @@ preference.
 
 Huey comes with builtin support for Redis, Sqlite and in-memory storage.
 
+GUI
+---------------
+The current team does not have the resources to create and maintain a GUI component. However, check out the project `django-huey-monitor <https://github.com/boxine/django-huey-monitor>`_.
+
 Documentation
 ----------------
 
