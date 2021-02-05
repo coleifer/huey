@@ -46,7 +46,7 @@ options with their default values:
     # settings.py
     HUEY = {
         'huey_class': 'huey.RedisHuey',  # Huey implementation to use.
-        'name': settings.DATABASES['default']['NAME'],  # Use db name for huey.
+        'filename': settings.DATABASES['default']['NAME'],  # Use db name for huey.
         'results': True,  # Store return values of tasks.
         'store_none': False,  # If a task returns None, do not save to results.
         'immediate': settings.DEBUG,  # If DEBUG=True, run synchronously.
