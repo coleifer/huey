@@ -240,6 +240,9 @@ WORKER_TO_ENVIRONMENT = {
     WORKER_PROCESS: ProcessEnvironment,
 }
 
+        if sys.version_info >= (3, 8) and sys.platform.lower() == 'darwin':
+            import multiprocessing
+            multiprocessing.set_start_method('fork')
 
 class Consumer(object):
     """
