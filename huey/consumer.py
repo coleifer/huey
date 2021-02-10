@@ -240,9 +240,6 @@ WORKER_TO_ENVIRONMENT = {
     WORKER_PROCESS: ProcessEnvironment,
 }
 
-        if sys.version_info >= (3, 8) and sys.platform.lower() == 'darwin':
-            import multiprocessing
-            multiprocessing.set_start_method('fork')
 
 class Consumer(object):
     """
@@ -258,6 +255,10 @@ class Consumer(object):
                  backoff=1.15, max_delay=10.0, scheduler_interval=1,
                  worker_type=WORKER_THREAD, check_worker_health=True,
                  health_check_interval=10, flush_locks=False):
+
+        if sys.version_info >= (3, 8) and sys.platform.lower() == 'darwin':
+            import multiprocessing
+            multiprocessing.set_start_method('fork')
 
         self._logger = logging.getLogger('huey.consumer')
         if huey.immediate:
