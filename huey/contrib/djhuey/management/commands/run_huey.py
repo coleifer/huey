@@ -5,7 +5,6 @@ from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.utils.module_loading import autodiscover_modules
 
-from huey.consumer import Consumer
 from huey.consumer_options import ConsumerConfig
 from huey.consumer_options import OptionParserHandler
 
@@ -82,5 +81,5 @@ class Command(BaseCommand):
         if not logger.handlers:
             config.setup_logger(logger)
 
-        consumer = Consumer(HUEY, **config.values)
+        consumer = HUEY.create_consumer(**config.values)
         consumer.run()
