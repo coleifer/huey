@@ -3,7 +3,16 @@ Changelog
 
 ## master
 
-[View commits](https://github.com/coleifer/huey/compare/2.3.0...HEAD)
+[View commits](https://github.com/coleifer/huey/compare/2.3.1...HEAD)
+
+## 2.3.1
+
+* Add `SIGNAL_INTERRUPTED` to signal when a task is interrupted when a consumer
+  exits abruptly.
+* Use the `Huey.create_consumer()` API within the Django management command, to
+  allow Django users to customize the creation of the `Consumer` instance.
+
+[View commits](https://github.com/coleifer/huey/compare/2.3.0...2.3.1)
 
 ## 2.3.0
 
