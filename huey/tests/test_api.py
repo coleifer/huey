@@ -1286,3 +1286,33 @@ class TestDocstring(BaseTestCase):
 
         self.assertEqual(inspect.getdoc(add), 'Adds two numbers.')
         self.assertEqual(inspect.getdoc(ptask), 'Sample periodic task.')
+
+
+class TestCustomErrorMetadata(BaseTestCase):
+    def get_huey(self):
+        class CustomError(MemoryHuey):
+            def build_error_result(self, task, exc):
+                err = super(CustomError, self).build_error_result(task, exc)
+                err.metadata['name'] = task.name
+                err.metadata['args'] = task.args
+                return err
+        return CustomError(utc=False)
+
+    def test_custom_error(self):
+        @self.huey.task()
+        def task_e(n):
+            raise TestError('uh-oh')
+
+        re = task_e(0)
+        self.assertTrue(self.execute_next() is None)
+        self.assertEqual(self.huey.result_count(), 1)  # Error result present.
+
+        # Resolves the result handle, which re-raises the error.
+        err = self.trap_exception(re)
+        self.assertEqual(err.metadata['error'], 'TestError(uh-oh)')
+        self.assertEqual(err.metadata['retries'], 0)
+        self.assertEqual(err.metadata['name'], 'task_e')
+        self.assertEqual(err.metadata['args'], (0,))
+
+        self.assertEqual(self.huey.result_count(), 0)
+        self.assertEqual(len(self.huey), 0)

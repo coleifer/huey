@@ -389,17 +389,8 @@ class Huey(object):
 
         if self.results and not isinstance(task, PeriodicTask):
             if exception is not None:
-                try:
-                    tb = traceback.format_exc()
-                except AttributeError:  # Seems to only happen on 3.4.
-                    tb = '- unable to resolve traceback on Python 3.4 -'
-
-                self.put_result(task.id, Error({
-                    'error': repr(exception),
-                    'retries': task.retries,
-                    'traceback': tb,
-                    'task_id': task.id,
-                }))
+                error = self.build_error_result(task, exception)
+                self.put_result(task.id, error)
             elif task_value is not None or self.store_none:
                 self.put_result(task.id, task_value)
 
@@ -455,6 +446,19 @@ class Huey(object):
             except Exception as exc:
                 logger.exception('Unhandled exception calling post-execute '
                                  'hook %s for %s.', name, task)
+
+    def build_error_result(self, task, exception):
+        try:
+            tb = traceback.format_exc()
+        except AttributeError:  # Seems to only happen on 3.4.
+            tb = '- unable to resolve traceback on Python 3.4 -'
+
+        return Error({
+            'error': repr(exception),
+            'retries': task.retries,
+            'traceback': tb,
+            'task_id': task.id,
+        })
 
     def _task_key(self, task_class, key):
         return ':'.join((key, self._registry.task_to_string(task_class)))
