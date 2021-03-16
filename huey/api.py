@@ -389,8 +389,8 @@ class Huey(object):
 
         if self.results and not isinstance(task, PeriodicTask):
             if exception is not None:
-                error = self.build_error_result(task, exception)
-                self.put_result(task.id, error)
+                error_data = self.build_error_result(task, exception)
+                self.put_result(task.id, Error(error_data))
             elif task_value is not None or self.store_none:
                 self.put_result(task.id, task_value)
 
@@ -453,12 +453,12 @@ class Huey(object):
         except AttributeError:  # Seems to only happen on 3.4.
             tb = '- unable to resolve traceback on Python 3.4 -'
 
-        return Error({
+        return {
             'error': repr(exception),
             'retries': task.retries,
             'traceback': tb,
             'task_id': task.id,
-        })
+        }
 
     def _task_key(self, task_class, key):
         return ':'.join((key, self._registry.task_to_string(task_class)))

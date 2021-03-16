@@ -1293,8 +1293,7 @@ class TestCustomErrorMetadata(BaseTestCase):
         class CustomError(MemoryHuey):
             def build_error_result(self, task, exc):
                 err = super(CustomError, self).build_error_result(task, exc)
-                err.metadata['name'] = task.name
-                err.metadata['args'] = task.args
+                err.update(name=task.name, args=task.args)
                 return err
         return CustomError(utc=False)
 
