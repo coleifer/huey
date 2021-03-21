@@ -50,8 +50,11 @@ class Command(BaseCommand):
         # Python 3.8+ on MacOS uses an incompatible multiprocess model. In this
         # case we must explicitly configure mp to use fork().
         if sys.version_info >= (3, 8) and sys.platform == 'darwin':
-            import multiprocessing
-            multiprocessing.set_start_method('fork')
+            try:
+                import multiprocessing
+                multiprocessing.set_start_method('fork')
+            except:
+                pass
 
         consumer_options = {}
         try:
