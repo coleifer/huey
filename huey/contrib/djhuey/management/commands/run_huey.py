@@ -50,8 +50,14 @@ class Command(BaseCommand):
         # Python 3.8+ on MacOS uses an incompatible multiprocess model. In this
         # case we must explicitly configure mp to use fork().
         if sys.version_info >= (3, 8) and sys.platform == 'darwin':
+            # Apparently this was causing a "context has already been set"
+            # error for some user. We'll just pass and hope for the best.
+            # They're apple users so presumably nothing important will be lost.
             import multiprocessing
-            multiprocessing.set_start_method('fork')
+            try:
+                multiprocessing.set_start_method('fork')
+            except RuntimeError:
+                pass
 
         consumer_options = {}
         try:
