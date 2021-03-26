@@ -43,9 +43,10 @@ class Command(BaseCommand):
         parser.add_argument('-A', '--disable-autoload', action='store_true',
                             dest='disable_autoload',
                             help='Do not autoload "tasks.py"')
+        parser.add_argument('--queue', action='store', dest='queue', help='Name of the queue consumer to run')
 
     def handle(self, *args, **options):
-        from huey.contrib.djhuey import HUEY
+        from huey.contrib.djhuey import default_queue
 
         # Python 3.8+ on MacOS uses an incompatible multiprocess model. In this
         # case we must explicitly configure mp to use fork().
@@ -59,12 +60,9 @@ class Command(BaseCommand):
             except RuntimeError:
                 pass
 
+        queue = options.get('queue')
         consumer_options = {}
-        try:
-            if isinstance(settings.HUEY, dict):
-                consumer_options.update(settings.HUEY.get('consumer', {}))
-        except AttributeError:
-            pass
+        consumer_options.update(self.default_queue_settings(queue))
 
         for key, value in options.items():
             if value is not None:
@@ -87,5 +85,15 @@ class Command(BaseCommand):
         if not logger.handlers:
             config.setup_logger(logger)
 
-        consumer = HUEY.create_consumer(**config.values)
+        consumer = default_queue(queue).create_consumer(**config.values)
         consumer.run()
+
+    def default_queue_settings(self, queue):
+        try:
+            if not queue and isinstance(settings.HUEY, dict):
+                return settings.HUEY.get('consumer', {})
+            if queue and isinstance(settings.HUEYS, dict):
+                return settings.HUEYS[queue].get('consumer', {})
+        except AttributeError:
+            pass
+        return {}
