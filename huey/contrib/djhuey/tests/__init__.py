@@ -1,0 +1,1 @@
+from huey.contrib.djhuey.tests.tests_config import *

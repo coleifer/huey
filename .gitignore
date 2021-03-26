@@ -5,3 +5,4 @@ docs/_build
 venv/
 huey.egg-info/
 huey.db
+hueyenv/
