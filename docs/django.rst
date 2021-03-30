@@ -11,7 +11,10 @@ integration provides:
 3. Auto-discovery of ``tasks.py`` modules to simplify task importing.
 4. Properly manage database connections.
 
-Supported Django versions are the officially supported at https://www.djangoproject.com/download/#supported-versions
+Supported Django versions are those officially supported at https://www.djangoproject.com/download/#supported-versions
+
+.. note::
+   For multiple-queue support, check out `gaiacoop/django-huey <https://github.com/gaiacoop/django-huey>`_.
 
 Setting things up
 ^^^^^^^^^^^^^^^^^
