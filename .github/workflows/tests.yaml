@@ -21,7 +21,7 @@ jobs:
       - name: package deps
         run: sudo apt-get install kyototycoon libkyototycoon-dev
       - name: pip deps
-        run: pip install gevent redis peewee ukt
+        run: pip install gevent redis peewee ukt django
       - name: runtests
         env:
           HUEY_TRAVIS: '1'
