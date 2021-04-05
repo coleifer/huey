@@ -54,5 +54,8 @@ def consumer_main():
 if __name__ == '__main__':
     if sys.version_info >= (3, 8) and sys.platform == 'darwin':
         import multiprocessing
-        multiprocessing.set_start_method('fork')
+        try:
+            multiprocessing.set_start_method('fork')
+        except RuntimeError:
+            pass
     consumer_main()
