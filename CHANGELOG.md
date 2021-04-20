@@ -3,7 +3,16 @@ Changelog
 
 ## master
 
-[View commits](https://github.com/coleifer/huey/compare/2.3.1...HEAD)
+[View commits](https://github.com/coleifer/huey/compare/2.3.2...HEAD)
+
+## 2.3.2
+
+* Add hook (`Huey.build_error_result`) for customizing the error result
+  metadata.
+* Avoid crashing if another module already modified/set the multiprocessing
+  start method.
+
+[View commits](https://github.com/coleifer/huey/compare/2.3.1...2.3.2)
 
 ## 2.3.1
 
