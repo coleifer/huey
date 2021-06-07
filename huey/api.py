@@ -964,7 +964,7 @@ dash_re = re.compile(r'(\d+)-(\d+)')
 every_re = re.compile(r'\*\/(\d+)')
 
 
-def crontab(minute='*', hour='*', day='*', month='*', day_of_week='*'):
+def crontab(minute='*', hour='*', day='*', month='*', day_of_week='*', strict=False):
     """
     Convert a "crontab"-style set of parameters into a test function that will
     return True when the given datetime matches the parameters set forth in
@@ -977,6 +977,10 @@ def crontab(minute='*', hour='*', day='*', month='*', day_of_week='*'):
     */n = run every "n" times, i.e. hours='*/4' == 0, 4, 8, 12, 16, 20
     m-n = run every time m..n
     m,n = run on m and n
+
+    The strict parameter will cause crontab to raise a ValueError if an input
+    does not match a supported crontab input format. This provides backwards
+    compatibility.
     """
     validation = (
         ('m', month, range(1, 13)),
@@ -1005,27 +1009,32 @@ def crontab(minute='*', hour='*', day='*', month='*', day_of_week='*'):
                 elif date_str == 'w':
                     piece %= 7
                 settings.add(piece)
+                continue
 
-            else:
-                dash_match = dash_re.match(piece)
-                if dash_match:
-                    lhs, rhs = map(int, dash_match.groups())
-                    if lhs not in acceptable or rhs not in acceptable:
-                        raise ValueError('%s is not a valid input' % piece)
-                    elif date_str == 'w':
-                        lhs %= 7
-                        rhs %= 7
-                    settings.update(range(lhs, rhs + 1))
-                    continue
+            dash_match = dash_re.match(piece)
+            if dash_match:
+                lhs, rhs = map(int, dash_match.groups())
+                if lhs not in acceptable or rhs not in acceptable:
+                    raise ValueError('%s is not a valid input' % piece)
+                elif date_str == 'w':
+                    lhs %= 7
+                    rhs %= 7
+                settings.update(range(lhs, rhs + 1))
+                continue
 
-                # Handle stuff like */3, */6.
-                every_match = every_re.match(piece)
-                if every_match:
-                    if date_str == 'w':
-                        raise ValueError('Cannot perform this kind of matching'
-                                         ' on day-of-week.')
-                    interval = int(every_match.groups()[0])
-                    settings.update(acceptable[::interval])
+            # Handle stuff like */3, */6.
+            every_match = every_re.match(piece)
+            if every_match:
+                if date_str == 'w':
+                    raise ValueError('Cannot perform this kind of matching'
+                                     ' on day-of-week.')
+                interval = int(every_match.groups()[0])
+                settings.update(acceptable[::interval])
+                continue
+
+            # Older versions of Huey would, at this point, ignore the unmatched piece.
+            if strict:
+                raise ValueError('%s is not a valid input' % piece)
 
         cron_settings.append(sorted(list(settings)))
 
