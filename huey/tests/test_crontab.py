@@ -118,3 +118,9 @@ class TestCrontab(unittest.TestCase):
         self.assertRaises(ValueError, crontab, minute='61')
         self.assertRaises(ValueError, crontab, minute='0-61')
         self.assertRaises(ValueError, crontab, day_of_week='*/3')
+
+    def test_invalid_crontabs_2(self):
+        self.assertTrue(crontab(minute='*abc'))
+        invalid = ('abc', '*abc', 'a-b', '1-c', '0x9')
+        for i in invalid:
+            self.assertRaises(ValueError, crontab, minute=i, strict=True)

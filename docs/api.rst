@@ -1109,7 +1109,7 @@ Huey object
         of an unhandled exception in the parent task.
 
 
-.. py:function:: crontab(month='*', day='*', day_of_week='*', hour='*', minute='*')
+.. py:function:: crontab(month='*', day='*', day_of_week='*', hour='*', minute='*'[, strict=False])
 
     Convert a "crontab"-style set of parameters into a test function that will
     return ``True`` when a given ``datetime`` matches the parameters set forth in
@@ -1124,6 +1124,8 @@ Huey object
     - "m-n" = run every time m..n
     - "m,n" = run on m and n
 
+    :param bool strict: cause crontab to raise a ``ValueError`` if an input
+       does not match a supported input format.
     :rtype: a test function that takes a ``datetime`` and returns a boolean
 
     .. note::
