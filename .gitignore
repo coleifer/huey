@@ -5,3 +5,5 @@ docs/_build
 venv/
 huey.egg-info/
 huey.db
+demo/
+.vscode/

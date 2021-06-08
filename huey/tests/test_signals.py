@@ -21,17 +21,17 @@ class TestSignals(BaseTestCase):
             return n + 1
 
         r = task_a(3)
-        self.assertSignals([])
+        self.assertSignals([SIGNAL_ENQUEUED])
         self.assertEqual(self.execute_next(), 4)
         self.assertSignals([SIGNAL_EXECUTING, SIGNAL_COMPLETE])
 
         r = task_a.schedule((2,), delay=60)
-        self.assertSignals([])
+        self.assertSignals([SIGNAL_ENQUEUED])
         self.assertTrue(self.execute_next() is None)
         self.assertSignals([SIGNAL_SCHEDULED])
 
         r = task_a(None)
-        self.assertSignals([])
+        self.assertSignals([SIGNAL_ENQUEUED])
         self.assertTrue(self.execute_next() is None)
         self.assertSignals([SIGNAL_EXECUTING, SIGNAL_ERROR])
 
@@ -56,9 +56,9 @@ class TestSignals(BaseTestCase):
             return n + 1
 
         r = task_a(None)
-        self.assertSignals([])
+        self.assertSignals([SIGNAL_ENQUEUED])
         self.assertTrue(self.execute_next() is None)
-        self.assertSignals([SIGNAL_EXECUTING, SIGNAL_ERROR, SIGNAL_RETRYING])
+        self.assertSignals([SIGNAL_EXECUTING, SIGNAL_ERROR, SIGNAL_RETRYING, SIGNAL_ENQUEUED])
         self.assertTrue(self.execute_next() is None)
         self.assertSignals([SIGNAL_EXECUTING, SIGNAL_ERROR])
 
@@ -67,7 +67,7 @@ class TestSignals(BaseTestCase):
             return n + 1
 
         r = task_b(None)
-        self.assertSignals([])
+        self.assertSignals([SIGNAL_ENQUEUED])
         self.assertTrue(self.execute_next() is None)
         self.assertSignals([SIGNAL_EXECUTING, SIGNAL_ERROR, SIGNAL_RETRYING,
                             SIGNAL_SCHEDULED])
@@ -79,13 +79,13 @@ class TestSignals(BaseTestCase):
 
         task_a.revoke(revoke_once=True)
         r = task_a(2)
-        self.assertSignals([])
+        self.assertSignals([SIGNAL_ENQUEUED])
         self.assertTrue(self.execute_next() is None)
         self.assertSignals([SIGNAL_REVOKED])
 
         r = task_a(3)
         self.assertEqual(self.execute_next(), 4)
-        self.assertSignals([SIGNAL_EXECUTING, SIGNAL_COMPLETE])
+        self.assertSignals([SIGNAL_ENQUEUED, SIGNAL_EXECUTING, SIGNAL_COMPLETE])
 
     def test_signals_locked(self):
         @self.huey.task()
@@ -94,13 +94,13 @@ class TestSignals(BaseTestCase):
             return n + 1
 
         r = task_a(1)
-        self.assertSignals([])
+        self.assertSignals([SIGNAL_ENQUEUED])
         self.assertEqual(self.execute_next(), 2)
         self.assertSignals([SIGNAL_EXECUTING, SIGNAL_COMPLETE])
 
         with self.huey.lock_task('lock-a'):
             r = task_a(2)
-            self.assertSignals([])
+            self.assertSignals([SIGNAL_ENQUEUED])
             self.assertTrue(self.execute_next() is None)
             self.assertSignals([SIGNAL_EXECUTING, SIGNAL_LOCKED])
 
@@ -119,18 +119,18 @@ class TestSignals(BaseTestCase):
         self.assertEqual(extra_state, [])
         self.assertEqual(self.execute_next(), 4)
         self.assertEqual(extra_state, [3])
-        self.assertSignals([SIGNAL_EXECUTING, SIGNAL_COMPLETE])
+        self.assertSignals([SIGNAL_ENQUEUED, SIGNAL_EXECUTING, SIGNAL_COMPLETE])
 
         r2 = task_a(1)
         self.assertEqual(self.execute_next(), 2)
         self.assertEqual(extra_state, [3, 1])
-        self.assertSignals([SIGNAL_EXECUTING, SIGNAL_COMPLETE])
+        self.assertSignals([SIGNAL_ENQUEUED, SIGNAL_EXECUTING, SIGNAL_COMPLETE])
 
         self.huey.disconnect_signal(extra_handler, SIGNAL_EXECUTING)
         r3 = task_a(2)
         self.assertEqual(self.execute_next(), 3)
         self.assertEqual(extra_state, [3, 1])
-        self.assertSignals([SIGNAL_EXECUTING, SIGNAL_COMPLETE])
+        self.assertSignals([SIGNAL_ENQUEUED, SIGNAL_EXECUTING, SIGNAL_COMPLETE])
 
     def test_multi_handlers(self):
         state1 = []

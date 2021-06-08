@@ -1,6 +1,6 @@
 import itertools
 
-
+SIGNAL_ENQUEUED = 'enqueued'
 SIGNAL_CANCELED = 'canceled'
 SIGNAL_COMPLETE = 'complete'
 SIGNAL_ERROR = 'error'

@@ -11,6 +11,7 @@ The following signals are implemented by Huey:
 
 * ``SIGNAL_CANCELED``: task was canceled due to a pre-execute hook raising
   a :py:class:`CancelExecution` exception.
+* ``SIGNAL_ENQUEUED``: task has been enqueued to be executed.
 * ``SIGNAL_COMPLETE``: task has been executed successfully.
 * ``SIGNAL_ERROR``: task failed due to an unhandled exception.
 * ``SIGNAL_EXECUTING``: task is about to be executed.
@@ -89,6 +90,7 @@ Here is a simple example of a task execution we would expect to succeed:
 
 The consumer would send the following signals:
 
+* ``SIGNAL_ENQUEUED`` task has been queued to be executed.
 * ``SIGNAL_EXECUTING`` - the task has been dequeued and will be executed.
 * ``SIGNAL_COMPLETE`` - the task has finished successfully.
 
@@ -101,10 +103,11 @@ Here is an example of scheduling a task for execution after a short delay:
 
 The following signals would be sent:
 
+* ``SIGNAL_ENQUEUED`` task has been queued to be executed.
 * ``SIGNAL_SCHEDULED`` - the task is not yet ready to run, so it has been added
   to the schedule.
 * After 10 seconds, the consumer will run the task and send
-  the ``SIGNAL_EXECUTING`` signal.
+  the ``SIGNAL_ENQUEUED`` and ``SIGNAL_EXECUTING`` signal.
 * ``SIGNAL_COMPLETE``.
 
 Here is an example that may fail, in which case it will be retried
@@ -123,11 +126,13 @@ automatically with a delay of 10 seconds.
 Assuming the task failed the first time and succeeded the second time, we would
 see the following signals being sent:
 
+* ``SIGNAL_ENQUEUED`` task has been queued to be executed.
 * ``SIGNAL_EXECUTING`` - the task is being executed.
 * ``SIGNAL_ERROR`` - the task raised an unhandled exception.
 * ``SIGNAL_RETRYING`` - the task will be retried.
 * ``SIGNAL_SCHEDULED`` - the task has been added to the schedule for execution
   in ~10 seconds.
+* ``SIGNAL_ENQUEUED`` task has been queued to be executed.
 * ``SIGNAL_EXECUTING`` - second try running task.
 * ``SIGNAL_COMPLETE`` - task succeeded.
 
@@ -140,6 +145,7 @@ What happens if we revoke the ``add()`` task and then attempt to execute it:
 
 The following signal will be sent:
 
+* ``SIGNAL_ENQUEUED`` task has been queued to be executed.
 * ``SIGNAL_REVOKED`` - this is sent before the task enters the "executing"
   state. When a task is revoked, no other signals will be sent.
 

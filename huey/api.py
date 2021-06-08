@@ -288,6 +288,7 @@ class Huey(object):
             self.execute(task)
         else:
             self.storage.enqueue(self.serialize_task(task), task.priority)
+            self._emit(S.SIGNAL_ENQUEUED, task)
 
         if not self.results:
             return
