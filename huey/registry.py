@@ -7,6 +7,11 @@ Message = namedtuple('Message', ('id', 'name', 'eta', 'retries', 'retry_delay',
                                  'priority', 'args', 'kwargs', 'on_complete',
                                  'on_error'))
 
+# Automatically set missing parameters to None. This is kind-of a hack, but it
+# allows us to add new parameters while continuing to be able to handle
+# messages enqueued with a smaller-set of arguments.
+Message.__new__.__defaults__ = (None,) * len(Message._fields)
+
 
 class Registry(object):
     def __init__(self):
