@@ -3,12 +3,16 @@ on: [push]
 jobs:
   tests:
     name: ${{ matrix.python-version }}
-    runs-on: ubuntu-16.04
+    runs-on: ubuntu-20.04
     services:
       redis:
         image: redis
         ports:
           - 6379:6379
+      kyototycoon:
+        image: coleifer/kyototycoon
+        ports:
+          - 1978:1978
     strategy:
       fail-fast: false
       matrix:
@@ -18,8 +22,6 @@ jobs:
       - uses: actions/setup-python@v2
         with:
           python-version: ${{ matrix.python-version }}
-      - name: package deps
-        run: sudo apt-get install kyototycoon libkyototycoon-dev
       - name: pip deps
         run: pip install gevent redis peewee ukt
       - name: runtests
