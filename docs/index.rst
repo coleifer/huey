@@ -26,6 +26,7 @@ huey supports:
 * automatically retry tasks that fail
 * task prioritization
 * task result storage
+* task expiration
 * task locking
 * task pipelines and chains
 
