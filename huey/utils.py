@@ -71,13 +71,21 @@ def local_to_utc(dt):
     return datetime.datetime(*time.gmtime(time.mktime(dt.timetuple()))[:6])
 
 
+def normalize_expire_time(expires, utc=True):
+    if isinstance(expires, datetime.datetime):
+        return normalize_time(eta=expires, utc=utc)
+    return normalize_time(delay=expires, utc=utc)
+
+
 def normalize_time(eta=None, delay=None, utc=True):
     if not ((delay is None) ^ (eta is None)):
         raise ValueError('Specify either an eta (datetime) or delay (seconds)')
     elif delay:
         method = (utc and datetime.datetime.utcnow or
                   datetime.datetime.now)
-        return method() + datetime.timedelta(seconds=delay)
+        if not isinstance(delay, datetime.timedelta):
+            delay = datetime.timedelta(seconds=delay)
+        return method() + delay
     elif eta:
         has_tz = not is_naive(eta)
         if utc:

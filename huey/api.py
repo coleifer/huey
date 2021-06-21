@@ -612,7 +612,7 @@ class Task(object):
 
     def __init__(self, args=None, kwargs=None, id=None, eta=None, retries=None,
                  retry_delay=None, priority=None, on_complete=None,
-                 on_error=None):
+                 on_error=None, expires=None, expires_resolved=None):
         self.name = type(self).__name__
         self.args = () if args is None else args
         self.kwargs = {} if kwargs is None else kwargs
@@ -624,6 +624,8 @@ class Task(object):
                 self.default_retry_delay
         self.priority = priority if priority is not None else \
                 self.default_priority
+        self.expires = expires
+        self.expires_resolved = expires_resolved
 
         self.on_complete = on_complete
         self.on_error = on_error

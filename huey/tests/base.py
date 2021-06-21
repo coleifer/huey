@@ -28,10 +28,10 @@ class BaseTestCase(unittest.TestCase):
     def get_huey(self):
         return MemoryHuey(utc=False)
 
-    def execute_next(self):
+    def execute_next(self, timestamp=None):
         task = self.huey.dequeue()
         self.assertTrue(task is not None)
-        return self.huey.execute(task)
+        return self.huey.execute(task, timestamp=timestamp)
 
     def trap_exception(self, fn, exc_type=TaskException):
         try:

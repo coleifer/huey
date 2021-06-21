@@ -5,7 +5,7 @@ from huey.exceptions import HueyException
 
 Message = namedtuple('Message', ('id', 'name', 'eta', 'retries', 'retry_delay',
                                  'priority', 'args', 'kwargs', 'on_complete',
-                                 'on_error'))
+                                 'on_error', 'expires', 'expires_resolved'))
 
 # Automatically set missing parameters to None. This is kind-of a hack, but it
 # allows us to add new parameters while continuing to be able to handle
@@ -76,7 +76,9 @@ class Registry(object):
             task.args,
             task.kwargs,
             on_complete,
-            on_error)
+            on_error,
+            task.expires,
+            task.expires_resolved)
 
     def create_task(self, message):
         # Compatibility with Huey 1.11 message format.
@@ -104,7 +106,9 @@ class Registry(object):
             message.retry_delay,
             message.priority,
             on_complete,
-            on_error)
+            on_error,
+            message.expires,
+            message.expires_resolved)
 
     @property
     def periodic_tasks(self):
