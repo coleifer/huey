@@ -479,7 +479,7 @@ class TestQueue(BaseTestCase):
             self.huey.execute(task, seconds(30))
             self.assertEqual(state, [res.id, r2.id, r3.id, r4.id])
 
-            state.clear()
+            state = []
 
     def test_scheduling_expires(self):
         @self.huey.task()
