@@ -105,9 +105,9 @@ class Registry(object):
             message.retries,
             message.retry_delay,
             message.priority,
+            message.expires,
             on_complete,
             on_error,
-            message.expires,
             message.expires_resolved)
 
     @property

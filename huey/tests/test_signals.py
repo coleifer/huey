@@ -1,3 +1,5 @@
+import datetime
+
 from huey.signals import *
 from huey.tests.base import BaseTestCase
 
@@ -103,6 +105,23 @@ class TestSignals(BaseTestCase):
             self.assertSignals([])
             self.assertTrue(self.execute_next() is None)
             self.assertSignals([SIGNAL_EXECUTING, SIGNAL_LOCKED])
+
+    def test_signal_expired(self):
+        @self.huey.task(expires=10)
+        def task_a(n):
+            return n + 1
+
+        now = datetime.datetime.now()
+        expires = now + datetime.timedelta(seconds=15)
+        r = task_a(2)
+        self.assertSignals([])
+        self.assertTrue(self.execute_next(expires) is None)
+        self.assertSignals([SIGNAL_EXPIRED])
+
+        r = task_a(3)
+        self.assertSignals([])
+        self.assertTrue(self.execute_next(), 4)
+        self.assertSignals([SIGNAL_EXECUTING, SIGNAL_COMPLETE])
 
     def test_specific_handler(self):
         extra_state = []

@@ -47,6 +47,8 @@ class TestRegistry(BaseTestCase):
         self.assertEqual(message.kwargs, {'p4': 'v4'})
         self.assertTrue(message.on_complete is None)
         self.assertTrue(message.on_error is None)
+        self.assertTrue(message.expires is None)
+        self.assertTrue(message.expires_resolved is None)
 
         task2 = self.registry.create_task(message)
         self.assertEqual(task2.id, task.id)
@@ -56,6 +58,8 @@ class TestRegistry(BaseTestCase):
         self.assertEqual(task2.kwargs, {'p4': 'v4'})
         self.assertTrue(task2.on_complete is None)
         self.assertTrue(task2.on_error is None)
+        self.assertTrue(task2.expires is None)
+        self.assertTrue(task2.expires_resolved is None)
 
     def test_missing_task(self):
         @self.huey.task()

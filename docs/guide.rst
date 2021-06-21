@@ -398,6 +398,50 @@ API docs:
 * :py:meth:`TaskWrapper.is_revoked` for checking the status of the task
   function itself.
 
+Task expiration
+---------------
+
+Huey tasks can be configured with an expiration time. Setting an expiration
+time on tasks will prevent them being run after the given time has elapsed.
+Expiration times can be specified as:
+
+* ``datetime()`` instances, which are treated as absolute times.
+* ``timedelta()`` or ``int``, which are relative to the time *at which the task
+  is enqueued*.
+
+A default expire time can be provided when declaring a task:
+
+.. code-block:: python
+
+    # Task must be executed by consumer within 60s of being enqueued.
+    @huey.task(expires=60)
+    def time_sensitive_task(...):
+
+Expiration times can be specified per-invocation, as well:
+
+.. code-block:: python
+
+    # Task must be executed by consumer within 5 minutes of being enqueued.
+    time_sensitive_task(report_file, expires=timedelta(seconds=300))
+
+Expiration times can also be specified when scheduling tasks:
+
+.. code-block:: python
+
+    # Task scheduled to run in 1 hour, and once enqueued for execution, must be
+    # run within 60 seconds.
+    time_sensitive_task.schedule(
+        args=(report_file,),
+        delay=timedelta(seconds=3600),
+        expires=timedelta(seconds=60))
+
+    # Example using absolute datetimes instead of relative deltas:
+    one_hr = datetime.now() + timedelta(seconds=3600)
+    time_sensitive_task.schedule(
+        args=(report_file,),
+        eta=one_hr,
+        expires=one_hr + timedelta(seconds=60))
+
 Canceling or pausing periodic tasks
 -----------------------------------
 

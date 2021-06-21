@@ -415,6 +415,124 @@ class TestQueue(BaseTestCase):
         self.assertEqual(self.huey.result_count(), 0)
         self.assertEqual(self.huey.scheduled_count(), 0)
 
+    def test_expires(self):
+        state = []
+        now = datetime.datetime.now()
+        seconds = lambda s: now + datetime.timedelta(seconds=s)
+
+        # Tasks with both relative and absolute expire time.
+        @self.huey.task(context=True, expires=10)
+        def task_r(task=None):
+            state.append(task.id)
+            return True
+
+        @self.huey.task(context=True, expires=seconds(10))
+        def task_a(task=None):
+            state.append(task.id)
+            return True
+
+        for exp_task in (task_r, task_a):
+            # Task enqueued and executes normally since we're within the 10
+            # second window.
+            res = exp_task()
+            self.assertEqual(len(self.huey), 1)
+            self.assertTrue(self.execute_next(timestamp=seconds(1)))
+            self.assertTrue(res())
+            self.assertEqual(state, [res.id])
+
+            # We'll create another task and attempt to run it, as if 10 seconds
+            # had elapsed, and it will be expired.
+            r2 = exp_task()
+            task = self.huey.dequeue()
+
+            # We'll ensure that the TTL was set for ~10 seconds from now.
+            self.assertTrue(seconds(10) <= task.expires_resolved < seconds(12))
+
+            # Attempt to execute with execution timestamp 12s from task
+            # creation - the task will be expired.
+            self.huey.execute(task, seconds(12))
+            self.assertEqual(state, [res.id])
+
+            # Attempt to execute with execution timestamp at 5s.
+            self.huey.execute(task, seconds(5))
+            self.assertEqual(state, [res.id, r2.id])
+
+            # We can override the expire-time at invocation.
+            r3 = exp_task(expires=60)
+            task = self.huey.dequeue()
+            self.assertTrue(seconds(60) <= task.expires_resolved < seconds(62))
+
+            # Task is expired.
+            self.huey.execute(task, seconds(63))
+            self.assertEqual(state, [res.id, r2.id])
+
+            # Run within the expiration time.
+            self.huey.execute(task, seconds(50))
+            self.assertEqual(state, [res.id, r2.id, r3.id])
+
+            # We can also use datetime objects for default and per-task expire.
+            r4 = exp_task(expires=seconds(30))
+            task = self.huey.dequeue()
+            self.assertEqual(task.expires_resolved, seconds(30))
+            self.huey.execute(task, seconds(31))
+            self.assertEqual(state, [res.id, r2.id, r3.id])
+            self.huey.execute(task, seconds(30))
+            self.assertEqual(state, [res.id, r2.id, r3.id, r4.id])
+
+            state.clear()
+
+    def test_scheduling_expires(self):
+        @self.huey.task()
+        def task_a(n):
+            return n + 1
+
+        now = datetime.datetime.now()
+        seconds = lambda s: now + datetime.timedelta(seconds=s)
+
+        result = task_a.schedule((3,), eta=seconds(60), expires=5)
+        self.assertEqual(len(self.huey), 1)
+        self.assertEqual(self.huey.scheduled_count(), 0)
+
+        # Will be added to schedule, since task is not ready to run.
+        self.assertTrue(self.execute_next() is None)
+        self.assertEqual(len(self.huey), 0)
+        self.assertEqual(self.huey.scheduled_count(), 1)
+
+        # Simulate consumer running the scheduler after 60s elapsed.
+        task, = self.huey.read_schedule(timestamp=seconds(60))
+        self.assertEqual(task.expires, 5)  # Expire time is present.
+        self.huey.enqueue(task)
+
+        task = self.huey.dequeue()  # Read our task back.
+        task.eta = now  # Simulate the task being ready to run.
+        self.assertEqual(self.huey.execute(task, seconds(1)), 4)
+
+    def test_reschedule_expires(self):
+        state = []
+        now = datetime.datetime.now()
+        seconds = lambda s: now + datetime.timedelta(seconds=s)
+
+        @self.huey.task(context=True)
+        def task_s(task=None):
+            state.append(task.id)
+            return True
+
+        res = task_s()
+        res2 = res.reschedule(expires=seconds(10))
+        self.assertEqual(len(self.huey), 2)
+        self.assertTrue(self.execute_next() is None)  # 1st was revoked.
+
+        task = self.huey.dequeue()
+        self.assertEqual(task.expires_resolved, seconds(10))
+        self.assertTrue(self.huey.execute(task, seconds(11)) is None)
+        self.assertEqual(state, [])
+
+        res3 = res2.reschedule(expires=5)
+        task = self.huey.dequeue()
+        self.assertTrue(seconds(5) < task.expires_resolved < seconds(7))
+        self.assertEqual(self.huey.execute(task), True)
+        self.assertEqual(state, [res3.id])
+
     def test_task_error(self):
         @self.huey.task()
         def task_e(n):

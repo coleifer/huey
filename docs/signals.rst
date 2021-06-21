@@ -14,12 +14,13 @@ The following signals are implemented by Huey:
 * ``SIGNAL_COMPLETE``: task has been executed successfully.
 * ``SIGNAL_ERROR``: task failed due to an unhandled exception.
 * ``SIGNAL_EXECUTING``: task is about to be executed.
+* ``SIGNAL_EXPIRED``: task expired.
 * ``SIGNAL_LOCKED``: failed to acquire lock, aborting task.
 * ``SIGNAL_RETRYING``: task failed, but will be retried.
 * ``SIGNAL_REVOKED``: task is revoked and will not be executed.
 * ``SIGNAL_SCHEDULED``: task is not yet ready to run and has been added to the
   schedule for future execution.
-* ``SIGNAL_INTERRUPTED``: task is interrupted when consumer exits
+* ``SIGNAL_INTERRUPTED``: task is interrupted when consumer exits.
 
 When a signal handler is called, it will be called with the following
 arguments:

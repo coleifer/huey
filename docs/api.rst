@@ -243,7 +243,7 @@ Huey object
 
             huey = RedisHuey(immediate=True)
 
-    .. py:method:: task(retries=0, retry_delay=0, priority=None, context=False, name=None, **kwargs)
+    .. py:method:: task(retries=0, retry_delay=0, priority=None, context=False, name=None, expires=None, **kwargs)
 
         :param int retries: number of times to retry the function if an
             unhandled exception occurs when it is executed.
@@ -254,6 +254,11 @@ Huey object
             :py:class:`Task` instance as a keyword argument.
         :param str name: name for this task. If not provided, Huey will default
             to using the module name plus function name.
+        :param expires: set expiration time for task - if task is not run
+            before ``expires``, it will be discarded. The ``expires`` parameter
+            can be either an integer (seconds), a timedelta, or a datetime. For
+            relative expiration values, the expire time will be resolved when
+            the task is enqueued.
         :param kwargs: arbitrary key/value arguments that are passed to the
             :py:class:`TaskWrapper` instance.
         :returns: a :py:class:`TaskWrapper` that wraps the decorated function
@@ -365,7 +370,7 @@ Huey object
         For more information, see :py:class:`TaskWrapper`, :py:class:`Task`,
         and :py:class:`Result`.
 
-    .. py:method:: periodic_task(validate_datetime, retries=0, retry_delay=0, priority=None, context=False, name=None, **kwargs)
+    .. py:method:: periodic_task(validate_datetime, retries=0, retry_delay=0, priority=None, context=False, name=None, expires=None, **kwargs)
 
         :param function validate_datetime: function which accepts a
             ``datetime`` instance and returns whether the task should be
@@ -379,6 +384,11 @@ Huey object
             :py:class:`Task` instance as a parameter.
         :param str name: name for this task. If not provided, Huey will default
             to using the module name plus function name.
+        :param expires: set expiration time for task - if task is not run
+            before ``expires``, it will be discarded. The ``expires`` parameter
+            can be either an integer (seconds), a timedelta, or a datetime. For
+            relative expiration values, the expire time will be resolved when
+            the task is enqueued.
         :param kwargs: arbitrary key/value arguments that are passed to the
             :py:class:`TaskWrapper` instance.
         :returns: a :py:class:`TaskWrapper` that wraps the decorated function
@@ -938,6 +948,11 @@ Huey object
         :param kwargs: Keyword arguments for task function.
         :param int priority: assign priority override to task, higher numbers
             are processed first by the consumer when there is a backlog.
+        :param expires: set expiration time for task - if task is not run
+            before ``expires``, it will be discarded. The ``expires`` parameter
+            can be either an integer (seconds), a timedelta, or a datetime. For
+            relative expiration values, the expire time will be resolved when
+            the task is enqueued.
         :returns: a :py:class:`Task` instance representing the execution of the
             task function with the given arguments.
 
@@ -1008,7 +1023,7 @@ Huey object
             # [0, 2, 6, 12, 20, 30, 42, 56, 72, 90]
 
 
-.. py:class:: Task(args=None, kwargs=None, id=None, eta=None, retries=None, retry_delay=None, on_complete=None, on_error=None)
+.. py:class:: Task(args=None, kwargs=None, id=None, eta=None, retries=None, retry_delay=None, expires=None, on_complete=None, on_error=None)
 
     :param tuple args: arguments for the function call.
     :param dict kwargs: keyword arguments for the function call.
@@ -1018,6 +1033,11 @@ Huey object
     :param int retry_delay: seconds to wait before retrying a failed task.
     :param int priority: priority assigned to task, higher numbers are
         processed first by the consumer when there is a backlog.
+    :param expires: set expiration time for task - if task is not run
+        before ``expires``, it will be discarded. The ``expires`` parameter
+        can be either an integer (seconds), a timedelta, or a datetime. For
+        relative expiration values, the expire time will be resolved when
+        the task is enqueued.
     :param Task on_complete: Task to execute upon completion of this task.
     :param Task on_error: Task to execute upon failure / error.
 
@@ -1285,10 +1305,12 @@ Result
 
         .. seealso:: :py:meth:`TaskWrapper.is_revoked`.
 
-    .. py:method:: reschedule(eta=None, delay=None)
+    .. py:method:: reschedule(eta=None, delay=None, expires=None)
 
         :param datetime eta: execute function at the given time.
         :param int delay: execute function after specified delay in seconds.
+        :param expires: set expiration time for task. If not provided, then the
+            task's original expire time (if any) will be used.
         :returns: :py:class:`Result` handle for the new task.
 
         Reschedule the given task. The original task instance will be revoked,
