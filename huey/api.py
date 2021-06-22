@@ -166,12 +166,12 @@ class Huey(object):
             return TaskWrapper(
                 self,
                 func.func if isinstance(func, TaskWrapper) else func,
-                retries=retries,
-                retry_delay=retry_delay,
-                default_priority=priority,
-                default_expires=expires,
                 context=context,
                 name=name,
+                default_retries=retries,
+                default_retry_delay=retry_delay,
+                default_priority=priority,
+                default_expires=expires,
                 **kwargs)
         return decorator
 
@@ -785,7 +785,8 @@ class TaskWrapper(object):
         return self.huey.restore_all(self.task_class)
 
     def schedule(self, args=None, kwargs=None, eta=None, delay=None,
-                 priority=None, expires=None, id=None):
+                 priority=None, retries=None, retry_delay=None, expires=None,
+                 id=None):
         if eta is None and delay is None:
             if isinstance(args, (int, float)):
                 delay = args
@@ -806,8 +807,8 @@ class TaskWrapper(object):
             kwargs or {},
             id=id,
             eta=eta,
-            retries=self.retries,
-            retry_delay=self.retry_delay,
+            retries=retries,
+            retry_delay=retry_delay,
             priority=priority,
             expires=expires)
         return self.huey.enqueue(task)
@@ -825,8 +826,9 @@ class TaskWrapper(object):
         return self.func(*args, **kwargs)
 
     def s(self, *args, **kwargs):
-        return self.task_class(args, kwargs, retries=self.retries,
-                               retry_delay=self.retry_delay,
+        return self.task_class(args, kwargs,
+                               retries=kwargs.pop('retries', None),
+                               retry_delay=kwargs.pop('retry_delay', None),
                                priority=kwargs.pop('priority', None),
                                expires=kwargs.pop('expires', None))
 

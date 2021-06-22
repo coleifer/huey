@@ -24,8 +24,21 @@ class TestError(Exception):
     def __repr__(self):
         return 'TestError(%s)' % self._m
 
+class ExcCounter(Exception):
+    counter = 0
+    def __init__(self):
+        ExcCounter.counter += 1
+        self._v = ExcCounter.counter
+    def __repr__(self):
+        return 'ExcCounter(%s)' % self._v
+
+
 
 class TestQueue(BaseTestCase):
+    def setUp(self):
+        super(TestQueue, self).setUp()
+        ExcCounter.counter = 0
+
     def test_workflow(self):
         @self.huey.task()
         def task_a(n):
@@ -568,18 +581,10 @@ class TestQueue(BaseTestCase):
         self.assertEqual(exc.metadata['error'], 'TaskException()')
 
     def test_retry(self):
-        class TestException(Exception):
-            counter = 0
-            def __init__(self):
-                TestException.counter += 1
-                self._v = TestException.counter
-            def __repr__(self):
-                return 'TestException(%s)' % self._v
-
         @self.huey.task(retries=1)
         def task_a(n):
             if n < 0:
-                raise TestException()
+                raise ExcCounter()
             return n + 1
 
         # Execute the task normally.
@@ -596,7 +601,7 @@ class TestQueue(BaseTestCase):
         # Attempting to resolve the result value will raise a TaskException,
         # which wraps the original error from the task.
         task_error = self.trap_exception(r)
-        self.assertEqual(task_error.metadata['error'], 'TestException(1)')
+        self.assertEqual(task_error.metadata['error'], 'ExcCounter(1)')
         self.assertEqual(task_error.metadata['retries'], 1)
         self.assertEqual(len(self.huey), 1)
         self.assertEqual(self.huey.result_count(), 0)
@@ -612,7 +617,7 @@ class TestQueue(BaseTestCase):
         # it to re-read. Attempting to read again will just return the cached
         # value.
         task_error = self.trap_exception(r)
-        self.assertEqual(task_error.metadata['error'], 'TestException(1)')
+        self.assertEqual(task_error.metadata['error'], 'ExcCounter(1)')
         self.assertEqual(self.huey.result_count(), 1)  # No change.
 
         # Reset the state of the result object in order to be able to read.
@@ -620,9 +625,49 @@ class TestQueue(BaseTestCase):
 
         # As expected, the error occurs again.
         task_error = self.trap_exception(r)
-        self.assertEqual(task_error.metadata['error'], 'TestException(2)')
+        self.assertEqual(task_error.metadata['error'], 'ExcCounter(2)')
         self.assertEqual(task_error.metadata['retries'], 0)
         self.assertEqual(len(self.huey), 0)  # Not enqueued again.
+        self.assertEqual(self.huey.result_count(), 0)
+
+    def test_retries_with_override(self):
+        @self.huey.task(retries=1)
+        def task_a():
+            raise ExcCounter()
+
+        # Override the number of retries so it is not retried.
+        r = task_a(retries=0)
+        self.assertTrue(self.execute_next() is None)
+
+        # Attempting to resolve the result value will raise a TaskException,
+        # which wraps the original error from the task. The task will not be
+        # retried, so it is not enqueued again.
+        task_error = self.trap_exception(r)
+        self.assertEqual(task_error.metadata['error'], 'ExcCounter(1)')
+        self.assertEqual(task_error.metadata['retries'], 0)
+        self.assertEqual(len(self.huey), 0)
+        self.assertEqual(self.huey.result_count(), 0)
+
+        # Override the number of retries.
+        r = task_a(retries=2)
+        self.assertTrue(self.execute_next() is None)
+
+        # Attempting to resolve the result value will raise a TaskException,
+        # which wraps the original error from the task.
+        task_error = self.trap_exception(r)
+        self.assertEqual(task_error.metadata['error'], 'ExcCounter(2)')
+        self.assertEqual(task_error.metadata['retries'], 2)
+        self.assertEqual(len(self.huey), 1)
+        self.assertEqual(self.huey.result_count(), 0)
+        self.huey.dequeue()  # Throw away task.
+
+        # Ensure this works with scheduling as well.
+        r = task_a.schedule(delay=-1, retries=3)
+        self.assertTrue(self.execute_next() is None)
+        task_error = self.trap_exception(r)
+        self.assertEqual(task_error.metadata['error'], 'ExcCounter(3)')
+        self.assertEqual(task_error.metadata['retries'], 3)
+        self.assertEqual(len(self.huey), 1)
         self.assertEqual(self.huey.result_count(), 0)
 
     def test_retry_periodic(self):
