@@ -138,11 +138,12 @@ class Scheduler(BaseProcess):
     If periodic tasks are enabled, the scheduler will wake up every 60 seconds
     to enqueue any periodic tasks that should be run.
     """
+    periodic_task_seconds = 60
     process_name = 'Scheduler'
 
     def __init__(self, huey, interval, periodic):
         super(Scheduler, self).__init__(huey)
-        self.interval = min(interval, 60)
+        self.interval = max(min(interval, 60), 1)
 
         self.periodic = periodic
         self._next_loop = time_clock()
@@ -164,11 +165,9 @@ class Scheduler(BaseProcess):
                 self._logger.debug('Enqueueing %s', task)
                 self.huey.enqueue(task)
 
-        if self.periodic:
-            current_p = self._next_periodic
-            if current_p <= time_clock():
-                self._next_periodic += 60
-                self.enqueue_periodic_tasks(now)
+        if self.periodic and self._next_periodic <= time_clock():
+            self._next_periodic += self.periodic_task_seconds
+            self.enqueue_periodic_tasks(now)
 
         self.sleep_for_interval(current, self.interval)
 
