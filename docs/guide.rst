@@ -80,6 +80,7 @@ delay:
 
 .. code-block:: pycon
 
+    >>> import datetime
     >>> eta = datetime.datetime.now() + datetime.timedelta(seconds=10)
     >>> r = add.schedule((4, 5), eta=eta)
     >>> r(blocking=True)  # Will block for ~10 seconds.
