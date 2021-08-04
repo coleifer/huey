@@ -918,7 +918,7 @@ class FileStorage(BaseStorage):
 
             with open(tmp_dest, 'rb') as fh:
                 data = fh.read()
-                os.unlink(tmp_dest)
+            os.unlink(tmp_dest)
         return data
 
     def queue_size(self):
