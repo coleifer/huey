@@ -3,7 +3,17 @@ Changelog
 
 ## master
 
-[View commits](https://github.com/coleifer/huey/compare/2.3.2...HEAD)
+[View commits](https://github.com/coleifer/huey/compare/2.4.0...HEAD)
+
+## 2.4.0
+
+* Task expiration: https://huey.readthedocs.io/en/latest/guide.html#task-expiration
+* Add option to make `crontab()` parsing strict, raising an error if an invalid
+  interval specification is given. You probably want to enable this.
+* Fix bug in the FileStorage dequeue() method, which attempted to unlink an
+  open file.
+
+[View commits](https://github.com/coleifer/huey/compare/2.3.2...2.4.0)
 
 ## 2.3.2
 
