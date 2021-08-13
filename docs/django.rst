@@ -84,8 +84,14 @@ The following ``huey_class`` implementations are provided out-of-the-box:
 * ``huey.RedisHuey`` - default.
 * ``huey.PriorityRedisHuey`` - uses Redis but adds support for :ref:`priority`.
   Requires redis server 5.0 or newer.
+* ``huey.RedisExpireHuey`` - Redis implementation that expires result keys
+  automatically if results are not read.
+* ``huey.PriorityRedisExpireHuey`` - Redis implementation that expires result
+  keys automatically if results are not read and supports priority.
 * ``huey.SqliteHuey`` - uses Sqlite, full support for task priorities. Accepts
   a ``filename`` parameter for the path to the database file.
+* ``huey.FileHuey`` - uses filesystem for storage. Accepts a ``path`` parameter
+  for the base storage directory.
 
 Alternatively, you can simply set ``settings.HUEY`` to a :py:class:`Huey`
 instance and do your configuration directly. In the example below, I've also
