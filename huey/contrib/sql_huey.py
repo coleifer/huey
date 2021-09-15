@@ -82,10 +82,17 @@ class SqlStorage(BaseStorage):
     def kv(self, *columns):
         return self.KV.select(*columns).where(self.KV.queue == self.name)
 
+    def check_conn(self):
+        if not self.database.is_connection_usable():
+            self.database.close()
+            self.database.connect()
+
     def enqueue(self, data, priority=None):
+        self.check_conn()
         self.Task.create(queue=self.name, data=data, priority=priority or 0)
 
     def dequeue(self):
+        self.check_conn()
         query = (self.tasks(self.Task.id, self.Task.data)
                  .order_by(self.Task.priority.desc(), self.Task.id)
                  .limit(1))
@@ -116,9 +123,11 @@ class SqlStorage(BaseStorage):
         self.Task.delete().where(self.Task.queue == self.name).execute()
 
     def add_to_schedule(self, data, timestamp, utc):
+        self.check_conn()
         self.Schedule.create(queue=self.name, data=data, timestamp=timestamp)
 
     def read_schedule(self, timestamp):
+        self.check_conn()
         query = (self.schedule(self.Schedule.id, self.Schedule.data)
                  .where(self.Schedule.timestamp <= timestamp)
                  .tuples())
@@ -154,6 +163,7 @@ class SqlStorage(BaseStorage):
          .execute())
 
     def put_data(self, key, value, is_result=False):
+        self.check_conn()
         if isinstance(self.database, PostgresqlDatabase):
             (self.KV
              .insert(queue=self.name, key=key, value=value)
@@ -164,6 +174,7 @@ class SqlStorage(BaseStorage):
             self.KV.replace(queue=self.name, key=key, value=value).execute()
 
     def peek_data(self, key):
+        self.check_conn()
         try:
             kv = self.kv(self.KV.value).where(self.KV.key == key).get()
         except self.KV.DoesNotExist:
@@ -172,6 +183,7 @@ class SqlStorage(BaseStorage):
             return kv.value
 
     def pop_data(self, key):
+        self.check_conn()
         query = self.kv().where(self.KV.key == key)
         if self.database.for_update:
             query = query.for_update()
@@ -188,9 +200,11 @@ class SqlStorage(BaseStorage):
                 return kv.value if dq.execute() == 1 else EmptyData
 
     def has_data_for_key(self, key):
+        self.check_conn()
         return self.kv().where(self.KV.key == key).exists()
 
     def put_if_empty(self, key, value):
+        self.check_conn()
         try:
             with self.database.atomic():
                 self.KV.insert(queue=self.name, key=key, value=value).execute()
