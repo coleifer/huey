@@ -298,7 +298,7 @@ class TestFileStorageMethods(StorageTests, BaseTestCase):
 
     def get_huey(self):
         return Huey('test-file-storage', storage_class=FileStorage,
-                    path=self.path, levels=2)
+                    path=self.path, levels=2, use_thread_lock=True)
 
     def test_filesystem_result_store(self):
         s = self.huey.storage

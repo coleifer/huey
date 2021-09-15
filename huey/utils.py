@@ -5,6 +5,11 @@ import errno
 import os
 import sys
 import time
+import warnings
+try:
+    import fcntl
+except ImportError:
+    fcntl = None
 
 
 Error = namedtuple('Error', ('metadata',))
@@ -130,9 +135,11 @@ def decode(s):
 
 
 class FileLock(object):
-    def __init__(self, filename, interval=0.01):
+    def __init__(self, filename):
+        if fcntl is None:
+            warnings.warn('FileLock not supported on this platform. Please '
+                          'use a different storage implementation.')
         self.filename = filename
-        self.interval = interval
         self.fd = None
 
         dirname = os.path.dirname(filename)
@@ -142,21 +149,17 @@ class FileLock(object):
             os.unlink(self.filename)
 
     def acquire(self):
-        flags = os.O_CREAT | os.O_EXCL | os.O_RDWR
-        while True:
-            try:
-                self.fd = os.open(self.filename, flags)
-                break
-            except OSError as exc:
-                if exc.errno != errno.EEXIST:
-                    raise
-                time.sleep(self.interval)
+        flags = os.O_CREAT | os.O_TRUNC | os.O_RDWR
+        self.fd = os.open(self.filename, flags)
+        if fcntl is not None:
+            fcntl.flock(self.fd, fcntl.LOCK_EX)
 
     def release(self):
         if self.fd is not None:
             fd, self.fd = self.fd, None
+            if fcntl is not None:
+                fcntl.flock(fd, fcntl.LOCK_UN)
             os.close(fd)
-            os.unlink(self.filename)
 
     def __enter__(self):
         self.acquire()
