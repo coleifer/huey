@@ -3,7 +3,15 @@ Changelog
 
 ## master
 
-[View commits](https://github.com/coleifer/huey/compare/2.4.0...HEAD)
+[View commits](https://github.com/coleifer/huey/compare/2.4.1...HEAD)
+
+## 2.4.1
+
+* Attempt to reconnect to database if connection becomes unusable (e.g. due to
+  a server restart). See: `huey.contrib.sql_huey.SqlHuey`.
+* Do not use a soft file-lock for `FileStorage` - use `fcntl.flock()` instead.
+
+[View commits](https://github.com/coleifer/huey/compare/2.4.0...2.4.1)
 
 ## 2.4.0
 
