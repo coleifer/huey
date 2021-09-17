@@ -561,40 +561,65 @@ class RedisPriorityQueue(object):
     priority = True
 
     def enqueue(self, data, priority=None):
-        priority = 0 if priority is None else -priority
-        # Prefix the message with an encoded timestamp to ensure that messages
-        # created with the same priority are stored in the correct order. Since
-        # the underlying data-type is a sorted-set, this also prevents multiple
-        # identical messages, except they are enqueued on the same microsecond,
-        # from being treated as a single item.
-        prefix = struct.pack('>Q', int(time.time() * 1e6))
-        self.conn.zadd(self.queue_key, {prefix + data: priority})
+        try:
+            priority = 0 if priority is None else -priority
+            # Prefix the message with an encoded timestamp to ensure that messages
+            # created with the same priority are stored in the correct order. Since
+            # the underlying data-type is a sorted-set, this also prevents multiple
+            # identical messages, except they are enqueued on the same microsecond,
+            # from being treated as a single item.
+            prefix = struct.pack('>Q', int(time.time() * 1e6))
+            self.conn.zadd(self.queue_key, {prefix + data: priority})
+        except:
+            if priority:
+                raise NotImplementedError('Task priorities are not supported by this storage.')
+            self.conn.lpush(self.queue_key, data)
 
     def dequeue(self):
-        if self.blocking:
-            try:
-                # BZPOPMIN returns (key, data, score).
-                _, res, _ = self.conn.bzpopmin(
-                    self.queue_key,
-                    timeout=self.read_timeout)
-            except (ConnectionError, TypeError, IndexError):
-                # Unfortunately, there is no way to differentiate a socket
-                # timing out and a host being unreachable.
-                return
+        try:
+            if self.blocking:
+                try:
+                    # BZPOPMIN returns (key, data, score).
+                    _, res, _ = self.conn.bzpopmin(
+                        self.queue_key,
+                        timeout=self.read_timeout)
+                except (ConnectionError, TypeError, IndexError):
+                    # Unfortunately, there is no way to differentiate a socket
+                    # timing out and a host being unreachable.
+                    return
+                else:
+                    return res[8:]
             else:
-                return res[8:]
-        else:
-            # ZPOPMIN returns a list of (data, score) 2-tuples.
-            items = self.conn.zpopmin(self.queue_key, count=1)
-            if items:
-                return items[0][0][8:]  # [(prefix+data, score)].
+                # ZPOPMIN returns a list of (data, score) 2-tuples.
+                items = self.conn.zpopmin(self.queue_key, count=1)
+                if items:
+                    return items[0][0][8:]  # [(prefix+data, score)].
+        except:
+            if self.blocking:
+                try:
+                    return self.conn.brpop(
+                        self.queue_key,
+                        timeout=self.read_timeout)[1]
+                except (ConnectionError, TypeError, IndexError):
+                    # Unfortunately, there is no way to differentiate a socket
+                    # timing out and a host being unreachable.
+                    return None
+            else:
+                return self.conn.rpop(self.queue_key)
 
     def queue_size(self):
-        return self.conn.zcard(self.queue_key)
+        try:
+            return self.conn.zcard(self.queue_key)
+        except:
+            return self.conn.llen(self.queue_key)
 
     def enqueued_items(self, limit=None):
-        items = self.conn.zrange(self.queue_key, 0, limit or -1)
-        return [item[8:] for item in items]  # Unprefix the data.
+        try:
+            items = self.conn.zrange(self.queue_key, 0, limit or -1)
+            return [item[8:] for item in items]  # Unprefix the data.
+        except:
+            limit = limit or -1
+            return self.conn.lrange(self.queue_key, 0, limit)[::-1]
 
 
 class PriorityRedisStorage(RedisPriorityQueue, RedisStorage): pass
@@ -1065,3 +1090,4 @@ class FileStorage(BaseStorage):
 
     def flush_results(self):
         self._flush_dir(self.result_path)
+
