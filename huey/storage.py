@@ -24,6 +24,7 @@ try:
     except ImportError:
         from redis import Redis
     from redis.exceptions import ConnectionError
+    from redis.exceptions import ResponseError
 except ImportError:
     ConnectionPool = Redis = ConnectionError = None
 
@@ -570,9 +571,10 @@ class RedisPriorityQueue(object):
             # from being treated as a single item.
             prefix = struct.pack('>Q', int(time.time() * 1e6))
             self.conn.zadd(self.queue_key, {prefix + data: priority})
-        except:
-            if priority:
-                raise NotImplementedError('Task priorities are not supported by this storage.')
+        except ResponseError:
+            # ResponseError: WRONGTYPE Operation against a key holding the wrong kind of value
+            # assume the underlying queue is still RedisStorage.
+            # Ignore priority for now and try to enqueue as for RedisStorage
             self.conn.lpush(self.queue_key, data)
 
     def dequeue(self):
@@ -594,32 +596,27 @@ class RedisPriorityQueue(object):
                 items = self.conn.zpopmin(self.queue_key, count=1)
                 if items:
                     return items[0][0][8:]  # [(prefix+data, score)].
-        except:
-            if self.blocking:
-                try:
-                    return self.conn.brpop(
-                        self.queue_key,
-                        timeout=self.read_timeout)[1]
-                except (ConnectionError, TypeError, IndexError):
-                    # Unfortunately, there is no way to differentiate a socket
-                    # timing out and a host being unreachable.
-                    return None
-            else:
-                return self.conn.rpop(self.queue_key)
+        except ResponseError:
+            # ResponseError: WRONGTYPE Operation against a key holding the wrong kind of value
+            # assume the underlying queue is still RedisStorage. Fallback to its implementation for now
+            return RedisStorage.dequeue(self)
 
     def queue_size(self):
         try:
             return self.conn.zcard(self.queue_key)
-        except:
-            return self.conn.llen(self.queue_key)
+        except ResponseError:
+            # ResponseError: WRONGTYPE Operation against a key holding the wrong kind of value
+            # assume the underlying queue is still RedisStorage. Fallback to its implementation for now
+            return RedisStorage.queue_size(self)
 
     def enqueued_items(self, limit=None):
         try:
             items = self.conn.zrange(self.queue_key, 0, limit or -1)
             return [item[8:] for item in items]  # Unprefix the data.
-        except:
-            limit = limit or -1
-            return self.conn.lrange(self.queue_key, 0, limit)[::-1]
+        except ResponseError:
+            # ResponseError: WRONGTYPE Operation against a key holding the wrong kind of value
+            # assume the underlying queue is still RedisStorage. Fallback to its implementation for now
+            return RedisStorage.enqueued_items(self, limit=limit)
 
 
 class PriorityRedisStorage(RedisPriorityQueue, RedisStorage): pass

@@ -264,6 +264,44 @@ class TestPriorityRedisStorage(TestRedisStorage):
     def get_huey(self):
         return PriorityRedisHuey(utc=False)
 
+    def setup_old_storage(self):
+        self.old_huey = RedisHuey(utc=False)
+        self.old_storage = self.old_huey.storage
+        self.old_storage.enqueue(b'old-item-1')
+        self.assertEqual(self.old_storage.queue_size(), 1)
+        self.assertEqual(self.old_storage.queue_key, self.s.queue_key)
+        self.assertEqual(self.s.conn.type(self.s.queue_key), b'list')
+
+    def test_queue_size_can_fallback_if_non_priority_queue(self):
+        self.setup_old_storage()
+        self.assertEqual(self.s.queue_size(), 1)
+
+    def test_enqueue_can_fallback_if_non_priority_queue(self):
+        self.setup_old_storage()
+        self.assertEqual(self.s.enqueued_items(), [b'old-item-1'])
+        self.s.enqueue(b'new-item-1')
+        self.assertEqual(self.s.enqueued_items(), [b'old-item-1', b'new-item-1'])
+        self.assertEqual(self.s.conn.type(self.s.queue_key), b'list')
+
+    def test_enqueued_items_can_fallback_if_non_priority_queue(self):
+        self.setup_old_storage()
+        self.assertEqual(self.old_storage.enqueued_items(), [b'old-item-1'])
+        self.assertEqual(self.s.enqueued_items(), [b'old-item-1'])
+
+    def test_dequeue_can_fallback_if_non_priority_queue(self):
+        self.setup_old_storage()
+        self.assertEqual(self.s.queue_size(), 1)
+        self.assertEqual(self.s.dequeue(), b'old-item-1')
+        self.assertEqual(self.old_storage.queue_size(), 0)
+        self.assertEqual(self.s.queue_size(), 0)
+
+    def test_when_empty_reverts_to_priority_type(self):
+        self.test_dequeue_can_fallback_if_non_priority_queue()
+        self.assertEqual(self.s.conn.type(self.s.queue_key), b'none')
+        self.s.enqueue(b'new-item-1')
+        self.assertEqual(self.s.conn.type(self.s.queue_key), b'zset')
+        self.assertEqual(self.s.enqueued_items(), [b'new-item-1'])
+
 
 @unittest.skipIf(get_redis_version() < 5, 'Requires Redis >= 5.0')
 class TestPriorityRedisStorageNotBlocking(TestRedisStorage):
