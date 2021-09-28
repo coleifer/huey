@@ -19,6 +19,13 @@ Implementations of :py:class:`Huey` which handle task and result persistence.
     See the documentation for :py:class:`Huey` for the list of initialization
     parameters common to all Huey implementations.
 
+.. warning::
+    If you have a busy application and plan to switch from one of the Redis
+    implementations to another (e.g. switch from ``RedisHuey`` to the
+    ``PriorityRedisHuey``) you may want to start the new huey consumer on a
+    different Redis database (e.g. ``db=15``). Then let your old consumer drain
+    any pre-existing tasks while the new consumer accepts new tasks.
+
 .. py:class:: RedisHuey
 
     :py:class:`Huey` that utilizes `redis <https://redis.io/>`_ for queue and
