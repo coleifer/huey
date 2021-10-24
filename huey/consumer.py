@@ -253,7 +253,8 @@ class Consumer(object):
     def __init__(self, huey, workers=1, periodic=True, initial_delay=0.1,
                  backoff=1.15, max_delay=10.0, scheduler_interval=1,
                  worker_type=WORKER_THREAD, check_worker_health=True,
-                 health_check_interval=10, flush_locks=False):
+                 health_check_interval=10, flush_locks=False,
+                 die_on_term=False):
 
         self._logger = logging.getLogger('huey.consumer')
         if huey.immediate:
@@ -267,6 +268,13 @@ class Consumer(object):
         self.default_delay = initial_delay  # Default queue polling interval.
         self.backoff = backoff  # Exponential backoff factor when queue empty.
         self.max_delay = max_delay  # Maximum interval between polling events.
+
+        # Map shutdown signals.
+        self.immediate_stop_signal = signal.SIGTERM
+        self.graceful_stop_signal = signal.SIGINT
+        if die_on_term:
+            self.immediate_stop_signal = signal.SIGINT
+            self.graceful_stop_signal = signal.SIGTERM
 
         # Ensure that the scheduler runs at an interval between 1 and 60s.
         self.scheduler_interval = max(min(scheduler_interval, 60), 1)
@@ -486,19 +494,19 @@ class Consumer(object):
         return not restart_occurred
 
     def _set_signal_handlers(self):
-        signal.signal(signal.SIGTERM, self._handle_stop_signal)
-        signal.signal(signal.SIGINT, signal.default_int_handler)
+        signal.signal(self.immediate_stop_signal, self._handle_stop_signal)
+        signal.signal(self.graceful_stop_signal, signal.default_int_handler)
         if hasattr(signal, 'SIGHUP'):
             signal.signal(signal.SIGHUP, self._handle_restart_signal)
 
     def _handle_stop_signal(self, sig_num, frame):
-        self._logger.info('Received SIGTERM')
+        self._logger.info('Received %s', signal.Signals(sig_num).name)
         self._received_signal = True
         self._restart = False
         self._graceful = False
 
     def _handle_restart_signal(self, sig_num, frame):
-        self._logger.info('Received SIGHUP, will restart')
+        self._logger.info('Received %s, will restart', signal.Signals(sig_num).name)
         self._received_signal = True
         self._restart = True
 
@@ -508,8 +516,8 @@ class Consumer(object):
         # process. Upon a TERM signal, we raise a KeyboardInterrupt, which is
         # caught below (and in the worker execute() code), to allow immediate
         # shutdown.
-        signal.signal(signal.SIGINT, signal.SIG_IGN)
-        signal.signal(signal.SIGTERM, self._handle_stop_signal_worker)
+        signal.signal(self.graceful_stop_signal, signal.SIG_IGN)
+        signal.signal(self.immediate_stop_signal, self._handle_stop_signal_worker)
         if hasattr(signal, 'SIGHUP'):
             signal.signal(signal.SIGHUP, signal.SIG_IGN)
 

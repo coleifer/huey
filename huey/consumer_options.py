@@ -21,6 +21,7 @@ config_defaults = (
     ('verbose', None),
     ('simple_log', None),
     ('flush_locks', False),
+    ('die_on_term', False),
 )
 config_keys = [param for param, _ in config_defaults]
 
@@ -67,6 +68,9 @@ class OptionParserHandler(object):
                          'restarting any worker that crashes unexpectedly.')),
             option('flush_locks', action='store_true', dest='flush_locks',
                    help=('flush all locks when starting consumer.')),
+            option('die_on_term', action='store_true',
+                   help=('Perform graceful shutdown on SIGTERM and immediate '
+                         'shutdown on SIGINT.')),
         )
 
     def get_scheduler_options(self):

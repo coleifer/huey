@@ -255,6 +255,10 @@ they are currently executing before the process exits.
 Alternatively, you can shutdown the consumer using ``SIGTERM`` and any running
 tasks will be interrupted, ensuring the process exits quickly.
 
+If you want to reverse the behaviour, use a ``--die-on-term``
+parameter. If you run Huey on Heroku, you want to use this option as
+``SIGTERM`` is used as a graceful shutdown signal.
+
 .. _consumer-restart:
 
 Consumer restart

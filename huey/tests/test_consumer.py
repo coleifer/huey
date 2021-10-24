@@ -1,4 +1,5 @@
 import datetime
+import signal
 import time
 
 from huey.api import crontab
@@ -124,6 +125,8 @@ class TestConsumerConfig(BaseTestCase):
         self.assertEqual(consumer.default_delay, 0.1)
         self.assertEqual(consumer.scheduler_interval, 1)
         self.assertTrue(consumer._health_check)
+        self.assertEqual(consumer.graceful_stop_signal, signal.SIGINT)
+        self.assertEqual(consumer.immediate_stop_signal, signal.SIGTERM)
 
     def test_consumer_config(self):
         cfg = ConsumerConfig(workers=3, worker_type='process', initial_delay=1,
@@ -150,3 +153,10 @@ class TestConsumerConfig(BaseTestCase):
         assertInvalid(scheduler_interval=90)
         assertInvalid(scheduler_interval=7)
         assertInvalid(scheduler_interval=45)
+
+    def test_die_on_term_signal_configueration(self):
+        cfg = ConsumerConfig(die_on_term=True)
+        cfg.validate()
+        consumer = self.huey.create_consumer(**cfg.values)
+        self.assertEqual(consumer.graceful_stop_signal, signal.SIGTERM)
+        self.assertEqual(consumer.immediate_stop_signal, signal.SIGINT)
