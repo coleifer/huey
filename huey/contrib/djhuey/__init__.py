@@ -48,7 +48,7 @@ def default_queue_name():
         return settings.DATABASE_NAME
     except AttributeError:
         try:
-            return settings.DATABASES['default']['NAME']
+            return str(settings.DATABASES['default']['NAME'])
         except KeyError:
             return 'huey'
 

@@ -406,6 +406,7 @@ class Consumer(object):
             try:
                 for _, worker_process in self.worker_threads:
                     worker_process.join()
+                self.scheduler.join()
             except KeyboardInterrupt:
                 self._logger.info('Received request to shut down now.')
             else:
