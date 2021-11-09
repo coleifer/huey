@@ -350,10 +350,9 @@ class MemoryStorage(BaseStorage):
 # and atomically pop them from the sorted set and return them. It won't return
 # anything if it isn't able to remove the items it reads.
 SCHEDULE_POP_LUA = """\
-local key = KEYS[1]
 local unix_ts = ARGV[1]
-local res = redis.call('zrangebyscore', key, '-inf', unix_ts)
-if #res and redis.call('zremrangebyscore', key, '-inf', unix_ts) == #res then
+local res = redis.call('zrangebyscore', KEYS[1], '-inf', unix_ts)
+if #res and redis.call('zremrangebyscore', KEYS[1], '-inf', unix_ts) == #res then
     return res
 end"""
 
