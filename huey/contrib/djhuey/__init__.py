@@ -127,13 +127,18 @@ disconnect_signal = HUEY.disconnect_signal
 
 def close_db(fn):
     """Decorator to be used with tasks that may operate on the database."""
+
+    def _close_old_connections():
+        if not HUEY.immediate:
+            close_old_connections()
+
     @wraps(fn)
     def inner(*args, **kwargs):
+        _close_old_connections()
         try:
             return fn(*args, **kwargs)
         finally:
-            if not HUEY.immediate:
-                close_old_connections()
+            _close_old_connections()
     return inner
 
 
