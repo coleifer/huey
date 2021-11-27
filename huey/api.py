@@ -599,6 +599,9 @@ class Huey(object):
 
     def flush_locks(self):
         flushed = set()
+        registered_locks = self.get('_huey_registered_locks')
+        if registered_locks is not None:
+            self._locks = self._locks.union(set(registered_locks.split(':')))
         for lock_key in self._locks:
             if self.delete(lock_key):
                 flushed.add(lock_key.split('.lock.', 1)[-1])
@@ -843,6 +846,7 @@ class TaskLock(object):
         self._name = name
         self._key = '%s.lock.%s' % (self._huey.name, self._name)
         self._huey._locks.add(self._key)
+        self._register_lock()
 
     def __call__(self, fn):
         @wraps(fn)
@@ -860,6 +864,13 @@ class TaskLock(object):
 
     def clear(self):
         return self._huey.delete(self._key)
+
+    def _register_lock(self):
+        existing_locks = self._huey.get('_huey_registered_locks', peek=True)
+        if existing_locks is None:
+            self._huey.put('_huey_registered_locks', self._key)
+        elif self._key not in existing_locks:
+            self._huey.put('_huey_registered_locks', '%s:%s' % (existing_locks, self._key))
 
 
 class Result(object):

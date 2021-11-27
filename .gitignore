@@ -5,3 +5,7 @@ docs/_build
 venv/
 huey.egg-info/
 huey.db
+huey.db-shm
+huey.db-wal
+huey_storage.db-shm
+huey_storage.db-wal

@@ -1296,10 +1296,47 @@ class TestTaskLocking(BaseTestCase):
         # lock is released.
         self.assertEqual(self.execute_next(), 6)
 
+    def test_task_flushing(self):
+        @self.huey.task()
+        @self.huey.lock_task('lock_a')
+        def task_a(n):
+            print(self.huey.get('_huey_registered_locks', peek=True))
+            return n + 1
+
+        task_a(3)
+        self.assertEqual(self.execute_next(), 4)
+
+        r = task_a(4)
+        with self.huey.lock_task('lock_a'):
+            print(self.huey.get('_huey_registered_locks', peek=True))
+            self.assertTrue(self.execute_next() is None)
+
+        exc = self.trap_exception(r)
+        self.assertTrue('unable to set lock' in str(exc))
+
+        task_a(5)
+        with self.huey.lock_task('lock_a'):
+            print(self.huey.get('_huey_registered_locks', peek=True))
+            self.huey.flush_locks()
+            self.assertEqual(self.execute_next(), 6)
+
+        r = task_a(6)
+        with self.huey.lock_task('lock_a'):
+            print(self.huey.get('_huey_registered_locks', peek=True))
+            # simulate consumer dying without flushing locks
+            self.huey._locks = set()
+            # flush locks on consumer start
+            self.huey.flush_locks()
+            print(self.huey.get('_huey_registered_locks', peek=True))
+            # this should now be able to succeed as above
+            self.assertEqual(self.execute_next(), 7)
+
 
 class TestHueyAPIs(BaseTestCase):
     def test_flush_locks(self):
         with self.huey.lock_task('lock1'):
+            # simulate consumer dying without flushing locks
+            self.huey._locks = set()
             with self.huey.lock_task('lock2'):
                 flushed = self.huey.flush_locks()
 
