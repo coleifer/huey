@@ -3,7 +3,16 @@ Changelog
 
 ## master
 
-[View commits](https://github.com/coleifer/huey/compare/2.4.1...HEAD)
+[View commits](https://github.com/coleifer/huey/compare/2.4.2...HEAD)
+
+## 2.4.2
+
+* Fix implementation of schedule-pop Lua script so it works with Redis cluster.
+* Ensure Django connections are closed before *and* after (previously they were
+  only closed after) task execution with `db_task()` and `db_periodic_task()`.
+* Allow additional lock-names to be specified when flushing locks.
+
+[View commits](https://github.com/coleifer/huey/compare/2.4.1...2.4.2)
 
 ## 2.4.1
 
