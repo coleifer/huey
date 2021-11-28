@@ -1306,6 +1306,15 @@ class TestHueyAPIs(BaseTestCase):
         self.assertEqual(flushed, set(['lock1', 'lock2']))
         self.assertEqual(self.huey.flush_locks(), set())
 
+    def test_flush_named_locks(self):
+        self.huey.put_if_empty('%s.lock.lock1' % self.huey.name, '1')
+        self.huey.put_if_empty('%s.lock.lock2' % self.huey.name, '1')
+        with self.huey.lock_task('lock3'):
+            flushed = self.huey.flush_locks('lock1', 'lock2', 'lockx')
+
+        self.assertEqual(flushed, set(['lock1', 'lock2', 'lock3']))
+        self.assertEqual(self.huey.flush_locks(), set())
+
     def test_serialize_deserialize(self):
         @self.huey.task()
         def task_a(n):

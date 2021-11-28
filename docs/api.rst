@@ -810,6 +810,18 @@ Huey object
                 with huey.lock_task('db-backup'):
                     do_db_backup()
 
+    .. py:method:: flush_locks(*names)
+
+        :param names: additional lock-names to flush.
+        :returns: set of lock names that were set and subsequently cleared.
+
+        Flush any locks that may be held. Top-level tasks or functions that use
+        the :py:meth:`~Huey.lock_task` decorator will be registered as
+        import-time side-effects, but it is possible that locks in nested
+        scopes (e.g. a context-manager inside a task function) will not be
+        registered. These undiscovered locks can be flushed by passing their
+        lock-names explicitly.
+
     .. py:method:: put(key, value)
 
         :param key: key for data

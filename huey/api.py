@@ -1,5 +1,6 @@
 import datetime
 import inspect
+import itertools
 import logging
 import re
 import time
@@ -597,11 +598,18 @@ class Huey(object):
     def lock_task(self, lock_name):
         return TaskLock(self, lock_name)
 
-    def flush_locks(self):
+    def flush_locks(self, *names):
         flushed = set()
-        for lock_key in self._locks:
+        locks = self._locks
+        if names:
+            lock_template = '%s.lock.%%s' % self.name
+            named_locks = (lock_template % name.strip() for name in names)
+            locks = itertools.chain(locks, named_locks)
+
+        for lock_key in locks:
             if self.delete(lock_key):
                 flushed.add(lock_key.split('.lock.', 1)[-1])
+
         return flushed
 
     def result(self, id, blocking=False, timeout=None, backoff=1.15,

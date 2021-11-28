@@ -253,7 +253,8 @@ class Consumer(object):
     def __init__(self, huey, workers=1, periodic=True, initial_delay=0.1,
                  backoff=1.15, max_delay=10.0, scheduler_interval=1,
                  worker_type=WORKER_THREAD, check_worker_health=True,
-                 health_check_interval=10, flush_locks=False):
+                 health_check_interval=10, flush_locks=False,
+                 extra_locks=None):
 
         self._logger = logging.getLogger('huey.consumer')
         if huey.immediate:
@@ -295,8 +296,9 @@ class Consumer(object):
 
         # In the event the consumer was killed while running a task that held
         # a lock, this ensures that all locks are flushed before starting.
-        if flush_locks:
-            self.flush_locks()
+        if flush_locks or extra_locks:
+            lock_names = extra_locks.split(',') if extra_locks else ()
+            self.flush_locks(*lock_names)
 
         # Create the scheduler process (but don't start it yet).
         scheduler = self._create_scheduler()
@@ -313,9 +315,9 @@ class Consumer(object):
             # but it is referenced in the test-suite.
             self.worker_threads.append((worker, process))
 
-    def flush_locks(self):
+    def flush_locks(self, *names):
         self._logger.debug('Flushing locks before starting up.')
-        flushed = self.huey.flush_locks()
+        flushed = self.huey.flush_locks(*names)
         if flushed:
             self._logger.warning('Found stale locks: %s' % (
                 ', '.join(key for key in flushed)))

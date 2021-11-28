@@ -141,6 +141,12 @@ their default values.
     Flush all locks when starting the consumer. This may be useful if the
     consumer was killed abruptly while executing a locked task.
 
+``-L``, ``--extra-locks``
+    Additional lock-names to flush when starting the consumer, separated by
+    comma. This is useful if you have locks within context-managers that may
+    not be discovered during consumer startup, but you wish to ensure they are
+    cleared. Implies ``--flush-locks``.
+
 ``-s``, ``--scheduler-interval``
     The frequency with which the scheduler should run. By default this will run
     every second, but you can increase the interval to as much as 60 seconds.

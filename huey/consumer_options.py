@@ -21,6 +21,7 @@ config_defaults = (
     ('verbose', None),
     ('simple_log', None),
     ('flush_locks', False),
+    ('extra_locks', None),
 )
 config_keys = [param for param, _ in config_defaults]
 
@@ -67,6 +68,8 @@ class OptionParserHandler(object):
                          'restarting any worker that crashes unexpectedly.')),
             option('flush_locks', action='store_true', dest='flush_locks',
                    help=('flush all locks when starting consumer.')),
+            option(('L', 'extra_locks'), dest='extra_locks',
+                   help=('additional locks to flush, separated by comma.')),
         )
 
     def get_scheduler_options(self):
