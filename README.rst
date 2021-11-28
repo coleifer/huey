@@ -9,6 +9,7 @@ huey is:
 * clean and simple API
 * redis, sqlite, file-system, or in-memory storage
 * `example code <https://github.com/coleifer/huey/tree/master/examples/>`_.
+* `read the documentation <https://huey.readthedocs.io/>`_.
 
 huey supports:
 
