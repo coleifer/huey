@@ -382,8 +382,7 @@ class RedisStorage(BaseStorage):
                 '"url", "connection_pool", or "connection_params"')
 
         if url:
-            connection_pool = ConnectionPool.from_url(
-                url, decode_components=True)
+            connection_pool = ConnectionPool.from_url(url)
         elif connection_pool is None:
             connection_pool = ConnectionPool(**connection_params)
 
