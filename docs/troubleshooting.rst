@@ -21,6 +21,9 @@ Tasks not running
     :py:class:`Huey` object, you also import any decorated functions as well.
 
     For more information on how tasks are imported, see the :ref:`import documentation <imports>`.
+    
+    Alternatively, this can be due to having lots of old scheduled/queued
+    tasks in your redis, try running ``redis-cli flushall``.
 
 "Error importing XXX" when starting consumer
     This error message occurs when the module containing the configuration
