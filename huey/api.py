@@ -598,6 +598,9 @@ class Huey(object):
     def lock_task(self, lock_name):
         return TaskLock(self, lock_name)
 
+    def is_locked(self, lock_name):
+        return TaskLock(self, lock_name).is_locked()
+
     def flush_locks(self, *names):
         flushed = set()
         locks = self._locks
@@ -851,6 +854,9 @@ class TaskLock(object):
         self._name = name
         self._key = '%s.lock.%s' % (self._huey.name, self._name)
         self._huey._locks.add(self._key)
+
+    def is_locked(self):
+        return self._huey.storage.has_data_for_key(self._key)
 
     def __call__(self, fn):
         @wraps(fn)

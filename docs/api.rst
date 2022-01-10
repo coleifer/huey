@@ -810,6 +810,11 @@ Huey object
                 with huey.lock_task('db-backup'):
                     do_db_backup()
 
+    .. py:method:: is_locked(lock_name)
+
+        :param str lock_name: Name of lock to check.
+        :returns: boolean value indicating whether lock is held or not.
+
     .. py:method:: flush_locks(*names)
 
         :param names: additional lock-names to flush.
