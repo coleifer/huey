@@ -1,10 +1,14 @@
 from functools import wraps
 from importlib import import_module
+from typing import TYPE_CHECKING
 import sys
 import traceback
 
 from django.conf import settings
 from django.db import close_old_connections
+
+if TYPE_CHECKING:
+    from huey import Huey
 
 
 configuration_message = """
@@ -66,7 +70,7 @@ def config_error(msg):
     sys.exit(1)
 
 
-HUEY = getattr(settings, 'HUEY', None)
+HUEY = getattr(settings, 'HUEY', None)  # type: Huey
 if HUEY is None:
     try:
         RedisHuey = get_backend(default_backend_path)
