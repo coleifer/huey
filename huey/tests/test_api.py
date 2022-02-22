@@ -795,6 +795,77 @@ class TestQueue(BaseTestCase):
         self.assertEqual(len(self.huey), 0)
         self.assertEqual(self.huey.result_count(), 0)
 
+    def test_cancel_execution(self):
+        @self.huey.task()
+        def task_a(n=None):
+            raise CancelExecution(retry=n)
+
+        r = task_a()
+        self.assertTrue(self.execute_next() is None)
+        self.assertRaises(TaskException, r.get)
+        self.assertEqual(len(self.huey), 0)
+
+        r = task_a(False)
+        self.assertTrue(self.execute_next() is None)
+        self.assertRaises(TaskException, r.get)
+        self.assertEqual(len(self.huey), 0)
+
+        r = task_a(True)
+        self.assertTrue(self.execute_next() is None)
+        self.assertRaises(TaskException, r.get)
+        try:
+            r.get()
+        except TaskException as exc:
+            metadata = exc.metadata
+        self.assertEqual(metadata['error'], 'CancelExecution()')
+        self.assertEqual(metadata['retries'], 1)
+        self.assertEqual(len(self.huey), 1)
+
+    def test_cancel_execution_task_retries(self):
+        @self.huey.task(retries=2)
+        def task_a(n=None):
+            raise CancelExecution(retry=n)
+
+        # Even though the task itself declares retries, these retries are
+        # ignored when cancel is raised with retry=False.
+        r = task_a(False)
+        self.assertTrue(self.execute_next() is None)
+        self.assertRaises(TaskException, r.get)
+        self.assertEqual(len(self.huey), 0)
+
+        # The original task specified 2 retries. When Cancel is raised with
+        # retry=None, it proceeds normally.
+        r = task_a()
+        for retries in (2, 1, 0):
+            self.assertTrue(self.execute_next() is None)
+            self.assertRaises(TaskException, r.get)
+            try:
+                r.get()
+            except TaskException as exc:
+                metadata = exc.metadata
+            self.assertEqual(metadata['error'], 'CancelExecution()')
+            self.assertEqual(metadata['retries'], retries)
+            if retries > 0:
+                self.assertEqual(len(self.huey), 1)
+            else:
+                self.assertEqual(len(self.huey), 0)
+            r.reset()
+
+        # The original task specified 2 retries. When Cancel is raised with
+        # retry=True, then max(task.retries, 1) will be used.
+        r = task_a(True)
+        for retries in (2, 1, 1, 1):
+            self.assertTrue(self.execute_next() is None)
+            self.assertRaises(TaskException, r.get)
+            try:
+                r.get()
+            except TaskException as exc:
+                metadata = exc.metadata
+            self.assertEqual(metadata['error'], 'CancelExecution()')
+            self.assertEqual(metadata['retries'], retries)
+            self.assertEqual(len(self.huey), 1)
+            r.reset()
+
     def test_read_schedule(self):
         @self.huey.task()
         def task_a(n):

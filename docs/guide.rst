@@ -398,6 +398,39 @@ API docs:
 * :py:meth:`TaskWrapper.is_revoked` for checking the status of the task
   function itself.
 
+Canceling from within a Task
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Huey provides a special :py:class:`CancelExecution` exception which can be
+raised, either within a :py:meth:`~Huey.pre_execute` hook or within the body of
+a :py:meth:`~Huey.task`-decorated function, to cancel the execution of the
+task. Additionally, when raised from within a task, the ``CancelExecution``
+exception can override the task's default retry policy, by specifying either
+``retry=True/False``.
+
+Example:
+
+.. code:: python
+
+    @huey.task(retries=2)
+    def load_data():
+        if something_temporary_is_wrong():
+            # Task will be retried, even if it has run out of retries or is a
+            # task that does not specify any automatic retries.
+            raise CancelExecution(retry=True)
+        elif something_fatal_is_wrong():
+            # Task will NOT be retried, even if it has more than one retry
+            # remaining.
+            raise CancelExecution(retry=False)
+        elif cancel_and_maybe_retry():
+            # Task will only be retried if it has one or more retries
+            # remaining (this is the default).
+            raise CancelExecution()
+
+        ...
+
+For more information, see: :py:class:`CancelExecution`.
+
 Canceling or pausing periodic tasks
 -----------------------------------
 

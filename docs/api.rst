@@ -1408,8 +1408,18 @@ Exceptions
 
 .. py:class:: CancelExecution
 
-    Should be raised by user code within a :py:meth:`~Huey.pre_execute` hook to
-    signal to the consumer that the task shall be cancelled.
+    Cancel the execution of a task. Can be raised either within a
+    :py:meth:`~Huey.pre_execute` hook, or within a
+    :py:meth:`~Huey.task`-decorated function.
+
+    When raised from within a :py:meth:`~Huey.pre_execute` hook, this exception
+    signals to the consumer that the task shall be cancelled and not run.
+
+    When raised in the body of a :py:meth:`~Huey.task`-decorated function, this
+    exception accepts a boolean ``retry`` parameter (default is ``False``). If
+    ``retry=False`` then the task will not be retried, **even if it has 1 or
+    more retries remaining**. Similarly, if ``retry=True`` then the task will
+    be retried regardless.
 
 .. py:class:: RetryTask
 
