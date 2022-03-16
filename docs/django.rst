@@ -111,7 +111,7 @@ Running the Consumer
 
 To run the consumer, use the ``run_huey`` management command.  This command
 will automatically import any modules in your ``INSTALLED_APPS`` named
-*tasks.py* (or the name specified by the ``--autoload-name option``).  The 
+*tasks.py* (or as specified by the ``--autoload-name`` option).  The 
 consumer can be configured using both the django settings module and/or by 
 specifying options from the command-line.
 
