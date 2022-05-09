@@ -241,13 +241,15 @@ automatically close the connection for you.
 DEBUG and Synchronous Execution
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-When ``settings.DEBUG = True``, tasks will be executed **synchronously** just
-like regular function calls. The purpose of this is to avoid running both Redis
-and an additional consumer process while developing or running tests. If you
-prefer to use a live storage engine when ``DEBUG`` is enabled, you can specify
-``immediate_use_memory=False`` - which still runs Huey in immediate mode, but
-using a live storage API. To completely disable immediate mode when ``DEBUG``
-is set, specify ``immediate=False`` in your settings.
+When ``settings.DEBUG = True``, and ``settings.HUEY`` is a ``dict`` that does
+not explicitly specify a value for ``immediate``, tasks will be executed
+**synchronously** just like regular function calls. The purpose of this is to
+avoid running both Redis and an additional consumer process while developing or
+running tests. If you prefer to use a live storage engine when ``DEBUG`` is
+enabled, you can specify ``immediate_use_memory=False`` - which still runs Huey
+in immediate mode, but using a live storage API. To completely disable
+immediate mode when ``DEBUG`` is set, you can specify ``immediate=False`` in
+your settings.
 
 .. code-block:: python
 
