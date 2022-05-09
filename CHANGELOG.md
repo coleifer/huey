@@ -3,7 +3,13 @@ Changelog
 
 ## master
 
-[View commits](https://github.com/coleifer/huey/compare/2.4.2...HEAD)
+[View commits](https://github.com/coleifer/huey/compare/2.4.3...HEAD)
+
+## 2.4.3
+
+* Fix compatibility with redis-py 4.0.0+.
+
+[View commits](https://github.com/coleifer/huey/compare/2.4.2...2.4.3)
 
 ## 2.4.2
 
