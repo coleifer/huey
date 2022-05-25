@@ -8,7 +8,7 @@ getting set up with huey.  It is arranged in a problem/solution format.
 
 Tasks not running
     First step is to increase logging verbosity by running the consumer with
-    ``--verbose``.  You can also specify a logfile using the ``--logfile``
+    ``--huey-verbose``.  You can also specify a logfile using the ``--logfile``
     option.
 
     Check for any exceptions.  The most common cause of tasks not running is
