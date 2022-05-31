@@ -1129,13 +1129,13 @@ class SqliteHuey(Huey):
 class RedisHuey(Huey):
     storage_class = RedisStorage
 
-class RedisExpireHuey(Huey):
+class RedisExpireHuey(RedisHuey):
     storage_class = RedisExpireStorage
 
-class PriorityRedisHuey(Huey):
+class PriorityRedisHuey(RedisHuey):
     storage_class = PriorityRedisStorage
 
-class PriorityRedisExpireHuey(Huey):
+class PriorityRedisExpireHuey(RedisHuey):
     storage_class = PriorityRedisExpireStorage
 
 class FileHuey(Huey):
