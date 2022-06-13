@@ -34,6 +34,14 @@ Tasks not returning results
     Ensure that you have not accidentally specified ``results=False`` when
     instantiating your :py:class:`Huey` object.
 
+    Additionally note that, by default, Huey does not store ``None`` in the
+    result-store. So if your task returns ``None``, Huey will discard the
+    result. If you need to block or detect whether a task has finished, it is
+    recommended that you return a non-``None`` value or in extreme
+    circumstances you can initialize Huey with ``store_none=True`` (though this
+    can quickly fill up your result store and is only recommended for users who
+    are very familiar with Huey).
+
 Scheduled tasks are not being run at the correct time
     Check the time on the server the consumer is running on - if different from
     the producer this may cause problems. Huey uses UTC internally by default,
