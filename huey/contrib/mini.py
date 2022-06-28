@@ -66,6 +66,11 @@ class MiniHuey(object):
 
         return decorator
 
+    def periodic_task(self, validate_func):
+        def decorator(fn):
+            return self.task(validate_func)(fn)
+        return decorator
+
     def start(self):
         if self._run_t is not None:
             raise Exception('Task runner is already running.')
