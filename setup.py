@@ -25,8 +25,7 @@ setup(
         ],
     },
     classifiers=[
-        'Development Status :: 4 - Beta',
-        'Environment :: Web Environment',
+        'Development Status :: 5 - Production/Stable',
         'Intended Audience :: Developers',
         'License :: OSI Approved :: MIT License',
         'Operating System :: OS Independent',
@@ -39,6 +38,10 @@ setup(
         'Programming Language :: Python :: 3.8',
         'Programming Language :: Python :: 3.9',
         'Programming Language :: Python :: 3.10',
+        'Programming Language :: Python :: 3.11',
+        'Programming Language :: Python :: 3.12',
+        'Programming Language :: Python :: 3.13',
+        'Topic :: Software Development :: Libraries :: Python Modules',
     ],
     test_suite='runtests.collect_tests',
     entry_points={
