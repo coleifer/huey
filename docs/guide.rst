@@ -903,6 +903,58 @@ cache arbitrary key/value data:
 
 See :py:meth:`Huey.get` and :py:meth:`Huey.put` for additional details.
 
+Exponential Backoff Retries
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Huey tasks support specifying a number of ``retries`` and a ``retry_delay``,
+but does not support exponential backoff out-of-the-box. That's not a problem,
+as we can use a couple decorators to implement it ourselves quite easily:
+
+.. code-block:: python
+
+    import functools
+
+    def exp_backoff_task(retries=10, retry_backoff=1.15):
+        def deco(fn):
+            @functools.wraps(fn)
+            def inner(*args, **kwargs):
+                # We will register this task with `context=True`, which causes
+                # Huey to pass the task instance as a keyword argument to the
+                # decorated task function. This enables us to modify its retry
+                # delay, multiplying it by our backoff factor, in the event of
+                # an exception.
+                task = kwargs.pop('task')
+                try:
+                    return fn(*args, **kwargs)
+                except Exception as exc:
+                    task.retry_delay *= retry_backoff
+                    raise exc
+
+            # Register our wrapped task (inner()), which handles delegating to
+            # our function, and in the event of an unhandled exception,
+            # increases the retry delay by the given factor.
+            return huey.task(retries=retries, retry_delay=1, context=True)(inner)
+        return deco
+
+Example usage:
+
+.. code-block:: python
+
+    @exp_backoff_task(retries=5, retry_backoff=2)
+    def test_backoff(message):
+        print('test_backoff called:', message)
+        raise ValueError('forcing retry')
+
+If the consumer started executing our task at 12:00:00, then it would be
+retried at the following times:
+
+* 12:00:00 (first call)
+* 12:00:02 (retry 1)
+* 12:00:06 (retry 2)
+* 12:00:14 (retry 3)
+* 12:00:30 (retry 4)
+* 12:01:02 (retry 5)
+
 Dynamic periodic tasks
 ^^^^^^^^^^^^^^^^^^^^^^
 
