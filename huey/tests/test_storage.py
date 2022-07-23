@@ -203,7 +203,7 @@ class TestRedisExpireStorage(StorageTests, BaseTestCase):
         self.assertEqual(conn.ttl(self.s.result_key(b'k1')), -1)
         self.assertEqual(conn.ttl(self.s.result_key(b'k2')), 3600)
 
-        # Non-existant keys return -2. See redis docs for TTL command.
+        # Non-existent keys return -2. See redis docs for TTL command.
         self.assertEqual(conn.ttl(self.s.result_key(b'k3')), -2)
 
         # Non-expired keys return -1.
