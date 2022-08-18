@@ -267,6 +267,19 @@ your settings.
         'immediate': False,
     }
 
+Getting the Huey Instance
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+If you want to interact with Huey APIs that are not exposed through ``djhuey``
+explicitly, you can get the actual ``Huey`` instance in the following way:
+
+.. code-block:: python
+
+    from huey.contrib.djhuey import HUEY as huey
+
+    # E.g., get the underlying Storage instance.
+    storage = huey.get_storage()
+
 Configuration Examples
 ^^^^^^^^^^^^^^^^^^^^^^
 
