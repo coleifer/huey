@@ -3,7 +3,17 @@ Changelog
 
 ## master
 
-[View commits](https://github.com/coleifer/huey/compare/2.4.3...HEAD)
+[View commits](https://github.com/coleifer/huey/compare/2.4.4...HEAD)
+
+## 2.4.4
+
+* Add `is_locked(lock_name)` to test whether lock is held.
+* Allow raising `CancelExecution` within a Task, and override `retries`.
+* Add a very basic redis-backed lock that can be acquired more than once (to
+  provide a rudimentary semaphore).
+* Add a `periodic_task()` wrapper for `MiniHuey` class.
+
+[View commits](https://github.com/coleifer/huey/compare/2.4.3...2.4.4)
 
 ## 2.4.3
 
