@@ -578,7 +578,7 @@ class TestQueue(BaseTestCase):
         r = task_o(1)
         self.assertTrue(self.execute_next() is None)
         exc = self.trap_exception(r)
-        self.assertEqual(exc.metadata['error'], 'TaskException()')
+        self.assertEqual(exc.metadata['error'], 'TestError(1)')
 
     def test_retry(self):
         @self.huey.task(retries=1)
