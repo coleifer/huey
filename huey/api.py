@@ -477,8 +477,13 @@ class Huey(object):
         except AttributeError:  # Seems to only happen on 3.4.
             tb = '- unable to resolve traceback on Python 3.4 -'
 
+        if isinstance(exception, TaskException):
+            error = exception.metadata.get('error') or repr(exception)
+        else:
+            error = repr(exception)
+
         return {
-            'error': repr(exception),
+            'error': error,
             'retries': task.retries,
             'traceback': tb,
             'task_id': task.id,
