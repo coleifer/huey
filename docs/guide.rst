@@ -1008,6 +1008,33 @@ like of the "dynamic ptask" function:
 When the consumer executes the "schedule_message" tasks, our new periodic task
 will be registered and added to the schedule.
 
+Run Arbitrary Functions as Tasks
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Instead of explicitly needing to declare all of your tasks up-front, you can
+write a special task that accepts a dotted-path to a callable and run anything
+inside of huey (provided it is available wherever the consumer is running):
+
+.. code-block:: python
+
+    from importlib import import_module
+
+    @huey.task()
+    def path_task(path, *args, **kwargs):
+        path, name = path.rsplit('.', 1)  # e.g. path.to.module.function
+        mod = import_module(path)  # Dynamically import the module.
+        return getattr(mod, name)(*args, **kwargs)  # Call the function.
+
+    # Example usage might be:
+    # foo.py
+    def add_these(a, b):
+        return a + b
+
+    # Somewhere else, we can tell the consumer to use the "path_task" to import
+    # the foo module and call "add_these(1, 2)", storing the result in the
+    # result-store like any other task.
+    path_task('foo.add_these', 1, 2)
+
 Reading more
 ------------
 
