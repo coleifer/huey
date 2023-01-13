@@ -32,6 +32,7 @@ from huey.storage import RedisExpireStorage
 from huey.storage import RedisStorage
 from huey.storage import SqliteStorage
 from huey.utils import Error
+from huey.utils import load_class
 from huey.utils import normalize_expire_time
 from huey.utils import normalize_time
 from huey.utils import reraise_as
@@ -123,6 +124,8 @@ class Huey(object):
         self._registry = Registry()
         self._signal = S.Signal()
         self._tasks_in_flight = set()
+
+        self._registry.register(ImportedTask)
 
     def create_storage(self):
         # When using immediate mode, the default behavior is to use an
@@ -643,6 +646,15 @@ class Huey(object):
             revoke_on_timeout=revoke_on_timeout,
             preserve=preserve)
 
+    def enqueue_path(self, path, *args, **kwargs):
+        task = ImportedTask(args, kwargs,
+                            path=path,
+                            retries=kwargs.pop('retries', None),
+                            retry_delay=kwargs.pop('retry_delay', None),
+                            priority=kwargs.pop('priority', None),
+                            expires=kwargs.pop('expires', None))
+        return self.enqueue(task)
+
 
 class Task(object):
     default_expires = None
@@ -759,6 +771,20 @@ class Task(object):
 class PeriodicTask(Task):
     def validate_datetime(self, timestamp):
         return False
+
+
+class ImportedTask(Task):
+    def __init__(self, *a, **kw):
+        path = kw.pop('path', None)
+        super(ImportedTask, self).__init__(*a, **kw)
+        if path is not None:
+            self.args = (path,) + self.args
+
+    def execute(self):
+        args, kwargs = self.data
+        path, args = args[0], args[1:]
+        func = load_class(path)
+        return func(*args, **kwargs)
 
 
 class TaskWrapper(object):
