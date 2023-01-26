@@ -49,6 +49,7 @@ class TestRegistry(BaseTestCase):
         self.assertTrue(message.on_error is None)
         self.assertTrue(message.expires is None)
         self.assertTrue(message.expires_resolved is None)
+        self.assertTrue(message.meta is None)
 
         task2 = self.registry.create_task(message)
         self.assertEqual(task2.id, task.id)
@@ -60,6 +61,7 @@ class TestRegistry(BaseTestCase):
         self.assertTrue(task2.on_error is None)
         self.assertTrue(task2.expires is None)
         self.assertTrue(task2.expires_resolved is None)
+        self.assertTrue(task2.meta is None)
 
     def test_missing_task(self):
         @self.huey.task()

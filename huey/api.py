@@ -652,7 +652,8 @@ class Task(object):
 
     def __init__(self, args=None, kwargs=None, id=None, eta=None, retries=None,
                  retry_delay=None, priority=None, expires=None,
-                 on_complete=None, on_error=None, expires_resolved=None):
+                 on_complete=None, on_error=None, expires_resolved=None,
+                 meta=None):
         self.name = type(self).__name__
         self.args = () if args is None else args
         self.kwargs = {} if kwargs is None else kwargs
@@ -666,6 +667,7 @@ class Task(object):
                 self.default_priority
         self.expires = expires if expires is not None else self.default_expires
         self.expires_resolved = expires_resolved
+        self.meta = meta
 
         self.on_complete = on_complete
         self.on_error = on_error
@@ -814,7 +816,7 @@ class TaskWrapper(object):
 
     def schedule(self, args=None, kwargs=None, eta=None, delay=None,
                  priority=None, retries=None, retry_delay=None, expires=None,
-                 id=None):
+                 id=None, meta=None):
         if eta is None and delay is None:
             if isinstance(args, (int, float)):
                 delay = args
@@ -838,7 +840,8 @@ class TaskWrapper(object):
             retries=retries,
             retry_delay=retry_delay,
             priority=priority,
-            expires=expires)
+            expires=expires,
+            meta=meta)
         return self.huey.enqueue(task)
 
     def _apply(self, it):
@@ -858,7 +861,8 @@ class TaskWrapper(object):
                                retries=kwargs.pop('retries', None),
                                retry_delay=kwargs.pop('retry_delay', None),
                                priority=kwargs.pop('priority', None),
-                               expires=kwargs.pop('expires', None))
+                               expires=kwargs.pop('expires', None),
+                               meta=kwargs.pop('meta', None))
 
 
 class TaskLock(object):
@@ -983,7 +987,7 @@ class Result(object):
     def restore(self):
         return self.huey.restore(self.task)
 
-    def reschedule(self, eta=None, delay=None, expires=None):
+    def reschedule(self, eta=None, delay=None, expires=None, meta=None):
         # Rescheduling works by revoking the currently-scheduled task (nothing
         # is done to check if the task has already run, however). Then the
         # original task's data is used to enqueue a new task with a new task ID
@@ -997,7 +1001,8 @@ class Result(object):
             eta=eta,
             retries=self.task.retries,
             retry_delay=self.task.retry_delay,
-            expires=expires if expires is not None else self.task.expires)
+            expires=expires if expires is not None else self.task.expires,
+            meta=meta if meta is not None else self.task.meta)
         return self.huey.enqueue(task)
 
     def reset(self):
