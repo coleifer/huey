@@ -3,7 +3,14 @@ Changelog
 
 ## master
 
-[View commits](https://github.com/coleifer/huey/compare/2.4.4...HEAD)
+[View commits](https://github.com/coleifer/huey/compare/2.4.5...HEAD)
+
+## 2.4.5
+
+Improves propagation of errors in task results and includes fix for newer
+versions of pip.
+
+[View commits](https://github.com/coleifer/huey/compare/2.4.4...2.4.5)
 
 ## 2.4.4
 
