@@ -832,6 +832,82 @@ If you would like to get email alerts when an error occurs, you can attach a
     mail_handler.setLevel(logging.ERROR)
     logging.getLogger('huey').addHandler(mail_handler)
 
+.. _storage_options:
+
+Storage Options
+---------------
+
+Huey provides a number of different storage layers suitable to different types
+of workloads. Below I will try to sketch the differences, strengths, and
+weaknesses of each storage layer.
+
+:py:class:`RedisHuey`
+    Huey's capabilities are, to a large extent, informed by the functionality
+    available in Redis. This is the most robust option available and can handle
+    very busy workloads. Because Redis runs as a separate server process, it is
+    even possible to run Huey consumers on multiple machines to facilitate
+    "scale-out" operation.
+
+    Operations are guaranteed to be atomic, following the guarantees provided
+    by Redis. The queue is stored in a Redis list, scheduled tasks use a sorted
+    set, and the task result-store is kept in a hash.
+
+    Tasks that return a meaningful value must be sure that the caller
+    "resolves" those return values at some point, to ensure that the result
+    store does not become filled with unused data (to mitigate this, you can
+    just modify your tasks to return ``None`` if you never intend to use the
+    result).
+
+    By default Huey performs a "blocking" pop on the queue, which reduces
+    latency, although polling can be used instead by passing ``blocking=False``
+    when instantiating ``RedisHuey``.
+
+    Task priorities are not supported by :py:class:`RedisHuey`.
+
+:py:class:`PriorityRedisHuey`
+    Redis storage layer that supports task priorities. In order to make this
+    possible and efficient, ``PriorityRedisHuey`` stores the queue in a sorted
+    set. Since sorted sets require the key to be unique, Huey will use the
+    timestamp in microseconds to differentiate tasks enqueued with the same
+    priority.
+
+:py:class:`RedisExpireHuey`
+    Redis storage layer that stores task results in top-level keys, in order to
+    add an expiration time to them. Putting an expiration on task result keys
+    can ensure that the result-store does not fill up with unresolved result
+    values. The default expire time is 86400 seconds, although this can be
+    controlled by setting the ``expire_time`` parameter during instantiation.
+
+:py:class:`PriorityRedisExpireHuey`
+    Combines the behaviors of :py:class:`PriorityRedisHuey` to support task
+    priorities, with the result-store expiration behavior of
+    :py:class:`RedisExpireHuey`.
+
+:py:class:`SqliteHuey`
+    Sqlite works well for many workloads (see `Appropriate uses for Sqlite <https://www.sqlite.org/whentouse.html>`_),
+    and Huey's Sqlite storage layer works well regardless of the worker-type
+    chosen. Sqlite locks the database during writes, ensuring only a single
+    writer can write to the database at any given time. Writes generally happen
+    very quickly, however, so in practice this is rarely an issue. Because the
+    database is stored in a single file, taking backups is quite simple.
+
+    ``SqliteHuey`` may be a good choice for moderate workloads where the
+    operational complexity of running a separate server process like Redis is
+    undesirable.
+
+:py:class:`FileHuey`
+    Stores the queue, schedule and task results in files on the filesystem.
+    This implementation is provided mostly for testing and development. An
+    exclusive lock is used around all file-system operations, since multiple
+    operations (list directory, read file, unlink file, e.g.) are typically
+    required for each storage primitive (enqueue, dequeue, store result, etc).
+
+:py:class:`MemoryHuey`
+    In-memory implementation of the storage layer used for :ref:`immediate`.
+
+:py:class:`BlackHoleHuey`
+    All storage methods are no-ops.
+
 Tips and tricks
 ---------------
 

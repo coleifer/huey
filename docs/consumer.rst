@@ -89,6 +89,9 @@ their default values.
       which spend a lot of time waiting to read/write to a socket, will get a
       huge boost from using the greenlet worker model. Because greenlets are so
       cheap in terms of memory, you can easily run a large number of workers.
+      Note that all code that does **not** consist in waiting for a socket will
+      be blocking and cannot be pre-empted. Understand the tradeoffs before
+      jumping to use greenlets.
     * Anything else: use "thread". You get the benefits of pre-emptive
       multi-tasking without the overhead of multiple processes. A safe choice
       and the default.
@@ -210,7 +213,8 @@ different mechanisms to achieve this concurrency.
   not yield control to the gevent scheduler, limiting concurrency. For this
   reason, gevent is a good choice for tasks that perform lots of socket I/O,
   but may give worse performance for tasks that are CPU-bound (e.g., parsing
-  large files, manipulating images, generating reports, etc).
+  large files, manipulating images, generating reports, etc). Understand the
+  tradeoff thoroughly before using this worker type.
 
 When in doubt, the default setting (``thread``) is a safe choice.
 

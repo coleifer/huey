@@ -102,6 +102,11 @@ Implementations of :py:class:`Huey` which handle task and result persistence.
     :param password: password for Redis.
     :param int db: Redis database to use (typically 0-15, default is 0).
 
+.. py:class:: PriorityRedisExpireHuey
+
+    Combines behavior of :py:class:`RedisExpireHuey` and
+    :py:class:`PriorityRedisHuey`.
+
 .. py:class:: SqliteHuey
 
     :py:class:`Huey` that utilizes sqlite3 for queue and result storage. Only
