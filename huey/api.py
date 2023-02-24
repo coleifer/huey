@@ -410,6 +410,11 @@ class Huey(object):
         else:
             logger.info('%s executed in %0.3fs', task, duration)
 
+        # Clear the flag if this instance of the task was revoked after it
+        # began executing by destructively reading it's revoke key.
+        if not isinstance(task, PeriodicTask):
+            self.get(task.revoke_id)
+
         if self.results and not isinstance(task, PeriodicTask):
             if exception is not None:
                 error_data = self.build_error_result(task, exception)
