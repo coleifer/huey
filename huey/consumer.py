@@ -12,6 +12,7 @@ from multiprocessing import Process
 try:
     import gevent
     from gevent import Greenlet
+    from gevent import monkey
     from gevent.event import Event as GreenEvent
 except ImportError:
     Greenlet = GreenEvent = None
@@ -371,6 +372,13 @@ class Consumer(object):
                 'Consumer cannot be run with Huey instances where immediate '
                 'is enabled. Please check your configuration and ensure that '
                 '"huey.immediate = False".')
+
+        # Check if gevent is used, and if monkey-patch applied properly.
+        if self.worker_type == WORKER_GREENLET:
+            if not monkey.is_module_patched('socket'):
+                self._logger.warning('Gevent monkey-patch has not been applied'
+                                     ', this may result in incorrect or '
+                                     'unpredictable behavior.')
 
         # Log startup message.
         self._logger.info('Huey consumer started with %s %s, PID %s at %s',
