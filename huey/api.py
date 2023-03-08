@@ -859,7 +859,15 @@ class TaskWrapper(object):
         return self.func(*args, **kwargs)
 
     def s(self, *args, **kwargs):
+        eta = kwargs.pop('eta', None)
+        delay = kwargs.pop('delay', None)
+        if delay is not None and isinstance(delay, datetime.timedelta):
+            delay = delay.total_seconds()
+        if eta is not None or delay is not None:
+            eta = normalize_time(eta, delay, self.huey.utc)
+
         return self.task_class(args, kwargs,
+                               eta=eta,
                                retries=kwargs.pop('retries', None),
                                retry_delay=kwargs.pop('retry_delay', None),
                                priority=kwargs.pop('priority', None),

@@ -126,6 +126,28 @@ class TestQueue(BaseTestCase):
         self.assertEqual(len(sched), 1)
         self.assertEqual(sched[0], task)
 
+    def test_schedule_s(self):
+        @self.huey.task()
+        def add(a, b):
+            return a + b
+
+        task = add.s((1, 2), delay=10)
+        task = task.then(add, (3,), delay=20)
+        self.huey.execute(task)
+
+        sched = self.huey.scheduled()
+        self.assertEqual(len(sched), 1)
+        self.assertEqual(sched[0], task)
+
+        t10 = datetime.datetime.now() + datetime.timedelta(seconds=10)
+        self.assertFalse(self.huey.ready_to_run(task))
+        self.assertTrue(self.huey.ready_to_run(task, t10))
+
+        t20 = datetime.datetime.now() + datetime.timedelta(seconds=20)
+        oc = task.on_complete
+        self.assertFalse(self.huey.ready_to_run(oc, t10))
+        self.assertTrue(self.huey.ready_to_run(oc, t20))
+
     def test_revoke_task(self):
         state = {}
         @self.huey.task()
