@@ -131,9 +131,10 @@ class TestQueue(BaseTestCase):
         def add(a, b):
             return a + b
 
-        task = add.s((1, 2), delay=10)
-        task = task.then(add, (3,), delay=20)
-        self.huey.execute(task)
+        task = add.s(1, 2, delay=10)
+        task = task.then(add, 3, delay=20)
+        r1, r2 = self.huey.enqueue(task)
+        self.execute_next()
 
         sched = self.huey.scheduled()
         self.assertEqual(len(sched), 1)
@@ -147,6 +148,16 @@ class TestQueue(BaseTestCase):
         oc = task.on_complete
         self.assertFalse(self.huey.ready_to_run(oc, t10))
         self.assertTrue(self.huey.ready_to_run(oc, t20))
+
+        r = r1.reschedule()
+        self.assertEqual(len(self.huey), 1)
+        self.assertEqual(self.execute_next(), 3)
+
+        self.assertEqual(len(self.huey), 1)
+        task = self.huey.dequeue()
+        self.assertFalse(self.huey.ready_to_run(task))
+        self.assertTrue(self.huey.ready_to_run(task, t20))
+        self.assertEqual(self.huey.execute(task, t20), 6)
 
     def test_revoke_task(self):
         state = {}
@@ -567,6 +578,29 @@ class TestQueue(BaseTestCase):
         self.assertTrue(seconds(5) < task.expires_resolved < seconds(7))
         self.assertEqual(self.huey.execute(task), True)
         self.assertEqual(state, [res3.id])
+
+    def test_reschedule_priority(self):
+        state = []
+
+        @self.huey.task(context=True)
+        def task_s(task=None):
+            state.append(task.id)
+            return True
+
+        res = task_s(priority=10)
+        res2 = res.reschedule(priority=99)
+        self.assertEqual(len(self.huey), 2)
+
+        task = self.huey.dequeue()
+        self.assertEqual(task.priority, 99)
+        self.assertTrue(self.huey.execute(task))
+
+        task = self.huey.dequeue()
+        self.assertEqual(task.priority, 10)
+        self.assertTrue(res.is_revoked())
+        self.assertTrue(self.huey.execute(task) is None)
+
+        self.assertEqual(state, [res2.id])
 
     def test_task_error(self):
         @self.huey.task()
