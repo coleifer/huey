@@ -283,6 +283,80 @@ will be allowed to finish before the restart occurs.
     `issue 374 <https://github.com/coleifer/huey/issues/374>`_ and
     `PEP 446 <https://www.python.org/dev/peps/pep-0446/>`_.
 
+
+.. _process-supervisors:
+
+supervisord and systemd
+-----------------------
+
+Huey plays nicely with both `supervisord <https://supervisord.org/>`_,
+`systemd <https://systemd.io/>`_ and presumably any other process supervisor.
+
+Barebones supervisor config using 4 worker threads:
+
+.. code-block:: ini
+
+    [program:my_huey]
+    directory=/path/to/project/
+    command=/path/to/huey/bin/huey_consumer.py my_app.huey -w 4
+    user=someuser
+    autostart=true
+    autorestart=true
+    stdout_logfile=/var/log/huey.log
+    stderr_logfile=/var/log/huey.err
+    environment=PYTHONPATH="/path/to/project:$PYTHONPATH"
+    ; Increase this if you want to ensure long-running tasks are not
+    ; interrupted during shutdown.
+    stopwaitsecs=30
+
+Barebones systemd config using 4 worker threads:
+
+.. code-block:: ini
+
+    [Unit]
+    Description=My Huey
+    After=network.target
+
+    [Service]
+    User=someuser
+    Group=somegroup
+    WorkingDirectory=/path/to/project/
+    ExecStart=/path/to/huey/bin/huey_consumer.py my_app.huey -w 4
+    Restart=always
+
+    [Install]
+    WantedBy=multi-user.target
+
+.. note::
+    Django users may replace ``huey/bin/huey_consumer.py`` with the appropriate
+    path to ``manage.py run_huey``.
+
+
+.. _multiple-consumers:
+
+Multiple Consumers
+------------------
+
+Huey is typically run on a single server, with the number of workers scaled-up
+according to your applications workload. However, it is also possible to run
+multiple Huey consumers across multiple servers. When running multiple
+consumers, it is crucial that **only one consumer** be configured to enqueue
+periodic tasks.
+
+By default the consumer will enqueue periodic tasks for execution whenever they
+are ready to be run. When multiple consumers are used, it is therefore
+necessary to specify the ``-n`` or ``--no-periodic`` option for all consumers
+except one.
+
+For example:
+
+* Server A (main): ``huey_consumer.py myapp.huey -w 8 -k process``
+* Server B: ``huey_consumer.py myapp.huey -w 8 -k process --no-periodic``
+* Server C: ``huey_consumer.py myapp.huey -w 8 -k process --no-periodic``
+
+Since each Huey consumer must be able to communicate with the queue and
+result-store, Redis or another network-accessible storage backend must be used.
+
 .. _consumer-internals:
 
 Consumer Internals
