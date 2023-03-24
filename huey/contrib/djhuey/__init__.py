@@ -5,6 +5,7 @@ import traceback
 
 from django.conf import settings
 from django.db import close_old_connections
+from django.db import transaction
 
 
 configuration_message = """
@@ -152,4 +153,37 @@ def db_periodic_task(*args, **kwargs):
         ret = periodic_task(*args, **kwargs)(close_db(fn))
         ret.call_local = fn
         return ret
+    return decorator
+
+
+def on_commit_task(*args, **kwargs):
+    """
+    This task will register a post-commit callback to enqueue the task. A
+    result handle will still be returned immediately, however, even though
+    the task may not (ever) be enqueued, subject to whether or not the
+    transaction actually commits.
+
+    Because we have to setup the callback within the bit of code that performs
+    the actual enqueueing, we cannot expose the full functionality of the
+    TaskWrapper. If you anticipate wanting all these methods, you are probably
+    best off decorating the same function twice, e.g.:
+
+        def update_data(pk):
+            # Do some database operation.
+            pass
+
+        my_task = task()(update_data)
+        my_on_commit_task = on_commit_task()(update_data)
+    """
+    def decorator(fn):
+        task_wrapper = task(*args, **kwargs)(close_db(fn))
+
+        @wraps(fn)
+        def inner(*a, **k):
+            task = task_wrapper.s(*a, **k)
+            def enqueue_on_commit():
+                task_wrapper.huey.enqueue(task)
+            transaction.on_commit(enqueue_on_commit)
+            return HUEY._result_handle(task)
+        return inner
     return decorator

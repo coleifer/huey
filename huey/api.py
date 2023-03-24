@@ -637,6 +637,9 @@ class Huey(object):
 
         return flushed
 
+    def _result_handle(self, task):
+        return Result(self, task)
+
     def result(self, id, blocking=False, timeout=None, backoff=1.15,
                max_delay=1.0, revoke_on_timeout=False, preserve=False):
         task_result = Result(self, Task(id=id))
