@@ -1,7 +1,7 @@
 import time
 
 from huey import crontab
-from huey.contrib.djhuey import task, periodic_task, db_task
+from huey.contrib.djhuey import task, periodic_task, db_task, on_commit_task
 
 
 def tprint(s, c=32):
@@ -49,3 +49,18 @@ def every_other_minute():
 @periodic_task(crontab(minute='*/5'))
 def every_five_mins():
     tprint('This task runs every 5 minutes.', 34)
+
+
+# When this task is called, it will not be enqueued until the active
+# transaction commits. If no transaction is active it will enqueue immediately.
+# Example:
+# with transaction.atomic():
+#     rh = after_commit('hello!')
+#     time.sleep(5)  # Still not enqueued....
+#
+# # Now the task is enqueued.
+# print(rh.get(True))  # prints "6".
+@on_commit_task()
+def after_commit(msg):
+    tprint(msg, 33)
+    return len(msg)
