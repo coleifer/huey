@@ -372,6 +372,7 @@ class Huey(object):
 
         start = time_clock()
         exception = None
+        retry_eta = None
         task_value = None
 
         try:
@@ -388,6 +389,8 @@ class Huey(object):
         except RetryTask as exc:
             logger.info('Task %s raised RetryTask, retrying.', task.id)
             task.retries += 1
+            if exc.eta or exc.delay is not None:
+                retry_eta = normalize_time(exc.eta, exc.delay, self.utc)
             exception = exc
         except CancelExecution as exc:
             if exc.retry or (exc.retry is None and task.retries):
@@ -440,14 +443,17 @@ class Huey(object):
 
         if exception is not None and task.retries:
             self._emit(S.SIGNAL_RETRYING, task)
-            self._requeue_task(task, self._get_timestamp())
+            self._requeue_task(task, self._get_timestamp(), retry_eta)
 
         return task_value
 
-    def _requeue_task(self, task, timestamp):
+    def _requeue_task(self, task, timestamp, retry_eta=None):
         task.retries -= 1
         logger.info('Requeueing %s, %s retries', task.id, task.retries)
-        if task.retry_delay:
+        if retry_eta is not None:
+            task.eta = retry_eta
+            self.add_schedule(task)
+        elif task.retry_delay:
             delay = datetime.timedelta(seconds=task.retry_delay)
             task.eta = timestamp + delay
             self.add_schedule(task)

@@ -808,6 +808,38 @@ class TestQueue(BaseTestCase):
         dt = datetime.datetime.now() + datetime.timedelta(seconds=61)
         self.assertTrue(self.huey.ready_to_run(task, dt))
 
+    def test_retrytask_eta_delay(self):
+        @self.huey.task(retry_delay=10)
+        def task_a(d=None, e=None):
+            raise RetryTask(delay=d, eta=e)
+
+        seconds = lambda s: (datetime.datetime.now() +
+                             datetime.timedelta(seconds=s))
+
+        def run_iteration(d, e):
+            r = task_a(d=d, e=e)
+            self.assertTrue(self.execute_next() is None)
+            self.assertRaises(TaskException, r.get)
+            self.assertEqual(len(self.huey), 0)
+            self.assertEqual(len(self.huey.scheduled()), 1)
+
+            task, = self.huey.scheduled()
+            self.assertEqual(task.id, r.id)
+            self.assertFalse(self.huey.ready_to_run(task))
+            if e is not None:
+                self.assertEqual(task.eta, e)
+            else:
+                d = d or 10  # Default.
+                self.assertTrue(seconds(d - 3) < task.eta < seconds(d + 3))
+
+            self.huey.flush()
+
+        run_iteration(None, None)
+        run_iteration(3, None)
+        run_iteration(300, None)
+        run_iteration(None, seconds(3))
+        run_iteration(None, seconds(300))
+
     def test_retrytask_explicit(self):
         state = [0]
 
