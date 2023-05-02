@@ -278,7 +278,7 @@ explicitly, you can get the actual ``Huey`` instance in the following way:
     from huey.contrib.djhuey import HUEY as huey
 
     # E.g., get the underlying Storage instance.
-    storage = huey.get_storage()
+    storage = huey.storage
 
 Configuration Examples
 ^^^^^^^^^^^^^^^^^^^^^^
