@@ -238,6 +238,12 @@ automatically close the connection for you.
     def every_five_mins():
         # This is a periodic task that executes queries.
 
+.. note::
+    Huey uses ``django.db.close_old_connections`` to cleanup old / errored 
+    database connections. This function uses the CONN_MAX_AGE Django setting 
+    to determine if the connection is old. It may be neccesarry to modify 
+    this setting if it has been changed in the active Django configuration.
+
 DEBUG and Synchronous Execution
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
