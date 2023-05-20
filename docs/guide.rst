@@ -243,7 +243,8 @@ Task priority
     :py:class:`RedisHuey`.
 
     Task prioritization is fully supported by :py:class:`SqliteHuey` and the
-    in-memory storage layer used when :ref:`immediate` is enabled.
+    file-based :py:class:`FileHuey`. The in-memory storage layer (used when
+    :ref:`immediate` is enabled) also supports task priorities.
 
 Huey tasks can be given a priority, allowing you to ensure that your most
 important tasks do not get delayed when the workers are busy.
