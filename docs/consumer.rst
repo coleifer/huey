@@ -218,6 +218,12 @@ different mechanisms to achieve this concurrency.
 
 When in doubt, the default setting (``thread``) is a safe choice.
 
+.. warning::
+    Multiprocess support is not available for Windows. The only process start
+    method available on Windows is "spawn", which has the downside of requiring
+    the Huey state to be pickled. Huey uses (and creates) many objects which
+    cannot be pickled. More information here: `multiprocessing documentation <https://docs.python.org/3/library/multiprocessing.html#the-spawn-and-forkserver-start-methods>`_.
+
 Using gevent
 ^^^^^^^^^^^^
 

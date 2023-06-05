@@ -4,6 +4,7 @@ import logging
 import os
 import sys
 
+from huey.constants import WORKER_PROCESS
 from huey.consumer import Consumer
 from huey.consumer_options import ConsumerConfig
 from huey.consumer_options import OptionParserHandler
@@ -40,6 +41,10 @@ def consumer_main():
                if v is not None}
     config = ConsumerConfig(**options)
     config.validate()
+
+    if sys.platform == 'win32' and config.worker_type == WORKER_PROCESS:
+        err('Error:  huey cannot be run in "process"-mode on Windows.')
+        sys.exit(1)
 
     huey_instance = load_huey(args[0])
 
