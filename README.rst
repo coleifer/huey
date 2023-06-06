@@ -25,8 +25,6 @@ huey supports:
 
 .. image:: http://i.imgur.com/2EpRs.jpg
 
-.. image:: https://api.travis-ci.org/coleifer/huey.svg?branch=master
-
 At a glance
 -----------
 
