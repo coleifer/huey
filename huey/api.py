@@ -9,6 +9,7 @@ import uuid
 import warnings
 
 from collections import OrderedDict
+from collections import deque
 from functools import partial
 from functools import wraps
 
@@ -1050,6 +1051,18 @@ class ResultGroup(object):
         return iter(self._results)
     def __len__(self):
         return len(self._results)
+    def as_completed(self, backoff=1.15, max_delay=1.0):
+        res = deque(self._results)
+        delay = {r.id: 0. for r in res}
+        while res:
+            r = res.popleft()
+            if delay[r.id]:
+                time.sleep(delay[r.id])
+            if r._get() is EmptyData:
+                res.append(r)
+                delay[r.id] = min((delay[r.id] or 0.1) * backoff, max_delay)
+            else:
+                yield r.get()
 
 
 dash_re = re.compile(r'(\d+)-(\d+)')
