@@ -6,6 +6,7 @@ import traceback
 from django.conf import settings
 from django.db import close_old_connections
 from django.db import transaction
+from django.utils.module_loading import autodiscover_modules
 
 
 configuration_message = """
@@ -77,6 +78,8 @@ if HUEY is None:
     else:
         HUEY = RedisHuey(default_queue_name())
 
+autodiscover = False
+
 if isinstance(HUEY, dict):
     huey_config = HUEY.copy()  # Operate on a copy.
     name = huey_config.pop('name', default_queue_name())
@@ -97,6 +100,8 @@ if isinstance(HUEY, dict):
     except (ValueError, ImportError, AttributeError):
         config_error('Error: could not import Huey backend:\n%s'
                      % traceback.format_exc())
+
+    autodiscover = HUEY.get("autodiscover", True)
 
     HUEY = backend_cls(name, **huey_config)
 
