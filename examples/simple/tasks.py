@@ -2,7 +2,7 @@ import os
 import threading
 import time
 from huey import crontab
-from huey.signals import SIGNAL_COMPLETE
+from huey.signals import *
 
 from config import huey
 
@@ -95,3 +95,23 @@ def shutdown_hook():
 @huey.signal(SIGNAL_COMPLETE)
 def on_complete(signal, task, exc=None):
     tprint('received signal [%s] for task [%s]' % (signal, task))
+
+@huey.signal(SIGNAL_INTERRUPTED)
+def on_interrupted(signal, task, exc=None):
+    tprint('received interrupted task signal for task: %s' % task)
+
+from huey.constants import EmptyData
+from huey.exceptions import RetryTask
+@huey.task(context=True)
+def hold_on(a, task=None):
+    if task is not None and huey.storage.peek_data('hold_on') is not EmptyData:
+        print('appears to be running...will retry in 60s')
+        raise RetryTask(delay=60)
+
+    huey.storage.put_data('hold_on', '1')
+    try:
+        print('in task, sleeping for %s' % a)
+        time.sleep(a)
+    finally:
+        huey.storage.pop_data('hold_on')
+    return True

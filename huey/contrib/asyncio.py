@@ -10,32 +10,32 @@ async def aget_result(res, backoff=1.15, max_delay=1.0, preserve=False):
     Example usage:
 
         @huey.task()
-        def some_task(...):
-            ...
-
+        def sleep(n):
+            time.sleep(n)
 
         # Call the task and get the normal result-handle.
-        rh = some_task(...)
+        rh = sleep(2)
 
         # Asynchronously await the result of the task.
         result = await aget_result(rh)
 
     More advanced example of waiting for multiple results concurrently:
 
-        r1 = some_task(...)
-        r2 = some_task(...)
-        r3 = some_task(...)
+        r1 = sleep(1)
+        r2 = sleep(2)
+        r3 = sleep(3)
 
-        # Asynchronously await the results of all 3 tasks.
+        # Asynchronously await the results of all 3 tasks. Will take
+        # ~3 seconds.
         results = await asyncio.gather(
             aget_result(r1),
             aget_result(r2),
             aget_result(r3))
 
     NOTE: the Redis operation will be a normal blocking socket read, but in
-    practice these will be super fast. The slow part is the necessity to call
-    `sleep()` between polling intervals (since the Redis command to read the
-    result does not block).
+    practice these will be super fast. The slow part is the necessity to wait
+    between polling intervals (since the Redis command to read the result does
+    not block).
     """
     delay = 0.1
     while res._result is EmptyData:
@@ -47,6 +47,20 @@ async def aget_result(res, backoff=1.15, max_delay=1.0, preserve=False):
 
 
 async def aget_result_group(rg, *args, **kwargs):
+    """
+    Await the results of a ResultGroup.
+
+    Example usage:
+
+        @huey.task()
+        def sleep(n):
+            time.sleep(n)
+
+        rg = sleep.map([2, 2, 2])
+
+        # This should take ~2 seconds.
+        results = await aget_result_group(rg)
+    """
     return await asyncio.gather(*[
         aget_result(r, *args, **kwargs)
         for r in rg])
