@@ -9,3 +9,5 @@ beyond the core APIs.
 .. include:: mini.rst
 
 .. include:: django.rst
+
+.. include:: asyncio.rst

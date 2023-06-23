@@ -12,6 +12,7 @@ async def aget_result(res, backoff=1.15, max_delay=1.0, preserve=False):
         @huey.task()
         def sleep(n):
             time.sleep(n)
+            return n
 
         # Call the task and get the normal result-handle.
         rh = sleep(2)
@@ -55,6 +56,7 @@ async def aget_result_group(rg, *args, **kwargs):
         @huey.task()
         def sleep(n):
             time.sleep(n)
+            return n
 
         rg = sleep.map([2, 2, 2])
 
