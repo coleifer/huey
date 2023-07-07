@@ -27,10 +27,10 @@ def load_huey(path):
         raise
 
 
-def consumer_main():
+def consumer_main(args=None):
     parser_handler = OptionParserHandler()
     parser = parser_handler.get_option_parser()
-    options, args = parser.parse_args()
+    options, args = parser.parse_args(args)
 
     if len(args) == 0:
         err('Error:   missing import path to `Huey` instance')
