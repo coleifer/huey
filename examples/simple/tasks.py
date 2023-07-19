@@ -115,3 +115,8 @@ def hold_on(a, task=None):
     finally:
         huey.storage.pop_data('hold_on')
     return True
+
+@huey.task()
+def slow_cpu():
+    for i in range(1000000000):
+        j = i % 13331
