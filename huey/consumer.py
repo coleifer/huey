@@ -522,8 +522,8 @@ class Consumer(object):
         self._restart = False
         self._graceful = False
         if self.worker_type == WORKER_GREENLET:
-            # Ensure that the running greenlet (if not main) is interrupted.
-            raise KeyboardInterrupt
+            gevent.killall([t for _, t in self.worker_threads],
+                           KeyboardInterrupt)
 
     def _handle_restart_signal(self, sig_num, frame):
         self._logger.info('Received SIGHUP, will restart')
