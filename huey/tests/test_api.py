@@ -1456,7 +1456,7 @@ class TestTaskLocking(BaseTestCase):
             self.assertTrue(self.execute_next() is None)
 
         exc = self.trap_exception(r)
-        self.assertTrue('unable to set lock' in str(exc))
+        self.assertTrue('unable to acquire' in str(exc))
 
         # Task failed due to lock, will be retried, which succeeds now that the
         # lock is released.
