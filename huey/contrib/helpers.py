@@ -59,7 +59,7 @@ def lock_task_semaphore(huey, lock_name, value=1, timeout=None):
         def inner(*args, **kwargs):
             tid = sem.acquire()
             if tid is None:
-                raise TaskLockedException('unable to acquire lock: %s' %
+                raise TaskLockedException('unable to acquire lock %s' %
                                           lock_name)
             try:
                 return fn(*args, **kwargs)

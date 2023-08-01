@@ -384,7 +384,7 @@ class Huey(object):
                 self._tasks_in_flight.remove(task)
                 duration = time_clock() - start
         except TaskLockedException as exc:
-            logger.warning('Task %s not run, unable to acquire lock.', task.id)
+            logger.warning('Task %s not run, %s.', task.id, exc)
             exception = exc
             self._emit(S.SIGNAL_LOCKED, task)
         except RetryTask as exc:
@@ -907,7 +907,7 @@ class TaskLock(object):
 
     def __enter__(self):
         if not self._huey.put_if_empty(self._key, '1'):
-            raise TaskLockedException('unable to set lock: %s' % self._name)
+            raise TaskLockedException('unable to acquire lock %s' % self._name)
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self._huey.delete(self._key)
