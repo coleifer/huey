@@ -3,7 +3,34 @@ Changelog
 
 ## master
 
-[View commits](https://github.com/coleifer/huey/compare/2.4.5...HEAD)
+[View commits](https://github.com/coleifer/huey/compare/2.5.0...HEAD)
+
+## 2.5.0
+
+* Check to ensure the gevent monkeypatch was applied when running the consumer
+  with greenlet workers, log warning if it is not.
+* Explicitly clear the revoked flag on task instances after execution (#713).
+  This will help reduce junk keys left in the storage if you attempt to revoke
+  a task while it is executing.
+* Add support for `delay=`, `eta=` in Huey's `.s()` and `.then()` - this adds
+  support for delaying or scheduling pipelines.
+* Add support for rescheduling callback pipelines when rescheduling a task.
+  This is enabled by default (`preserve_pipeline=True`).
+* Add an `on_commit_task()` decorator for Django extension that will enqueue
+  the task after any database changes have been committed. This eliminates a
+  common race condition where a task is enqueued and executed before the
+  corresponding database changes have been committed.
+* Allow overriding the `delay` and `eta` when raising a `RetryTask` exception.
+  This provides finer-grained control over when a task should be retried.
+* Add a very simple `ResultGroup.as_completed()` helper to provide a way to
+  deal with multiple results as they become available. Refs #746.
+* Add an `asyncio` helper for resolving task results asynchronously. Asyncio
+  users can use `await aget_result(result)` or `await aget_result_group(rg)` to
+  fetch a task result in non-blocking fashion.
+* Fix bug in SIGINT and SIGTERM behavior for gevent users.
+* Include lock name when a task fails due to `TaskLocked` exception (#757).
+
+[View commits](https://github.com/coleifer/huey/compare/2.4.5...2.5.0)
 
 ## 2.4.5
 
