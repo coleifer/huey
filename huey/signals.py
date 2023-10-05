@@ -10,8 +10,8 @@ SIGNAL_LOCKED = 'locked'
 SIGNAL_RETRYING = 'retrying'
 SIGNAL_REVOKED = 'revoked'
 SIGNAL_SCHEDULED = 'scheduled'
-SIGNAL_INTERRUPTED = "interrupted"
-
+SIGNAL_INTERRUPTED = 'interrupted'
+SIGNAL_ENQUEUE = 'enqueue'
 
 class Signal(object):
     __slots__ = ('receivers',)
