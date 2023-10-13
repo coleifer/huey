@@ -12,8 +12,8 @@ huey
 
 huey is:
 
-* a task queue (**2019-04-01**: :ref:`version 2.0 released <changes>`)
-* written in python (2.7+, 3.4+)
+* a task queue
+* written in python
 * clean and simple API
 * redis, sqlite, file-system, or in-memory storage
 * `example code <https://github.com/coleifer/huey/tree/master/examples/>`_.
