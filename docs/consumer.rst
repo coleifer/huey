@@ -124,14 +124,14 @@ their default values.
 
     .. image:: http://media.charlesleifer.com/blog/photos/p1472257818.22.png
 
-``-c``, ``--health-check-interval``
+``-c``, ``--health_check_interval``
     This parameter specifies how often huey should check on the status of the
     workers, restarting any that died for some reason. I personally run a dozen
     or so huey consumers at any given time and have never encountered an issue
     with the workers, but I suppose anything's possible and better safe than
     sorry.
 
-``-C``, ``--disable-health-check``
+``-C``, ``--disable_health_check``
     This option **disables** the worker health checks. Until version 1.3.0,
     huey had no concept of a "worker health check" because in my experience the
     workers simply always stayed up and responsive. But if you are using huey
@@ -144,7 +144,7 @@ their default values.
     Flush all locks when starting the consumer. This may be useful if the
     consumer was killed abruptly while executing a locked task.
 
-``-L``, ``--extra-locks``
+``-L``, ``--extra_locks``
     Additional lock-names to flush when starting the consumer, separated by
     comma. This is useful if you have locks within context-managers that may
     not be discovered during consumer startup, but you wish to ensure they are
