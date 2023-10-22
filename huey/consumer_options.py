@@ -58,17 +58,17 @@ class OptionParserHandler(object):
                    help=('factor used to back-off polling interval when queue '
                          'is empty (default=1.15, must be >= 1)'),
                    type='float'),
-            option(('c', 'health_check_interval'), type='float',
+            option(('c', 'health-check-interval'), type='float',
                    dest='health_check_interval', metavar='SECONDS',
                    help=('minimum time to wait between worker health checks '
                          '(default=1.0)')),
-            option(('C', 'disable_health_check'), action='store_false',
+            option(('C', 'disable-health-check'), action='store_false',
                    dest='check_worker_health',
                    help=('disable health check that monitors worker health, '
                          'restarting any worker that crashes unexpectedly.')),
             option('flush_locks', action='store_true', dest='flush_locks',
                    help=('flush all locks when starting consumer.')),
-            option(('L', 'extra_locks'), dest='extra_locks',
+            option(('L', 'extra-locks'), dest='extra_locks',
                    help=('additional locks to flush, separated by comma.')),
         )
 
