@@ -522,7 +522,7 @@ class Consumer(object):
         self._logger.info('Received SIGTERM')
         self._received_signal = True
         self._restart = False
-        self._graceful = False
+        self._graceful = True
         if self.worker_type == WORKER_GREENLET:
             def kill_workers():
                 gevent.killall([t for _, t in self.worker_threads],
