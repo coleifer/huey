@@ -498,18 +498,22 @@ class Consumer(object):
         return not restart_occurred
 
     def _set_signal_handlers(self):
-        signal.signal(signal.SIGTERM, self._handle_stop_signal)
-        if self.worker_type == WORKER_GREENLET:
-            # Add a special INT handler when using gevent. If the running
-            # greenlet is not the main hub, then Gevent will raise a
-            # KeyboardInterrupt in the running greenlet by default. This
-            # ensures that when INT is received we properly flag the main loop
-            # for graceful shutdown and do NOT propagate the exception.
-            signal.signal(signal.SIGINT, self._handle_interrupt_signal_gevent)
+        if hasattr(signal, 'SIGTERM'):
+            signal.signal(signal.SIGTERM, signal.default_int_handler)
         else:
-            signal.signal(signal.SIGINT, signal.default_int_handler)
-        if hasattr(signal, 'SIGHUP'):
-            signal.signal(signal.SIGHUP, self._handle_restart_signal)
+            signal.signal(signal.SIGTERM, self._handle_stop_signal)
+            if self.worker_type == WORKER_GREENLET:
+                # Add a special INT handler when using gevent. If the running
+                # greenlet is not the main hub, then Gevent will raise a
+                # KeyboardInterrupt in the running greenlet by default. This
+                # ensures that when INT is received we properly flag the main loop
+                # for graceful shutdown and do NOT propagate the exception.
+                signal.signal(
+                    signal.SIGINT, self._handle_interrupt_signal_gevent)
+            else:
+                signal.signal(signal.SIGINT, signal.default_int_handler)
+            if hasattr(signal, 'SIGHUP'):
+                signal.signal(signal.SIGHUP, self._handle_restart_signal)
 
     def _handle_interrupt_signal_gevent(self, sig_num, frame):
         self._logger.info('Received SIGINT')
