@@ -11,6 +11,14 @@ try:
 except ImportError:
     fcntl = None
 
+if sys.version_info < (3, 12):
+    utcnow = datetime.datetime.utcnow
+else:
+    def utcnow():
+        return (datetime.datetime
+                .now(datetime.timezone.utc)
+                .replace(tzinfo=None))
+
 
 Error = namedtuple('Error', ('metadata',))
 
@@ -86,7 +94,7 @@ def normalize_time(eta=None, delay=None, utc=True):
     if not ((delay is None) ^ (eta is None)):
         raise ValueError('Specify either an eta (datetime) or delay (seconds)')
     elif delay:
-        method = (utc and datetime.datetime.utcnow or
+        method = (utc and utcnow() or
                   datetime.datetime.now)
         if not isinstance(delay, datetime.timedelta):
             delay = datetime.timedelta(seconds=delay)

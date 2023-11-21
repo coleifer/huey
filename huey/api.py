@@ -39,6 +39,7 @@ from huey.utils import reraise_as
 from huey.utils import string_type
 from huey.utils import time_clock
 from huey.utils import to_timestamp
+from huey.utils import utcnow
 
 
 logger = logging.getLogger('huey')
@@ -343,7 +344,7 @@ class Huey(object):
         return self.storage.delete_data(key)
 
     def _get_timestamp(self):
-        return (datetime.datetime.utcnow() if self.utc else
+        return (utcnow() if self.utc else
                 datetime.datetime.now())
 
     def execute(self, task, timestamp=None):
