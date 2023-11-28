@@ -271,6 +271,33 @@ they are currently executing before the process exits.
 Alternatively, you can shutdown the consumer using ``SIGTERM`` and any running
 tasks will be interrupted, ensuring the process exits quickly.
 
+.. warning::
+    Huey does not guarantee at-least-once delivery of messages, and does not do
+    acknowledgement of completed tasks. This means that if you terminate the
+    consumer **without** letting it finish any currently-executing tasks, those
+    tasks will be lost. To be alerted when this occurs, you can use Huey's
+    :ref:`signals` (specifically ``signals.SIGNAL_INTERRUPTED``). The consumer
+    will emit this for tasks that are interrupted during execution.
+
+Deployments
+^^^^^^^^^^^
+
+When deploying new code, your best bet is to gracefully shutdown the Huey
+consumer using ``SIGINT``, letting all running tasks finish, before starting a
+new consumer process using the new code.
+
+If you have long-running tasks, an alternative option is to configure
+your new code to use a separate storage namespace. On Redis this is as simple
+as specifying a new ``name`` for your ``RedisHuey()`` instance. Then you can
+start the new code and new consumer, and they will operate independently of the
+previously-running consumer. When all tasks are done, you can gracefully
+shutdown the old consumer.
+
+.. note::
+    It is always a good idea to implement a Huey ``signals.SIGNAL_INTERRUPTED``
+    handler (:ref:`signals`), even if all it does is log an exception about the
+    interrupted task.
+
 .. _consumer-restart:
 
 Consumer restart
@@ -288,7 +315,6 @@ will be allowed to finish before the restart occurs.
     workers, to leak file descriptors. For more information, check out
     `issue 374 <https://github.com/coleifer/huey/issues/374>`_ and
     `PEP 446 <https://www.python.org/dev/peps/pep-0446/>`_.
-
 
 .. _process-supervisors:
 
