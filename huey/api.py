@@ -81,6 +81,7 @@ class Huey(object):
         def nightly_report():
             generate_nightly_report()
     """
+    consumer_class = Consumer
     storage_class = None
     _deprecated_params = ('result_store', 'events', 'store_errors',
                           'global_registry')
@@ -162,7 +163,7 @@ class Huey(object):
                 self.storage = self.create_storage()
 
     def create_consumer(self, **options):
-        return Consumer(self, **options)
+        return self.consumer_class(self, **options)
 
     def task(self, retries=0, retry_delay=0, priority=None, context=False,
              name=None, expires=None, **kwargs):
