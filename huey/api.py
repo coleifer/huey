@@ -86,6 +86,10 @@ class Huey(object):
     _deprecated_params = ('result_store', 'events', 'store_errors',
                           'global_registry')
 
+    @property
+    def task_wrapper_class(self):
+        return TaskWrapper
+
     def __init__(self, name='huey', results=True, store_none=False, utc=True,
                  immediate=False, serializer=None, compression=False,
                  use_zlib=False, immediate_use_memory=True, always_eager=None,
@@ -168,7 +172,7 @@ class Huey(object):
     def task(self, retries=0, retry_delay=0, priority=None, context=False,
              name=None, expires=None, **kwargs):
         def decorator(func):
-            return TaskWrapper(
+            return self.task_wrapper_class(
                 self,
                 func.func if isinstance(func, TaskWrapper) else func,
                 context=context,
@@ -187,7 +191,7 @@ class Huey(object):
             def method_validate(self, timestamp):
                 return validate_datetime(timestamp)
 
-            return TaskWrapper(
+            return self.task_wrapper_class(
                 self,
                 func.func if isinstance(func, TaskWrapper) else func,
                 context=context,
