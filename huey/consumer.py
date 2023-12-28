@@ -21,7 +21,7 @@ from huey.constants import WORKER_GREENLET
 from huey.constants import WORKER_PROCESS
 from huey.constants import WORKER_THREAD
 from huey.constants import WORKER_TYPES
-from huey.exceptions import ConfigurationError
+from huey.exceptions import ConfigurationError, StopFlagException
 from huey.utils import time_clock
 
 
@@ -426,35 +426,46 @@ class Consumer(object):
         else:
             self._logger.info('Shutting down')
 
+    def run_one_iteration(self, health_check_ts):
+        """
+        Run one iteration of the consumer event loop.
+        """
+        timeout = self._stop_flag_timeout
+        try:
+            self.stop_flag.wait(timeout=timeout)
+        except KeyboardInterrupt:
+            self._logger.info('Received SIGINT')
+            self.stop(graceful=True)
+        except:
+            self._logger.exception('Error in consumer.')
+            self.stop()
+        else:
+            if self._received_signal:
+                self.stop(graceful=self._graceful)
+
+        if self.stop_flag.is_set():
+            raise StopFlagException
+
+        if self._health_check:
+            now = time_clock()
+            if now >= health_check_ts + self._health_check_interval:
+                health_check_ts = now
+                self.check_worker_health()
+
+        return health_check_ts
+
     def run(self):
         """
         Run the consumer.
         """
         self.start()
-        timeout = self._stop_flag_timeout
         health_check_ts = time_clock()
 
         while True:
             try:
-                self.stop_flag.wait(timeout=timeout)
-            except KeyboardInterrupt:
-                self._logger.info('Received SIGINT')
-                self.stop(graceful=True)
-            except:
-                self._logger.exception('Error in consumer.')
-                self.stop()
-            else:
-                if self._received_signal:
-                    self.stop(graceful=self._graceful)
-
-            if self.stop_flag.is_set():
+                health_check_ts = self.run_one_iteration(health_check_ts)
+            except StopFlagException:
                 break
-
-            if self._health_check:
-                now = time_clock()
-                if now >= health_check_ts + self._health_check_interval:
-                    health_check_ts = now
-                    self.check_worker_health()
 
         self.huey.notify_interrupted_tasks()
 
