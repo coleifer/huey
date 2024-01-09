@@ -117,6 +117,9 @@ class Huey(object):
             self.storage_class = storage_class
         self.storage = self.create_storage()
 
+        # Allow overriding the default TaskWrapper implementation.
+        self.task_wrapper_class = self.get_task_wrapper_class()
+
         self._locks = set()
         self._pre_execute = OrderedDict()
         self._post_execute = OrderedDict()
@@ -125,6 +128,9 @@ class Huey(object):
         self._registry = Registry()
         self._signal = S.Signal()
         self._tasks_in_flight = set()
+
+    def get_task_wrapper_class(self):
+        return TaskWrapper
 
     def create_storage(self):
         # When using immediate mode, the default behavior is to use an
@@ -166,6 +172,7 @@ class Huey(object):
 
     def task(self, retries=0, retry_delay=0, priority=None, context=False,
              name=None, expires=None, **kwargs):
+        TaskWrapper = self.task_wrapper_class
         def decorator(func):
             return TaskWrapper(
                 self,
@@ -182,6 +189,7 @@ class Huey(object):
     def periodic_task(self, validate_datetime, retries=0, retry_delay=0,
                       priority=None, context=False, name=None, expires=None,
                       **kwargs):
+        TaskWrapper = self.task_wrapper_class
         def decorator(func):
             def method_validate(self, timestamp):
                 return validate_datetime(timestamp)
