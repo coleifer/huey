@@ -25,6 +25,9 @@ from huey.exceptions import ConfigurationError
 from huey.utils import time_clock
 
 
+class ConsumerStopped(Exception): pass
+
+
 class BaseProcess(object):
     process_name = 'BaseProcess'
 
@@ -431,30 +434,13 @@ class Consumer(object):
         Run the consumer.
         """
         self.start()
-        timeout = self._stop_flag_timeout
         health_check_ts = time_clock()
 
         while True:
             try:
-                self.stop_flag.wait(timeout=timeout)
-            except KeyboardInterrupt:
-                self._logger.info('Received SIGINT')
-                self.stop(graceful=True)
-            except:
-                self._logger.exception('Error in consumer.')
-                self.stop()
-            else:
-                if self._received_signal:
-                    self.stop(graceful=self._graceful)
-
-            if self.stop_flag.is_set():
+                health_check_ts = self.loop(health_check_ts)
+            except ConsumerStopped:
                 break
-
-            if self._health_check:
-                now = time_clock()
-                if now >= health_check_ts + self._health_check_interval:
-                    health_check_ts = now
-                    self.check_worker_health()
 
         self.huey.notify_interrupted_tasks()
 
@@ -464,6 +450,31 @@ class Consumer(object):
             os.execl(python, python, *sys.argv)
         else:
             self._logger.info('Consumer exiting.')
+
+    def loop(self, health_check_ts=None):
+        try:
+            self.stop_flag.wait(timeout=self._stop_flag_timeout)
+        except KeyboardInterrupt:
+            self._logger.info('Received SIGINT')
+            self.stop(graceful=True)
+        except:
+            self._logger.exception('Error in consumer.')
+            self.stop()
+        else:
+            if self._received_signal:
+                self.stop(graceful=self._graceful)
+
+        if self.stop_flag.is_set():
+            # Flag to caller that the main consumer loop should shut down.
+            raise ConsumerStopped
+
+        if self._health_check and health_check_ts:
+            now = time_clock()
+            if now >= health_check_ts + self._health_check_interval:
+                health_check_ts = now
+                self.check_worker_health()
+
+        return health_check_ts
 
     def check_worker_health(self):
         """

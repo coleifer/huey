@@ -7,4 +7,4 @@ PYTHONPATH=".:$PYTHONPATH"
 export PYTHONPATH
 WORKER_CLASS=${1:-thread}
 export WORKER_CLASS
-python ../../huey/bin/huey_consumer.py main.huey --workers=4 -k $WORKER_CLASS -C -S
+python ../../huey/bin/huey_consumer.py main.huey --workers=4 -k $WORKER_CLASS -S
