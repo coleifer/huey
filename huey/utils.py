@@ -94,7 +94,7 @@ def normalize_time(eta=None, delay=None, utc=True):
     if not ((delay is None) ^ (eta is None)):
         raise ValueError('Specify either an eta (datetime) or delay (seconds)')
     elif delay:
-        method = (utc and utcnow() or
+        method = (utc and utcnow or
                   datetime.datetime.now)
         if not isinstance(delay, datetime.timedelta):
             delay = datetime.timedelta(seconds=delay)
