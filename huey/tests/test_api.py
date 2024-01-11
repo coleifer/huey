@@ -176,6 +176,10 @@ class TestQueue(BaseTestCase):
         # The result-wrapper will indicate the tasks are revoked.
         for r in (r1, r2, r3):
             self.assertTrue(r.is_revoked())
+            self.assertTrue(self.huey.is_revoked(r))
+            # We don't have the task class when using an ID so this doesn't
+            # work.
+            self.assertFalse(self.huey.is_revoked(r.task.id))
 
         # Task is discarded and not executed, due to being revoked.
         t1 = self.huey.dequeue()
@@ -217,6 +221,11 @@ class TestQueue(BaseTestCase):
         self.assertTrue(r1.is_revoked())
         self.assertFalse(r2.is_revoked())
         self.assertTrue(r3.is_revoked())
+
+        self.assertTrue(self.huey.is_revoked(r1))
+        self.assertTrue(self.huey.is_revoked(r1.task.id))
+        self.assertFalse(self.huey.is_revoked(r2))
+        self.assertFalse(self.huey.is_revoked(r2.task.id))
 
         # Task is discarded and not executed, due to being revoked.
         t1 = self.huey.dequeue()

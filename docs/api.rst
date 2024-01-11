@@ -731,6 +731,25 @@ Huey object
 
     .. py:method:: is_revoked(task, timestamp=None)
 
+        :param task: either a task instance, a task ID, a Result, or a Task class.
+
+        This method should rarely need to be called directly. Typically you
+        should rather use the ``is_revoked`` method on the object that is being
+        revoked, for example:
+
+        .. code-block:: python
+
+            @huey.task()
+            def greet(name):
+                return 'Hello %s' % name
+
+            r = greet.schedule(delay=60, args=('Huey',))
+            r.revoke()  # Revoke this task.
+            r.is_revoked()  # True.
+
+            greet.revoke()  # Revoke ALL invocations of this task.
+            greet.is_revoked()  # True.
+
         .. seealso::
             For task instances, use :py:meth:`Result.is_revoked`.
 

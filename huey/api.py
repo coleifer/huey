@@ -514,11 +514,15 @@ class Huey(object):
         return ':'.join((key, self._registry.task_to_string(task_class)))
 
     def revoke_all(self, task_class, revoke_until=None, revoke_once=False):
+        if isinstance(task_class, TaskWrapper):
+            task_class = task_class.task_class
         if revoke_until is not None:
             revoke_until = normalize_time(revoke_until, utc=self.utc)
         self.put(self._task_key(task_class, 'rt'), (revoke_until, revoke_once))
 
     def restore_all(self, task_class):
+        if isinstance(task_class, TaskWrapper):
+            task_class = task_class.task_class
         return self.delete(self._task_key(task_class, 'rt'))
 
     def revoke(self, task, revoke_until=None, revoke_once=False):
@@ -563,6 +567,8 @@ class Huey(object):
             return True, False
 
     def is_revoked(self, task, timestamp=None, peek=True):
+        if isinstance(task, TaskWrapper):
+            task = task.task_class
         if inspect.isclass(task) and issubclass(task, Task):
             key = self._task_key(task, 'rt')
             is_revoked, can_restore = self._check_revoked(key, timestamp, peek)
@@ -570,7 +576,9 @@ class Huey(object):
                 self.restore_all(task)
             return is_revoked
 
-        if not isinstance(task, Task):
+        if isinstance(task, Result):
+            task = task.task
+        elif not isinstance(task, Task):
             # Assume we've been given a task ID.
             task = Task(id=task)
 
@@ -951,6 +959,7 @@ class Result(object):
     def __init__(self, huey, task):
         self.huey = huey
         self.task = task
+        self.revoke_id = task.revoke_id
         self._result = EmptyData
 
     def __repr__(self):
