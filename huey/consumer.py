@@ -424,6 +424,7 @@ class Consumer(object):
                 self.scheduler.join()
             except KeyboardInterrupt:
                 self._logger.info('Received request to shut down now.')
+                self._restart = False
             else:
                 self._logger.info('All workers have stopped.')
         else:
@@ -510,12 +511,14 @@ class Consumer(object):
 
     def _set_signal_handlers(self):
         signal.signal(signal.SIGTERM, self._handle_stop_signal)
-        if self.worker_type == WORKER_GREENLET:
+        if self.worker_type in (WORKER_GREENLET, WORKER_THREAD):
             # Add a special INT handler when using gevent. If the running
             # greenlet is not the main hub, then Gevent will raise a
             # KeyboardInterrupt in the running greenlet by default. This
             # ensures that when INT is received we properly flag the main loop
             # for graceful shutdown and do NOT propagate the exception.
+            # This is also added for threads to ensure that, in the event of a
+            # SIGHUP followed by a SIGINT, we respect the SIGINT.
             signal.signal(signal.SIGINT, self._handle_interrupt_signal_gevent)
         else:
             signal.signal(signal.SIGINT, signal.default_int_handler)
