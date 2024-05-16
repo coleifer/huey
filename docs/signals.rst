@@ -144,6 +144,21 @@ The following signal will be sent:
 * ``SIGNAL_REVOKED`` - this is sent before the task enters the "executing"
   state. When a task is revoked, no other signals will be sent.
 
+Handling Interrupted Tasks
+--------------------------
+
+In some cases, tasks may be interrupted due to signals like SIGTERM, which can happen when `autoscaling workers in environments like Kubernetes <https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/>`_. The following example demonstrates how to handle such interruptions by retrying the interrupted tasks.
+
+.. code-block:: python
+
+    @huey.signal(SIGNAL_INTERRUPTED)
+    def on_interrupted(signal, task, *args, **kwargs):
+        huey.enqueue(task)
+
+This signal handler will be called when a task is interrupted, allowing the task to be re-enqueued for execution.
+
+This approach ensures that tasks interrupted by signals like SIGTERM are automatically retried, which is particularly useful in environments that dynamically scale workers.
+
 Performance considerations
 --------------------------
 
