@@ -144,6 +144,27 @@ The following signal will be sent:
 * ``SIGNAL_REVOKED`` - this is sent before the task enters the "executing"
   state. When a task is revoked, no other signals will be sent.
 
+Using SIGNAL_INTERRUPTED
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+The correct way to shut-down the Huey consumer is to send a ``SIGINT`` signal
+to the worker process (e.g. Ctrl+C) - this initiates a graceful shutdown.
+Sometimes, however, you may need to shutdown the consumer using ``SIGTERM`` -
+this immediately stops the consumer. Any tasks that are currently being
+executed are then "lost" and will not be retried by default (see also:
+:ref:`consumer-shutdown`).
+
+To avoid losing these tasks, you can use a ``SIGNAL_INTERRUPTED`` handler to
+re-enqueue them:
+
+.. code-block:: python
+
+    @huey.signal(SIGNAL_INTERRUPTED)
+    def on_interrupted(signal, task, *args, **kwargs):
+        # The consumer was shutdown before `task` finished executing.
+        # Re-enqueue it.
+        huey.enqueue(task)
+
 Performance considerations
 --------------------------
 
