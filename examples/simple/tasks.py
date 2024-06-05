@@ -100,6 +100,9 @@ def on_complete(signal, task, exc=None):
 def on_interrupted(signal, task, exc=None):
     tprint('received interrupted task signal for task: %s' % task)
 
+
+# Example of retrying a task if it is *currently* running.
+
 from huey.constants import EmptyData
 from huey.exceptions import RetryTask
 @huey.task(context=True)
@@ -115,6 +118,39 @@ def hold_on(a, task=None):
     finally:
         huey.storage.pop_data('hold_on')
     return True
+
+# Example of limiting the time a task can run for (10s).
+
+@huey.task()
+def limit_time(n):
+    s = time.time()
+    evt = threading.Event()
+    def run_computation():
+        for i in range(n):
+            # Here we would do some kind of computation, checking our event
+            # along the way.
+            print('.', end='', flush=True)
+            if evt.wait(1):
+                print('CANCELED')
+                return
+
+        evt.set()
+
+    t = threading.Thread(target=run_computation)
+    t.start()
+
+    # Attempt to wait for the thread to finish for a total of 10s.
+    for i in range(10):
+        t.join(1)
+
+    if not evt.is_set():
+        # The thread still hasn't finished -- flag it that it must stop now.
+        evt.set()
+        t.join()
+
+    print('limit_time() completed in %0.2f' % (time.time() - s))
+
+# Task that blocks CPU, used for testing.
 
 @huey.task()
 def slow_cpu():
