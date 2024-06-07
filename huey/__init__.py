@@ -1,6 +1,6 @@
 __author__ = 'Charles Leifer'
 __license__ = 'MIT'
-__version__ = '2.5.0'
+__version__ = '2.5.1'
 
 from huey.api import BlackHoleHuey
 from huey.api import Huey

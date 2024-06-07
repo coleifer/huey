@@ -3,7 +3,19 @@ Changelog
 
 ## master
 
-[View commits](https://github.com/coleifer/huey/compare/2.5.0...HEAD)
+[View commits](https://github.com/coleifer/huey/compare/2.5.1...HEAD)
+
+## 2.5.1
+
+* More makework thanks to the ass-clowns running Python. Fix issue with
+  deprecation of `datetime.utcnow()` in 3.12.
+* Add API for customizing the `TaskWrapper` implementation, suitably named
+  `get_task_wrapper_class()`.
+* Make the `revoke_all()`, `restore_all()` and `is_revoked()` more robust for
+  various input types.
+* Fix bug that could occur in the event of a SIGHUP followed by a SIGINT when
+  using thread workers.
+* Added new experimental contrib module for SQS queue and S3 result storage.
 
 ## 2.5.0
 
