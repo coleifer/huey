@@ -215,6 +215,7 @@ The ``huey.contrib.djhuey`` module exposes a number of additional helpers:
 * :py:meth:`~Huey.pre_execute`
 * :py:meth:`~Huey.post_execute`
 * :py:meth:`~Huey.signal` and :py:meth:`~Huey.disconnect_signal`
+* :py:func:`on_commit_task`, for enqueueing tasks after transaction commits.
 
 Tasks that execute queries
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -237,6 +238,75 @@ automatically close the connection for you.
     @db_periodic_task(crontab(minute='*/5'))
     def every_five_mins():
         # This is a periodic task that executes queries.
+
+Enqueueing After Commit
+^^^^^^^^^^^^^^^^^^^^^^^
+
+The Huey Django extension provides a helper for when you need to ensure the
+active transaction has committed **before** enqueueing your task. Consider this
+example code:
+
+.. code-block:: python
+
+    @task()
+    def do_work(user_id):
+        user = User.objects.get(pk=user_id)
+        ...
+
+    @transaction.atomic
+    def some_view(request, ...):
+        user = User.objects.create(...)
+        do_work(user.id)
+        return response
+
+When ``some_view`` is executed, the ``do_work()`` task is enqueued with the ID
+of the newly-created user row. If the task is enqueued and executed **before**
+the transaction commits, then the task will report that the user matching that
+ID does not exist (because it has not been committed yet).
+
+To avoid this situation, we provide a special-purpose decorator
+:py:func:`on_commit_task`, which registers a callback with Django that ensures
+the task is enqueued **after** the transaction is committed. If no transaction
+is active, the task will be enqueued normally.
+
+Here is the safe version:
+
+.. code-block:: python
+
+    @on_commit_task()
+    def do_work(user_id):
+        user = User.objects.get(pk=user_id)
+        ...
+
+    @transaction.atomic
+    def some_view(request, ...):
+        user = User.objects.create(...)
+        do_work(user.id)  # Will not be enqueued until txn commits.
+        return response
+
+Because we have to setup a callback to run after commit, the full functionality
+of the :py:class:`TaskWrapper` is not available with tasks decorated with
+:py:func:`on_commit_task`. If you anticipate needing all the TaskWrapper
+methods, you can decorate the same function twice:
+
+.. code-block:: python
+
+    def do_work(user_id):
+        user = User.objects.get(pk=user_id)
+        ...
+
+    do_work_task = task()(do_work)
+    do_work_on_commit = on_commit_task()(do_work)
+
+
+.. py:func:: on_commit_task(*args, **kwargs)
+
+    :param args: See :py:meth:`~Huey.task` for supported parameters.
+    :param kwargs: See :py:meth:`~Huey.task` for supported parameters.
+
+    Enqueue the decorated function for execution after the transaction commits.
+    If no transaction is active, task will be enqueued immediately.
+
 
 DEBUG and Synchronous Execution
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
