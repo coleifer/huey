@@ -55,7 +55,7 @@ class KyotoTycoonStorage(BaseStorage):
     def convert_ts(self, ts):
         return int(time.mktime(ts.timetuple()))
 
-    def add_to_schedule(self, data, ts, utc):
+    def add_to_schedule(self, data, ts):
         self.s.add(data, self.convert_ts(ts))
 
     def read_schedule(self, ts):

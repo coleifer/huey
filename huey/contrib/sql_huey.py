@@ -122,7 +122,7 @@ class SqlStorage(BaseStorage):
     def flush_queue(self):
         self.Task.delete().where(self.Task.queue == self.name).execute()
 
-    def add_to_schedule(self, data, timestamp, utc):
+    def add_to_schedule(self, data, timestamp):
         self.check_conn()
         self.Schedule.create(queue=self.name, data=data, timestamp=timestamp)
 

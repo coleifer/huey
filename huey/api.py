@@ -594,7 +594,7 @@ class Huey(object):
     def add_schedule(self, task):
         data = self.serialize_task(task)
         eta = task.eta or datetime.datetime.fromtimestamp(0)
-        self.storage.add_to_schedule(data, eta, self.utc)
+        self.storage.add_to_schedule(data, eta)
         logger.info('Added task %s to schedule, eta %s', task.id, eta)
         self._emit(S.SIGNAL_SCHEDULED, task)
 

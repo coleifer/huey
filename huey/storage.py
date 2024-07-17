@@ -100,14 +100,13 @@ class BaseStorage(object):
         """
         raise NotImplementedError
 
-    def add_to_schedule(self, data, ts, utc):
+    def add_to_schedule(self, data, ts):
         """
         Add the given task data to the schedule, to be executed at the given
         timestamp.
 
         :param bytes data: Task data.
         :param datetime ts: Timestamp at which task should be executed.
-        :param bool utc: Whether huey is in UTC-mode or local mode.
         :return: No return value.
         """
         raise NotImplementedError
@@ -247,7 +246,7 @@ class BlackHoleStorage(BaseStorage):
     def queue_size(self): return 0
     def enqueued_items(self, limit=None): return []
     def flush_queue(self): pass
-    def add_to_schedule(self, data, ts, utc): pass
+    def add_to_schedule(self, data, ts): pass
     def read_schedule(self, ts): return []
     def schedule_size(self): return 0
     def scheduled_items(self, limit=None): return []
@@ -296,7 +295,7 @@ class MemoryStorage(BaseStorage):
     def flush_queue(self):
         self._queue = []
 
-    def add_to_schedule(self, data, ts, utc):
+    def add_to_schedule(self, data, ts):
         heapq.heappush(self._schedule, (ts, data))
 
     def read_schedule(self, ts):
@@ -438,7 +437,7 @@ class RedisStorage(BaseStorage):
     def flush_queue(self):
         self.conn.delete(self.queue_key)
 
-    def add_to_schedule(self, data, ts, utc):
+    def add_to_schedule(self, data, ts):
         self.conn.zadd(self.schedule_key, {data: self.convert_ts(ts)})
 
     def read_schedule(self, ts):
@@ -753,7 +752,7 @@ class SqliteStorage(BaseSqlStorage):
     def flush_queue(self):
         self.sql('delete from task where queue=?', (self.name,), commit=True)
 
-    def add_to_schedule(self, data, ts, utc):
+    def add_to_schedule(self, data, ts):
         params = (self.name, to_blob(data), to_timestamp(ts))
         self.sql('insert into schedule (queue, data, timestamp) '
                  'values (?, ?, ?)', params, commit=True)
@@ -937,7 +936,7 @@ class FileStorage(BaseStorage):
         ts = time.mktime(ts.timetuple()) + (ts.microsecond * 1e-6)
         return '%012x' % int(ts * 1000)
 
-    def add_to_schedule(self, data, ts, utc):
+    def add_to_schedule(self, data, ts):
         with self.lock:
             if not os.path.exists(self.schedule_path):
                 os.makedirs(self.schedule_path)

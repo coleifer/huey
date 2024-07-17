@@ -70,7 +70,7 @@ class StorageTests(object):
                  (b'n1', timestamp - second),
                  (b'p2', timestamp + second + second))
         for data, ts in items:
-            self.s.add_to_schedule(data, ts, False)
+            self.s.add_to_schedule(data, ts)
 
         self.assertEqual(self.s.schedule_size(), 4)
 
