@@ -909,6 +909,83 @@ weaknesses of each storage layer.
 :py:class:`BlackHoleHuey`
     All storage methods are no-ops.
 
+Testing Guidelines
+------------------
+
+When testing Huey task-decorated functions, a couple guidelines will make your
+life easier.
+
+1. Set your :py:class:`Huey` instance to :ref:`immediate`. Any code that calls
+   a task will run it synchronously, so it is safe to block on results as well.
+2. Unit test individual tasks by using the ``.call_local()`` to call the
+   underlying function.
+
+Examples:
+
+.. code-block:: python
+
+    # Consider the following Huey instance and tasks:
+    huey = RedisHuey(...)
+
+    # Fake database to check side-effects.
+    database = []
+
+    @huey.task()
+    def add(a, b):
+        return a + b
+
+    @huey.periodic_task(crontab(...))
+    def run_reports():
+        global database
+        database.append(True)  # Simulate a side-effect.
+
+        # The return values for periodic tasks are discarded when run by the
+        # Huey consumer. A return value may be helpful for testing, however, so
+        # in this example we will return something to demonstrate how to test
+        # our periodic task.
+        return 42
+
+    class TestMyTasks(unittest.TestCase):
+        def setUp(self):
+            # Make tasks run synchronously.
+            huey.immediate = True
+
+        def tearDown(self):
+            huey.immediate = False
+
+        def test_task(self):
+            result_handle = add(3, 4)
+            self.assertEqual(result_handle.get(), 7)
+
+            # Alternatively, you can also:
+            self.assertEqual(add.call_local(3, 4), 7)
+
+        def test_task_exceptions(self):
+            # We can also test exceptions.
+            result_handle = add(3, None)  # Exception logged, but not raised.
+
+            with self.assertRaises(TaskException):
+                result_handle.get()
+
+            with self.assertRaises(TypeError):
+                # Exception raised directly when using call_local().
+                add.call_local(3, None)
+
+        def test_periodic_task(self):
+            # We cannot use the result-handle from a periodic task, because the
+            # results are always discarded by the consumer. In this case it is
+            # necessary to use `.call_local()` if we want to check the return
+            # value.
+            self.assertEqual(run_reports.call_local(), 42)
+            self.assertTrue(len(database), 1)
+
+            # If our periodic task has a side-effect, however, we can call it
+            # normally and check the side-effect happened. For example, if the
+            # run_reports() periodic task wrote a row to a database, we could
+            # do something like:
+            run_reports()
+            self.assertTrue(len(database), 2)
+
 Tips and tricks
 ---------------
 
