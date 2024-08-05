@@ -61,6 +61,9 @@ Greenlet workers seem stuck
     to apply the patch inside the ``manage.py`` script. See the Django docs
     section for the code.
 
+    If you're using a ConnectionPool, check that it provides enough connections
+    to cover all Greenlet workers.
+
 Testing projects using Huey
     Use ``immediate=True``:
 
