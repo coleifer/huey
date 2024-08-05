@@ -183,6 +183,9 @@ patch is to create a custom bootstrap script that mimics the functionality of
         from django.core.management import execute_from_command_line
         execute_from_command_line(sys.argv)
 
+Each greenlet worker requires a connection to Redis. If you're using a
+ConnectionPool, ensure it has enough connections for all workers.
+
 How to create tasks
 ^^^^^^^^^^^^^^^^^^^
 
