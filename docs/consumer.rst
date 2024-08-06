@@ -72,7 +72,8 @@ their default values.
     If you have a CPU-intensive workload, you may want to increase the number
     of workers to the number of CPU cores (or 2x CPU cores). Lastly, if you are
     using the ``greenlet`` worker type, you can easily run tens or hundreds of
-    workers as they are extremely lightweight.
+    workers as they are extremely lightweight (however make sure, when using
+    Redis, that you create a large enough pool for all these connections).
 
 ``-k``, ``--worker-type``
     Choose the worker type, ``thread``, ``process`` or ``greenlet``. The
@@ -91,7 +92,8 @@ their default values.
       cheap in terms of memory, you can easily run a large number of workers.
       Note that all code that does **not** consist in waiting for a socket will
       be blocking and cannot be pre-empted. Understand the tradeoffs before
-      jumping to use greenlets.
+      jumping to use greenlets. When using with Redis, ensure that your
+      connection pool is large enough to provide connections for each greenlet.
     * Anything else: use "thread". You get the benefits of pre-emptive
       multi-tasking without the overhead of multiple processes. A safe choice
       and the default.
@@ -214,7 +216,9 @@ different mechanisms to achieve this concurrency.
   reason, gevent is a good choice for tasks that perform lots of socket I/O,
   but may give worse performance for tasks that are CPU-bound (e.g., parsing
   large files, manipulating images, generating reports, etc). Understand the
-  tradeoff thoroughly before using this worker type.
+  tradeoff thoroughly before using this worker type. When using Redis, ensure
+  that your connection pool is large enough for each greenlet to have its own
+  connection.
 
 When in doubt, the default setting (``thread``) is a safe choice.
 
