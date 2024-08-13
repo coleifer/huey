@@ -11,6 +11,7 @@ from huey.api import _unsupported
 from huey.constants import EmptyData
 from huey.exceptions import CancelExecution
 from huey.exceptions import ConfigurationError
+from huey.exceptions import ResultTimeout
 from huey.exceptions import RetryTask
 from huey.exceptions import TaskException
 from huey.exceptions import TaskLockedException
@@ -87,6 +88,18 @@ class TestQueue(BaseTestCase):
         self.assertTrue(self.execute_next() is None)
         self.assertEqual(self.huey.result_count(), 1)
         self.assertTrue(r4._get() is None)
+
+    def test_result_timeout(self):
+        @self.huey.task()
+        def task_a(n):
+            return n
+
+        r = task_a(1)
+        with self.assertRaises(ResultTimeout):
+            r.get(blocking=True, timeout=0.01)
+        self.assertEqual(self.execute_next(), 1)
+        self.assertEqual(self.huey.result_count(), 1)
+        self.assertEqual(r(), 1)
 
     def test_scheduling(self):
         @self.huey.task()

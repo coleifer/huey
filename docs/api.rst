@@ -775,7 +775,7 @@ Huey object
         yet. If you want to wait for the result, specify ``blocking=True``.
         This will loop, backing off up to the provided ``max_delay``, until the
         value is ready or the ``timeout`` is reached. If the ``timeout`` is
-        reached before the result is ready, a :py:class:`HueyException` will be
+        reached before the result is ready, a :py:class:`ResultTimeout` will be
         raised.
 
         .. seealso::
@@ -1269,8 +1269,8 @@ Result
         Traceback (most recent call last):
           File "<stdin>", line 1, in <module>
           File "/home/charles/tmp/huey/src/huey/huey/queue.py", line 46, in get
-            raise HueyException
-        huey.exceptions.HueyException
+            raise ResultTimeout
+        huey.exceptions.ResultTimeout
 
         >>> res(blocking=True)  # No timeout, will block until it gets data.
         300
@@ -1303,6 +1303,8 @@ Result
             attempting to fetch result.
         :param bool revoke_on_timeout: if a timeout occurs, revoke the task,
             thereby preventing it from running if it is has not started yet.
+        :raises: ResultTimeout if blocking and timeout specified without result
+            becoming ready yet.
 
         Attempt to retrieve the return value of a task.  By default,
         :py:meth:`~Result.get` will simply check for the value, returning
@@ -1310,7 +1312,7 @@ Result
         can specify ``blocking=True``. This will loop, backing off up to the
         provided ``max_delay``, until the value is ready or the ``timeout`` is
         reached. If the ``timeout`` is reached before the result is ready, a
-        :py:class:`HueyException` exception will be raised.
+        :py:class:`ResultTimeout` exception will be raised.
 
         .. note:: Instead of calling ``.get()``, you can simply call the
             :py:class:`Result` object directly. Both methods accept the same
@@ -1429,6 +1431,11 @@ Exceptions
 .. py:class:: TaskLockedException
 
     Raised by the consumer when a task lock cannot be acquired.
+
+.. py:class:: ResultTimeout
+
+    Raised when attempting to block on a call to :py:meth:`Result.get` (for
+    instance) and the timeout is exceeded without the result being ready.
 
 .. py:class:: CancelExecution
 
