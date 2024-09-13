@@ -24,8 +24,9 @@ try:
     except ImportError:
         from redis import Redis
     from redis.exceptions import ConnectionError
+    from redis.exceptions import TimeoutError
 except ImportError:
-    ConnectionPool = Redis = ConnectionError = None
+    ConnectionPool = Redis = ConnectionError = TimeoutError = None
 
 from huey.constants import EmptyData
 from huey.exceptions import ConfigurationError
@@ -420,7 +421,7 @@ class RedisStorage(BaseStorage):
                 return self.conn.brpop(
                     self.queue_key,
                     timeout=self.read_timeout)[1]
-            except (ConnectionError, TypeError, IndexError):
+            except (ConnectionError, TimeoutError, TypeError, IndexError):
                 # Unfortunately, there is no way to differentiate a socket
                 # timing out and a host being unreachable.
                 return None
@@ -574,7 +575,7 @@ class RedisPriorityQueue(object):
                 _, res, _ = self.conn.bzpopmin(
                     self.queue_key,
                     timeout=self.read_timeout)
-            except (ConnectionError, TypeError, IndexError):
+            except (ConnectionError, TimeoutError, TypeError, IndexError):
                 # Unfortunately, there is no way to differentiate a socket
                 # timing out and a host being unreachable.
                 return
