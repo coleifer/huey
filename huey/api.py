@@ -602,8 +602,15 @@ class Huey(object):
     def read_schedule(self, timestamp=None):
         if timestamp is None:
             timestamp = self._get_timestamp()
-        return [self.deserialize_task(task)
-                for task in self.storage.read_schedule(timestamp)]
+        accum = []
+        for msg in self.storage.read_schedule(timestamp):
+            try:
+                task = self.deserialize_task(msg)
+            except Exception:
+                logger.exception('Unable to deserialize scheduled task.')
+            else:
+                accum.append(task)
+        return accum
 
     def read_periodic(self, timestamp):
         if timestamp is None:
