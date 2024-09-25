@@ -3,7 +3,14 @@ Changelog
 
 ## master
 
-[View commits](https://github.com/coleifer/huey/compare/2.5.1...HEAD)
+[View commits](https://github.com/coleifer/huey/compare/2.5.2...HEAD)
+
+## 2.5.2
+
+* Prevent bad task serialization in schedule from causing a batch of tasks
+  to be lost, see #815..
+* Ensure we catch ResultTimeout which may occur when used with Sentinel, #813.
+* Remove junk SQS implementation I was testing out.
 
 ## 2.5.1
 
