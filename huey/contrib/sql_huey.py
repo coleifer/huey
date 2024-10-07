@@ -97,7 +97,7 @@ class SqlStorage(BaseStorage):
                  .order_by(self.Task.priority.desc(), self.Task.id)
                  .limit(1))
         if self.database.for_update:
-            query = query.for_update()
+            query = query.for_update('FOR UPDATE SKIP LOCKED')
 
         with self.database.atomic():
             try:
@@ -132,7 +132,7 @@ class SqlStorage(BaseStorage):
                  .where(self.Schedule.timestamp <= timestamp)
                  .tuples())
         if self.database.for_update:
-            query = query.for_update()
+            query = query.for_update('FOR UPDATE SKIP LOCKED')
 
         with self.database.atomic():
             results = list(query)
@@ -186,7 +186,7 @@ class SqlStorage(BaseStorage):
         self.check_conn()
         query = self.kv().where(self.KV.key == key)
         if self.database.for_update:
-            query = query.for_update()
+            query = query.for_update('FOR UPDATE SKIP LOCKED')
 
         with self.database.atomic():
             try:
