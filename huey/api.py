@@ -305,6 +305,8 @@ class Huey(object):
         if task.expires:
             task.resolve_expires(self.utc)
 
+        self._emit(S.SIGNAL_ENQUEUED, task)
+
         if self._immediate:
             self.execute(task)
         else:
