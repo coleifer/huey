@@ -187,9 +187,10 @@ Performance considerations
 --------------------------
 
 Signal handlers are executed **synchronously** by the consumer as it processes
-tasks (with the exception of ``SIGNAL_ENQUEUED``). It is important to use care
-when implementing signal handlers, as one slow signal handler can impact the
-overall responsiveness of the consumer.
+tasks (with the exception of ``SIGNAL_ENQUEUED``, which also runs in your
+application process). It is important to use care when implementing signal
+handlers, as one slow signal handler can impact the overall responsiveness of
+the consumer.
 
 For example, if you implement a signal handler that posts some data to REST
 API, everything might work fine until the REST API goes down or stops being
