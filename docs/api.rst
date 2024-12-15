@@ -1462,6 +1462,17 @@ Exceptions
     task will be overridden and the value specified will be used to determine
     when the task will be retried next.
 
+    .. code-block:: python
+
+        @huey.task()
+        def fetch_api_data(url):
+            try:
+                fh = urlopen(url)
+            except HTTPError:
+                # Try again in 60 seconds for an HTTP error (500, etc).
+                raise RetryTask(delay=60)
+            ...
+
 .. py:class:: TaskException
 
     General exception raised by :py:class:`Result` handles when reading the

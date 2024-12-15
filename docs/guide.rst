@@ -225,12 +225,24 @@ It is also possible to explicitly retry a task from within the task, by raising
 a :py:class:`RetryTask` exception. When this exception is used, the task will
 be retried regardless of whether it was declared with ``retries``. Similarly,
 the task's remaining retries (if they were declared) will not be affected by
-raising :py:class:`RetryTask`.
+raising :py:class:`RetryTask`. Example:
+
+.. code-block:: python
+
+    @huey.task()
+    def fetch_api_data(url):
+        try:
+            fh = urlopen(url)
+        except HTTPError:
+            # Try again in 60 seconds for an HTTP error (500, etc).
+            raise RetryTask(delay=60)
+        ...
 
 For more information, see the following API documentation:
 
 * :py:meth:`~Huey.task` and :py:meth:`~Huey.periodic_task`
 * :py:class:`Result`
+* :py:class:`RetryTask`
 
 .. _priority:
 
