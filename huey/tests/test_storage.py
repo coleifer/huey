@@ -4,6 +4,7 @@ import itertools
 import os
 import shutil
 import threading
+import time
 import unittest
 try:
     from queue import Queue

@@ -1,4 +1,5 @@
 import datetime
+import threading
 import time
 
 from huey.api import crontab
@@ -11,7 +12,7 @@ from huey.utils import time_clock
 
 class TestConsumer(Consumer):
     class _Scheduler(Scheduler):
-        def sleep_for_interval(self, current, interval):
+        def sleep_for_interval(self, evt, current, interval):
             pass
     scheduler_class = _Scheduler
 
@@ -29,16 +30,16 @@ class TestConsumerIntegration(BaseTestCase):
             self.assertEqual(result.get(blocking=True, timeout=2), 2)
 
     def work_on_tasks(self, consumer, n=1, now=None):
-        worker, _ = consumer.worker_threads[0]
+        worker, _, evt = consumer.worker_threads[0]
         for i in range(n):
             self.assertEqual(len(self.huey), n - i)
-            worker.loop(now)
+            worker.loop(evt, now=now)
 
     def schedule_tasks(self, consumer, now=None):
         scheduler = consumer._create_scheduler()
         scheduler._next_loop = time_clock() + 60
         scheduler._next_periodic = time_clock() - 60
-        scheduler.loop(now)
+        scheduler.loop(threading.Event(), now=now)
 
     def test_consumer_schedule_task(self):
         @self.huey.task()
