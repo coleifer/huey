@@ -287,7 +287,8 @@ Here is the safe version:
 Because we have to setup a callback to run after commit, the full functionality
 of the :py:class:`TaskWrapper` is not available with tasks decorated with
 :py:func:`on_commit_task`. If you anticipate needing all the TaskWrapper
-methods, you can decorate the same function twice:
+methods, you can decorate the same function twice by given them two different
+identifier names:
 
 .. code-block:: python
 
@@ -295,8 +296,8 @@ methods, you can decorate the same function twice:
         user = User.objects.get(pk=user_id)
         ...
 
-    do_work_task = task()(do_work)
-    do_work_on_commit = on_commit_task()(do_work)
+    do_work_task = task(name="do_work_task")(do_work)
+    do_work_on_commit = on_commit_task(name="do_work_on_commit")(do_work)
 
 
 .. py:func:: on_commit_task(*args, **kwargs)
