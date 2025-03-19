@@ -3,7 +3,21 @@ Changelog
 
 ## master
 
-[View commits](https://github.com/coleifer/huey/compare/2.5.2...HEAD)
+[View commits](https://github.com/coleifer/huey/compare/2.5.3...HEAD)
+
+## 2.5.3
+
+This release adds the oft-requested `SIGNAL_ENQUEUED`. This signal, of
+necessity, runs **in the calling process** and not in the consumer, since tasks
+are enqueued by the application typically. The exception is tasks that are
+enqueued for retry by the consumer or tasks (including periodic tasks) enqueued
+by the scheduler.
+
+* Add support for a new `SIGNAL_ENQUEUED`.
+* Use `FOR UPDATE SKIP LOCKED` when supported by the database in the `sql_huey`
+  storage engine.
+
+[View commits](https://github.com/coleifer/huey/compare/2.5.2...2.5.3)
 
 ## 2.5.2
 
