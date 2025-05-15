@@ -1,10 +1,7 @@
-from collections import deque
-import base64
 import contextlib
 import hashlib
 import heapq
 import itertools
-import json
 import os
 import re
 import shutil
@@ -15,7 +12,6 @@ except ImportError:
 import struct
 import threading
 import time
-import warnings
 
 try:
     from redis import ConnectionPool

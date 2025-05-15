@@ -5,7 +5,8 @@ from huey.exceptions import HueyException
 
 Message = namedtuple('Message', ('id', 'name', 'eta', 'retries', 'retry_delay',
                                  'priority', 'args', 'kwargs', 'on_complete',
-                                 'on_error', 'expires', 'expires_resolved'))
+                                 'on_error', 'expires', 'expires_resolved',
+                                 'context_vars_data'))
 
 # Automatically set missing parameters to None. This is kind-of a hack, but it
 # allows us to add new parameters while continuing to be able to handle
@@ -78,14 +79,15 @@ class Registry(object):
             on_complete,
             on_error,
             task.expires,
-            task.expires_resolved)
+            task.expires_resolved,
+            task.captured_contextvars_data)
 
     def create_task(self, message):
         # Compatibility with Huey 1.11 message format.
         if not isinstance(message, Message) and isinstance(message, tuple):
             tid, name, eta, retries, retry_delay, (args, kwargs), oc = message
             message = Message(tid, name, eta, retries, retry_delay, None, args,
-                              kwargs, oc, None)
+                              kwargs, oc, None, None, None, None)
 
         TaskClass = self.string_to_task(message.name)
 
@@ -100,15 +102,16 @@ class Registry(object):
         return TaskClass(
             message.args,
             message.kwargs,
-            message.id,
-            message.eta,
-            message.retries,
-            message.retry_delay,
-            message.priority,
-            message.expires,
-            on_complete,
-            on_error,
-            message.expires_resolved)
+            id=message.id,
+            eta=message.eta,
+            retries=message.retries,
+            retry_delay=message.retry_delay,
+            priority=message.priority,
+            expires=message.expires,
+            on_complete=on_complete,
+            on_error=on_error,
+            expires_resolved=message.expires_resolved,
+            captured_contextvars_data=message.context_vars_data)
 
     @property
     def periodic_tasks(self):

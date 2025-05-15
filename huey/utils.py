@@ -1,7 +1,6 @@
 from collections import namedtuple
 import calendar
 import datetime
-import errno
 import os
 import sys
 import time

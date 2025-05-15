@@ -1,5 +1,6 @@
 import datetime
 import inspect
+import contextvars
 
 from huey.api import MemoryHuey
 from huey.api import PeriodicTask
@@ -32,7 +33,6 @@ class ExcCounter(Exception):
         self._v = ExcCounter.counter
     def __repr__(self):
         return 'ExcCounter(%s)' % self._v
-
 
 
 class TestQueue(BaseTestCase):
@@ -574,6 +574,35 @@ class TestQueue(BaseTestCase):
         task = self.huey.dequeue()  # Read our task back.
         task.eta = now  # Simulate the task being ready to run.
         self.assertEqual(self.huey.execute(task, seconds(1)), 4)
+
+    def test_contextvars_propagation(self):
+            cv_test_var = contextvars.ContextVar('cv_test_var')
+
+            @self.huey.task(propagate_contextvars=True)
+            def task_reads_cv():
+                return cv_test_var.get('default_value')
+
+            @self.huey.task(propagate_contextvars=False)
+            def task_reads_cv_no_propagate():
+                return cv_test_var.get('default_value_no_prop')
+
+            # Test Case 1: Propagation Enabled
+            token = cv_test_var.set('propagated_value')
+            res1 = task_reads_cv()
+            self.assertEqual(self.execute_next(), 'propagated_value')
+            self.assertEqual(res1.get(), 'propagated_value')
+            self.assertEqual(cv_test_var.get(), 'propagated_value')
+            cv_test_var.reset(token)
+            self.assertEqual(cv_test_var.get(None), None)
+
+            # Test Case 2: Propagation Disabled
+            token_tc2 = cv_test_var.set('another_value_tc2')
+            res2 = task_reads_cv_no_propagate()
+            cv_test_var.reset(token_tc2)
+
+            self.assertEqual(self.execute_next(), 'default_value_no_prop')
+            self.assertEqual(res2.get(), 'default_value_no_prop')
+            self.assertEqual(cv_test_var.get(None), None)
 
     def test_reschedule_expires(self):
         state = []

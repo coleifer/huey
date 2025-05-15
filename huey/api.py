@@ -10,7 +10,7 @@ import warnings
 
 from collections import OrderedDict
 from collections import deque
-from functools import partial
+import contextvars
 from functools import wraps
 
 from huey import signals as S
@@ -18,7 +18,6 @@ from huey.constants import EmptyData
 from huey.consumer import Consumer
 from huey.exceptions import CancelExecution
 from huey.exceptions import ConfigurationError
-from huey.exceptions import HueyException
 from huey.exceptions import ResultTimeout
 from huey.exceptions import RetryTask
 from huey.exceptions import TaskException
@@ -36,10 +35,8 @@ from huey.storage import SqliteStorage
 from huey.utils import Error
 from huey.utils import normalize_expire_time
 from huey.utils import normalize_time
-from huey.utils import reraise_as
 from huey.utils import string_type
 from huey.utils import time_clock
-from huey.utils import to_timestamp
 from huey.utils import utcnow
 
 
@@ -172,7 +169,7 @@ class Huey(object):
         return Consumer(self, **options)
 
     def task(self, retries=0, retry_delay=0, priority=None, context=False,
-             name=None, expires=None, **kwargs):
+             name=None, expires=None, propagate_contextvars=False, **kwargs):
         TaskWrapper = self.task_wrapper_class
         def decorator(func):
             return TaskWrapper(
@@ -184,12 +181,13 @@ class Huey(object):
                 default_retry_delay=retry_delay,
                 default_priority=priority,
                 default_expires=expires,
+                propagate_contextvars=propagate_contextvars,
                 **kwargs)
         return decorator
 
     def periodic_task(self, validate_datetime, retries=0, retry_delay=0,
                       priority=None, context=False, name=None, expires=None,
-                      **kwargs):
+                      propagate_contextvars=False, **kwargs):
         TaskWrapper = self.task_wrapper_class
         def decorator(func):
             def method_validate(self, timestamp):
@@ -206,6 +204,7 @@ class Huey(object):
                 default_expires=expires,
                 validate_datetime=method_validate,
                 task_base=PeriodicTask,
+                propagate_contextvars=propagate_contextvars,
                 **kwargs)
 
         return decorator
@@ -391,7 +390,18 @@ class Huey(object):
         try:
             self._tasks_in_flight.add(task)
             try:
-                task_value = task.execute()
+                if task.captured_contextvars_data is not None:
+                    cv_map = self.serializer.deserialize(task.captured_contextvars_data)
+                    
+                    def execute_in_context():
+                        for cv, value in cv_map.items():
+                            cv.set(value)
+                        return task.execute()
+                    
+                    execution_context = contextvars.Context()
+                    task_value = execution_context.run(execute_in_context)
+                else:
+                    task_value = task.execute()
             finally:
                 self._tasks_in_flight.remove(task)
                 duration = time_clock() - start
@@ -694,7 +704,8 @@ class Task(object):
 
     def __init__(self, args=None, kwargs=None, id=None, eta=None, retries=None,
                  retry_delay=None, priority=None, expires=None,
-                 on_complete=None, on_error=None, expires_resolved=None):
+                 on_complete=None, on_error=None, expires_resolved=None,
+                 captured_contextvars_data=None):
         self.name = type(self).__name__
         self.args = () if args is None else args
         self.kwargs = {} if kwargs is None else kwargs
@@ -708,6 +719,7 @@ class Task(object):
                 self.default_priority
         self.expires = expires if expires is not None else self.default_expires
         self.expires_resolved = expires_resolved
+        self.captured_contextvars_data = captured_contextvars_data
 
         self.on_complete = on_complete
         self.on_error = on_error
@@ -807,7 +819,8 @@ class TaskWrapper(object):
     task_base = Task
 
     def __init__(self, huey, func, retries=None, retry_delay=None,
-                 context=False, name=None, task_base=None, **settings):
+                 context=False, name=None, task_base=None, propagate_contextvars=False,
+                 **settings):
         self.__doc__ = getattr(func, '__doc__', None)
         self.huey = huey
         self.func = func
@@ -815,6 +828,7 @@ class TaskWrapper(object):
         self.retry_delay = retry_delay
         self.context = context
         self.name = name
+        self.propagate_contextvars = propagate_contextvars
         self.settings = settings
         if task_base is not None:
             self.task_base = task_base
@@ -903,12 +917,36 @@ class TaskWrapper(object):
         if eta is not None or delay is not None:
             eta = normalize_time(eta, delay, self.huey.utc)
 
+        captured_contextvars_data = None
+        if self.propagate_contextvars:
+            vars_to_capture = {}
+            current_context = contextvars.copy_context()
+            for cv, value in current_context.items():
+                try:
+                    # Test serializability by attempting to serialize.
+                    self.huey.serializer.serialize(value)
+                    vars_to_capture[cv] = value
+                except Exception:
+                    logger.warning(
+                        'Cannot serialize value for ContextVar "%s" for task "%s". '
+                        'Skipping.', cv.name, self.name or self.func.__name__)
+            
+            if vars_to_capture:
+                try:
+                    captured_contextvars_data = self.huey.serializer.serialize(vars_to_capture)
+                except Exception:
+                    logger.exception(
+                        'Failed to serialize captured context_vars map for task "%s".',
+                        self.name or self.func.__name__)
+                    captured_contextvars_data = None
+
         return self.task_class(args, kwargs,
                                eta=eta,
                                retries=kwargs.pop('retries', None),
                                retry_delay=kwargs.pop('retry_delay', None),
                                priority=kwargs.pop('priority', None),
-                               expires=kwargs.pop('expires', None))
+                               expires=kwargs.pop('expires', None),
+                               captured_contextvars_data=captured_contextvars_data)
 
 
 class TaskLock(object):
