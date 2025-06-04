@@ -1303,6 +1303,10 @@ Result
             attempting to fetch result.
         :param bool revoke_on_timeout: if a timeout occurs, revoke the task,
             thereby preventing it from running if it is has not started yet.
+        :param bool preserve: when set to ``True``, this parameter ensures that
+            the task result will be preserved after having been successfully
+            retrieved. Ordinarily, Huey will discard results after they have
+            been read, to prevent the result store from growing without bounds.
         :raises: ResultTimeout if blocking and timeout specified without result
             becoming ready yet.
 
@@ -1313,6 +1317,12 @@ Result
         provided ``max_delay``, until the value is ready or the ``timeout`` is
         reached. If the ``timeout`` is reached before the result is ready, a
         :py:class:`ResultTimeout` exception will be raised.
+
+        .. warning:: By default the result store will delete a task's return
+            value after the value has been successfully read (by a successful
+            call to the :py:meth:`~Huey.result` or :py:meth:`Result.get`
+            methods). If you intend to access the task result multiple times,
+            you must specify ``preserve=True`` when calling these methods.
 
         .. note:: Instead of calling ``.get()``, you can simply call the
             :py:class:`Result` object directly. Both methods accept the same
