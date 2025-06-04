@@ -3,7 +3,7 @@ on: [push]
 jobs:
   tests:
     name: ${{ matrix.python-version }}
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     services:
       redis:
         image: redis
