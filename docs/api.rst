@@ -1303,6 +1303,10 @@ Result
             attempting to fetch result.
         :param bool revoke_on_timeout: if a timeout occurs, revoke the task,
             thereby preventing it from running if it is has not started yet.
+        :param bool preserve: when set to ``True``, this parameter ensures that
+            the task result will be preserved after having been successfully
+            retrieved. Ordinarily, Huey will discard results after they have
+            been read, to prevent the result store from growing without bounds.
         :raises: ResultTimeout if blocking and timeout specified without result
             becoming ready yet.
 
