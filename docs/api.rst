@@ -1310,13 +1310,13 @@ Result
         :raises: ResultTimeout if blocking and timeout specified without result
             becoming ready yet.
 
-        Attempt to retrieve the return value of a task.  By default,
+        Attempts to retrieve the return value of a task. By default,
         :py:meth:`~Result.get` will simply check for the value, returning
-        ``None`` if it is not ready yet. If you want to wait for a value, you
-        can specify ``blocking=True``. This will loop, backing off up to the
+        ``None`` if it is not ready yet. If you want to wait for the result,
+        specify ``blocking=True``. This will loop, backing off up to the
         provided ``max_delay``, until the value is ready or the ``timeout`` is
         reached. If the ``timeout`` is reached before the result is ready, a
-        :py:class:`ResultTimeout` exception will be raised.
+        :py:class:`ResultTimeout` will be raised.
 
         .. warning:: By default the result store will delete a task's return
             value after the value has been successfully read (by a successful
