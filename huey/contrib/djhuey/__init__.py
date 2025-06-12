@@ -185,5 +185,6 @@ def on_commit_task(*args, **kwargs):
                 task_wrapper.huey.enqueue(task)
             transaction.on_commit(enqueue_on_commit)
             return HUEY._result_handle(task)
+        inner.call_local = fn
         return inner
     return decorator
