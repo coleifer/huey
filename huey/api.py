@@ -1022,7 +1022,7 @@ class Result(object):
         result = self.get_raw_result(blocking, timeout, backoff, max_delay,
                                      revoke_on_timeout, preserve)
         if result is not None and isinstance(result, Error):
-            raise TaskException(result.metadata)
+            raise TaskException(metadata=result.metadata)
         return result
 
     def is_revoked(self):

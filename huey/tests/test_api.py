@@ -908,7 +908,7 @@ class TestQueue(BaseTestCase):
     def test_cancel_execution(self):
         @self.huey.task()
         def task_a(n=None):
-            raise CancelExecution(retry=n)
+            raise CancelExecution('some message', retry=n)
 
         r = task_a()
         self.assertTrue(self.execute_next() is None)
@@ -934,7 +934,7 @@ class TestQueue(BaseTestCase):
     def test_cancel_execution_task_retries(self):
         @self.huey.task(retries=2)
         def task_a(n=None):
-            raise CancelExecution(retry=n)
+            raise CancelExecution('some message', retry=n)
 
         # Even though the task itself declares retries, these retries are
         # ignored when cancel is raised with retry=False.

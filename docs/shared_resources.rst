@@ -109,7 +109,7 @@ Example:
         # This pre-execute task will cancel the execution of every task if the
         # current day is Sunday.
         if datetime.datetime.now().weekday() == 6:
-            raise CancelExecution('No tasks on sunday!')
+            raise CancelExecution('No tasks on sunday!', retry=False)
 
     @huey.post_execute()
     def post_execute_hook(task, task_value, exc):

@@ -528,7 +528,7 @@ Huey object
             @huey.pre_execute()
             def my_pre_execute_hook(task):
                 if datetime.datetime.now().weekday() == 6:
-                    raise CancelExecution('Sunday -- no work will be done.')
+                    raise CancelExecution('Sunday -- no work will be done.', retry=False)
 
     .. py:method:: unregister_pre_execute(name_or_fn)
 
@@ -1287,7 +1287,7 @@ Result
         Traceback (most recent call last):
           File "<stdin>", line 1, in <module>
           File "/home/charles/tmp/huey/src/huey/huey/api.py", line 684, in get
-            raise TaskException(result.metadata)
+            raise TaskException(metadata=result.metadata)
         huey.exceptions.TaskException: Exception('I failed',)
 
     .. py:attribute:: id

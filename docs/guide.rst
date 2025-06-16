@@ -434,7 +434,7 @@ Example:
         elif something_fatal_is_wrong():
             # Task will NOT be retried, even if it has more than one retry
             # remaining.
-            raise CancelExecution(retry=False)
+            raise CancelExecution('optional message', retry=False)
         elif cancel_and_maybe_retry():
             # Task will only be retried if it has one or more retries
             # remaining (this is the default).
