@@ -65,6 +65,11 @@ Usage and task declaration:
             def run_backup():
                 pass
 
+            @huey.periodic_task(crontab(hour='10,14', minute='30'))
+            def send_reminders():
+                pass
+
+
         Example usage. Running tasks and getting results work about the same as
         regular Huey:
 
@@ -113,11 +118,6 @@ Usage and task declaration:
     .. py:method:: stop()
 
         Stop the scheduler.
-
-.. note::
-    There is not a separate decorator for *periodic*, or *crontab*, tasks. Just
-    use :py:meth:`MiniHuey.task` and pass in a validation function. A
-    validation function can be generated using the :py:func:`crontab` function.
 
 .. note::
     Tasks enqueued for immediate execution will be run regardless of whether
