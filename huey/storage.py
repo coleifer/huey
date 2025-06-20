@@ -940,7 +940,7 @@ class FileStorage(BaseStorage):
 
     def _timestamp_to_prefix(self, ts):
         # TODO: possibly use ts.timestamp() instead?
-        ts = time.mktime(ts.timetuple()) + (ts.microsecond / 1e-6)
+        ts = time.mktime(ts.timetuple()) + (ts.microsecond / 1e6)
         return '%012x' % self._partial_secs(ts)
 
     def add_to_schedule(self, data, ts):
