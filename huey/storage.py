@@ -939,7 +939,6 @@ class FileStorage(BaseStorage):
         self._flush_dir(self.queue_path)
 
     def _timestamp_to_prefix(self, ts):
-        # TODO: possibly use ts.timestamp() instead?
         ts = time.mktime(ts.timetuple()) + (ts.microsecond / 1e6)
         return '%012x' % self._partial_secs(ts)
 
