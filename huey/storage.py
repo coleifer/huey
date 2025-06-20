@@ -869,6 +869,11 @@ class FileStorage(BaseStorage):
             self.lock_file = os.path.join(self.path, '.lock')
             self.lock = FileLock(self.lock_file)
 
+    def _partial_secs(self, fp, multiplier=None):
+        if multiplier is None:
+            multiplier = 1e6
+        return round(multiplier * fp)
+
     def _flush_dir(self, path):
         if os.path.exists(path):
             shutil.rmtree(path)
@@ -888,7 +893,7 @@ class FileStorage(BaseStorage):
             # timestamp (asc).
             prefix = '%04x-%012x' % (
                 self.MAX_PRIORITY - priority,
-                int(time.time() * 1000))
+                self._partial_secs(time.time()))
 
             base = filename = os.path.join(self.queue_path, prefix)
             conflict = 0
@@ -934,8 +939,9 @@ class FileStorage(BaseStorage):
         self._flush_dir(self.queue_path)
 
     def _timestamp_to_prefix(self, ts):
-        ts = time.mktime(ts.timetuple()) + (ts.microsecond * 1e-6)
-        return '%012x' % int(ts * 1000)
+        # TODO: possibly use ts.timestamp() instead?
+        ts = time.mktime(ts.timetuple()) + (ts.microsecond / 1e-6)
+        return '%012x' % self._partial_secs(ts)
 
     def add_to_schedule(self, data, ts):
         with self.lock:
