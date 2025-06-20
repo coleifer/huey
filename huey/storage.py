@@ -871,7 +871,7 @@ class FileStorage(BaseStorage):
 
     def _partial_secs(self, fp, multiplier=None):
         if multiplier is None:
-            multiplier = 1e6
+            multiplier = 1000
         return round(multiplier * fp)
 
     def _flush_dir(self, path):
