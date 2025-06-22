@@ -167,10 +167,12 @@ class SqlStorage(BaseStorage):
     def schedule_size(self):
         return self.schedule().count()
 
-    def scheduled_items(self):
+    def scheduled_items(self, limit=None):
         tasks = (self.schedule(self.Schedule.data)
                  .order_by(self.Schedule.timestamp)
                  .tuples())
+        if limit:
+            tasks = tasks.limit(limit)
         return list(map(operator.itemgetter(0), tasks))
 
     def flush_schedule(self):
