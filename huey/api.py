@@ -925,6 +925,15 @@ class TaskLock(object):
     def is_locked(self):
         return self._huey.storage.has_data_for_key(self._key)
 
+    def acquire(self, value=True):
+        """Optional: value: (default) `True` to acquire the lock or `False` to clear it."""
+        if value is not True:
+            return self.clear()
+        return self._huey.put_if_empty(self._key, '1')
+
+    def clear(self):
+        return self._huey.delete(self._key)
+
     def __call__(self, fn):
         @wraps(fn)
         def inner(*args, **kwargs):
@@ -933,14 +942,17 @@ class TaskLock(object):
         return inner
 
     def __enter__(self):
-        if not self._huey.put_if_empty(self._key, '1'):
+        if not self.acquire(value=True):
             raise TaskLockedException('unable to acquire lock %s' % self._name)
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self._huey.delete(self._key)
+        self.clear()
 
-    def clear(self):
-        return self._huey.delete(self._key)
+    lock = property(
+        is_locked, acquire, clear,
+        "The 'lock' property. "
+        "Set to `True` to acquire the lock or `False` to clear it."
+    )
 
 
 class Result(object):
