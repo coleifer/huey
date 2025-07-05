@@ -1217,6 +1217,14 @@ Huey object
 
     See :py:meth:`Huey.lock_task` for example usage.
 
+    .. py:method:: acquire([value=True])
+
+        Helper method to manually acquire the lock. This method is provided to allow the lock to be obtained later from the value returned by :py:meth:`Huey.lock_task` inside a task.
+
+        The context-manager is easier to use if the lock is to be acquired immediately. You must clear any locks that you acquired manually in every path of your code.
+
+        The optional `value` argument can be ignored. Setting it to anything other than `True` is the same as using the `clear` method below. It is only there to support the `lock` property of this class.
+
     .. py:method:: clear()
 
         Helper method to manually clear the lock. This method is provided to
