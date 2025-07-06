@@ -1227,6 +1227,19 @@ Huey object
         ``-f`` method which will flush all locks before beginning to execute
         tasks.
 
+    .. py:method:: acquire()
+
+        Acquire the lock, raising a :py:class:`TaskLockedException` if the lock
+        could not be acquired. Otherwise, returns ``True``.
+
+    .. py:method:: release()
+
+        Identical to :py:meth:`~TaskLock.clear`.
+
+    .. py:method:: locked()
+
+        :returns: boolean whether lock is currently being held.
+
 Result
 ------
 
