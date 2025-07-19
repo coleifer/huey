@@ -18,6 +18,11 @@ class Registry(object):
         self._registry = {}
         self._periodic_tasks = []
 
+    def __bool__(self):
+        if self._registry or self._periodic_tasks:
+            return True
+        return False
+
     def task_to_string(self, task_class):
         return '%s.%s' % (task_class.__module__, task_class.__name__)
 
