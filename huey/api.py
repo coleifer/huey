@@ -645,6 +645,9 @@ class Huey(object):
     def result_count(self):
         return self.storage.result_store_size()
 
+    def __bool__(self):
+        return True
+
     def __len__(self):
         return self.pending_count()
 
