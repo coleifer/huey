@@ -401,7 +401,8 @@ class Huey(object):
             self._emit(S.SIGNAL_LOCKED, task)
         except RetryTask as exc:
             logger.info('Task %s raised RetryTask, retrying.', task.id)
-            task.retries += 1
+            if not exc.decrement_retries:
+                task.retries += 1
             if exc.eta or exc.delay is not None:
                 retry_eta = normalize_time(exc.eta, exc.delay, self.utc)
             exception = exc

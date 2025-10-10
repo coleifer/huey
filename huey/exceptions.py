@@ -8,8 +8,9 @@ class CancelExecution(Exception):
         self.retry = retry
         super(CancelExecution, self).__init__(*args, **kwargs)
 class RetryTask(Exception):
-    def __init__(self, msg=None, eta=None, delay=None, *args, **kwargs):
+    def __init__(self, msg=None, eta=None, delay=None, *args, decrement_retries=False, **kwargs):
         self.eta, self.delay = eta, delay
+        self.decrement_retries = decrement_retries
         super(RetryTask, self).__init__(msg, *args, **kwargs)
 class TaskException(Exception):
     def __init__(self, metadata=None, *args):

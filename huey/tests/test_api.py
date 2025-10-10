@@ -905,6 +905,24 @@ class TestQueue(BaseTestCase):
         self.assertEqual(len(self.huey), 0)
         self.assertEqual(self.huey.result_count(), 0)
 
+    def test_retrytask_explicit_with_decrement(self):
+        state = [0]
+        @self.huey.task()
+        def task_a(n):
+            state[0] = state[0] + n
+            raise RetryTask('asdf', decrement_retries=True)
+
+        t = task_a.s(1)
+        t.retries = 2
+        r = self.huey.enqueue(t)
+        self.assertTrue(self.execute_next() is None)
+        self.assertRaises(TaskException, r.get)
+        self.assertEqual(state, [1])
+        self.assertEqual(len(self.huey), 1)
+
+        task = self.huey.dequeue()
+        self.assertEqual(task.retries, 1)  # Decremented!
+
     def test_cancel_execution(self):
         @self.huey.task()
         def task_a(n=None):

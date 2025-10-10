@@ -1469,11 +1469,12 @@ Exceptions
     more retries remaining**. Similarly, if ``retry=True`` then the task will
     be retried regardless.
 
-.. py:class:: RetryTask(msg=None, delay=None, eta=None)
+.. py:class:: RetryTask(msg=None, delay=None, eta=None, decrement_retries=False)
 
     Raised by user code from within a :py:meth:`~Huey.task` function to force a
     retry. When this exception is raised, the task will be retried irrespective
-    of whether it is configured with automatic retries.
+    of whether it is configured with automatic retries, except when
+    ``decrement_retries`` is set to ``True`` and the task has no retries left.
 
     If ``delay`` or ``eta`` is specified, then any ``retry_delay`` set on the
     task will be overridden and the value specified will be used to determine
