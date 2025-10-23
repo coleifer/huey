@@ -3,7 +3,14 @@ Changelog
 
 ## master
 
-[View commits](https://github.com/coleifer/huey/compare/2.5.3...HEAD)
+[View commits](https://github.com/coleifer/huey/compare/2.5.4...HEAD)
+
+## 2.5.4
+
+* Minor bug fixes
+* Fix multiprocessing start method for python 3.14+.
+
+[View commits](https://github.com/coleifer/huey/compare/2.5.3...2.5.4)
 
 ## 2.5.3
 
