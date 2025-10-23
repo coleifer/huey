@@ -3,7 +3,8 @@ from setuptools import setup, find_packages
 
 
 with open(os.path.join(os.path.dirname(__file__), 'README.rst')) as fh:
-    readme = fh.read()
+    readme = '\n'.join(line for line in fh.read().splitlines()
+                       if 'image::' not in line)
 
 extras_require = {
     'backends': ['redis>=3.0.0'],
