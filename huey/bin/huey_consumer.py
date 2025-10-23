@@ -57,7 +57,9 @@ def consumer_main():
 
 
 if __name__ == '__main__':
-    if sys.version_info >= (3, 8) and sys.platform == 'darwin':
+    # MacOS on 3.8+ and Linux on 3.14+ need to explicitly specify forking.
+    if ((sys.version_info >= (3, 8) and sys.platform == 'darwin') or
+        (sys.version_info >= (3, 14))):
         import multiprocessing
         try:
             multiprocessing.set_start_method('fork')
