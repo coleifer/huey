@@ -41,6 +41,13 @@ from huey.utils import string_type
 from huey.utils import time_clock
 from huey.utils import to_timestamp
 from huey.utils import utcnow
+# 异常处理模块导入
+from huey.exception_handler import ExceptionHandler
+from huey.validation import analyze_function_for_null_pointer
+from huey.timeout import TimeoutManager
+from huey.deadlock import DeadlockDetector
+from huey.resource import ResourceMonitor
+from huey.observability import exception_logger
 
 
 logger = logging.getLogger('huey')
@@ -130,6 +137,23 @@ class Huey(object):
         self._signal = S.Signal()
         self._tasks_in_flight = set()
 
+        # 异常处理相关组件初始化
+        self.exception_handler = ExceptionHandler()
+        self.timeout_manager = TimeoutManager()
+        self.deadlock_detector = DeadlockDetector(self)
+        self.resource_monitor = ResourceMonitor()
+        # 启动后台监控任务
+        self._start_background_tasks()
+
+    def _start_background_tasks(self):
+        """
+        启动后台监控任务
+        """
+        # 启动死锁检测器
+        self.deadlock_detector.start()
+        # 启动资源监控器
+        self.resource_monitor.start()
+    
     def get_task_wrapper_class(self):
         return TaskWrapper
 
@@ -172,7 +196,7 @@ class Huey(object):
         return Consumer(self, **options)
 
     def task(self, retries=0, retry_delay=0, priority=None, context=False,
-             name=None, expires=None, **kwargs):
+             name=None, expires=None, validate_args=None, **kwargs):
         TaskWrapper = self.task_wrapper_class
         def decorator(func):
             return TaskWrapper(
@@ -184,6 +208,7 @@ class Huey(object):
                 default_retry_delay=retry_delay,
                 default_priority=priority,
                 default_expires=expires,
+                validate_args=validate_args,
                 **kwargs)
         return decorator
 
@@ -455,6 +480,46 @@ class Huey(object):
             self.enqueue(next_task)
 
         if exception is not None and task.retries:
+            # 智能异常处理：判断是否重试及重试策略
+            should_retry, delay = False, None
+            try:
+                from huey.exception_handler import exception_handler
+                import traceback
+                
+                # 获取完整的堆栈跟踪
+                tb_str = traceback.format_exc()
+                
+                # 准备任务元数据
+                task_metadata = {
+                    'args': task.args,
+                    'kwargs': task.kwargs,
+                    'id': task.id,
+                    'name': task.name,
+                    'retries': task.retries,
+                    'retry_delay': task.retry_delay
+                }
+                
+                # 检测异常类型并决定是否重试
+                should_retry, delay = exception_handler.should_retry(
+                    exception, tb_str, task.retries, task_metadata
+                )
+                
+                if should_retry:
+                    logger.info(f'Task {task.id} will be retried with delay {delay}s based on exception type {type(exception).__name__}')
+                    # 应用智能重试延迟
+                    if delay:
+                        retry_eta = timestamp + datetime.timedelta(seconds=delay)
+                    
+                    self._emit(S.SIGNAL_RETRYING, task)
+                    self._requeue_task(task, self._get_timestamp(), retry_eta)
+                    return
+            except ImportError:
+                pass  # 如果异常处理模块不可用，使用默认重试机制
+            except Exception as handler_exc:
+                logger.exception('Error in exception handler for task %s.', task.id)
+                # 异常处理模块出错，回退到默认重试机制
+            
+            # 默认重试机制
             self._emit(S.SIGNAL_RETRYING, task)
             self._requeue_task(task, self._get_timestamp(), retry_eta)
 
@@ -810,7 +875,7 @@ class TaskWrapper(object):
     task_base = Task
 
     def __init__(self, huey, func, retries=None, retry_delay=None,
-                 context=False, name=None, task_base=None, **settings):
+                 context=False, name=None, task_base=None, validate_args=None, **settings):
         self.__doc__ = getattr(func, '__doc__', None)
         self.huey = huey
         self.func = func
@@ -819,22 +884,83 @@ class TaskWrapper(object):
         self.context = context
         self.name = name
         self.settings = settings
+        self.validate_args = validate_args
         if task_base is not None:
             self.task_base = task_base
 
         # Dynamically create task class and register with Huey instance.
         self.task_class = self.create_task(func, context, name, **settings)
         self.huey._registry.register(self.task_class)
+        
+        # 静态分析函数以检测潜在的空指针风险
+        from huey.validation import analyze_function_for_null_pointer
+        risks = analyze_function_for_null_pointer(func)
+        if risks:
+            logger.warning(f"函数 {func.__name__} 存在潜在的空指针风险:")
+            for risk in risks:
+                logger.warning(f"  - {risk}")
 
     def unregister(self):
         return self.huey._registry.unregister(self.task_class)
 
     def create_task(self, func, context=False, name=None, **settings):
+        # 静态分析函数空指针风险
+        from huey.validation import analyze_function_for_null_pointer
+        risks = analyze_function_for_null_pointer(func)
+        if risks:
+            logger.warning(f"函数 {func.__name__} 存在潜在空指针风险:")
+            for risk in risks:
+                logger.warning(f"  - {risk}")
+        
         def execute(self):
             args, kwargs = self.data
+            
+            # 参数验证和修复
+            from huey.validation import validate_task_parameters
+            if not validate_task_parameters(args, kwargs):
+                raise ValueError("Invalid task parameters")
+            
             if self.context:
                 kwargs['task'] = self
-            return func(*args, **kwargs)
+            
+            # 添加超时控制
+            from huey.timeout import task_timeout
+            timeout = getattr(self, 'timeout', None)
+            
+            # 创建任务执行函数
+            def task_func():
+                if timeout:
+                    @task_timeout(timeout)
+                    def timed_task():
+                        return func(*args, **kwargs)
+                    return timed_task()
+                else:
+                    return func(*args, **kwargs)
+            
+            try:
+                return task_func()
+            except Exception as e:
+                # 智能异常分类与重试
+                from huey.exception_handler import exception_handler
+                import traceback
+                traceback_str = traceback.format_exc()
+                retry_count = 0
+                task_metadata = {
+                    'args': args,
+                    'kwargs': kwargs,
+                    'id': self.id,
+                    'name': self.name,
+                    'max_retries': self.retries,
+                    'retry_delay': self.retry_delay,
+                    'retry_count': retry_count
+                }
+                should_retry, delay = exception_handler.should_retry(e, traceback_str, retry_count, task_metadata)
+                if should_retry:
+                    logger.info(f'Task {self.id} will be retried with delay {delay}s based on exception type {type(e).__name__}')
+                    self.retry_delay = delay
+                    raise RetryTask()
+                else:
+                    raise
 
         attrs = {
             'context': context,
