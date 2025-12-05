@@ -19,6 +19,10 @@ setup(
     author='Charles Leifer',
     author_email='coleifer@gmail.com',
     url='http://github.com/coleifer/huey/',
+    project_urls={
+        'Documentation': 'https://huey.readthedocs.io',
+        'Changelog': 'https://github.com/coleifer/huey/blob/master/CHANGELOG.md',
+    },
     packages=find_packages(),
     extras_require=extras_require,
     package_data={
