@@ -3,7 +3,13 @@ Changelog
 
 ## master
 
-[View commits](https://github.com/coleifer/huey/compare/2.5.4...HEAD)
+[View commits](https://github.com/coleifer/huey/compare/2.5.5...HEAD)
+
+## 2.5.5
+
+* pypa/pypi is a joke.
+
+[View commits](https://github.com/coleifer/huey/compare/2.5.4...2.5.5)
 
 ## 2.5.4
 
