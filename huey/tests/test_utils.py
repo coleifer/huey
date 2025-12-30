@@ -32,7 +32,7 @@ class FakePacific(datetime.tzinfo):
     def utcoffset(self, dt):
         return datetime.timedelta(hours=-8)
     def tzname(self, dt):
-        return 'US/Pacific'
+        return 'America/Los_Angeles'
     def dst(self, dt):
         return datetime.timedelta(0)
 
@@ -40,7 +40,7 @@ class FakePacific(datetime.tzinfo):
 class TestNormalizeTime(unittest.TestCase):
     def setUp(self):
         self._orig_tz = os.environ.get('TZ')
-        os.environ['TZ'] = 'US/Pacific'
+        os.environ['TZ'] = 'America/Los_Angeles'
         time.tzset()
 
     def tearDown(self):
