@@ -1,2 +1,32 @@
 [build-system]
 requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "huey"
+dynamic = ["version"]
+description = "a little task queue"
+readme = "README.rst"
+license = "MIT"
+authors = [
+    { name = "Charles Leifer", email = "coleifer@gmail.com" }
+]
+classifiers = [
+    "Programming Language :: Python :: 2",
+    "Programming Language :: Python :: 3",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+[project.scripts]
+huey_consumer = "huey.bin.huey_consumer:consumer_main"
+
+[project.urls]
+Repository = "https://github.com/coleifer/huey"
+Documentation = "https://huey.readthedocs.io/"
+Changelog = "https://github.com/coleifer/huey/blob/master/CHANGELOG.md"
+
+[project.optional-dependencies]
+backends = ["redis>=3.0.0"]
+
+[tool.setuptools.dynamic]
+version = { attr = "huey.__version__" }
