@@ -3,7 +3,13 @@ Changelog
 
 ## master
 
-[View commits](https://github.com/coleifer/huey/compare/2.5.5...HEAD)
+[View commits](https://github.com/coleifer/huey/compare/2.6.0...HEAD)
+
+## 2.6.0
+
+* "Modernize" build system to use pyproject.toml and github actions.
+
+[View commits](https://github.com/coleifer/huey/compare/2.5.5...2.6.0)
 
 ## 2.5.5
 
