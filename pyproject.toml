@@ -7,7 +7,6 @@ name = "huey"
 dynamic = ["version"]
 description = "a little task queue"
 readme = "README.rst"
-license = "MIT"
 authors = [
     { name = "Charles Leifer", email = "coleifer@gmail.com" }
 ]
