@@ -9,10 +9,6 @@ jobs:
         image: redis
         ports:
           - 6379:6379
-      kyototycoon:
-        image: coleifer/kyototycoon
-        ports:
-          - 1978:1978
     strategy:
       fail-fast: false
       matrix:
