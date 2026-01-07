@@ -29,3 +29,6 @@ backends = ["redis>=3.0.0"]
 
 [tool.setuptools.dynamic]
 version = { attr = "huey.__version__" }
+
+[tool.setuptools.packages.find]
+exclude = ["examples*", "docs*"]
