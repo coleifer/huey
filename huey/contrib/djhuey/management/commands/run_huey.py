@@ -54,7 +54,7 @@ class Command(BaseCommand):
             import multiprocessing
             try:
                 multiprocessing.set_start_method('fork')
-            except RuntimeError:
+            except (RuntimeError, ValueError):
                 pass
 
         consumer_options = {}

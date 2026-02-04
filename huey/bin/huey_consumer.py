@@ -63,6 +63,6 @@ if __name__ == '__main__':
         import multiprocessing
         try:
             multiprocessing.set_start_method('fork')
-        except RuntimeError:
+        except (ValueError, RuntimeError):
             pass
     consumer_main()
