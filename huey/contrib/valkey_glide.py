@@ -31,7 +31,6 @@ class ValkeyGlideStorage(RedisStorage):
             port = port or 6379
             config = GlideClientConfiguration(
                 [NodeAddress(host, port)],
-                request_timeout=1000,
                 **client_config_params)
             self.conn = GlideClient.create(config)
 
@@ -46,6 +45,9 @@ class ValkeyGlideStorage(RedisStorage):
         if client_name is not None:
             self.conn.client_setname(client_name)
 
+        if blocking:
+            raise ConfigurationError('Valkey glide does not seem to work '
+                                     'properly with blocking operations.')
         self.read_timeout = read_timeout
 
     def enqueue(self, data, priority=None):
