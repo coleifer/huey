@@ -381,3 +381,15 @@ class TestFileStorageMethods(StorageTests, BaseTestCase):
     @unittest.skipIf(TRAVIS, 'skipping test that is flaky on travis-ci')
     def test_consumer_integration(self):
         return super(TestFileStorageMethods, self).test_consumer_integration()
+
+
+try:
+    from huey.contrib.valkey_glide import ValkeyGlideHuey
+except ImportError:
+    ValkeyGlideHuey = None
+
+
+@unittest.skipIf(ValkeyGlideHuey is None, 'valkey-glide-sync not installed')
+class TestValkeyGlideStorage(StorageTests, BaseTestCase):
+    def get_huey(self):
+        return ValkeyGlideHuey(utc=False)
