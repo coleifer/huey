@@ -40,8 +40,8 @@ source_suffix = '.rst'
 master_doc = 'index'
 
 # General information about the project.
-project = u'huey'
-copyright = u'2013, charles leifer'
+project = 'huey'
+copyright = '2013, charles leifer'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -189,8 +189,8 @@ latex_elements = {
 # Grouping the document tree into LaTeX files. List of tuples
 # (source start file, target name, title, author, documentclass [howto/manual]).
 latex_documents = [
-  ('index', 'huey.tex', u'huey Documentation',
-   u'charles leifer', 'manual'),
+  ('index', 'huey.tex', 'huey Documentation',
+   'charles leifer', 'manual'),
 ]
 
 # The name of an image file (relative to this directory) to place at the top of
@@ -219,8 +219,8 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    ('index', 'huey', u'huey Documentation',
-     [u'charles leifer'], 1)
+    ('index', 'huey', 'huey Documentation',
+     ['charles leifer'], 1)
 ]
 
 # If true, show URL addresses after external links.
@@ -233,8 +233,8 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-  ('index', 'huey', u'huey Documentation',
-   u'charles leifer', 'huey', 'One line description of project.',
+  ('index', 'huey', 'huey Documentation',
+   'charles leifer', 'huey', 'One line description of project.',
    'Miscellaneous'),
 ]
 

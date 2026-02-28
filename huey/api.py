@@ -39,7 +39,6 @@ from huey.utils import normalize_time
 from huey.utils import reraise_as
 from huey.utils import string_type
 from huey.utils import time_clock
-from huey.utils import to_timestamp
 from huey.utils import utcnow
 
 

@@ -1,16 +1,9 @@
-try:
-    import gzip
-except ImportError:
-    gzip = None
-try:
-    import zlib
-except ImportError:
-    zlib = None
+import gzip
+import zlib
 import hashlib
 import hmac
 import logging
 import pickle
-import sys
 
 from huey.exceptions import ConfigurationError
 from huey.utils import encode
@@ -19,36 +12,8 @@ from huey.utils import encode
 logger = logging.getLogger('huey.serializer')
 
 
-if gzip is not None:
-    if sys.version_info[0] > 2:
-        gzip_compress = gzip.compress
-        gzip_decompress = gzip.decompress
-    else:
-        from io import BytesIO
-
-        def gzip_compress(data, comp_level):
-            buf = BytesIO()
-            fh = gzip.GzipFile(fileobj=buf, mode='wb',
-                               compresslevel=comp_level)
-            fh.write(data)
-            fh.close()
-            return buf.getvalue()
-
-        def gzip_decompress(data):
-            buf = BytesIO(data)
-            fh = gzip.GzipFile(fileobj=buf, mode='rb')
-            try:
-                return fh.read()
-            finally:
-                fh.close()
-
-
-if sys.version_info[0] == 2:
-    def is_compressed(data):
-        return data and (data[0] == b'\x1f' or data[0] == b'\x78')
-else:
-    def is_compressed(data):
-        return data and data[0] == 0x1f or data[0] == 0x78
+def is_compressed(data):
+    return data and data[0] == 0x1f or data[0] == 0x78
 
 
 class Serializer(object):
@@ -58,13 +23,6 @@ class Serializer(object):
         self.comp_level = compression_level
         self.use_zlib = use_zlib
         self.pickle_protocol = pickle_protocol or pickle.HIGHEST_PROTOCOL
-        if self.comp:
-            if self.use_zlib and zlib is None:
-                raise ConfigurationError('use_zlib specified, but zlib module '
-                                         'not found.')
-            elif gzip is None:
-                raise ConfigurationError('gzip module required to enable '
-                                         'compression.')
 
     def _serialize(self, data):
         return pickle.dumps(data, self.pickle_protocol)
@@ -78,7 +36,7 @@ class Serializer(object):
             if self.use_zlib:
                 data = zlib.compress(data, self.comp_level)
             else:
-                data = gzip_compress(data, self.comp_level)
+                data = gzip.compress(data, self.comp_level)
         return data
 
     def deserialize(self, data):
@@ -89,7 +47,7 @@ class Serializer(object):
             elif self.use_zlib:
                 data = zlib.decompress(data)
             else:
-                data = gzip_decompress(data)
+                data = gzip.decompress(data)
         return self._deserialize(data)
 
 

@@ -31,8 +31,6 @@ except ImportError:
 from huey.constants import EmptyData
 from huey.exceptions import ConfigurationError
 from huey.utils import FileLock
-from huey.utils import text_type
-from huey.utils import to_timestamp
 
 
 class BaseStorage(object):
@@ -754,13 +752,13 @@ class SqliteStorage(BaseSqlStorage):
         self.sql('delete from task where queue=?', (self.name,), commit=True)
 
     def add_to_schedule(self, data, ts):
-        params = (self.name, to_blob(data), to_timestamp(ts))
+        params = (self.name, to_blob(data), ts.timestamp())
         self.sql('insert into schedule (queue, data, timestamp) '
                  'values (?, ?, ?)', params, commit=True)
 
     def read_schedule(self, ts):
         with self.db(commit=True) as curs:
-            params = (self.name, to_timestamp(ts))
+            params = (self.name, ts.timestamp())
             curs.execute('select id, data from schedule where '
                          'queue = ? and timestamp <= ?', params)
             id_list, data = [], []
@@ -987,7 +985,7 @@ class FileStorage(BaseStorage):
         self._flush_dir(self.schedule_path)
 
     def path_for_key(self, key):
-        if isinstance(key, text_type):
+        if isinstance(key, str):
             key = key.encode('utf8')
         checksum = hashlib.md5(key).hexdigest()
         prefix = checksum[:self.levels]
@@ -995,7 +993,7 @@ class FileStorage(BaseStorage):
         return os.path.join(self.result_path, *prefix_filename)
 
     def put_data(self, key, value, is_result=False):
-        if isinstance(key, text_type):
+        if isinstance(key, str):
             key = key.encode('utf8')
 
         filename = self.path_for_key(key)

@@ -112,34 +112,25 @@ def normalize_time(eta=None, delay=None, utc=True):
         return eta
 
 
-if sys.version_info[0] == 2:
-    string_type = basestring
-    text_type = unicode
-    def to_timestamp(dt):
-        return time.mktime(dt.timetuple())
-else:
-    string_type = (bytes, str)
-    text_type = str
-    def to_timestamp(dt):
-        return dt.timestamp()
+string_type = (bytes, str)
 
 
 def encode(s):
     if isinstance(s, bytes):
         return s
-    elif isinstance(s, text_type):
+    elif isinstance(s, str):
         return s.encode('utf8')
     elif s is not None:
-        return text_type(s).encode('utf8')
+        return str(s).encode('utf8')
 
 
 def decode(s):
-    if isinstance(s, text_type):
+    if isinstance(s, str):
         return s
     elif isinstance(s, bytes):
         return s.decode('utf8')
     elif s is not None:
-        return text_type(s)
+        return str(s)
 
 
 class FileLock(object):
