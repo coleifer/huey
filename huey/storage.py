@@ -59,6 +59,7 @@ class BaseStorage(object):
 
         :param bytes data: Task data.
         :param float priority: Priority, higher priorities processed first.
+                               Defaults to 0.
         :return: No return value.
 
         Some storage may not implement support for priority. In that case, the
@@ -150,7 +151,7 @@ class BaseStorage(object):
 
     def put_data(self, key, value, is_result=False):
         """
-        Store an arbitrary key/value pair.
+        Store an arbitrary key/value pair, overwriting value on an existing key.
 
         :param bytes key: lookup key
         :param bytes value: value
