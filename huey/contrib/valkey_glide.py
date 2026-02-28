@@ -83,7 +83,7 @@ class ValkeyGlideStorage(RedisStorage):
         tx = Transaction()
         tx.hexists(self.result_key, key)
         tx.hget(self.result_key, key)
-        exists, val = self.conn.exec(tx, False)
+        exists, val = getattr(self.conn, 'exec')(tx, False)
         return EmptyData if not exists else val
 
     def pop_data(self, key):
@@ -91,7 +91,7 @@ class ValkeyGlideStorage(RedisStorage):
         tx.hexists(self.result_key, key)
         tx.hget(self.result_key, key)
         tx.hdel(self.result_key, [key])
-        exists, val, n = self.conn.exec(tx, False)
+        exists, val, n = getattr(self.conn, 'exec')(tx, False)
         return EmptyData if not exists else val
 
     def flush_queue(self):

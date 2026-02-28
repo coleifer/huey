@@ -3,6 +3,7 @@ import hashlib
 import itertools
 import os
 import shutil
+import sys
 import threading
 import unittest
 try:
@@ -384,7 +385,10 @@ class TestFileStorageMethods(StorageTests, BaseTestCase):
 
 
 try:
-    from huey.contrib.valkey_glide import ValkeyGlideHuey
+    if sys.version_info[0] > 2:
+        from huey.contrib.valkey_glide import ValkeyGlideHuey
+    else:
+        ValkeyGlideHuey = None
 except ImportError:
     ValkeyGlideHuey = None
 
