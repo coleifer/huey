@@ -151,7 +151,7 @@ class BaseStorage(object):
 
     def put_data(self, key, value, is_result=False):
         """
-        Store an arbitrary key/value pair, overwriting value on an existing key.
+        Store an arbitrary key/value pair, overwrites any existing value.
 
         :param bytes key: lookup key
         :param bytes value: value
