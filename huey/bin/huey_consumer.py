@@ -18,7 +18,7 @@ def err(s):
 def load_huey(path):
     try:
         return load_class(path)
-    except:
+    except Exception:
         cur_dir = os.getcwd()
         if cur_dir not in sys.path:
             sys.path.insert(0, cur_dir)

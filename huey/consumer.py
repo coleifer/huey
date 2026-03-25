@@ -448,7 +448,11 @@ class Consumer(object):
         if self._restart:
             self._logger.info('Consumer will restart.')
             python = sys.executable
-            os.execl(python, python, *sys.argv)
+            if not python:
+                self._logger.error('Could not determine Python executable, '
+                                   'unable to restart.')
+            else:
+                os.execl(python, python, *sys.argv)
         else:
             self._logger.info('Consumer exiting.')
 
@@ -547,6 +551,7 @@ class Consumer(object):
         self._logger.info('Received SIGHUP, will restart')
         self._received_signal = True
         self._restart = True
+        self._graceful = True  # Restart shuts down gracefully.
 
     def _set_child_signal_handlers(self):
         # Install signal handlers in child process. We ignore SIGHUP (restart)
