@@ -229,7 +229,9 @@ def thread_timeout(seconds):
     evt = threading.Event()
 
     # Uses ctypes to inject an exception into the thread. Not good but the best
-    # we have.
+    # we have. This doesn't interrupt stuff like time.sleep() -- the exception
+    # is raised, but the sleep() call must finish. So this is only effective if
+    # we are calling into the interpreter frequently during the wrapped block.
     def watchdog():
         if not evt.wait(seconds):
             tid = current.ident

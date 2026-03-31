@@ -15,6 +15,7 @@ class NullHandler(logging.Handler):
 logger = logging.getLogger('huey')
 logger.addHandler(NullHandler())
 
+SLOW_TESTS = bool(os.environ.get('HUEY_SLOW_TESTS'))
 TRAVIS = bool(os.environ.get('HUEY_TRAVIS'))
 
 
@@ -55,3 +56,9 @@ class BaseTestCase(unittest.TestCase):
             yield
         finally:
             consumer.stop(graceful=True)
+
+
+def slow_test():
+    def decorator(method):
+        return unittest.skipUnless(SLOW_TESTS, 'skipping slow test')(method)
+    return decorator

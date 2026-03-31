@@ -6,8 +6,6 @@ import os
 import sys
 import unittest
 
-from huey import tests
-
 
 def collect_tests(args=None):
     suite = unittest.TestSuite()
@@ -18,7 +16,7 @@ def collect_tests(args=None):
         suite.addTest(module_suite)
     else:
         tmpl = 'huey.tests.test_%s'
-        cleaned = [tmpl % arg if not arg.startswith('test') else arg
+        cleaned = [tmpl % arg if 'test_' not in arg else arg
                    for arg in args]
         user_suite = unittest.TestLoader().loadTestsFromNames(cleaned)
         suite.addTest(user_suite)
@@ -37,9 +35,16 @@ if __name__ == '__main__':
                       type='int', help='Verbosity of output')
     parser.add_option('-f', '--failfast', action='store_true', default=False,
                       help='Stop on first failure or error.')
+    parser.add_option('-s', '--slow-tests', action='store_true', default=False,
+                      dest='slow_tests', help='Run slow tests.')
 
     options, args = parser.parse_args()
+
+    if options.slow_tests:
+        os.environ['HUEY_SLOW_TESTS'] = '1'
+
     suite = collect_tests(args)
+
     failures, errors = runtests(suite, options.verbosity, options.failfast)
     for f in glob.glob('huey*.db*'):
         os.unlink(f)
