@@ -70,41 +70,47 @@ class KyotoTycoonStorage(BaseStorage):
     def flush_schedule(self):
         return self.s.clear()
 
-    def prefix_key(self, key):
-        return '%s.%s' % (self.qname, decode(key))
+    def result_key(self, key):
+        return '%s.r.%s' % (self.qname, decode(key))
 
     def put_data(self, key, value, is_result=False):
         xt = self.expire_time if is_result else None
-        self.kt.set(self.prefix_key(key), value, self._db, expire_time=xt)
+        self.kt.set(self.result_key(key), value, self._db, expire_time=xt)
 
     def peek_data(self, key):
-        result = self.kt.get_bytes(self.prefix_key(key), self._db)
+        result = self.kt.get_bytes(self.result_key(key), self._db)
         return EmptyData if result is None else result
 
     def pop_data(self, key):
         if self.expire_time is not None:
             return self.peek_data(key)
 
-        result = self.kt.seize(self.prefix_key(key), self._db)
+        result = self.kt.seize(self.result_key(key), self._db)
         return EmptyData if result is None else result
 
     def delete_data(self, key):
-        return self.kt.seize(self.prefix_key(key), self._db) is not None
+        return self.kt.seize(self.result_key(key), self._db) is not None
 
     def has_data_for_key(self, key):
-        return self.kt.exists(self.prefix_key(key), self._db)
+        return self.kt.exists(self.result_key(key), self._db)
 
     def put_if_empty(self, key, value):
-        return self.kt.add(self.prefix_key(key), value, self._db)
+        return self.kt.add(self.result_key(key), value, self._db)
+
+    def counter_key(self, key):
+        return '%s.c.%s' % (self.qname, decode(key))
 
     def incr(self, key, amount=1):
-        return self.kt.increment(self.prefix_key(key), amount, self._db)
+        return self.kt.increment(self.counter_key(key), amount, self._db)
+
+    def delete_counter(self, key):
+        return self.kt.remove(self.counter_key(key), self._db)
 
     def result_store_size(self):
-        return len(self.kt.match_prefix(self.prefix_key(''), db=self._db))
+        return len(self.kt.match_prefix(self.result_key(''), db=self._db))
 
     def result_items(self):
-        prefix = self.prefix_key('')
+        prefix = self.result_key('')
         keys = self.kt.match_prefix(prefix, db=self._db)
         result = self.kt.get_bulk(keys, self._db)
 
@@ -112,14 +118,18 @@ class KyotoTycoonStorage(BaseStorage):
         return {key[plen:]: value for key, value in result.items()}
 
     def flush_results(self):
-        prefix = self.prefix_key('')
-        keys = self.kt.match_prefix(prefix, db=self._db)
+        keys = self.kt.match_prefix(self.result_key(''), db=self._db)
+        return self.kt.remove_bulk(keys, self._db)
+
+    def flush_counters(self):
+        keys = self.kt.match_prefix(self.counter_key(''), db=self._db)
         return self.kt.remove_bulk(keys, self._db)
 
     def flush_all(self):
         self.flush_queue()
         self.flush_schedule()
         self.flush_results()
+        self.flush_counters()
 
 
 class KyotoTycoonHuey(Huey):

@@ -148,7 +148,12 @@ class StorageTests(object):
         self.assertEqual(self.s.incr('k1'), 2)
         self.assertEqual(self.s.incr('k2', amount=10), 10)
         self.assertEqual(self.s.incr('k2', amount=-5), 5)
-        self.s.flush_results()
+
+        self.s.delete_counter('k1')
+        self.assertEqual(self.s.incr('k1'), 1)
+        self.assertEqual(self.s.incr('k2', amount=2), 7)
+
+        self.s.flush_counters()
         self.assertEqual(self.s.incr('k1'), 1)
         self.assertEqual(self.s.incr('k2'), 1)
 

@@ -266,6 +266,12 @@ class SqlStorage(BaseStorage):
              update={self.Counter.value: self.Counter.value + amount})
          .execute())
 
+    def delete_counter(self, key):
+        with self.database.atomic():
+            self.Counter.delete().where(
+                (self.Counter.queue == self.name) &
+                (self.Counter.key == key)).execute()
+
     def result_store_size(self):
         return self.kv().count()
 
@@ -275,6 +281,8 @@ class SqlStorage(BaseStorage):
 
     def flush_results(self):
         self.KV.delete().where(self.KV.queue == self.name).execute()
+
+    def flush_counters(self):
         self.Counter.delete().where(self.Counter.queue == self.name).execute()
 
 

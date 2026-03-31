@@ -214,6 +214,12 @@ class BaseStorage(object):
         """
         raise NotImplementedError
 
+    def delete_counter(self, key):
+        """
+        Delete the counter at the given key.
+        """
+        raise NotImplementedError
+
     def result_store_size(self):
         """
         :return: Number of key/value pairs in the result store.
@@ -230,7 +236,15 @@ class BaseStorage(object):
 
     def flush_results(self):
         """
-        Delete all key/value pairs from the data-store and clear all counters.
+        Delete all key/value pairs from the data-store.
+
+        :return: No return value.
+        """
+        raise NotImplementedError
+
+    def flush_counters(self):
+        """
+        Clear all counters.
 
         :return: No return value.
         """
@@ -245,6 +259,7 @@ class BaseStorage(object):
         self.flush_queue()
         self.flush_schedule()
         self.flush_results()
+        self.flush_counters()
 
 
 class BlackHoleStorage(BaseStorage):
@@ -263,9 +278,11 @@ class BlackHoleStorage(BaseStorage):
     def pop_data(self, key): return EmptyData
     def has_data_for_key(self, key): return False
     def incr(self, key, amount=1): return amount
+    def delete_counter(self, key): pass
     def result_store_size(self): return 0
     def result_items(self): return {}
     def flush_results(self): pass
+    def flush_counters(self): pass
 
 
 class MemoryStorage(BaseStorage):
@@ -349,6 +366,10 @@ class MemoryStorage(BaseStorage):
             self._counters[key] = self._counters.get(key, 0) + amount
         return self._counters[key]
 
+    def delete_counter(self, key):
+        with self._lock:
+            self._counters.pop(key, None)
+
     def result_store_size(self):
         return len(self._results)
 
@@ -357,6 +378,8 @@ class MemoryStorage(BaseStorage):
 
     def flush_results(self):
         self._results = {}
+
+    def flush_counters(self):
         self._counters = {}
 
 
@@ -500,6 +523,9 @@ class RedisStorage(BaseStorage):
     def incr(self, key, amount=1):
         return self.conn.hincrby(self.counter_key, key, amount)
 
+    def delete_counter(self, key):
+        self.conn.hdel(self.counter_key, key)
+
     def result_store_size(self):
         return self.conn.hlen(self.result_key)
 
@@ -508,6 +534,8 @@ class RedisStorage(BaseStorage):
 
     def flush_results(self):
         self.conn.delete(self.result_key)
+
+    def flush_counters(self):
         self.conn.delete(self.counter_key)
 
 
@@ -561,6 +589,9 @@ class RedisExpireStorage(RedisStorage):
         self.conn.expire(self.counter_key(key), self._expire_time)
         return res
 
+    def delete_counter(self, key):
+        self.conn.delete(self.counter_key(key))
+
     def _result_keys(self):
         return self.conn.scan_iter(match=self.result_prefix + b'*')
 
@@ -580,7 +611,12 @@ class RedisExpireStorage(RedisStorage):
         return self.conn.scan_iter(match=self.counter_prefix + b'*')
 
     def flush_results(self):
-        keys = list(self._result_keys()) + list(self._counter_keys())
+        keys = list(self._result_keys())
+        if keys:
+            self.conn.delete(*keys)
+
+    def flush_counters(self):
+        keys = list(self._counter_keys())
         if keys:
             self.conn.delete(*keys)
 
@@ -890,6 +926,10 @@ class SqliteStorage(BaseSqlStorage):
 
         return value
 
+    def delete_counter(self, key):
+        self.sql('delete from counter where queue = ? and key = ?',
+                 (self.name, key), commit=True)
+
     def result_store_size(self):
         return self.sql('select count(*) from kv where queue=?', (self.name,),
                         results=True)[0][0]
@@ -901,6 +941,8 @@ class SqliteStorage(BaseSqlStorage):
 
     def flush_results(self):
         self.sql('delete from kv where queue=?', (self.name,), True)
+
+    def flush_counters(self):
         self.sql('delete from counter where queue=?', (self.name,), True)
 
 
@@ -1114,11 +1156,13 @@ class FileStorage(BaseStorage):
     def has_data_for_key(self, key):
         return os.path.exists(self.path_for_key(key))
 
-    def incr(self, key, amount=1):
+    def _counter_filename(self, key):
         if isinstance(key, str):
             key = key.encode('utf8')
-        filename = os.path.join(self.counter_path,
-                                hashlib.md5(key).hexdigest())
+        return os.path.join(self.counter_path, hashlib.md5(key).hexdigest())
+
+    def incr(self, key, amount=1):
+        filename = self._counter_filename(key)
         with self.lock:
             if not os.path.exists(self.counter_path):
                 os.makedirs(self.counter_path)
@@ -1131,6 +1175,12 @@ class FileStorage(BaseStorage):
                 fh.write(str(value))
 
         return value
+
+    def delete_counter(self, key):
+        filename = self._counter_filename(key)
+        with self.lock:
+            if os.path.exists(filename):
+                os.unlink(filename)
 
     def result_store_size(self):
         return sum(len(filenames) for _, _, filenames
@@ -1148,4 +1198,6 @@ class FileStorage(BaseStorage):
 
     def flush_results(self):
         self._flush_dir(self.result_path)
+
+    def flush_counters(self):
         self._flush_dir(self.counter_path)
