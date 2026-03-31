@@ -364,8 +364,10 @@ class Huey(object):
         return self.storage.delete_data(key)
 
     def _timeout_context(self, task):
-        if task.timeout is None or self._timeout_handler is None:
+        if task.timeout is None or task.timeout <= 0 or \
+           self._timeout_handler is None:
             return noop_context()
+
         return self._timeout_handler(task.timeout)
 
     def _get_timestamp(self):
