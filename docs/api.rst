@@ -1710,6 +1710,8 @@ Huey comes with several built-in storage implementations:
 
     .. py:method:: has_data_for_key(key)
 
+    .. py:method:: incr(key, amount=1)
+
     .. py:method:: result_store_size()
 
     .. py:method:: result_items()
