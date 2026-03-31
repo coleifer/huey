@@ -22,6 +22,9 @@ from huey.constants import WORKER_PROCESS
 from huey.constants import WORKER_THREAD
 from huey.constants import WORKER_TYPES
 from huey.exceptions import ConfigurationError
+from huey.utils import greenlet_timeout
+from huey.utils import process_timeout
+from huey.utils import thread_timeout
 from huey.utils import time_clock
 
 
@@ -208,6 +211,9 @@ class ThreadEnvironment(Environment):
     def is_alive(self, proc):
         return proc.is_alive()
 
+    def set_timeout_handler(self, huey):
+        huey.set_timeout_handler(thread_timeout)
+
 
 class GreenletEnvironment(Environment):
     def get_stop_flag(self):
@@ -223,6 +229,9 @@ class GreenletEnvironment(Environment):
     def is_alive(self, proc):
         return not proc.dead
 
+    def set_timeout_handler(self, huey):
+        huey.set_timeout_handler(greenlet_timeout)
+
 
 class ProcessEnvironment(Environment):
     def get_stop_flag(self):
@@ -235,6 +244,9 @@ class ProcessEnvironment(Environment):
 
     def is_alive(self, proc):
         return proc.is_alive()
+
+    def set_timeout_handler(self, huey):
+        huey.set_timeout_handler(process_timeout)
 
 
 WORKER_TO_ENVIRONMENT = {
@@ -291,6 +303,9 @@ class Consumer(object):
 
         # Create the execution environment helper.
         self.environment = self.get_environment(self.worker_type)
+
+        # Install environment-specific timeout handler.
+        self.environment.set_timeout_handler(self.huey)
 
         # Create the event used to signal the process should terminate. We'll
         # also store a boolean flag to indicate whether we should restart after

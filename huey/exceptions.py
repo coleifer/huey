@@ -2,6 +2,7 @@ class HueyException(Exception): pass
 class ConfigurationError(HueyException): pass
 class TaskLockedException(HueyException): pass
 class ResultTimeout(HueyException): pass
+class TaskTimeout(HueyException): pass
 
 class CancelExecution(Exception):
     def __init__(self, retry=None, *args, **kwargs):

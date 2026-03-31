@@ -12,6 +12,7 @@ SIGNAL_REVOKED = 'revoked'
 SIGNAL_SCHEDULED = 'scheduled'
 SIGNAL_INTERRUPTED = 'interrupted'
 SIGNAL_ENQUEUED = 'enqueued'
+SIGNAL_TIMEOUT = 'timeout'
 
 
 class Signal(object):

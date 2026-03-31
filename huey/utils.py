@@ -1,15 +1,34 @@
 from collections import namedtuple
 import calendar
+import contextlib
 import datetime
 import errno
+import logging
 import os
+import signal
 import sys
+import threading
 import time
 import warnings
+try:
+    import ctypes
+except ImportError:
+    ctypes = None
 try:
     import fcntl
 except ImportError:
     fcntl = None
+
+try:
+    import gevent
+except ImportError:
+    gevent = None
+
+from huey.exceptions import TaskTimeout
+
+
+logger = logging.getLogger(__name__)
+
 
 if sys.version_info < (3, 12):
     utcnow = datetime.datetime.utcnow
@@ -181,3 +200,60 @@ if sys.version_info[0] < 3:
     time_clock = time.time
 else:
     time_clock = time.monotonic
+
+
+@contextlib.contextmanager
+def noop_context():
+    yield
+
+@contextlib.contextmanager
+def process_timeout(seconds):
+    def _handle_alrm(signum, frame):
+        raise TaskTimeout('timeout (%ss)' % seconds)
+
+    orig = signal.signal(signal.SIGALRM, _handle_alrm)
+    signal.alarm(int(seconds))
+    try:
+        yield
+    finally:
+        signal.alarm(0)  # Cancel any pending alarm.
+        signal.signal(signal.SIGALRM, orig)
+
+@contextlib.contextmanager
+def thread_timeout(seconds):
+    if ctypes is None:
+        logger.warning('ctypes is required for thread-worker timeout')
+        yield
+
+    current = threading.current_thread()
+    evt = threading.Event()
+
+    # Uses ctypes to inject an exception into the thread. Not good but the best
+    # we have.
+    def watchdog():
+        if not evt.wait(seconds):
+            tid = current.ident
+            ctypes.pythonapi.PyThreadState_SetAsyncExc(
+                ctypes.c_ulong(tid),
+                ctypes.py_object(TaskTimeout))
+
+    t = threading.Thread(target=watchdog, daemon=True)
+    t.start()
+    try:
+        yield
+    finally:
+        evt.set()
+        t.join(1)
+
+@contextlib.contextmanager
+def greenlet_timeout(seconds):
+    if gevent is None:
+        logger.warning('gevent is required for greenlet-worker timeout')
+        yield
+
+    timer = gevent.Timeout(seconds, TaskTimeout('timeout (%ss)' % seconds))
+    timer.start()
+    try:
+        yield
+    finally:
+        timer.cancel()
