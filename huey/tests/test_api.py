@@ -1,5 +1,6 @@
 import datetime
 import inspect
+import time
 
 from huey.api import MemoryHuey
 from huey.api import PeriodicTask
@@ -15,8 +16,10 @@ from huey.exceptions import ResultTimeout
 from huey.exceptions import RetryTask
 from huey.exceptions import TaskException
 from huey.exceptions import TaskLockedException
+from huey.exceptions import TaskTimeout
 from huey.serializer import SignedSerializer
 from huey.tests.base import BaseTestCase
+from huey.utils import time_clock
 
 
 class TestError(Exception):
@@ -687,6 +690,54 @@ class TestQueue(BaseTestCase):
 
         timeout.schedule(delay=-1, timeout=4)
         assertTimeout(4)
+
+    def test_timeout_coop_helpers(self):
+        @self.huey.task(context=True)
+        def normal(task=None):
+            pass
+
+        @self.huey.task(context=True, timeout=1)
+        def timeout(task=None):
+            pass
+
+        t = normal.s()
+        self.assertFalse(t.is_timed_out)
+        self.assertEqual(t.time_remaining, float('inf'))
+        t.check_timeout()  # No exc.
+
+        t = timeout.s()
+        t._deadline = time_clock() + 1
+        self.assertFalse(t.is_timed_out)
+        self.assertTrue(0 < t.time_remaining <= 1)
+        t.check_timeout()  # No exc.
+
+        t._deadline = time_clock() - 1
+        self.assertTrue(t.is_timed_out)
+        self.assertEqual(t.time_remaining, 0)
+        with self.assertRaises(TaskTimeout):
+            t.check_timeout()
+
+    def test_timeout_cooperative_full(self):
+        state = []
+
+        @self.huey.task(timeout=0.001, context=True)
+        def timeout(n, task=None):
+            time.sleep(0.002)
+            task.check_timeout()
+            state.append(n)
+            return n
+
+        r = timeout(1)
+        self.assertTrue(self.execute_next() is None)
+        self.assertEqual(state, [])
+
+        self.assertEqual(self.huey.result_count(), 1)
+        exc = self.trap_exception(r)
+        self.assertTrue('timeout' in str(exc).lower())
+
+        r = timeout(1, timeout=1000)
+        self.assertEqual(self.execute_next(), 1)
+        self.assertEqual(state, [1])
 
     def test_task_error(self):
         @self.huey.task()
