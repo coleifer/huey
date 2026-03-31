@@ -12,6 +12,7 @@ from huey.api import _unsupported
 from huey.constants import EmptyData
 from huey.exceptions import CancelExecution
 from huey.exceptions import ConfigurationError
+from huey.exceptions import RateLimitExceeded
 from huey.exceptions import ResultTimeout
 from huey.exceptions import RetryTask
 from huey.exceptions import TaskException
@@ -1597,6 +1598,81 @@ class TestTaskLocking(BaseTestCase):
         # Task failed due to lock, will be retried, which succeeds now that the
         # lock is released.
         self.assertEqual(self.execute_next(), 6)
+
+
+class TestRateLimit(BaseTestCase):
+    def test_rate_limit(self):
+        rl = self.huey.rate_limit('test', limit=3, per=60)
+        for _ in range(3):
+            rl.acquire()
+
+        with self.assertRaises(RateLimitExceeded) as ctx:
+            rl.acquire()
+
+        exc = ctx.exception
+        self.assertEqual(exc.key, 'test')
+        self.assertTrue(0 < exc.delay <= 60)
+        self.assertTrue(exc.retry)
+
+        rl2 = self.huey.rate_limit('test2', limit=1, per=60, retry=False)
+        rl2.acquire()
+
+        with self.assertRaises(RateLimitExceeded) as ctx:
+            rl2.acquire()
+
+        exc = ctx.exception
+        self.assertEqual(exc.key, 'test2')
+        self.assertTrue(0 < exc.delay <= 60)
+        self.assertFalse(exc.retry)
+
+    def test_reset(self):
+        rl = self.huey.rate_limit('test', limit=1, per=60)
+        rl.acquire()
+        with self.assertRaises(RateLimitExceeded):
+            rl.acquire()
+
+        # Force window reset.
+        rl.reset()
+
+        rl.acquire()
+
+    def test_ctx_decorator(self):
+        rl = self.huey.rate_limit('test', limit=2, per=60)
+        @rl
+        def deco():
+            return True
+
+        def ctx():
+            with rl:
+                return True
+
+        self.assertTrue(deco())
+        self.assertTrue(ctx())
+
+        with self.assertRaises(RateLimitExceeded):
+            deco()
+        with self.assertRaises(RateLimitExceeded):
+            ctx()
+
+    def test_execution(self):
+        @self.huey.task()
+        @self.huey.rate_limit('test', limit=2, per=60)
+        def test(n):
+            return n + 1
+
+        r1 = test(1)
+        r2 = test(2)
+        r3 = test(3)
+        self.assertEqual(self.execute_next(), 2)
+        self.assertEqual(self.execute_next(), 3)
+
+        self.assertEqual(self.huey.scheduled_count(), 0)
+        self.assertTrue(self.execute_next() is None)
+        self.assertEqual(self.huey.scheduled_count(), 1)
+
+        err = self.trap_exception(r3)
+        self.assertTrue('RateLimitExceeded' in err.metadata['error'])
+        self.assertEqual(err.metadata['retries'], 1)
 
 
 class TestHueyAPIs(BaseTestCase):

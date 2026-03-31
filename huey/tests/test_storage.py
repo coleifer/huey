@@ -148,14 +148,25 @@ class StorageTests(object):
         self.assertEqual(self.s.incr('k1'), 2)
         self.assertEqual(self.s.incr('k2', amount=10), 10)
         self.assertEqual(self.s.incr('k2', amount=-5), 5)
+        self.assertEqual(self.s.incr('k2', amount=0), 5)
+        self.assertEqual(self.s.incr('k3', 0), 0)
 
         self.s.delete_counter('k1')
+        self.s.delete_counter('kx')
         self.assertEqual(self.s.incr('k1'), 1)
         self.assertEqual(self.s.incr('k2', amount=2), 7)
 
         self.s.flush_counters()
         self.assertEqual(self.s.incr('k1'), 1)
         self.assertEqual(self.s.incr('k2'), 1)
+
+        # Ensure we don't collide w/result store.
+        self.assertEqual(self.s.incr('k1'), 2)
+        self.assertFalse(self.s.has_data_for_key('k1'))
+        self.s.put_data('k1', b'test')
+        self.assertEqual(self.s.incr('k1'), 3)
+        self.assertEqual(self.s.pop_data('k1'), b'test')
+        self.assertEqual(self.s.incr('k1'), 4)
 
     @slow_test()
     def test_consumer_integration(self):

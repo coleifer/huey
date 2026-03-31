@@ -19,6 +19,7 @@ from huey.consumer import Consumer
 from huey.exceptions import CancelExecution
 from huey.exceptions import ConfigurationError
 from huey.exceptions import HueyException
+from huey.exceptions import RateLimitExceeded
 from huey.exceptions import ResultTimeout
 from huey.exceptions import RetryTask
 from huey.exceptions import TaskException
@@ -417,6 +418,18 @@ class Huey(object):
                            task.timeout)
             exception = exc
             self._emit(S.SIGNAL_TIMEOUT, task)
+        except RateLimitExceeded as exc:
+            delay = task.retry_delay or exc.delay
+            if exc.retry or task.retries:
+                logger.info('Task %s rate-limited on "%s", retrying in %s',
+                            task.id, exc.key, delay)
+                retry_eta = normalize_time(None, delay, self.utc)
+                if exc.retry:
+                    task.retries += 1
+            else:
+                logger.info('Task %s rate-limited on "%s"', task.id, exc.key)
+            exception = exc
+            self._emit(S.SIGNAL_RATE_LIMITED, task)
         except TaskLockedException as exc:
             logger.warning('Task %s not run, %s.', task.id, exc)
             exception = exc
@@ -695,6 +708,9 @@ class Huey(object):
                 flushed.add(lock_key.split('.lock.', 1)[-1])
 
         return flushed
+
+    def rate_limit(self, name, limit, per, retry=True):
+        return RateLimit(self, name, limit, per, retry=retry)
 
     def _result_handle(self, task):
         return Result(self, task)
@@ -994,6 +1010,64 @@ class TaskLock(object):
     def clear(self):
         return self._huey.delete(self._key)
     release = clear
+
+
+class RateLimit(object):
+    """
+    Utilize the Storage API counter to implement fixed window rate-limit.
+    """
+    def __init__(self, huey, name, limit, per, retry=True):
+        self._huey = huey
+        self._name = name
+        self._limit = limit
+        self._per = per
+        self._retry = retry
+        self._counter_key = '%s.rl.%s' % (self._huey.name, self._name)
+        self._window_key = '%s.rl.%s.w' % (self._huey.name, self._name)
+
+    def _current_window(self, now):
+        return int(now) // self._per
+
+    def _time_until_reset(self, now):
+        window_end = (self._current_window(now) + 1) * self._per
+        return window_end - now
+
+    def reset(self):
+        self._huey.storage.delete_counter(self._window_key)
+        self._huey.storage.delete_counter(self._counter_key)
+
+    def acquire(self):
+        now = time.time()
+        window = self._current_window(now)
+
+        # Check if window has rolled-over.
+        curr = self._huey.storage.incr(self._window_key, 0)
+        if curr != window:
+            # Multiple workers hitting concurrently may both reset.
+            self._huey.storage.delete_counter(self._counter_key)
+            self._huey.storage.delete_counter(self._window_key)
+            self._huey.storage.incr(self._window_key, window)
+
+        count = self._huey.storage.incr(self._counter_key)
+        if count > self._limit:
+            ttr = self._time_until_reset(now)
+            raise RateLimitExceeded(self._name, ttr, retry=self._retry)
+
+    def current_usage(self):
+        return self._huey.storage.incr(self._counter_key, 0)
+
+    def __call__(self, fn):
+        @wraps(fn)
+        def inner(*args, **kwargs):
+            with self:
+                return fn(*args, **kwargs)
+        return inner
+
+    def __enter__(self):
+        self.acquire()
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        pass
 
 
 class Result(object):

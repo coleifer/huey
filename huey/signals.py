@@ -13,6 +13,7 @@ SIGNAL_SCHEDULED = 'scheduled'
 SIGNAL_INTERRUPTED = 'interrupted'
 SIGNAL_ENQUEUED = 'enqueued'
 SIGNAL_TIMEOUT = 'timeout'
+SIGNAL_RATE_LIMITED = 'rate-limited'
 
 
 class Signal(object):
