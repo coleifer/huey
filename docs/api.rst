@@ -255,7 +255,7 @@ Huey object
 
             huey = RedisHuey(immediate=True)
 
-    .. py:method:: task(retries=0, retry_delay=0, priority=None, context=False, name=None, expires=None, **kwargs)
+    .. py:method:: task(retries=0, retry_delay=0, priority=None, context=False, name=None, expires=None, timeout=None, **kwargs)
 
         :param int retries: number of times to retry the function if an
             unhandled exception occurs when it is executed.
@@ -271,6 +271,14 @@ Huey object
             can be either an integer (seconds), a timedelta, or a datetime. For
             relative expiration values, the expire time will be resolved when
             the task is enqueued.
+        :param int timeout: set execution timeout for task. The implementation
+            used by the consumer is specific to the worker type. Processes use
+            SIGALRM, threads use ``PyThreadState_SetAsyncExc``, and greenlet
+            uses ``gevent.Timeout``. When using with threads it is only
+            effective when the running task is executing Python code, so a long
+            call to ``time.sleep()`` is not interrupted (for example). With
+            greenlet the timeout is reliable as long as the task yields
+            properly to the event loop.
         :param kwargs: arbitrary key/value arguments that are passed to the
             :py:class:`TaskWrapper` instance.
         :returns: a :py:class:`TaskWrapper` that wraps the decorated function
@@ -382,7 +390,7 @@ Huey object
         For more information, see :py:class:`TaskWrapper`, :py:class:`Task`,
         and :py:class:`Result`.
 
-    .. py:method:: periodic_task(validate_datetime, retries=0, retry_delay=0, priority=None, context=False, name=None, expires=None, **kwargs)
+    .. py:method:: periodic_task(validate_datetime, retries=0, retry_delay=0, priority=None, context=False, name=None, expires=None, timeout=None, **kwargs)
 
         :param function validate_datetime: function which accepts a
             ``datetime`` instance and returns whether the task should be
@@ -401,6 +409,14 @@ Huey object
             can be either an integer (seconds), a timedelta, or a datetime. For
             relative expiration values, the expire time will be resolved when
             the task is enqueued.
+        :param int timeout: set execution timeout for task. The implementation
+            used by the consumer is specific to the worker type. Processes use
+            SIGALRM, threads use ``PyThreadState_SetAsyncExc``, and greenlet
+            uses ``gevent.Timeout``. When using with threads it is only
+            effective when the running task is executing Python code, so a long
+            call to ``time.sleep()`` is not interrupted (for example). With
+            greenlet the timeout is reliable as long as the task yields
+            properly to the event loop.
         :param kwargs: arbitrary key/value arguments that are passed to the
             :py:class:`TaskWrapper` instance.
         :returns: a :py:class:`TaskWrapper` that wraps the decorated function
@@ -914,12 +930,35 @@ Huey object
         directly. The :py:meth:`Huey.task` and :py:meth:`Huey.periodic_task`
         decorators will create the appropriate TaskWrapper automatically.
 
-    .. py:method:: schedule(args=None, kwargs=None, eta=None, delay=None)
+    .. py:method:: schedule(args=None, kwargs=None, eta=None, delay=None, priority=None, retries=None, retry_delay=None, expires=None, timeout=None, id=None)
 
         :param tuple args: arguments for decorated function.
         :param dict kwargs: keyword arguments for decorated function.
         :param datetime eta: the time at which the function should be executed.
         :param int delay: number of seconds to wait before executing function.
+        :param int priority: priority assigned to task, higher numbers are
+            processed first by the consumer when there is a backlog.
+        :param int retries: number of times to retry the function if an
+            unhandled exception occurs when it is executed.
+        :param int retry_delay: number of seconds to wait between retries.
+        :param bool context: when the task is executed, include the
+            :py:class:`Task` instance as a keyword argument.
+        :param str name: name for this task. If not provided, Huey will default
+            to using the module name plus function name.
+        :param expires: set expiration time for task - if task is not run
+            before ``expires``, it will be discarded. The ``expires`` parameter
+            can be either an integer (seconds), a timedelta, or a datetime. For
+            relative expiration values, the expire time will be resolved when
+            the task is enqueued.
+        :param int timeout: set execution timeout for task. The implementation
+            used by the consumer is specific to the worker type. Processes use
+            SIGALRM, threads use ``PyThreadState_SetAsyncExc``, and greenlet
+            uses ``gevent.Timeout``. When using with threads it is only
+            effective when the running task is executing Python code, so a long
+            call to ``time.sleep()`` is not interrupted (for example). With
+            greenlet the timeout is reliable as long as the task yields
+            properly to the event loop.
+        :param id: assign the given ``id`` to the Task being scheduled.
         :returns: a :py:class:`Result` handle for the task.
 
         Use the ``schedule`` method to schedule the execution of the queue task
@@ -1001,6 +1040,14 @@ Huey object
             can be either an integer (seconds), a timedelta, or a datetime. For
             relative expiration values, the expire time will be resolved when
             the task is enqueued.
+        :param int timeout: set execution timeout for task. The implementation
+            used by the consumer is specific to the worker type. Processes use
+            SIGALRM, threads use ``PyThreadState_SetAsyncExc``, and greenlet
+            uses ``gevent.Timeout``. When using with threads it is only
+            effective when the running task is executing Python code, so a long
+            call to ``time.sleep()`` is not interrupted (for example). With
+            greenlet the timeout is reliable as long as the task yields
+            properly to the event loop.
         :returns: a :py:class:`Task` instance representing the execution of the
             task function with the given arguments.
 
@@ -1071,7 +1118,7 @@ Huey object
             # [0, 2, 6, 12, 20, 30, 42, 56, 72, 90]
 
 
-.. py:class:: Task(args=None, kwargs=None, id=None, eta=None, retries=None, retry_delay=None, expires=None, on_complete=None, on_error=None)
+.. py:class:: Task(args=None, kwargs=None, id=None, eta=None, retries=None, retry_delay=None, expires=None, timeout=None, on_complete=None, on_error=None)
 
     :param tuple args: arguments for the function call.
     :param dict kwargs: keyword arguments for the function call.
@@ -1086,6 +1133,14 @@ Huey object
         can be either an integer (seconds), a timedelta, or a datetime. For
         relative expiration values, the expire time will be resolved when
         the task is enqueued.
+    :param int timeout: set execution timeout for task. The implementation
+        used by the consumer is specific to the worker type. Processes use
+        SIGALRM, threads use ``PyThreadState_SetAsyncExc``, and greenlet
+        uses ``gevent.Timeout``. When using with threads it is only
+        effective when the running task is executing Python code, so a long
+        call to ``time.sleep()`` is not interrupted (for example). With
+        greenlet the timeout is reliable as long as the task yields
+        properly to the event loop.
     :param Task on_complete: Task to execute upon completion of this task.
     :param Task on_error: Task to execute upon failure / error.
 

@@ -534,6 +534,52 @@ Expiration times can also be specified when scheduling tasks:
         eta=one_hr,
         expires=one_hr + timedelta(seconds=60))
 
+Task timeouts
+-------------
+
+Huey tasks can be interrupted by setting a ``timeout`` on the task, in seconds.
+The actual implementation of the timeout mechanism depends on which worker type
+you are using in the consumer, and is selected automatically by Huey:
+
+* Process: uses ``SIGALRM``, most robust.
+* Thread: uses ``PyThreadState_SetAsyncExc``, not at all ideal. Recommendation
+  is not to use timeouts when using threaded workers. The problem with this
+  approach is that it can leave things in an uncertain state if the task
+  thread is holding resources (like locks). Furthermore, it only fires after a
+  given number of bytecodes, so is ineffective for long-running blocking
+  operations or calls into C code. The preferred way to handle timeouts when
+  using threads is to use an ``Event`` and check it from within the task at
+  intervals.
+* Greenlet: uses ``gevent.Timeout``, reliable so long as the task yields to the
+  event loop and is not held-up making a blocking call.
+
+In general only use timeouts if you are using the ``process`` or ``greenlet``
+worker types.
+
+A default timeout can be provided when declaring a task:
+
+.. code-block:: python
+
+    # Task must finish executing in 60s. If not, a `TaskTimeout` is raised and
+    # returned to the caller via the result handle.
+    @huey.task(timeout=60)
+    def maybe_slow(...):
+
+Timeouts can be specified per-invocation, as well:
+
+.. code-block:: python
+
+    # Task will raise a `TaskTimeout` if runs for more than 30s.
+    maybe_slow(report_file, timeout=30)
+
+Timeouts can also be specified when scheduling tasks:
+
+.. code-block:: python
+
+    maybe_slow.schedule(
+        args=(report_file,),
+        timeout=120)
+
 Task pipelines
 --------------
 

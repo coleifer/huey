@@ -235,8 +235,12 @@ def thread_timeout(seconds):
     def watchdog():
         if not evt.wait(seconds):
             tid = current.ident
+            if sys.version_info < (3, 6):
+                c_tid = ctypes.c_long(tid)
+            else:
+                c_tid = ctypes.c_ulong(tid)
             ctypes.pythonapi.PyThreadState_SetAsyncExc(
-                ctypes.c_ulong(tid),
+                c_tid,
                 ctypes.py_object(TaskTimeout))
 
     t = threading.Thread(target=watchdog, daemon=True)
