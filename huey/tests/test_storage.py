@@ -387,10 +387,7 @@ class TestFileStorageMethods(StorageTests, BaseTestCase):
 
 
 try:
-    if sys.version_info[0] > 2:
-        from huey.contrib.valkey_glide import ValkeyGlideHuey
-    else:
-        ValkeyGlideHuey = None
+    from huey.contrib.valkey_glide import ValkeyGlideHuey
 except ImportError:
     ValkeyGlideHuey = None
 

@@ -13,7 +13,6 @@ from gevent.event import Event
 from gevent.pool import Pool
 
 from huey.api import crontab
-from huey.utils import time_clock
 
 
 logger = logging.getLogger('huey.mini')
@@ -91,7 +90,7 @@ class MiniHuey(object):
     def _execute(self, fn, args, kwargs, async_result):
         args = args or ()
         kwargs = kwargs or {}
-        start = time_clock()
+        start = time.monotonic()
         try:
             ret = fn(*args, **kwargs)
         except Exception as exc:
@@ -99,7 +98,7 @@ class MiniHuey(object):
             async_result.set_exception(exc)
             raise
         else:
-            duration = time_clock() - start
+            duration = time.monotonic() - start
 
         if async_result is not None:
             async_result.set(ret)
@@ -108,7 +107,7 @@ class MiniHuey(object):
     def _run(self):
         logger.info('task runner started.')
         while not self._shutdown.is_set():
-            start = time_clock()
+            start = time.monotonic()
             now = datetime.datetime.now()
             if self._last_check + self._periodic_interval <= now:
                 logger.debug('checking periodic task schedule')
@@ -128,8 +127,8 @@ class MiniHuey(object):
                     self._enqueue(fn, args, kwargs, async_result)
 
             # Wait for most of the remained of the time remaining.
-            remaining = self._interval - (time_clock() - start)
+            remaining = self._interval - (time.monotonic() - start)
             if remaining > 0:
                 if not self._shutdown.wait(remaining * 0.9):
-                    gevent.sleep(self._interval - (time_clock() - start))
+                    gevent.sleep(self._interval - (time.monotonic() - start))
         logger.info('exiting task runner')

@@ -19,7 +19,6 @@ from huey.exceptions import TaskLockedException
 from huey.exceptions import TaskTimeout
 from huey.serializer import SignedSerializer
 from huey.tests.base import BaseTestCase
-from huey.utils import time_clock
 
 
 class TestError(Exception):
@@ -706,12 +705,12 @@ class TestQueue(BaseTestCase):
         t.check_timeout()  # No exc.
 
         t = timeout.s()
-        t._deadline = time_clock() + 1
+        t._deadline = time.monotonic() + 1
         self.assertFalse(t.is_timed_out)
         self.assertTrue(0 < t.time_remaining <= 1)
         t.check_timeout()  # No exc.
 
-        t._deadline = time_clock() - 1
+        t._deadline = time.monotonic() - 1
         self.assertTrue(t.is_timed_out)
         self.assertEqual(t.time_remaining, 0)
         with self.assertRaises(TaskTimeout):

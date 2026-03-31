@@ -38,10 +38,6 @@ from huey.utils import Error
 from huey.utils import noop_context
 from huey.utils import normalize_expire_time
 from huey.utils import normalize_time
-from huey.utils import reraise_as
-from huey.utils import string_type
-from huey.utils import time_clock
-from huey.utils import to_timestamp
 from huey.utils import utcnow
 
 
@@ -240,7 +236,7 @@ class Huey(object):
         return decorator
 
     def unregister_pre_execute(self, name):
-        if not isinstance(name, string_type):
+        if not isinstance(name, str):
             # Assume we were given the function itself.
             name = name.__name__
         return self._pre_execute.pop(name, None) is not None
@@ -252,7 +248,7 @@ class Huey(object):
         return decorator
 
     def unregister_post_execute(self, name):
-        if not isinstance(name, string_type):
+        if not isinstance(name, str):
             # Assume we were given the function itself.
             name = name.__name__
         return self._post_execute.pop(name, None) is not None
@@ -264,7 +260,7 @@ class Huey(object):
         return decorator
 
     def unregister_on_startup(self, name):
-        if not isinstance(name, string_type):
+        if not isinstance(name, str):
             # Assume we were given the function itself.
             name = name.__name__
         return self._startup.pop(name, None) is not None
@@ -276,7 +272,7 @@ class Huey(object):
         return decorator
 
     def unregister_on_shutdown(self, name=None):
-        if not isinstance(name, string_type):
+        if not isinstance(name, str):
             # Assume we were given the function itself.
             name = name.__name__
         return self._shutdown.pop(name, None) is not None
@@ -399,7 +395,7 @@ class Huey(object):
                 self._emit(S.SIGNAL_CANCELED, task)
                 return
 
-        start = time_clock()
+        start = time.monotonic()
         exception = None
         retry_eta = None
         task_value = None
@@ -415,7 +411,7 @@ class Huey(object):
                     task_value = task.execute()
             finally:
                 self._tasks_in_flight.remove(task)
-                duration = time_clock() - start
+                duration = time.monotonic() - start
         except TaskTimeout as exc:
             logger.warning('Task %s timed out after %ss.', task.id,
                            task.timeout)
@@ -784,12 +780,12 @@ class Task(object):
     @property
     def time_remaining(self):
         if self._deadline:
-            return max(0, self._deadline - time_clock())
+            return max(0, self._deadline - time.monotonic())
         return float('inf')
 
     @property
     def is_timed_out(self):
-        return self._deadline and time_clock() >= self._deadline
+        return self._deadline and time.monotonic() >= self._deadline
 
     def check_timeout(self):
         if self.is_timed_out:
@@ -1059,10 +1055,10 @@ class Result(object):
             if res is not EmptyData:
                 return res
         else:
-            start = time_clock()
+            start = time.monotonic()
             delay = .1
             while self._result is EmptyData:
-                if timeout and time_clock() - start >= timeout:
+                if timeout and time.monotonic() - start >= timeout:
                     if revoke_on_timeout:
                         self.revoke()
                     raise ResultTimeout('timed out waiting for result')

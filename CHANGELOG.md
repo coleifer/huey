@@ -7,6 +7,7 @@ Changelog
   control task running time. For threads, unfortunately, there's no good
   mechanism so instead APIs for cooperatively checking timeout are provided on
   the Task instance.
+* Remove Python 2.x compatibility.
 
 [View commits](https://github.com/coleifer/huey/compare/2.6.0...HEAD)
 

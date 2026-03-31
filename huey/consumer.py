@@ -25,7 +25,6 @@ from huey.exceptions import ConfigurationError
 from huey.utils import greenlet_timeout
 from huey.utils import process_timeout
 from huey.utils import thread_timeout
-from huey.utils import time_clock
 
 
 class ConsumerStopped(Exception): pass
@@ -53,13 +52,13 @@ class BaseProcess(object):
         if the current timestamp is 1340, we'll only sleep for 7 seconds (the
         goal being to sleep until 1347, or 1337 + 10).
         """
-        sleep_time = nseconds - (time_clock() - start_ts)
+        sleep_time = nseconds - (time.monotonic() - start_ts)
         if sleep_time <= 0:
             return
         self._logger.debug('Sleeping for %s', sleep_time)
         # Recompute time to sleep to improve accuracy in case the process was
         # pre-empted by the kernel while logging.
-        sleep_time = nseconds - (time_clock() - start_ts)
+        sleep_time = nseconds - (time.monotonic() - start_ts)
         if sleep_time > 0:
             time.sleep(sleep_time)
 
@@ -153,13 +152,13 @@ class Scheduler(BaseProcess):
         self.interval = max(min(interval, 60), 1)
 
         self.periodic = periodic
-        self._next_loop = time_clock()
-        self._next_periodic = time_clock()
+        self._next_loop = time.monotonic()
+        self._next_periodic = time.monotonic()
 
     def loop(self, now=None):
         current = self._next_loop
         self._next_loop += self.interval
-        if self._next_loop < time_clock():
+        if self._next_loop < time.monotonic():
             self._logger.debug('scheduler skipping iteration to avoid race.')
             return
 
@@ -172,7 +171,7 @@ class Scheduler(BaseProcess):
                 self._logger.debug('Enqueueing %s', task)
                 self.huey.enqueue(task)
 
-        if self.periodic and self._next_periodic <= time_clock():
+        if self.periodic and self._next_periodic <= time.monotonic():
             self._next_periodic += self.periodic_task_seconds
             self.enqueue_periodic_tasks(now)
 
@@ -450,7 +449,7 @@ class Consumer(object):
         Run the consumer.
         """
         self.start()
-        health_check_ts = time_clock()
+        health_check_ts = time.monotonic()
 
         while True:
             try:
@@ -489,7 +488,7 @@ class Consumer(object):
             raise ConsumerStopped
 
         if self._health_check and health_check_ts:
-            now = time_clock()
+            now = time.monotonic()
             if now >= health_check_ts + self._health_check_interval:
                 health_check_ts = now
                 self.check_worker_health()

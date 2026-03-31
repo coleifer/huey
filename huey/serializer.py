@@ -10,7 +10,6 @@ import hashlib
 import hmac
 import logging
 import pickle
-import sys
 
 from huey.exceptions import ConfigurationError
 from huey.utils import encode
@@ -20,35 +19,12 @@ logger = logging.getLogger('huey.serializer')
 
 
 if gzip is not None:
-    if sys.version_info[0] > 2:
-        gzip_compress = gzip.compress
-        gzip_decompress = gzip.decompress
-    else:
-        from io import BytesIO
-
-        def gzip_compress(data, comp_level):
-            buf = BytesIO()
-            fh = gzip.GzipFile(fileobj=buf, mode='wb',
-                               compresslevel=comp_level)
-            fh.write(data)
-            fh.close()
-            return buf.getvalue()
-
-        def gzip_decompress(data):
-            buf = BytesIO(data)
-            fh = gzip.GzipFile(fileobj=buf, mode='rb')
-            try:
-                return fh.read()
-            finally:
-                fh.close()
+    gzip_compress = gzip.compress
+    gzip_decompress = gzip.decompress
 
 
-if sys.version_info[0] == 2:
-    def is_compressed(data):
-        return data and (data[0] == b'\x1f' or data[0] == b'\x78')
-else:
-    def is_compressed(data):
-        return data and data[0] == 0x1f or data[0] == 0x78
+def is_compressed(data):
+    return data and data[0] == 0x1f or data[0] == 0x78
 
 
 class Serializer(object):
