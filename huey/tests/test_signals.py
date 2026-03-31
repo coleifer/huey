@@ -1,4 +1,5 @@
 import datetime
+import time
 
 from huey.signals import *
 from huey.tests.base import BaseTestCase
@@ -124,6 +125,16 @@ class TestSignals(BaseTestCase):
         self.assertSignals([SIGNAL_ENQUEUED])
         self.assertTrue(self.execute_next(), 4)
         self.assertSignals([SIGNAL_EXECUTING, SIGNAL_COMPLETE])
+
+    def test_signal_timeout(self):
+        @self.huey.task(timeout=0.001, context=True)
+        def timeout(task=None):
+            time.sleep(0.01)
+            task.check_timeout()
+
+        r = timeout()
+        self.execute_next()
+        self.assertSignals([SIGNAL_ENQUEUED, SIGNAL_EXECUTING, SIGNAL_TIMEOUT])
 
     def test_specific_handler(self):
         extra_state = []
