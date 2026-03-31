@@ -97,6 +97,9 @@ class KyotoTycoonStorage(BaseStorage):
     def put_if_empty(self, key, value):
         return self.kt.add(self.prefix_key(key), value, self._db)
 
+    def incr(self, key, amount=1):
+        return self.kt.increment(self.prefix_key(key), amount, self._db)
+
     def result_store_size(self):
         return len(self.kt.match_prefix(self.prefix_key(''), db=self._db))
 

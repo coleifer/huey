@@ -207,6 +207,13 @@ class BaseStorage(object):
         self.put_data(key, value)
         return True
 
+    def incr(self, key, amount=1):
+        """
+        Atomically increment a counter, returning the new value. If the key
+        does not exist, it is assumed to be 0.
+        """
+        raise NotImplementedError
+
     def result_store_size(self):
         """
         :return: Number of key/value pairs in the result store.
@@ -223,7 +230,7 @@ class BaseStorage(object):
 
     def flush_results(self):
         """
-        Delete all key/value pairs from the data-store.
+        Delete all key/value pairs from the data-store and clear all counters.
 
         :return: No return value.
         """
@@ -255,6 +262,7 @@ class BlackHoleStorage(BaseStorage):
     def peek_data(self, key): return EmptyData
     def pop_data(self, key): return EmptyData
     def has_data_for_key(self, key): return False
+    def incr(self, key, amount=1): return amount
     def result_store_size(self): return 0
     def result_items(self): return {}
     def flush_results(self): pass
@@ -267,6 +275,7 @@ class MemoryStorage(BaseStorage):
         self._queue = []
         self._results = {}
         self._schedule = []
+        self._counters = {}
         self._lock = threading.RLock()
 
     def enqueue(self, data, priority=None):
@@ -335,6 +344,11 @@ class MemoryStorage(BaseStorage):
     def has_data_for_key(self, key):
         return key in self._results
 
+    def incr(self, key, amount=1):
+        with self._lock:
+            self._counters[key] = self._counters.get(key, 0) + amount
+        return self._counters[key]
+
     def result_store_size(self):
         return len(self._results)
 
@@ -343,6 +357,7 @@ class MemoryStorage(BaseStorage):
 
     def flush_results(self):
         self._results = {}
+        self._counters = {}
 
 
 # A custom lua script to pass to redis that will read tasks from the schedule
@@ -395,6 +410,7 @@ class RedisStorage(BaseStorage):
         self.schedule_key = 'huey.schedule.%s' % self.name
         self.result_key = 'huey.results.%s' % self.name
         self.error_key = 'huey.errors.%s' % self.name
+        self.counter_key = 'huey.counters.%s' % self.name
 
         if client_name is not None:
             self.conn.client_setname(client_name)
@@ -403,7 +419,7 @@ class RedisStorage(BaseStorage):
         self.read_timeout = read_timeout
 
     def clean_name(self, name):
-        return re.sub('[^a-z0-9]', '', name)
+        return re.sub('[^A-Za-z0-9_]', '', name)
 
     def convert_ts(self, ts):
         return time.mktime(ts.timetuple()) + (ts.microsecond * 1e-6)
@@ -481,6 +497,9 @@ class RedisStorage(BaseStorage):
     def put_if_empty(self, key, value):
         return self.conn.hsetnx(self.result_key, key, value)
 
+    def incr(self, key, amount=1):
+        return self.conn.hincrby(self.counter_key, key, amount)
+
     def result_store_size(self):
         return self.conn.hlen(self.result_key)
 
@@ -489,6 +508,7 @@ class RedisStorage(BaseStorage):
 
     def flush_results(self):
         self.conn.delete(self.result_key)
+        self.conn.delete(self.counter_key)
 
 
 class RedisExpireStorage(RedisStorage):
@@ -501,8 +521,11 @@ class RedisExpireStorage(RedisStorage):
         self._expire_time = expire_time
 
         self.result_prefix = rp = b'huey.r.%s.' % self.name.encode('utf8')
+        self.counter_prefix = cp = b'huey.c.%s.' % self.name.encode('utf8')
+
         encode = lambda s: s if isinstance(s, bytes) else s.encode('utf8')
         self.result_key = lambda k: rp + encode(k)
+        self.counter_key = lambda k: cp + encode(k)
 
     def put_data(self, key, value, is_result=False):
         if is_result:
@@ -533,6 +556,11 @@ class RedisExpireStorage(RedisStorage):
     def put_if_empty(self, key, value):
         return self.conn.setnx(self.result_key(key), value)
 
+    def incr(self, key, amount=1):
+        res = self.conn.incr(self.counter_key(key), amount)
+        self.conn.expire(self.counter_key(key), self._expire_time)
+        return res
+
     def _result_keys(self):
         return self.conn.scan_iter(match=self.result_prefix + b'*')
 
@@ -548,8 +576,11 @@ class RedisExpireStorage(RedisStorage):
                 accum[key[pfx_len:]] = value
         return accum
 
+    def _counter_keys(self):
+        return self.conn.scan_iter(match=self.counter_prefix + b'*')
+
     def flush_results(self):
-        keys = list(self._result_keys())
+        keys = list(self._result_keys()) + list(self._counter_keys())
         if keys:
             self.conn.delete(*keys)
 
@@ -686,7 +717,12 @@ class SqliteStorage(BaseSqlStorage):
                   'data blob not null, priority real not null default 0.0)')
     index_task = ('create index if not exists task_priority_id on task '
                   '(priority desc, id asc)')
-    ddl = [table_kv, table_sched, index_sched, table_task, index_task]
+    table_counter = ('create table if not exists counter ('
+                     'queue text not null, key text not null, '
+                     'value integer not null default 0, '
+                     'primary key(queue, key))')
+    ddl = [table_kv, table_sched, index_sched, table_task, index_task,
+           table_counter]
 
     def __init__(self, name='huey', filename='huey.db', cache_mb=8,
                  fsync=False, journal_mode='wal', timeout=5, strict_fifo=False,
@@ -799,14 +835,21 @@ class SqliteStorage(BaseSqlStorage):
 
     def pop_data(self, key):
         with self.db(commit=True) as curs:
-            curs.execute('select value from kv where queue = ? and key = ?',
-                         (self.name, key))
-            result = curs.fetchone()
-            if result is not None:
-                curs.execute('delete from kv where queue=? and key=?',
-                             (self.name, key))
-                if curs.rowcount == 1:
+            if sqlite3.sqlite_version_info >= (3, 35, 0):
+                curs.execute('delete from kv where queue = ? and key = ? '
+                             'returning value', (self.name, key))
+                result = curs.fetchone()
+                if result is not None:
                     return to_bytes(result[0])
+            else:
+                curs.execute('select value from kv where queue = ? and key = ?',
+                             (self.name, key))
+                result = curs.fetchone()
+                if result is not None:
+                    curs.execute('delete from kv where queue=? and key=?',
+                                 (self.name, key))
+                    if curs.rowcount == 1:
+                        return to_bytes(result[0])
             return EmptyData
 
     def has_data_for_key(self, key):
@@ -824,6 +867,29 @@ class SqliteStorage(BaseSqlStorage):
         else:
             return True
 
+    def incr(self, key, amount=1):
+        with self.db(commit=True) as curs:
+            if sqlite3.sqlite_version_info >= (3, 35, 0):
+                curs.execute('insert into counter (queue, key, value) '
+                             'values (?, ?, ?) on conflict (queue, key) '
+                             'do update set value = value + ? '
+                             'returning value',
+                             (self.name, key, amount, amount))
+                value, = curs.fetchone()
+            elif sqlite3.sqlite_version_info >= (3, 24, 0):
+                curs.execute('insert into counter (queue, key, value) '
+                             'values (?, ?, ?) on conflict (queue, key) '
+                             'do update set value = value + ?',
+                             (self.name, key, amount, amount))
+                curs.execute('select value from counter '
+                             'where queue = ? and key = ?',
+                             (self.name, key))
+                value, = curs.fetchone()
+            else:
+                raise NotImplementedError('SQLite 3.24 or newer is required.')
+
+        return value
+
     def result_store_size(self):
         return self.sql('select count(*) from kv where queue=?', (self.name,),
                         results=True)[0][0]
@@ -835,6 +901,7 @@ class SqliteStorage(BaseSqlStorage):
 
     def flush_results(self):
         self.sql('delete from kv where queue=?', (self.name,), True)
+        self.sql('delete from counter where queue=?', (self.name,), True)
 
 
 class FileStorage(BaseStorage):
@@ -860,6 +927,7 @@ class FileStorage(BaseStorage):
         self.queue_path = os.path.join(self.path, 'queue')
         self.schedule_path = os.path.join(self.path, 'schedule')
         self.result_path = os.path.join(self.path, 'results')
+        self.counter_path = os.path.join(self.path, 'counters')
         self.levels = levels
 
         if use_thread_lock:
@@ -1046,6 +1114,24 @@ class FileStorage(BaseStorage):
     def has_data_for_key(self, key):
         return os.path.exists(self.path_for_key(key))
 
+    def incr(self, key, amount=1):
+        if isinstance(key, str):
+            key = key.encode('utf8')
+        filename = os.path.join(self.counter_path,
+                                hashlib.md5(key).hexdigest())
+        with self.lock:
+            if not os.path.exists(self.counter_path):
+                os.makedirs(self.counter_path)
+            try:
+                with open(filename, 'rt') as fh:
+                    value = int(fh.read()) + amount
+            except Exception:
+                value = amount
+            with open(filename, 'wt') as fh:
+                fh.write(str(value))
+
+        return value
+
     def result_store_size(self):
         return sum(len(filenames) for _, _, filenames
                    in os.walk(self.result_path))
@@ -1062,3 +1148,4 @@ class FileStorage(BaseStorage):
 
     def flush_results(self):
         self._flush_dir(self.result_path)
+        self._flush_dir(self.counter_path)

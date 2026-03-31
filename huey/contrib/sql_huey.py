@@ -30,7 +30,7 @@ class SqlStorage(BaseStorage):
             # Treat database argument as a URL connection string.
             self.database = db_url_connect(database)
 
-        self.KV, self.Schedule, self.Task = self.create_models()
+        self.KV, self.Schedule, self.Task, self.Counter = self.create_models()
         self.create_tables()
 
         # Check for FOR UPDATE SKIP LOCKED support.
@@ -76,15 +76,24 @@ class SqlStorage(BaseStorage):
 
         Task.add_index(Task.priority.desc(), Task.id)
 
-        return (KV, Schedule, Task)
+        class Counter(Base):
+            queue = CharField()
+            key = CharField()
+            value = IntegerField()
+            class Meta:
+                primary_key = CompositeKey('queue', 'key')
+
+        return (KV, Schedule, Task, Counter)
 
     def create_tables(self):
         with self.database:
-            self.database.create_tables([self.KV, self.Schedule, self.Task])
+            self.database.create_tables([self.KV, self.Schedule, self.Task,
+                                         self.Counter])
 
     def drop_tables(self):
         with self.database:
-            self.database.drop_tables([self.KV, self.Schedule, self.Task])
+            self.database.drop_tables([self.KV, self.Schedule, self.Task,
+                                       self.Counter])
 
     def close(self):
         return self.database.close()
@@ -232,6 +241,31 @@ class SqlStorage(BaseStorage):
         else:
             return True
 
+    def incr(self, key, amount=1):
+        with self.database.atomic():
+            if isinstance(self.database, MySQLDatabase):
+                self._incr_mysql(key, amount)
+            else:
+                self._incr(key, amount)
+
+            return self.Counter.get(
+                (self.Counter.queue == self.name) &
+                (self.Counter.key == key)).value
+
+    def _incr_mysql(self, key, amount=1):
+        (self.Counter
+         .insert(queue=self.name, key=key, value=amount)
+         .on_conflict(update={self.Counter.value: self.Counter.value + amount})
+         .execute())
+
+    def _incr(self, key, amount=1):
+        (self.Counter
+         .insert(queue=self.name, key=key, value=amount)
+         .on_conflict(
+             conflict_target=(self.Counter.queue, self.Counter.key),
+             update={self.Counter.value: self.Counter.value + amount})
+         .execute())
+
     def result_store_size(self):
         return self.kv().count()
 
@@ -241,6 +275,7 @@ class SqlStorage(BaseStorage):
 
     def flush_results(self):
         self.KV.delete().where(self.KV.queue == self.name).execute()
+        self.Counter.delete().where(self.Counter.queue == self.name).execute()
 
 
 SqlHuey = partial(Huey, storage_class=SqlStorage)

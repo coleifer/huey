@@ -143,6 +143,15 @@ class StorageTests(object):
                     b'i1-None', b'i3-None', b'i5-None', b'i7-None', b'i9-0']
         self.assertEqual([self.s.dequeue() for _ in range(10)], expected)
 
+    def test_counter(self):
+        self.assertEqual(self.s.incr('k1'), 1)
+        self.assertEqual(self.s.incr('k1'), 2)
+        self.assertEqual(self.s.incr('k2', amount=10), 10)
+        self.assertEqual(self.s.incr('k2', amount=-5), 5)
+        self.s.flush_results()
+        self.assertEqual(self.s.incr('k1'), 1)
+        self.assertEqual(self.s.incr('k2'), 1)
+
     @slow_test()
     def test_consumer_integration(self):
         @self.huey.task()
