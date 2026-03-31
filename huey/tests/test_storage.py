@@ -28,6 +28,7 @@ from huey.storage import MemoryStorage
 from huey.storage import RedisExpireStorage
 from huey.tests.base import BaseTestCase
 from huey.tests.base import TRAVIS
+from huey.tests.base import slow_test
 
 
 class StorageTests(object):
@@ -142,6 +143,7 @@ class StorageTests(object):
                     b'i1-None', b'i3-None', b'i5-None', b'i7-None', b'i9-0']
         self.assertEqual([self.s.dequeue() for _ in range(10)], expected)
 
+    @slow_test()
     def test_consumer_integration(self):
         @self.huey.task()
         def task_a(n):

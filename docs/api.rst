@@ -271,14 +271,12 @@ Huey object
             can be either an integer (seconds), a timedelta, or a datetime. For
             relative expiration values, the expire time will be resolved when
             the task is enqueued.
-        :param int timeout: set execution timeout for task. The implementation
-            used by the consumer is specific to the worker type. Processes use
-            SIGALRM, threads use ``PyThreadState_SetAsyncExc``, and greenlet
-            uses ``gevent.Timeout``. When using with threads it is only
-            effective when the running task is executing Python code, so a long
-            call to ``time.sleep()`` is not interrupted (for example). With
-            greenlet the timeout is reliable as long as the task yields
-            properly to the event loop.
+        :param int timeout: set execution timeout for task. Implementation
+            used by the consumer is specific to the worker type and is NOT
+            available for threads. Processes use SIGALRM, greenlet uses
+            ``gevent.Timeout``. When using with threads it is necessary to use
+            cooperative timeout checking. See :ref:`cooperative-timeout` for
+            example.
         :param kwargs: arbitrary key/value arguments that are passed to the
             :py:class:`TaskWrapper` instance.
         :returns: a :py:class:`TaskWrapper` that wraps the decorated function
@@ -409,14 +407,12 @@ Huey object
             can be either an integer (seconds), a timedelta, or a datetime. For
             relative expiration values, the expire time will be resolved when
             the task is enqueued.
-        :param int timeout: set execution timeout for task. The implementation
-            used by the consumer is specific to the worker type. Processes use
-            SIGALRM, threads use ``PyThreadState_SetAsyncExc``, and greenlet
-            uses ``gevent.Timeout``. When using with threads it is only
-            effective when the running task is executing Python code, so a long
-            call to ``time.sleep()`` is not interrupted (for example). With
-            greenlet the timeout is reliable as long as the task yields
-            properly to the event loop.
+        :param int timeout: set execution timeout for task. Implementation
+            used by the consumer is specific to the worker type and is NOT
+            available for threads. Processes use SIGALRM, greenlet uses
+            ``gevent.Timeout``. When using with threads it is necessary to use
+            cooperative timeout checking. See :ref:`cooperative-timeout` for
+            example.
         :param kwargs: arbitrary key/value arguments that are passed to the
             :py:class:`TaskWrapper` instance.
         :returns: a :py:class:`TaskWrapper` that wraps the decorated function
@@ -950,14 +946,12 @@ Huey object
             can be either an integer (seconds), a timedelta, or a datetime. For
             relative expiration values, the expire time will be resolved when
             the task is enqueued.
-        :param int timeout: set execution timeout for task. The implementation
-            used by the consumer is specific to the worker type. Processes use
-            SIGALRM, threads use ``PyThreadState_SetAsyncExc``, and greenlet
-            uses ``gevent.Timeout``. When using with threads it is only
-            effective when the running task is executing Python code, so a long
-            call to ``time.sleep()`` is not interrupted (for example). With
-            greenlet the timeout is reliable as long as the task yields
-            properly to the event loop.
+        :param int timeout: set execution timeout for task. Implementation
+            used by the consumer is specific to the worker type and is NOT
+            available for threads. Processes use SIGALRM, greenlet uses
+            ``gevent.Timeout``. When using with threads it is necessary to use
+            cooperative timeout checking. See :ref:`cooperative-timeout` for
+            example.
         :param id: assign the given ``id`` to the Task being scheduled.
         :returns: a :py:class:`Result` handle for the task.
 
@@ -1040,14 +1034,12 @@ Huey object
             can be either an integer (seconds), a timedelta, or a datetime. For
             relative expiration values, the expire time will be resolved when
             the task is enqueued.
-        :param int timeout: set execution timeout for task. The implementation
-            used by the consumer is specific to the worker type. Processes use
-            SIGALRM, threads use ``PyThreadState_SetAsyncExc``, and greenlet
-            uses ``gevent.Timeout``. When using with threads it is only
-            effective when the running task is executing Python code, so a long
-            call to ``time.sleep()`` is not interrupted (for example). With
-            greenlet the timeout is reliable as long as the task yields
-            properly to the event loop.
+        :param int timeout: set execution timeout for task. Implementation
+            used by the consumer is specific to the worker type and is NOT
+            available for threads. Processes use SIGALRM, greenlet uses
+            ``gevent.Timeout``. When using with threads it is necessary to use
+            cooperative timeout checking. See :ref:`cooperative-timeout` for
+            example.
         :returns: a :py:class:`Task` instance representing the execution of the
             task function with the given arguments.
 
@@ -1133,14 +1125,12 @@ Huey object
         can be either an integer (seconds), a timedelta, or a datetime. For
         relative expiration values, the expire time will be resolved when
         the task is enqueued.
-    :param int timeout: set execution timeout for task. The implementation
-        used by the consumer is specific to the worker type. Processes use
-        SIGALRM, threads use ``PyThreadState_SetAsyncExc``, and greenlet
-        uses ``gevent.Timeout``. When using with threads it is only
-        effective when the running task is executing Python code, so a long
-        call to ``time.sleep()`` is not interrupted (for example). With
-        greenlet the timeout is reliable as long as the task yields
-        properly to the event loop.
+    :param int timeout: set execution timeout for task. Implementation
+        used by the consumer is specific to the worker type and is NOT
+        available for threads. Processes use SIGALRM, greenlet uses
+        ``gevent.Timeout``. When using with threads it is necessary to use
+        cooperative timeout checking. See :ref:`cooperative-timeout` for
+        example.
     :param Task on_complete: Task to execute upon completion of this task.
     :param Task on_error: Task to execute upon failure / error.
 
@@ -1168,6 +1158,30 @@ Huey object
         task_instance = add.s(1, 2)  # Create a Task instance.
         ret = huey.enqueue(task_instance)  # Enqueue the queue task.
         print(ret.get(blocking=True))  # "3".
+
+    .. py:property:: is_timed_out
+
+        If task was configured with a ``timeout``, returns True if the task has
+        exceeded the timeout. The task timer starts when the task begins to
+        execute (after any pre-execute hooks are fired).
+
+    .. py:property:: time_remaining
+
+        If task was configured with a ``timeout``, returns the amount of time
+        remaining. For tasks that do not specify a timeout, this property
+        returns ``float('inf')`` so it is always safe to compare.
+
+    .. py:method:: check_timeout()
+
+        If task was configured with a ``timeout``, this method provides a
+        single hook for cooperatively checking whether the task has exceeded
+        its available time, and if so, raises a :class:`TaskTimeout`. This
+        exception ensures that the ``SIGNAL_TIMEOUT`` fires for the task.
+
+        This method is the only mechanism for enforcing a timeout when using
+        ``thread`` workers.
+
+        See :ref:`cooperative-timeout` for discussion.
 
     .. py:method:: then(task, *args, **kwargs)
 

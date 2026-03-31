@@ -404,6 +404,10 @@ class Huey(object):
         retry_eta = None
         task_value = None
 
+        # Set deadline for cooperative timeout.
+        if task.timeout:
+            task._deadline = start + task.timeout
+
         try:
             self._tasks_in_flight.add(task)
             try:
@@ -736,6 +740,7 @@ class Task(object):
         self.expires = expires if expires is not None else self.default_expires
         self.expires_resolved = expires_resolved
         self.timeout = timeout if timeout is not None else self.default_timeout
+        self._deadline = None
 
         self.on_complete = on_complete
         self.on_error = on_error
@@ -775,6 +780,20 @@ class Task(object):
         if self.expires:
             self.expires_resolved = normalize_expire_time(self.expires, utc)
         return self.expires_resolved
+
+    @property
+    def time_remaining(self):
+        if self._deadline:
+            return max(0, self._deadline - time_clock())
+        return float('inf')
+
+    @property
+    def is_timed_out(self):
+        return self._deadline and time_clock() >= self._deadline
+
+    def check_timeout(self):
+        if self.is_timed_out:
+            raise TaskTimeout('timeout %ss' % self.timeout)
 
     def extend_data(self, data):
         if data is None or data == ():

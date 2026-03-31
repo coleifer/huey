@@ -7,13 +7,8 @@ import logging
 import os
 import signal
 import sys
-import threading
 import time
 import warnings
-try:
-    import ctypes
-except ImportError:
-    ctypes = None
 try:
     import fcntl
 except ImportError:
@@ -221,35 +216,7 @@ def process_timeout(seconds):
 
 @contextlib.contextmanager
 def thread_timeout(seconds):
-    if ctypes is None:
-        logger.warning('ctypes is required for thread-worker timeout')
-        yield
-
-    current = threading.current_thread()
-    evt = threading.Event()
-
-    # Uses ctypes to inject an exception into the thread. Not good but the best
-    # we have. This doesn't interrupt stuff like time.sleep() -- the exception
-    # is raised, but the sleep() call must finish. So this is only effective if
-    # we are calling into the interpreter frequently during the wrapped block.
-    def watchdog():
-        if not evt.wait(seconds):
-            tid = current.ident
-            if sys.version_info < (3, 6):
-                c_tid = ctypes.c_long(tid)
-            else:
-                c_tid = ctypes.c_ulong(tid)
-            ctypes.pythonapi.PyThreadState_SetAsyncExc(
-                c_tid,
-                ctypes.py_object(TaskTimeout))
-
-    t = threading.Thread(target=watchdog, daemon=True)
-    t.start()
-    try:
-        yield
-    finally:
-        evt.set()
-        t.join(1)
+    yield
 
 @contextlib.contextmanager
 def greenlet_timeout(seconds):

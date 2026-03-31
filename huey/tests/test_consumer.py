@@ -45,14 +45,16 @@ class TestConsumerIntegration(BaseTestCase):
 
     @slow_test()
     def test_consumer_timeout(self):
-        @self.huey.task(timeout=1)
-        def t(n):
+        @self.huey.task(timeout=0.1, context=True)
+        def t(n, task=None):
             if n:
-                time.sleep(n)
+                for _ in range(100):
+                    task.check_timeout()
+                    time.sleep(n / 100)
             return n
 
         r1 = t(0)
-        r2 = t(1.1)
+        r2 = t(0.2)
         consumer = self.consumer(workers=1)
         self.work_on_tasks(consumer, 2)
         self.assertEqual(r1.get(), 0)
@@ -61,7 +63,8 @@ class TestConsumerIntegration(BaseTestCase):
         try:
             r2.get()
         except TaskException as exc:
-            self.assertEqual(exc.metadata['error'], 'TaskTimeout()')
+            self.assertEqual(exc.metadata['error'],
+                             'TaskTimeout(\'timeout 0.1s\')')
 
     def test_consumer_schedule_task(self):
         @self.huey.task()
