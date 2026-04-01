@@ -1033,20 +1033,20 @@ class RateLimit(object):
         return window_end - now
 
     def reset(self):
-        self._huey.storage.delete_counter(self._window_key)
+        self._huey.delete(self._window_key)
         self._huey.storage.delete_counter(self._counter_key)
 
     def acquire(self):
         now = time.time()
         window = self._current_window(now)
 
-        # Check if window has rolled-over.
-        curr = self._huey.storage.incr(self._window_key, 0)
-        if curr != window:
-            # Multiple workers hitting concurrently may both reset.
+        stored = self._huey.get(self._window_key, peek=True)
+        if stored != window:
+            # Window rollover, reset counter and store the new window. If two
+            # workers concurrently hit this, both delete the counter and put
+            # the same window value.
             self._huey.storage.delete_counter(self._counter_key)
-            self._huey.storage.delete_counter(self._window_key)
-            self._huey.storage.incr(self._window_key, window)
+            self._huey.put(self._window_key, window)
 
         count = self._huey.storage.incr(self._counter_key)
         if count > self._limit:
