@@ -1674,6 +1674,43 @@ class TestRateLimit(BaseTestCase):
         self.assertTrue('RateLimitExceeded' in err.metadata['error'])
         self.assertEqual(err.metadata['retries'], 1)
 
+        task, = self.huey.scheduled()
+        self.assertEqual(task.retries, 0)  # No additional retries.
+        self.huey.storage.flush_schedule()
+
+        r4 = test(4, retries=2)
+        self.assertTrue(self.execute_next() is None)
+        err = self.trap_exception(r4)
+        self.assertTrue('RateLimitExceeded' in err.metadata['error'])
+
+        task, = self.huey.scheduled()
+        self.assertEqual(task.retries, 2)  # Retries preserved, no decremented.
+        self.huey.storage.flush_schedule()
+
+        @self.huey.task()
+        @self.huey.rate_limit('test', limit=2, per=60, retry=False)
+        def test2(n):
+            return n + 1
+
+        # Task is NOT retried automatically.
+        r5 = test2(5)
+        self.assertTrue(self.execute_next() is None)
+        err = self.trap_exception(r5)
+        self.assertTrue('RateLimitExceeded' in err.metadata['error'])
+        self.assertEqual(self.huey.scheduled_count(), 0)
+
+        # Task may specify retries, though they will be decremented.
+        r6 = test2(6, retries=2, retry_delay=600)
+        self.assertTrue(self.execute_next() is None)
+        err = self.trap_exception(r6)
+        self.assertTrue('RateLimitExceeded' in err.metadata['error'])
+        self.assertEqual(self.huey.scheduled_count(), 1)
+
+        task, = self.huey.scheduled()
+        self.assertEqual(task.retries, 1)  # Retries decremented.
+        self.assertEqual(task.retry_delay, 600)  # Retry delay preserved.
+        self.huey.storage.flush_schedule()
+
 
 class TestHueyAPIs(BaseTestCase):
     def test_flush_locks(self):

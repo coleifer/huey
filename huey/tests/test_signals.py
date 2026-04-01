@@ -109,6 +109,49 @@ class TestSignals(BaseTestCase):
             self.assertTrue(self.execute_next() is None)
             self.assertSignals([SIGNAL_EXECUTING, SIGNAL_LOCKED])
 
+    def test_signals_ratelimit(self):
+        @self.huey.task()
+        @self.huey.rate_limit('rl', limit=1, per=60)
+        def task_a():
+            return 1
+
+        r = task_a()
+        self.assertEqual(self.execute_next(), 1)
+        self.assertSignals([
+            SIGNAL_ENQUEUED,
+            SIGNAL_EXECUTING,
+            SIGNAL_COMPLETE])
+
+        r = task_a()
+        self.assertTrue(self.execute_next() is None)
+        self.assertSignals([
+            SIGNAL_ENQUEUED,
+            SIGNAL_EXECUTING,
+            SIGNAL_RATE_LIMITED,
+            SIGNAL_RETRYING,
+            SIGNAL_SCHEDULED])
+
+        @self.huey.task()
+        @self.huey.rate_limit('rl', limit=1, per=60, retry=False)
+        def task_b():
+            return 1
+
+        r = task_b()
+        self.assertTrue(self.execute_next() is None)
+        self.assertSignals([
+            SIGNAL_ENQUEUED,
+            SIGNAL_EXECUTING,
+            SIGNAL_RATE_LIMITED])
+
+        r = task_b(retries=2)
+        self.assertTrue(self.execute_next() is None)
+        self.assertSignals([
+            SIGNAL_ENQUEUED,
+            SIGNAL_EXECUTING,
+            SIGNAL_RATE_LIMITED,
+            SIGNAL_RETRYING,
+            SIGNAL_SCHEDULED])
+
     def test_signal_expired(self):
         @self.huey.task(expires=10)
         def task_a(n):
