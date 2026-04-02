@@ -2,6 +2,7 @@ import os
 import threading
 import time
 from huey import crontab
+from huey.exceptions import TaskTimeout
 from huey.signals import *
 
 from config import huey
@@ -119,36 +120,29 @@ def hold_on(a, task=None):
         huey.storage.pop_data('hold_on')
     return True
 
-# Example of limiting the time a task can run for (10s).
+# Example of rate-limiting.
 
 @huey.task()
-def limit_time(n):
-    s = time.time()
-    evt = threading.Event()
-    def run_computation():
-        for i in range(n):
-            # Here we would do some kind of computation, checking our event
-            # along the way.
-            print('.', end='', flush=True)
-            if evt.wait(1):
-                print('CANCELED')
-                return
+@huey.rate_limit('api', limit=2, per=60)
+def api_call(n):
+    return n + 1
 
-        evt.set()
+# Example of limiting the time a task can run for (10s).
 
-    t = threading.Thread(target=run_computation)
-    t.start()
+@huey.task(context=True, timeout=10)  # Requires process or greenlet workers.
+def limit_time(n, task=None):
+    # If we are using threads, we must do cooperative checking, since there is
+    # no way to safely interrupt threads in Python.
+    if os.environ.get('WORKER_CLASS') == 'thread':
+        for _ in range(int(n)):
+            time.sleep(1)
+            if task.is_timed_out:
+                raise TaskTimeout
 
-    # Attempt to wait for the thread to finish for a total of 10s.
-    for i in range(10):
-        t.join(1)
-
-    if not evt.is_set():
-        # The thread still hasn't finished -- flag it that it must stop now.
-        evt.set()
-        t.join()
-
-    print('limit_time() completed in %0.2f' % (time.time() - s))
+    # Process and greenlet workers are handled properly automatically, though.
+    else:
+        time.sleep(n)
+    return n
 
 # Task that blocks CPU, used for testing.
 
