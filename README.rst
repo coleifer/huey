@@ -20,7 +20,7 @@ huey supports:
 * task prioritization
 * task result storage
 * task expiration
-* task locking
+* task locking, rate-limits and timeouts
 * task pipelines and chains
 
 .. image:: http://i.imgur.com/2EpRs.jpg
