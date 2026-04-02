@@ -1240,17 +1240,21 @@ Huey object
         ret = huey.enqueue(task_instance)  # Enqueue the queue task.
         print(ret.get(blocking=True))  # "3".
 
-    .. py:property:: is_timed_out
+    .. py:attribute:: is_timed_out
 
         If task was configured with a ``timeout``, returns True if the task has
         exceeded the timeout. The task timer starts when the task begins to
         execute (after any pre-execute hooks are fired).
 
-    .. py:property:: time_remaining
+        This is a property and the return value is calculated dynamically.
+
+    .. py:attribute:: time_remaining
 
         If task was configured with a ``timeout``, returns the amount of time
         remaining. For tasks that do not specify a timeout, this property
         returns ``float('inf')`` so it is always safe to compare.
+
+        This is a property and the return value is calculated dynamically.
 
     .. py:method:: check_timeout()
 

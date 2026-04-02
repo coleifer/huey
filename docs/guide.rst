@@ -595,8 +595,8 @@ using threaded workers **or** if you prefer more control within your task
 function, you can use the cooperative timeout APIs:
 
 * :py:meth:`Task.check_timeout`
-* :py:prop:`Task.is_timed_out`
-* :py:prop:`Task.time_remaining`
+* :py:attr:`Task.is_timed_out`
+* :py:attr:`Task.time_remaining`
 
 These methods require that the :py:class:`Task` instance be passed as context
 into the task function with ``context=True``.
