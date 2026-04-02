@@ -161,6 +161,16 @@ comma, for example:
     # Runs every 10 minutes between 9a and 11a, and 4p-6p.
     crontab(minute='*/10', hour='9-11,16-18')
 
+Huey also provides shortcuts for :py:func:`crontab.daily` and
+:py:func:`crontab.hourly` schedules:
+
+.. code-block:: python
+
+    @huey.periodic_task(crontab.hourly())
+    def aggregate_stats():
+        # This task runs every hour, on the hour.
+        ...
+
 For more information see the following API documentation:
 
 * :py:meth:`~Huey.periodic_task`
