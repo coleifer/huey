@@ -893,13 +893,13 @@ Huey object
         number of retries in the task decorator and disable automatic retries
         on the rate limiter. See examples below.
 
-        Example of limiting to 3 calls per minute. Tasks that are limited will
+        Example of limiting to 10 calls per minute. Tasks that are limited will
         automatically be retried at the start of the next rate-limit window.
 
         .. code-block:: python
 
             @huey.task()
-            @huey.rate_limit('data_sync', limit=3, per=60)
+            @huey.rate_limit('data_sync', limit=10, per=60)
             def data_sync(data):
                 service.apply_updates(data)
 
@@ -907,14 +907,14 @@ Huey object
         will be rescheduled for the start of the next window. If it fails
         again due to rate-limiting, it will again be rescheduled, etc.
 
-        Example of limiting to 3 calls per minute AND only allowing 2 retries.
+        Example of limiting to 10 calls per minute AND only allowing 2 retries.
         This mitigates unbounded growth for rate-limits that are continuously
         being hit:
 
         .. code-block:: python
 
             @huey.task(retries=2)
-            @huey.rate_limit('data_sync', limit=3, per=60)
+            @huey.rate_limit('data_sync', limit=10, per=60)
             def data_sync(data):
                 service.apply_updates(data)
 
@@ -927,8 +927,22 @@ Huey object
 
             @huey.task(retries=2)
             def data_sync(data):
-                with huey.rate_limit('data_sync', limit=3, per=60):
+                with huey.rate_limit('data_sync', limit=10, per=60):
                     service.apply_updates(data)
+
+        By default, rate-limited tasks are scheduled to be retried at the
+        beginning of the next rate-limit window. If a task specifies an
+        explicit ``retry_delay``, however, that value will be used instead:
+
+        .. code-block:: python
+
+            @huey.task(retries=2, retry_delay=120)
+            @huey.rate_limit('data_sync', limit=10, per=60)
+            def data_sync(data):
+                service.apply_updates(data)
+
+        In the above code, if the task fails due to being rate-limited, it will
+        be retried up to 2 times after a delay of 120s between retries.
 
     .. py:method:: put(key, value)
 
