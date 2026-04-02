@@ -70,9 +70,9 @@ def every_other_minute():
     tprint('This task runs every 2 minutes.', 35)
 
 
-@huey.periodic_task(crontab(minute='*/5'))
-def every_five_mins():
-    tprint('This task runs every 5 minutes.', 34)
+@huey.periodic_task(crontab.hourly())
+def every_hour():
+    tprint('This task runs every hour.', 34)
 
 
 # Example of using hooks.

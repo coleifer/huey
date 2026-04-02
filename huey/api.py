@@ -1313,6 +1313,11 @@ def crontab(minute='*', hour='*', day='*', month='*', day_of_week='*', strict=Fa
     return validate_date
 
 
+# Convenience helpers.
+crontab.hourly = partial(crontab, minute='0')
+crontab.daily = partial(crontab, minute='0', hour='0')
+
+
 def _unsupported(name, library):
     class UnsupportedHuey(Huey):
         def __init__(self, *args, **kwargs):

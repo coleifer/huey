@@ -124,3 +124,16 @@ class TestCrontab(unittest.TestCase):
         invalid = ('abc', '*abc', 'a-b', '1-c', '0x9')
         for i in invalid:
             self.assertRaises(ValueError, crontab, minute=i, strict=True)
+
+    def test_crontab_shortcuts(self):
+        validate = crontab.hourly()
+        self.assertTrue(validate(datetime.datetime(2026, 4, 1, 0)))
+        self.assertFalse(validate(datetime.datetime(2026, 4, 1, 0, 1)))
+        self.assertFalse(validate(datetime.datetime(2026, 4, 1, 0, 59)))
+        self.assertTrue(validate(datetime.datetime(2026, 4, 1, 1)))
+
+        validate = crontab.daily()
+        self.assertTrue(validate(datetime.datetime(2026, 4, 1, 0)))
+        self.assertFalse(validate(datetime.datetime(2026, 4, 1, 1)))
+        self.assertFalse(validate(datetime.datetime(2026, 4, 1, 23, 59)))
+        self.assertTrue(validate(datetime.datetime(2026, 4, 2, 0)))

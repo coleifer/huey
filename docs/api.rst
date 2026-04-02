@@ -1352,6 +1352,14 @@ Huey object
         you can create a periodic task that runs once per minute, and from that
         task, schedule any number of sub-tasks to run after the desired delays.
 
+.. py:function:: crontab.hourly()
+
+    Convenience function for a task that should run every hour, on the hour.
+
+.. py:function:: crontab.daily()
+
+    Convenience function for a task that should run daily, at midnight.
+
 
 .. py:class:: TaskLock(huey, name)
 
