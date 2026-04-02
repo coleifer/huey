@@ -863,6 +863,73 @@ Huey object
         registered. These undiscovered locks can be flushed by passing their
         lock-names explicitly.
 
+    .. py:method:: rate_limit(name, limit, per, retry=True)
+
+        :param str name: Name to use for the rate-limiter.
+        :param int limit: Maximum invocations in the given window.
+        :param int per: Size of rate-limiting window in seconds.
+        :param bool retry: Automatically reschedule rate-limited tasks to run
+            at beginning of next rate-limit window.
+        :returns: :py:class:`RateLimit` instance, which can be used as a
+            decorator or context-manager.
+
+        Simple fixed-window rate-limiting for tasks.
+
+        When a task fails due to being rate-limited, it will be automatically
+        rescheduled to run at the start of the next window when ``retry=True`` or
+        the task itself has one or more ``retries``.
+
+        Tasks that fail due to rate-limiting will emit a ``SIGNAL_RATE_LIMITED``.
+
+        By default any task that is rate-limited will be retried at the start
+        of the next rate-limiting window. For instance say we have a task that
+        is limited to 10 calls / 60 seconds. The 11th call in a given 60s
+        period will be retried at the start of the next window (~1 to 60 seconds
+        later, depending on timing).
+
+        This is good for tasks that must not be lost. There is a risk if the
+        volume of tasks continually exceeds the rate-limit that the automatic
+        retries will grow continuously. To mitigate this you can specify the
+        number of retries in the task decorator and disable automatic retries
+        on the rate limiter. See examples below.
+
+        Example of limiting to 3 calls per minute. Tasks that are limited will
+        automatically be retried at the start of the next rate-limit window.
+
+        .. code-block:: python
+
+            @huey.task()
+            @huey.rate_limit('data_sync', limit=3, per=60)
+            def data_sync(data):
+                service.apply_updates(data)
+
+        In the above example, if a task fails due to being rate-limited, it
+        will be rescheduled for the start of the next window. If it fails
+        again due to rate-limiting, it will again be rescheduled, etc.
+
+        Example of limiting to 3 calls per minute AND only allowing 2 retries.
+        This mitigates unbounded growth for rate-limits that are continuously
+        being hit:
+
+        .. code-block:: python
+
+            @huey.task(retries=2)
+            @huey.rate_limit('data_sync', limit=3, per=60)
+            def data_sync(data):
+                service.apply_updates(data)
+
+        In the above example, if a task fails due to being rate-limited, it
+        will be rescheduled for the start of the next window up to 2 times.
+
+        Equivalent example using a context-manager instead of a decorator:
+
+        .. code-block:: python
+
+            @huey.task(retries=2)
+            def data_sync(data):
+                with huey.rate_limit('data_sync', limit=3, per=60):
+                    service.apply_updates(data)
+
     .. py:method:: put(key, value)
 
         :param key: key for data
@@ -1309,6 +1376,27 @@ Huey object
 
         :returns: boolean whether lock is currently being held.
 
+.. py:class:: RateLimit(huey, name, limit, per, retry=True)
+
+    This class should not be instantiated directly, but is instead returned by
+    :py:meth:`Huey.rate_limit`. This object implements a context-manager or
+    decorator which can be used to enforce a simple fixed-window rate-limit of
+    the wrapped block.
+
+    When a task fails due to being rate-limited, it will be automatically
+    rescheduled to run at the start of the next window when ``retry=True`` or
+    the task itself has one or more ``retries``.
+
+    Rate-limited tasks emit a ``SIGNAL_RATE_LIMITED``.
+
+    :param str name: Name to use for the rate-limiter.
+    :param int limit: Maximum invocations in the given window.
+    :param int per: Size of rate-limiting window in seconds.
+    :param bool retry: Automatically reschedule rate-limited tasks to run
+        at beginning of next rate-limit window.
+    :returns: :py:class:`RateLimit` instance, which can be used as a
+        decorator or context-manager.
+
 Result
 ------
 
@@ -1523,7 +1611,15 @@ Exceptions
     Raised when attempting to block on a call to :py:meth:`Result.get` (for
     instance) and the timeout is exceeded without the result being ready.
 
-.. py:class:: CancelExecution
+.. py:class:: TaskTimeout
+
+    Raised when a task exceeds its specified execution time.
+
+.. py:class:: RateLimitExceeded(key, delay, retry=True)
+
+    Raised when a rate-limit has been exceeded.
+
+.. py:class:: CancelExecution(retry=None)
 
     Cancel the execution of a task. Can be raised either within a
     :py:meth:`~Huey.pre_execute` hook, or within a
@@ -1538,7 +1634,7 @@ Exceptions
     more retries remaining**. Similarly, if ``retry=True`` then the task will
     be retried regardless.
 
-.. py:class:: RetryTask(msg=None, delay=None, eta=None)
+.. py:class:: RetryTask(msg=None, eta=None, delay=None)
 
     Raised by user code from within a :py:meth:`~Huey.task` function to force a
     retry. When this exception is raised, the task will be retried irrespective

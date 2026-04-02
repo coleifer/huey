@@ -1711,6 +1711,40 @@ class TestRateLimit(BaseTestCase):
         self.assertEqual(task.retry_delay, 600)  # Retry delay preserved.
         self.huey.storage.flush_schedule()
 
+    def test_task_with_retries(self):
+        @self.huey.task(retries=2, retry_delay=10)
+        @self.huey.rate_limit('test', limit=1, per=60)
+        def test(n):
+            return n + 1
+
+        r1 = test(1)
+        r2 = test(2)
+        self.assertEqual(self.execute_next(), 2)
+
+        self.assertEqual(self.huey.scheduled_count(), 0)
+        self.assertTrue(self.execute_next() is None)
+        self.assertEqual(self.huey.scheduled_count(), 1)
+
+        task, = self.huey.scheduled()
+        self.assertEqual(task.retries, 2)  # Task retains its 2 retries.
+        self.assertEqual(task.retry_delay, 10)  # Task retains retry delay.
+        self.huey.storage.flush_schedule()
+
+        @self.huey.task(retries=2, retry_delay=10)
+        @self.huey.rate_limit('test', limit=1, per=60, retry=False)
+        def test2(n):
+            return n + 1
+
+        r3 = test2(1)
+        self.assertEqual(self.huey.scheduled_count(), 0)
+        self.assertTrue(self.execute_next() is None)
+        self.assertEqual(self.huey.scheduled_count(), 1)
+
+        task, = self.huey.scheduled()
+        self.assertEqual(task.retries, 1)  # Task retries decremented.
+        self.assertEqual(task.retry_delay, 10)  # Task retains retry delay.
+        self.huey.storage.flush_schedule()
+
 
 class TestHueyAPIs(BaseTestCase):
     def test_flush_locks(self):

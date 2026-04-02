@@ -23,6 +23,7 @@ The following signals are implemented by Huey:
   schedule for future execution.
 * ``SIGNAL_INTERRUPTED``: task is interrupted when consumer exits.
 * ``SIGNAL_TIMEOUT``: task timed-out during execution.
+* ``SIGNAL_RATE_LIMITED``: task is rate-limited.
 
 When a signal handler is called, it will be called with the following
 arguments:

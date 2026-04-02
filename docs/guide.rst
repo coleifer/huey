@@ -618,6 +618,107 @@ For budget-aware scheduling you can use the more granular ``time_remaining``:
 
            service.process_single_account(account)
 
+Locking tasks
+-------------
+
+Task locking can be accomplished using the :py:meth:`Huey.lock_task` method,
+which can be used as a context-manager or decorator.
+
+This lock prevents multiple invocations of a task from running concurrently.
+
+If a second invocation occurs and the lock cannot be acquired, then a special
+:py:class:`TaskLockedException` is raised and the task will not be executed.
+If the task is configured to be retried, then it will be retried normally.
+
+Examples:
+
+.. code-block:: python
+
+    @huey.periodic_task(crontab(minute='*/5'))
+    @huey.lock_task('reports-lock')  # Goes *after* the task decorator.
+    def generate_report():
+        # If a report takes longer than 5 minutes to generate, we do
+        # not want to kick off another until the previous invocation
+        # has finished.
+        run_report()
+
+
+    @huey.periodic_task(crontab(minute='0'))
+    def backup():
+        # Generate backup of code
+        do_code_backup()
+
+        # Generate database backup. Since this may take longer than an
+        # hour, we want to ensure that it is not run concurrently.
+        with huey.lock_task('db-backup'):
+            do_db_backup()
+
+See :py:meth:`Huey.lock_task` for API documentation.
+
+Rate-Limiting
+-------------
+
+Huey provides simple fixed-window rate-limiting for tasks. Rate-limiting
+behaves much like locking and can be used as a context-manager or a decorator.
+
+Rate-limiting allows for granular specification of when and how a rate-limited
+task should be retried.
+
+Example:
+
+.. code-block:: python
+
+    @huey.task()
+    @huey.rate_limit('data-sync', limit=10, per=60)
+    def data_sync(data):
+        # synchronize `data` with another system, but limit to 10 invocations
+        # in a 60s window.
+        service.apply_updates(data)
+
+In the above example, if more than 10 calls to ``data_sync()`` occur during a
+60 second window, the task raises a :py:class:`RateLimitExceeded`. This
+exception, by default, will cause the task to be retried at the start of the
+next rate-limit window - in the example this would be some delay between 0 and
+60 seconds. This occurs even if the task has **no** retries, as above.
+
+Flow:
+
+* ``data_sync()`` called 10 times in rapid succession, all succeed.
+* ``data_sync()`` called again 33 seconds into the rate-limit window.
+* ``RateLimitExceeded`` is raised. Huey schedules the rate-limited 11th
+  invocation of ``data_sync()`` to run in 27 seconds when the window resets.
+* ``data_sync()`` called again 48 seconds into the rate-limit window.
+* ``RateLimitExceeded`` raised, 12th invocation of ``data_sync`` scheduled to
+  run in 12 seconds when the window resets.
+
+This is good for tasks that you must not lose, but which may overwhelm a
+service if they come in too quickly. There is a risk, however, if the tasks
+continually exceed the rate-limits, that they "outpace" the rate-limiting and
+pile up. This can be mitigated by specifying a limited number of retries on the
+task itself:
+
+Example:
+
+.. code-block:: python
+
+    @huey.task(retries=2)
+    @huey.rate_limit('no-thundering-herd', limit=10, per=60, retry=False)
+    def data_sync(data):
+        service.apply_updates(data)
+
+This example will behave like the previous example, but will cap each
+invocation to two retries.
+
+Equivalent example using a context-manager instead of a decorator:
+
+.. code-block:: python
+
+    @huey.task(retries=2)
+    def data_sync(data):
+        with huey.rate_limit('data-sync', limit=10, per=60, retry=False):
+            service.apply_updates(data)
+
+See :py:meth:`Huey.rate_limit` for API documentation.
 
 Task pipelines
 --------------
@@ -727,42 +828,6 @@ For more information, see the following API docs:
 * :py:meth:`Task.then`
 * :py:class:`ResultGroup` and :py:class:`Result`
 
-Locking tasks
--------------
-
-Task locking can be accomplished using the :py:meth:`Huey.lock_task` method,
-which can be used as a context-manager or decorator.
-
-This lock prevents multiple invocations of a task from running concurrently.
-
-If a second invocation occurs and the lock cannot be acquired, then a special
-:py:class:`TaskLockedException` is raised and the task will not be executed.
-If the task is configured to be retried, then it will be retried normally.
-
-Examples:
-
-.. code-block:: python
-
-    @huey.periodic_task(crontab(minute='*/5'))
-    @huey.lock_task('reports-lock')  # Goes *after* the task decorator.
-    def generate_report():
-        # If a report takes longer than 5 minutes to generate, we do
-        # not want to kick off another until the previous invocation
-        # has finished.
-        run_report()
-
-
-    @huey.periodic_task(crontab(minute='0'))
-    def backup():
-        # Generate backup of code
-        do_code_backup()
-
-        # Generate database backup. Since this may take longer than an
-        # hour, we want to ensure that it is not run concurrently.
-        with huey.lock_task('db-backup'):
-            do_db_backup()
-
-See :py:meth:`Huey.lock_task` for API documentation.
 
 Signals
 -------
