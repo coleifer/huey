@@ -36,6 +36,8 @@ else:
 
 Error = namedtuple('Error', ('metadata',))
 
+ChordConfig = namedtuple('ChordConfig', ('cid', 'size', 'idx', 'callback'))
+
 
 class UTC(datetime.tzinfo):
     zero = datetime.timedelta(0)

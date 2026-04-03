@@ -7,7 +7,9 @@ from huey.api import PeriodicTask
 from huey.api import Result
 from huey.api import Task
 from huey.api import TaskWrapper
+from huey.api import chord
 from huey.api import crontab
+from huey.api import group
 from huey.api import _unsupported
 from huey.constants import EmptyData
 from huey.exceptions import CancelExecution
@@ -1385,6 +1387,30 @@ class TestTaskHooks(BaseTestCase):
         self.assertEqual(self.execute_next(), 4)
         self.assertEqual(pre_state, [r.id])
         self.assertEqual(post_state, [r.id])
+
+
+class TestGroupPrimitive(BaseTestCase):
+    def test_group(self):
+        @self.huey.task()
+        def test(n):
+            return n + 1
+
+        g = group(test.s(i) for i in range(3))
+        rg = self.huey.enqueue(g)
+        self.assertEqual(len(self.huey), 3)
+        for i in range(3):
+            self.assertEqual(self.execute_next(), i + 1)
+
+        self.assertEqual(rg.get(), [1, 2, 3])
+
+        g = group(test.s(i) for i in [1, None, 2])
+        rg = self.huey.enqueue(g)
+        self.assertEqual(self.execute_next(), 2)
+        self.assertTrue(self.execute_next() is None)
+        self.assertEqual(self.execute_next(), 3)
+
+        with self.assertRaises(TaskException):
+            rg.get()
 
 
 class TestTaskChaining(BaseTestCase):

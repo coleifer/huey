@@ -35,6 +35,7 @@ from huey.storage import PriorityRedisStorage
 from huey.storage import RedisExpireStorage
 from huey.storage import RedisStorage
 from huey.storage import SqliteStorage
+from huey.utils import ChordConfig
 from huey.utils import Error
 from huey.utils import noop_context
 from huey.utils import normalize_expire_time
@@ -307,6 +308,11 @@ class Huey(object):
         return self._registry.create_task(message)
 
     def enqueue(self, task):
+        if isinstance(task, group):
+            return ResultGroup([self.enqueue(t) for t in task.tasks])
+        elif isinstance(task, chord):
+            return self._enqueue_chord(task)
+
         # Resolve the expiration time when the task is enqueued.
         if task.expires:
             task.resolve_expires(self.utc)
@@ -330,6 +336,17 @@ class Huey(object):
             return ResultGroup(results)
         else:
             return Result(self, task)
+
+    def _enqueue_chord(self, chord):
+        cid = str(uuid.uuid4())
+        size = len(chord.tasks)
+        results = []
+        for i, task in enumerate(chord.tasks):
+            task.chord_config = ChordConfig(cid, size, i, task)
+            results.append(self.enqueue(task))
+
+        callback_result = Result(self, chord.callback)
+        return ChordResult(results, callback_result)
 
     def dequeue(self):
         data = self.storage.dequeue()
@@ -473,6 +490,9 @@ class Huey(object):
             elif task_value is not None or self.store_none:
                 self.put_result(task.id, task_value)
 
+        if task.chord_config is not None:
+            self._check_chord(task, task_value, exception)
+
         if self._post_execute:
             self._run_post_execute(task, task_value, exception)
 
@@ -494,6 +514,33 @@ class Huey(object):
             self._requeue_task(task, self._get_timestamp(), retry_eta)
 
         return task_value
+
+    def _check_chord(self, task, value, exception):
+        cc = task.chord_config
+        chord_key = 'chord:%s' % cc.cid
+        result_key = 'chord:%s:%s' % (cc.cid, cc.idx)
+        if exception is not None:
+            if task.retries:
+                # Do not do anything yet, task still has retries.
+                return
+
+            # task value is an Error result.
+            value = Error(self.build_error_result(task, exception))
+
+        self.put_result(result_key, value)
+
+        if self.storage.incr(chord_key) == cc.size:
+            self.storage.delete_counter(chord_key)
+
+            # Destructively read raw results w/o raising errors for exceptions.
+            results = []
+            for idx in range(cc.size):
+                result = self.get_raw_result('chord:%s:%s' % (cc.cid, cc.idx))
+                results.append(result)
+
+            callback = cc.callback
+            callback.extend_data((results,))
+            self.enqueue(callback)
 
     def _requeue_task(self, task, timestamp, retry_eta=None):
         task.retries -= 1
@@ -737,7 +784,7 @@ class Task(object):
     def __init__(self, args=None, kwargs=None, id=None, eta=None, retries=None,
                  retry_delay=None, priority=None, expires=None,
                  on_complete=None, on_error=None, expires_resolved=None,
-                 timeout=None):
+                 timeout=None, chord_config=None):
         self.name = type(self).__name__
         self.args = () if args is None else args
         self.kwargs = {} if kwargs is None else kwargs
@@ -752,6 +799,7 @@ class Task(object):
         self.expires = expires if expires is not None else self.default_expires
         self.expires_resolved = expires_resolved
         self.timeout = timeout if timeout is not None else self.default_timeout
+        self.chord_config = chord_config
         self._deadline = None
 
         self.on_complete = on_complete
@@ -780,6 +828,8 @@ class Task(object):
             rep += ' -> %s' % self.on_complete
         if self.on_error:
             rep += ', on error %s' % self.on_error
+        if self.chord_config:
+            rep += ', chord %s' % self.chord_config.cid
         return rep
 
     def __hash__(self):
@@ -1070,6 +1120,19 @@ class RateLimit(object):
         pass
 
 
+class group(object):
+    def __init__(self, tasks):
+        self.tasks = tasks
+
+
+class chord(object):
+    def __init__(self, tasks, callback):
+        if isinstance(callback, TaskWrapper):
+            callback = callback.s()
+        self.tasks = tasks
+        self.callback = callback
+
+
 class Result(object):
     """
     Wrapper around task result data. When a task is executed, an instance of
@@ -1218,6 +1281,16 @@ class ResultGroup(object):
                 delay[r.id] = min((delay[r.id] or 0.1) * backoff, max_delay)
             else:
                 yield r.get()
+
+
+class ChordResult(object):
+    def __init__(self, results, callback_result):
+        self.results = ResultGroup(results)
+        self.callback = callback_result
+
+    def get(self, *args, **kwargs):
+        return self.callback.get(*args, **kwargs)
+    __call__ = get
 
 
 dash_re = re.compile(r'(\d+)-(\d+)')
