@@ -1433,10 +1433,10 @@ class TestChordPrimitive(BaseTestCase):
 
         self.assertEqual(len(self.huey), 1)
         self.assertEqual(self.execute_next(), 6)
-
         self.assertEqual(r.get(), 6)
+        self.assertEqual(len(self.huey), 0)
 
-        c = chord([prod.s(i) for i in range(3)], agg.s())
+        c = chord([prod.s(i) for i in range(3)], agg)
         c.callback.then(prod)
         r = self.huey.enqueue(c)
         self.assertEqual(len(self.huey), 3)
@@ -1445,8 +1445,18 @@ class TestChordPrimitive(BaseTestCase):
         self.assertEqual(self.execute_next(), 6)
         self.assertEqual(len(self.huey), 1)
         self.assertEqual(self.execute_next(), 7)
-        self.assertEqual(len(self.huey), 0)
         self.assertEqual(r(), 6)
+        self.assertEqual(len(self.huey), 0)
+
+        c = chord([prod.s(i) for i in (1, None, 2)], agg)
+        r = self.huey.enqueue(c)
+        self.assertEqual(len(self.huey), 3)
+        self.assertEqual([self.execute_next() for _ in range(3)], [2, None, 3])
+        self.assertEqual(len(self.huey), 1)  # The failed task has 1 retry.
+        self.assertTrue(self.execute_next() is None)  # Retry - also fails.
+        self.assertEqual(len(self.huey), 1)  # Now the chord is hit.
+        self.assertEqual(self.execute_next(), -1)  # Error found.
+        self.assertEqual(len(self.huey), 0)
 
 
 class TestTaskChaining(BaseTestCase):
