@@ -22,6 +22,7 @@ from huey.exceptions import TaskLockedException
 from huey.exceptions import TaskTimeout
 from huey.serializer import SignedSerializer
 from huey.tests.base import BaseTestCase
+from huey.utils import Error
 
 
 class TestError(Exception):
@@ -1411,6 +1412,41 @@ class TestGroupPrimitive(BaseTestCase):
 
         with self.assertRaises(TaskException):
             rg.get()
+
+
+class TestChordPrimitive(BaseTestCase):
+    def test_chord(self):
+        @self.huey.task(retries=1)
+        def prod(n):
+            return n + 1
+
+        @self.huey.task()
+        def agg(ns):
+            if any(isinstance(n, Error) for n in ns):
+                return -1
+            return sum(ns)
+
+        c = chord([prod.s(i) for i in range(3)], agg.s())
+        r = self.huey.enqueue(c)
+        self.assertEqual(len(self.huey), 3)
+        self.assertEqual([self.execute_next() for _ in range(3)], [1, 2, 3])
+
+        self.assertEqual(len(self.huey), 1)
+        self.assertEqual(self.execute_next(), 6)
+
+        self.assertEqual(r.get(), 6)
+
+        c = chord([prod.s(i) for i in range(3)], agg.s())
+        c.callback.then(prod)
+        r = self.huey.enqueue(c)
+        self.assertEqual(len(self.huey), 3)
+        self.assertEqual([self.execute_next() for _ in range(3)], [1, 2, 3])
+        self.assertEqual(len(self.huey), 1)
+        self.assertEqual(self.execute_next(), 6)
+        self.assertEqual(len(self.huey), 1)
+        self.assertEqual(self.execute_next(), 7)
+        self.assertEqual(len(self.huey), 0)
+        self.assertEqual(r(), 6)
 
 
 class TestTaskChaining(BaseTestCase):

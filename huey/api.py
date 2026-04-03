@@ -342,7 +342,7 @@ class Huey(object):
         size = len(chord.tasks)
         results = []
         for i, task in enumerate(chord.tasks):
-            task.chord_config = ChordConfig(cid, size, i, task)
+            task.chord_config = ChordConfig(cid, size, i, chord.callback)
             results.append(self.enqueue(task))
 
         callback_result = Result(self, chord.callback)
@@ -491,7 +491,11 @@ class Huey(object):
                 self.put_result(task.id, task_value)
 
         if task.chord_config is not None:
-            self._check_chord(task, task_value, exception)
+            if exception is None:
+                self._check_chord(task, task_value)
+            elif not task.retries:
+                err = Error(self.build_error_result(task, exception))
+                self._check_chord(task, err)
 
         if self._post_execute:
             self._run_post_execute(task, task_value, exception)
@@ -515,18 +519,10 @@ class Huey(object):
 
         return task_value
 
-    def _check_chord(self, task, value, exception):
+    def _check_chord(self, task, value):
         cc = task.chord_config
         chord_key = 'chord:%s' % cc.cid
         result_key = 'chord:%s:%s' % (cc.cid, cc.idx)
-        if exception is not None:
-            if task.retries:
-                # Do not do anything yet, task still has retries.
-                return
-
-            # task value is an Error result.
-            value = Error(self.build_error_result(task, exception))
-
         self.put_result(result_key, value)
 
         if self.storage.incr(chord_key) == cc.size:
@@ -535,7 +531,7 @@ class Huey(object):
             # Destructively read raw results w/o raising errors for exceptions.
             results = []
             for idx in range(cc.size):
-                result = self.get_raw_result('chord:%s:%s' % (cc.cid, cc.idx))
+                result = self.get('chord:%s:%s' % (cc.cid, idx))
                 results.append(result)
 
             callback = cc.callback
