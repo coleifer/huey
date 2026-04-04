@@ -838,6 +838,54 @@ For more information, see the following API docs:
 * :py:meth:`Task.then`
 * :py:class:`ResultGroup` and :py:class:`Result`
 
+Groups and Chords
+-----------------
+
+:py:class:`group` allows you to enqueue one or more tasks and gather the
+results:
+
+.. code-block:: python
+
+    @huey.task()
+    def health_check(service):
+        return service.name, perform_health_check(service)
+
+    g = group([
+        health_check.s(api_service),
+        health_check.s(cache_service),
+        health_check.s(db_service),
+        health_check.s(proxy_service),
+    ])
+    result_group = huey.enqueue(g)
+
+    for name, is_healthy in result_group(blocking=True):
+        print('%s healthy? %s' % (name, is_healthy))
+
+:py:class:`chord` allows you to enqueue one or more tasks, then when they've
+all finished executing the results are sent to a final reducer callback:
+
+.. code-block:: python
+
+    @huey.task()
+    def fetch_url(url):
+        return (url, requests.get(url).text)
+
+    @huey.task()
+    def aggregate(responses):
+        for url, html in responses:
+            self.search.index(url, html)
+        return len(responses)
+
+    # Huey will run all the fetch_url() tasks, then when they are all finished
+    # the `aggregate()` task will be enqueued with the task results.
+    c = chord(
+        [fetch_url.s(url) for url in urls_to_update],
+        aggregate)
+
+    result = huey.enqueue(c)
+    pages_indexed = result(True)
+    print('Successfully indexed %s pages' % pages_indexed)
+
 
 Signals
 -------
