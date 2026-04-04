@@ -1137,7 +1137,7 @@ class group(object):
     def then(self, task, *args, **kwargs):
         if not isinstance(task, Task):
             task = task.s(*args, **kwargs)
-        return Chord(self.tasks, task)
+        return chord(self.tasks, task)
 
     def error(self, *args, **kwargs):
         raise NotImplementedError('error() is not available on `group()`')

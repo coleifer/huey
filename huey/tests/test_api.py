@@ -1447,11 +1447,38 @@ class TestGroupPrimitive(BaseTestCase):
             track.s('mid', priority=5),
         ]))
 
-        self.execute_next()
-        self.execute_next()
-        self.execute_next()
+        self.assertEqual(self.execute_next(), 'high')
+        self.assertEqual(self.execute_next(), 'mid')
+        self.assertEqual(self.execute_next(), 'low')
         self.assertEqual(state, ['high', 'mid', 'low'])
         self.assertEqual(r(), ['low', 'high', 'mid'])
+
+    def test_group_callback(self):
+        @self.huey.task()
+        def ident(v):
+            return v
+
+        g = group([ident.s('a'), ident.s('b')]).then(ident)
+        r = self.huey.enqueue(g)
+        self.assertEqual(len(self.huey), 2)
+        self.execute_next()
+        self.execute_next()
+        self.assertEqual(len(self.huey), 1)
+        self.assertEqual(self.execute_next(), ['a', 'b'])
+
+        # When groups have a callback they are converted to chord.
+        g = group([
+            ident.s('a', priority=1),
+            ident.s('b', priority=10),
+            ident.s('c', priority=5)]).then(ident)
+        r = self.huey.enqueue(g)
+        self.assertEqual(len(self.huey), 3)
+        self.assertEqual(self.execute_next(), 'b')
+        self.assertEqual(self.execute_next(), 'c')
+        self.assertEqual(self.execute_next(), 'a')
+        self.assertEqual(len(self.huey), 1)
+        self.assertEqual(self.execute_next(), ['a', 'b', 'c'])
+        self.assertEqual(r(), ['a', 'b', 'c'])
 
 
 class TestChordPrimitive(BaseTestCase):
@@ -1480,6 +1507,11 @@ class TestChordPrimitive(BaseTestCase):
         self.assertEqual(self.execute_next(), 6)
         self.assertEqual(r.get(), 6)
         self.assertEqual(len(self.huey), 0)
+
+        # Each subtask's results are still visible.
+        self.assertEqual(self.huey.result_count(), 3)
+        self.assertEqual(r.results(), [1, 2, 3])
+        self.assertEqual(self.huey.result_count(), 0)
 
         r = self.huey.enqueue(chord([prod.s(100)], agg))
         self.assertEqual(len(self.huey), 1)
