@@ -1559,17 +1559,16 @@ class TestChordPrimitive(BaseTestCase):
         self.assertEqual(state, [1, 2])  # err cb records both errors.
         self.assertEqual(self.execute_next(), -1)  # chord cb (err).
 
-
     def test_chord_ordering(self):
         @self.huey.task()
-        def get(s):
+        def ident(s):
             return s
         @self.huey.task()
         def agg(results):
             return results
 
         result = self.huey.enqueue(chord(
-            [get.s('a'), get.s('b'), get.s('c')],
+            [ident.s('a'), ident.s('b'), ident.s('c')],
             agg))
         self.assertEqual(len(self.huey), 3)
         tasks = [self.huey.dequeue() for _ in range(3)]
@@ -1581,6 +1580,56 @@ class TestChordPrimitive(BaseTestCase):
         self.assertEqual(self.execute_next(), ['a', 'b', 'c'])
 
         self.assertEqual(result(), ['a', 'b', 'c'])
+
+    def test_chord_scheduling(self):
+        @self.huey.task()
+        def ident(s):
+            return s
+        @self.huey.task()
+        def agg(results):
+            return results
+
+        c = chord([
+            ident.s('a', delay=30),
+            ident.s('b', delay=50),
+            ident.s('c', delay=10)], agg.s(delay=10))
+        r = self.huey.enqueue(c)
+        for i in range(3):
+            self.assertTrue(self.execute_next() is None)  # Scheduled.
+
+        self.assertEqual(len(self.huey), 0)
+        self.assertEqual(self.huey.scheduled_count(), 3)
+
+        now = datetime.datetime.now()
+        seconds = lambda s: now + datetime.timedelta(seconds=s)
+
+        task, = self.huey.read_schedule(timestamp=seconds(10))
+        self.assertEqual(self.huey.execute(task, seconds(10)), 'c')
+
+        task, = self.huey.read_schedule(timestamp=seconds(30))
+        self.assertEqual(self.huey.execute(task, seconds(30)), 'a')
+
+        self.assertEqual(len(self.huey), 0)
+        self.assertEqual(self.huey.scheduled_count(), 1)  # One task left.
+
+        # After execution this enqueues the callback.
+        task, = self.huey.read_schedule(timestamp=seconds(50))
+        self.assertEqual(self.huey.execute(task, seconds(50)), 'b')
+
+        self.assertEqual(len(self.huey), 1)
+        self.assertEqual(self.huey.scheduled_count(), 0)
+        self.assertTrue(self.execute_next() is None)
+
+        # Callback delay was calculated when enqueued, so it is 10, not 60.
+        self.assertEqual(self.huey.read_schedule(timestamp=seconds(9)), [])
+
+        task, = self.huey.read_schedule(timestamp=seconds(10))
+        self.assertEqual(self.huey.execute(task, seconds(10)), ['a', 'b', 'c'])
+
+        self.assertEqual(len(self.huey), 0)
+        self.assertEqual(self.huey.scheduled_count(), 0)
+
+        self.assertEqual(r(), ['a', 'b', 'c'])
 
     def test_chord_return_none(self):
         @self.huey.task()
