@@ -337,15 +337,29 @@ class Huey(object):
         else:
             return Result(self, task)
 
-    def _enqueue_chord(self, chord):
+    def _enqueue_chord(self, chord_obj):
         cid = str(uuid.uuid4())
-        size = len(chord.tasks)
+        size = len(chord_obj.tasks)
         results = []
-        for i, task in enumerate(chord.tasks):
-            task.chord_config = ChordConfig(cid, size, i, chord.callback)
-            results.append(self.enqueue(task))
+        for i, task in enumerate(chord_obj.tasks):
+            if isinstance(task, chord):
+                # Nested chord - the nested chord's callback becomes the outer
+                # chord task at position i.
+                task.callback.chord_config = ChordConfig(
+                    cid,
+                    size,
+                    i,
+                    chord_obj.callback)
+                inner_result = self._enqueue_chord(task)
+                results.append(inner_result.callback)
+            elif isinstance(task, group):
+                raise ValueError('cannot use `group` as a chord member - '
+                                 'use .then() to convert to a `chord` first.')
+            else:
+                task.chord_config = ChordConfig(cid, size, i, chord_obj.callback)
+                results.append(self.enqueue(task))
 
-        callback_result = Result(self, chord.callback)
+        callback_result = Result(self, chord_obj.callback)
         return ChordResult(results, callback_result)
 
     def dequeue(self):
@@ -1120,6 +1134,14 @@ class group(object):
     def __init__(self, tasks):
         self.tasks = tasks
 
+    def then(self, task, *args, **kwargs):
+        if not isinstance(task, Task):
+            task = task.s(*args, **kwargs)
+        return Chord(self.tasks, task)
+
+    def error(self, *args, **kwargs):
+        raise NotImplementedError('error() is not available on `group()`')
+
 
 class chord(object):
     def __init__(self, tasks, callback):
@@ -1127,6 +1149,14 @@ class chord(object):
             callback = callback.s()
         self.tasks = tasks
         self.callback = callback
+
+    def then(self, task, *args, **kwargs):
+        self.callback.then(task, *args, **kwargs)
+        return self
+
+    def error(self, task, *args, **kwargs):
+        self.callback.error(task, *args, **kwargs)
+        return self
 
 
 class Result(object):

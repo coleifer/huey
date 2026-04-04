@@ -1646,6 +1646,46 @@ class TestChordPrimitive(BaseTestCase):
         self.assertEqual(self.execute_next(), [1, None, None])
         self.assertEqual(r(), [1, None, None])
 
+    def test_nested_chord(self):
+        @self.huey.task()
+        def ident(v):
+            return v
+        @self.huey.task()
+        def agg(vs):
+            return vs
+
+        c = chord([
+            chord([ident.s('a'), ident.s('b')], agg),
+            chord([
+                chord([ident.s('c'), ident.s('d')], agg),
+                chord([ident.s('e'), ident.s('f')], agg),
+            ], agg),
+            chord([ident.s('g'), ident.s('h')], agg),
+        ], agg)
+        r = self.huey.enqueue(c)
+        self.assertEqual(len(self.huey), 8)
+
+        self.assertEqual([self.execute_next() for _ in range(8)],
+                         list('abcdefgh'))
+
+        self.assertEqual(len(self.huey), 4)
+        self.assertEqual([self.execute_next() for _ in range(4)], [
+            ['a', 'b'],
+            ['c', 'd'],
+            ['e', 'f'],
+            ['g', 'h'],
+        ])
+
+        self.assertEqual(len(self.huey), 1)
+        self.assertEqual(self.execute_next(), [
+            ['c', 'd'], ['e', 'f'],
+        ])
+
+        self.assertEqual(len(self.huey), 1)
+        self.assertEqual(self.execute_next(), [
+            ['a', 'b'], [['c', 'd'], ['e', 'f']], ['g', 'h'],
+        ])
+
 
 class TestTaskChaining(BaseTestCase):
     def test_pipeline_tuple(self):
