@@ -490,13 +490,6 @@ class Huey(object):
             elif task_value is not None or self.store_none:
                 self.put_result(task.id, task_value)
 
-        if task.chord_config is not None:
-            if exception is None:
-                self._check_chord(task, task_value)
-            elif not task.retries:
-                err = Error(self.build_error_result(task, exception))
-                self._check_chord(task, err)
-
         if self._post_execute:
             self._run_post_execute(task, task_value, exception)
 
@@ -512,6 +505,13 @@ class Huey(object):
             next_task = task.on_error
             next_task.extend_data(exception)
             self.enqueue(next_task)
+
+        if task.chord_config is not None:
+            if exception is None:
+                self._check_chord(task, task_value)
+            elif not task.retries:
+                err = Error(self.build_error_result(task, exception))
+                self._check_chord(task, err)
 
         if exception is not None and task.retries:
             self._emit(S.SIGNAL_RETRYING, task)

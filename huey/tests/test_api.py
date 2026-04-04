@@ -1413,9 +1413,49 @@ class TestGroupPrimitive(BaseTestCase):
         with self.assertRaises(TaskException):
             rg.get()
 
+    def test_multiple_task_types(self):
+        @self.huey.task()
+        def t1(n):
+            return n + 1
+        @self.huey.task()
+        def t2(n):
+            return n + 2
+
+        rg = self.huey.enqueue(group([
+            t1.s(1),
+            t2.s(2),
+            t1.s(10)]))
+        self.assertEqual(len(rg), 3)
+
+        for _ in range(3):
+            self.execute_next()
+
+        self.assertEqual(len(self.huey), 0)
+        self.assertEqual(rg(), [2, 4, 11])
+
+    def test_group_priorities(self):
+        state = []
+
+        @self.huey.task()
+        def track(label):
+            state.append(label)
+            return label
+
+        r = self.huey.enqueue(group([
+            track.s('low', priority=1),
+            track.s('high', priority=10),
+            track.s('mid', priority=5),
+        ]))
+
+        self.execute_next()
+        self.execute_next()
+        self.execute_next()
+        self.assertEqual(state, ['high', 'mid', 'low'])
+        self.assertEqual(r(), ['low', 'high', 'mid'])
+
 
 class TestChordPrimitive(BaseTestCase):
-    def test_chord(self):
+    def funcs(self):
         @self.huey.task(retries=1)
         def prod(n):
             return n + 1
@@ -1425,6 +1465,11 @@ class TestChordPrimitive(BaseTestCase):
             if any(isinstance(n, Error) for n in ns):
                 return -1
             return sum(ns)
+
+        return prod, agg
+
+    def test_chord(self):
+        prod, agg = self.funcs()
 
         c = chord([prod.s(i) for i in range(3)], agg.s())
         r = self.huey.enqueue(c)
@@ -1436,8 +1481,18 @@ class TestChordPrimitive(BaseTestCase):
         self.assertEqual(r.get(), 6)
         self.assertEqual(len(self.huey), 0)
 
+        r = self.huey.enqueue(chord([prod.s(100)], agg))
+        self.assertEqual(len(self.huey), 1)
+        self.assertEqual(self.execute_next(), 101)
+        self.assertEqual(len(self.huey), 1)
+        self.assertEqual(self.execute_next(), 101)
+        self.assertEqual(len(self.huey), 0)
+
+    def test_chord_callback_cb(self):
+        prod, agg = self.funcs()
+
         c = chord([prod.s(i) for i in range(3)], agg)
-        c.callback.then(prod)
+        c.callback.then(prod)  # Add callback to chord callback.
         r = self.huey.enqueue(c)
         self.assertEqual(len(self.huey), 3)
         self.assertEqual([self.execute_next() for _ in range(3)], [1, 2, 3])
@@ -1448,6 +1503,21 @@ class TestChordPrimitive(BaseTestCase):
         self.assertEqual(r(), 6)
         self.assertEqual(len(self.huey), 0)
 
+    def test_chord_task_cb(self):
+        prod, agg = self.funcs()
+
+        c = chord([prod.s(i).then(prod) for i in range(3)], agg)
+        r = self.huey.enqueue(c)
+        self.assertEqual(len(self.huey), 3)
+        self.assertEqual([self.execute_next() for _ in range(3)], [1, 2, 3])
+        self.assertEqual(len(self.huey), 4)  # 3 callbacks, then chord.
+        self.assertEqual([self.execute_next() for _ in range(3)], [2, 3, 4])
+        self.assertEqual(self.execute_next(), 6)
+        self.assertEqual(len(self.huey), 0)
+
+    def test_chord_error(self):
+        prod, agg = self.funcs()
+
         c = chord([prod.s(i) for i in (1, None, 2)], agg)
         r = self.huey.enqueue(c)
         self.assertEqual(len(self.huey), 3)
@@ -1457,6 +1527,75 @@ class TestChordPrimitive(BaseTestCase):
         self.assertEqual(len(self.huey), 1)  # Now the chord is hit.
         self.assertEqual(self.execute_next(), -1)  # Error found.
         self.assertEqual(len(self.huey), 0)
+
+        self.assertEqual(r.results[0], 2)
+        with self.assertRaises(TaskException):
+            r.results[1]
+        self.assertEqual(r.results[2], 3)
+
+    def test_chord_error_cb(self):
+        prod, agg = self.funcs()
+        state = []
+
+        @self.huey.task()
+        def on_err(*exc):
+            state.append(len(exc))
+            return 99
+
+        c = chord([prod.s(1), prod.s(None).error(on_err), prod.s(2)], agg)
+        r = self.huey.enqueue(c)
+        self.assertEqual(len(self.huey), 3)
+        self.assertEqual(self.execute_next(), 2)
+        self.assertTrue(self.execute_next() is None)
+        self.assertEqual(len(self.huey), 3)  # prod.s(2), errcb, retry.
+        self.assertEqual(self.execute_next(), 3)
+        self.assertEqual(len(self.huey), 2)  # errcb, retry.
+        self.assertEqual(state, [])
+        self.assertEqual(self.execute_next(), 99)
+        self.assertEqual(state, [1])
+        self.assertTrue(self.execute_next() is None)  # retry.
+        self.assertEqual(len(self.huey), 2)  # err cb, chord cb.
+        self.assertEqual(self.execute_next(), 99)  # err cb fired again.
+        self.assertEqual(state, [1, 2])  # err cb records both errors.
+        self.assertEqual(self.execute_next(), -1)  # chord cb (err).
+
+
+    def test_chord_ordering(self):
+        @self.huey.task()
+        def get(s):
+            return s
+        @self.huey.task()
+        def agg(results):
+            return results
+
+        result = self.huey.enqueue(chord(
+            [get.s('a'), get.s('b'), get.s('c')],
+            agg))
+        self.assertEqual(len(self.huey), 3)
+        tasks = [self.huey.dequeue() for _ in range(3)]
+
+        self.huey.execute(tasks[2])  # 'c'.
+        self.huey.execute(tasks[0])  # 'a'.
+        self.huey.execute(tasks[1])  # 'b'.
+        self.assertEqual(len(self.huey), 1)  # cb.
+        self.assertEqual(self.execute_next(), ['a', 'b', 'c'])
+
+        self.assertEqual(result(), ['a', 'b', 'c'])
+
+    def test_chord_return_none(self):
+        @self.huey.task()
+        def ident(v):
+            return v
+        @self.huey.task()
+        def agg(vs):
+            return vs
+
+        r = self.huey.enqueue(chord(
+            [ident.s(1), ident.s(None), ident.s(None)], agg))
+        self.assertEqual([self.execute_next() for _ in range(3)],
+                         [1, None, None])
+        self.assertEqual(self.execute_next(), [1, None, None])
+        self.assertEqual(r(), [1, None, None])
 
 
 class TestTaskChaining(BaseTestCase):

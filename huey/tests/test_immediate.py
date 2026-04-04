@@ -2,6 +2,8 @@ import datetime
 
 from huey.api import Huey
 from huey.api import MemoryHuey
+from huey.api import chord
+from huey.api import group
 from huey.exceptions import TaskException
 from huey.storage import BlackHoleStorage
 from huey.tests.base import BaseTestCase
@@ -123,6 +125,31 @@ class TestImmediate(BaseTestCase):
 
         result_group = task_a.map(range(8))
         self.assertEqual(result_group(), [1, 2, 3, 4, 5, 6, 7, 8])
+
+    def test_chord(self):
+        @self.huey.task(retries=1)
+        def prod(n):
+            return n + 1
+
+        @self.huey.task()
+        def agg(ns):
+            return sum(ns)
+
+        result = self.huey.enqueue(chord(
+            [prod.s(i) for i in range(10)], agg))
+        self.assertEqual(result(), 55)
+
+    def test_group(self):
+        @self.huey.task(retries=1)
+        def a(n):
+            return n + 1
+
+        @self.huey.task()
+        def b(n):
+            return n - 1
+
+        result = self.huey.enqueue(group([a.s(1), b.s(100), a.s(2), b.s(200)]))
+        self.assertEqual(result(), [2, 99, 3, 199])
 
 
 class NoUseException(Exception): pass

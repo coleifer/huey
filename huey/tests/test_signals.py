@@ -1,6 +1,7 @@
 import datetime
 import time
 
+from huey.api import chord
 from huey.signals import *
 from huey.tests.base import BaseTestCase
 
@@ -178,6 +179,22 @@ class TestSignals(BaseTestCase):
         r = timeout()
         self.execute_next()
         self.assertSignals([SIGNAL_ENQUEUED, SIGNAL_EXECUTING, SIGNAL_TIMEOUT])
+
+    def test_signals_chord(self):
+        @self.huey.task()
+        def prod(n):
+            return n + 1
+        @self.huey.task()
+        def agg(results):
+            return sum(results)
+
+        self.huey.enqueue(chord([prod.s(1), prod.s(2)], agg))
+        self.assertSignals([SIGNAL_ENQUEUED, SIGNAL_ENQUEUED])
+        self.assertEqual([self.execute_next() for _ in range(3)], [2, 3, 5])
+        self.assertSignals([
+            SIGNAL_EXECUTING, SIGNAL_COMPLETE,
+            SIGNAL_EXECUTING, SIGNAL_COMPLETE,
+            SIGNAL_ENQUEUED, SIGNAL_EXECUTING, SIGNAL_COMPLETE])
 
     def test_specific_handler(self):
         extra_state = []
