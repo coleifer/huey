@@ -9,6 +9,7 @@ Changelog
   the Task instance.
 * Remove Python 2.x compatibility.
 * Add new `incr(key, amount=1)` to storage API for atomic increment primitive.
+* Add `chord()` (map -> reduce) and `group()` (map) primitives.
 
 [View commits](https://github.com/coleifer/huey/compare/2.6.0...HEAD)
 
