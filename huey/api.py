@@ -337,45 +337,52 @@ class Huey(object):
         else:
             return Result(self, task)
 
-    def _set_chord_config(self, task, config):
-        while task.on_complete is not None:
-            task = task.on_complete
-        task.chord_config = config
-
     def _enqueue_chord(self, chord_obj):
         cid = str(uuid.uuid4())
         size = len(chord_obj.tasks)
         results = []
         for i, task in enumerate(chord_obj.tasks):
-            config = ChordConfig(cid, size, i, chord_obj.callback)
-
-            if isinstance(task, chord):
-                # Nested chord - the nested chord's callback becomes the outer
-                # chord task at position i.
-                self._set_chord_config(task.callback, config)
-                inner_result = self._enqueue_chord(task)
-                results.append(inner_result.callback)
-            elif isinstance(task, group):
+            if isinstance(task, group):
                 raise ValueError('cannot use `group` as a chord member - '
                                  'use .then() to convert to a `chord` first.')
-            else:
-                # Only set chord config on final step in pipeline.
-                self._set_chord_config(task, config)
-                results.append(self.enqueue(task))
 
-        callback_result = Result(self, chord_obj.callback)
+            config = ChordConfig(cid, size, i, chord_obj.callback)
+            results.append(self._enqueue_chord_member(task, config))
 
-        # Aggregate pipeline handles as well.
-        pipeline = None
-        if chord_obj.callback.on_complete:
-            current = chord_obj.callback.on_complete
-            pipeline_results = [callback_result]
-            while current is not None:
-                pipeline_results.append(Result(self, current))
-                current = current.on_complete
-            pipeline = ResultGroup(pipeline_results)
+        cb_result = Result(self, chord_obj.callback)
+        pipeline = self._build_pipeline_result(chord_obj.callback, cb_result)
+        return ChordResult(results, cb_result, pipeline)
 
-        return ChordResult(results, callback_result, pipeline)
+    def _enqueue_chord_member(self, task, config):
+        if isinstance(task, chord):
+            head = task.callback
+        else:
+            head = task
+
+        tail = head
+        while tail.on_complete is not None:
+            tail = tail.on_complete
+        tail.chord_config = config
+
+        # Enqueue head - nested chords are already enqueued (_enqueue_chord).
+        if isinstance(task, chord):
+            self._enqueue_chord(task)
+        else:
+            self.enqueue(head)
+
+        return Result(self, tail)
+
+    def _build_pipeline_result(self, callback, callback_result):
+        if not callback.on_complete:
+            return
+
+        pipeline = [callback_result]
+        current = callback.on_complete
+        while current is not None:
+            pipeline.append(Result(self, current))
+            current = current.on_complete
+
+        return ResultGroup(pipeline)
 
     def dequeue(self):
         data = self.storage.dequeue()
