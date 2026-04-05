@@ -337,19 +337,22 @@ class Huey(object):
         else:
             return Result(self, task)
 
+    def _set_chord_config(self, task, config):
+        while task.on_complete is not None:
+            task = task.on_complete
+        task.chord_config = config
+
     def _enqueue_chord(self, chord_obj):
         cid = str(uuid.uuid4())
         size = len(chord_obj.tasks)
         results = []
         for i, task in enumerate(chord_obj.tasks):
+            config = ChordConfig(cid, size, i, chord_obj.callback)
+
             if isinstance(task, chord):
                 # Nested chord - the nested chord's callback becomes the outer
                 # chord task at position i.
-                task.callback.chord_config = ChordConfig(
-                    cid,
-                    size,
-                    i,
-                    chord_obj.callback)
+                self._set_chord_config(task.callback, config)
                 inner_result = self._enqueue_chord(task)
                 results.append(inner_result.callback)
             elif isinstance(task, group):
@@ -357,10 +360,7 @@ class Huey(object):
                                  'use .then() to convert to a `chord` first.')
             else:
                 # Only set chord config on final step in pipeline.
-                curr = task
-                while curr.on_complete is not None:
-                    curr = curr.on_complete
-                curr.chord_config = ChordConfig(cid, size, i, chord_obj.callback)
+                self._set_chord_config(task, config)
                 results.append(self.enqueue(task))
 
         callback_result = Result(self, chord_obj.callback)
@@ -369,11 +369,11 @@ class Huey(object):
         pipeline = None
         if chord_obj.callback.on_complete:
             current = chord_obj.callback.on_complete
-            results = [callback_result]
+            pipeline_results = [callback_result]
             while current is not None:
-                results.append(Result(self, current))
+                pipeline_results.append(Result(self, current))
                 current = current.on_complete
-            pipeline = ResultGroup(results)
+            pipeline = ResultGroup(pipeline_results)
 
         return ChordResult(results, callback_result, pipeline)
 
@@ -539,8 +539,7 @@ class Huey(object):
             if exception is None:
                 self._check_chord(task, task_value)
             elif not task.retries:
-                err = Error(self.build_error_result(task, exception))
-                self._check_chord(task, err)
+                self._check_chord(task, exception)
 
         if exception is not None and task.retries:
             self._emit(S.SIGNAL_RETRYING, task)
@@ -552,7 +551,7 @@ class Huey(object):
         cc = task.chord_config
         chord_key = 'chord:%s' % cc.cid
         result_key = 'chord:%s:%s' % (cc.cid, cc.idx)
-        self.put_result(result_key, value)
+        self.put(result_key, value)
 
         if self.storage.incr(chord_key) == cc.size:
             self.storage.delete_counter(chord_key)

@@ -1489,7 +1489,7 @@ class TestChordPrimitive(BaseTestCase):
 
         @self.huey.task()
         def agg(ns):
-            if any(isinstance(n, Error) for n in ns):
+            if any(isinstance(n, Exception) for n in ns):
                 return -1
             return sum(ns)
 
