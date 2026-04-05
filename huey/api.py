@@ -364,7 +364,6 @@ class Huey(object):
             tail = tail.on_complete
         tail.chord_config = config
 
-        # Enqueue head - nested chords are already enqueued (_enqueue_chord).
         if isinstance(task, chord):
             self._enqueue_chord(task)
         else:
@@ -558,7 +557,7 @@ class Huey(object):
         cc = task.chord_config
         chord_key = 'chord:%s' % cc.cid
         result_key = 'chord:%s:%s' % (cc.cid, cc.idx)
-        self.put(result_key, value)
+        self.put_result(result_key, value)
 
         if self.storage.incr(chord_key) == cc.size:
             self.storage.delete_counter(chord_key)
@@ -1161,7 +1160,9 @@ class group(object):
         return chord(self.tasks, task)
 
     def error(self, *args, **kwargs):
-        raise NotImplementedError('error() is not available on `group()`')
+        # Apply error handler to all tasks.
+        for task in self.tasks:
+            task.error(*args, **kwargs)
 
 
 class chord(object):
@@ -1294,6 +1295,8 @@ class Result(object):
             retry_delay=self.task.retry_delay,
             priority=priority if priority is not None else self.task.priority,
             expires=expires if expires is not None else self.task.expires,
+            timeout=self.task.timeout,
+            chord_config=self.task.chord_config,
             on_complete=on_complete,
             on_error=on_error)
         return self.huey.enqueue(task)
