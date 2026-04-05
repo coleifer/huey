@@ -1423,6 +1423,47 @@ Huey object
     :returns: :py:class:`RateLimit` instance, which can be used as a
         decorator or context-manager.
 
+
+.. py:class:: group(tasks)
+
+    A ``group`` is a lightweight wrapper around any number of tasks that may
+    be executed in parallel. When a group is enqueued, Huey returns a
+    :py:class:`ResultGroup` for reading the results.
+
+    :param list tasks: any number of :py:class:`Task` instances.
+
+    Example:
+
+    .. code-block:: python
+
+        @huey.task()
+        def health_check(service):
+            return service.name, perform_health_check(service)
+
+        g = group([
+            health_check.s(api_service),
+            health_check.s(cache_service),
+            health_check.s(db_service),
+            health_check.s(proxy_service),
+        ])
+        result_group = huey.enqueue(g)
+
+        for name, is_healthy in result_group(blocking=True):
+            print('%s healthy? %s' % (name, is_healthy))
+
+    .. py:method:: then(task, *args, **kwargs)
+
+        :param task: A ``task()``-decorated function (:py:class:`TaskWrapper`),
+            or a :py:class:`Task` instance to run with the group results.
+        :param args: Arguments to pass to the task.
+        :param kwargs: Keyword arguments to pass to the task.
+        :returns: The group instance.
+
+        The :py:meth:`~group.then` method converts a :py:class:`group` into a
+        :py:class:`chord`. When all the tasks have finished executing and their
+        results are ready, the task specified in ``then()`` will be enqueued
+        with the group's results.
+
 Result
 ------
 

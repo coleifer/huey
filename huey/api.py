@@ -356,11 +356,26 @@ class Huey(object):
                 raise ValueError('cannot use `group` as a chord member - '
                                  'use .then() to convert to a `chord` first.')
             else:
-                task.chord_config = ChordConfig(cid, size, i, chord_obj.callback)
+                # Only set chord config on final step in pipeline.
+                curr = task
+                while curr.on_complete is not None:
+                    curr = curr.on_complete
+                curr.chord_config = ChordConfig(cid, size, i, chord_obj.callback)
                 results.append(self.enqueue(task))
 
         callback_result = Result(self, chord_obj.callback)
-        return ChordResult(results, callback_result)
+
+        # Aggregate pipeline handles as well.
+        pipeline = None
+        if chord_obj.callback.on_complete:
+            current = chord_obj.callback.on_complete
+            results = [callback_result]
+            while current is not None:
+                results.append(Result(self, current))
+                current = current.on_complete
+            pipeline = ResultGroup(results)
+
+        return ChordResult(results, callback_result, pipeline)
 
     def dequeue(self):
         data = self.storage.dequeue()
@@ -1310,9 +1325,10 @@ class ResultGroup(object):
 
 
 class ChordResult(object):
-    def __init__(self, results, callback_result):
+    def __init__(self, results, callback_result, pipeline=None):
         self.results = ResultGroup(results)
         self.callback = callback_result
+        self.pipeline_results = pipeline
 
     def get(self, *args, **kwargs):
         return self.callback.get(*args, **kwargs)

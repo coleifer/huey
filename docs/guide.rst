@@ -433,7 +433,7 @@ exception can override the task's default retry policy, by specifying either
 
 Example:
 
-.. code:: python
+.. code-block:: python
 
     @huey.task(retries=2)
     def load_data():
@@ -841,50 +841,197 @@ For more information, see the following API docs:
 Groups and Chords
 -----------------
 
-:py:class:`group` allows you to enqueue one or more tasks and gather the
-results:
+Pipelines execute tasks sequentially, while groups and chords allow you to run
+tasks in parallel, optionally collecting their results and passing them to a
+final callback.
+
+group - parallel execution
+^^^^^^^^^^^^^^^^^^^^^^^^^^-
+
+:py:class:`group` allows you to enqueue one or more tasks in parallel and
+gather the results. All tasks are enqueued immediately and may execute
+concurrently across workers. A :py:class:`ResultGroup` is returned to enable
+fetching the results of the tasks individually, as they become available, or
+after they are all completed.
+
+.. code-block:: python
+
+    from huey import group
+
+    @huey.task()
+    def fetch(url):
+        return requests.get(url).json()
+
+    urls = ['https://.../1/', 'https://.../2/', ...]
+    result_group = huey.enqueue(group([
+        fetch.s(url) for url in urls]))
+
+    # Block until all tasks are done.
+    results = result_group.get(blocking=True)
+    # [{'id': 1, ...}, {'id': 2, ...}, ...]
+
+Unlike :py:meth:`~TaskWrapper.map`, groups may contain different types of
+tasks:
 
 .. code-block:: python
 
     @huey.task()
-    def health_check(service):
-        return service.name, perform_health_check(service)
+    def check_cache():
+        return cache.ping()
 
-    g = group([
-        health_check.s(api_service),
-        health_check.s(cache_service),
-        health_check.s(db_service),
-        health_check.s(proxy_service),
-    ])
+    @huey.task()
+    def check_db():
+        try:
+            return db.execute('select 1').fetchone() is not None
+        except Exception:
+            logger.exception('database health-check failed')
+            return False
+
+    g = group([check_cache.s(), check_db.s()])
     result_group = huey.enqueue(g)
 
-    for name, is_healthy in result_group(blocking=True):
-        print('%s healthy? %s' % (name, is_healthy))
+    cache_ok, db_ok = result_group(blocking=True)
 
-:py:class:`chord` allows you to enqueue one or more tasks, then when they've
-all finished executing the results are sent to a final reducer callback:
+chord - map / reduce
+^^^^^^^^^^^^^^^^^^^^
+
+:py:class:`chord` is a :py:class:`group` with a callback. The member tasks are
+run in parallel and when all tasks have finished, their results (in order) are
+passed to the callback task.
 
 .. code-block:: python
 
+    from huey import chord
+
     @huey.task()
-    def fetch_url(url):
+    def fetch(url):
         return (url, requests.get(url).text)
 
     @huey.task()
-    def aggregate(responses):
-        for url, html in responses:
+    def index_pages(results):
+        for url, html in results:
             self.search.index(url, html)
-        return len(responses)
+
+        return len(results)
 
     # Huey will run all the fetch_url() tasks, then when they are all finished
-    # the `aggregate()` task will be enqueued with the task results.
+    # the `index_pages()` task will be enqueued with the task results.
+    urls = ['https://a.com', 'https://b.com', ...]
+
     c = chord(
-        [fetch_url.s(url) for url in urls_to_update],
-        aggregate)
+        [fetch.s(url) for url in urls],
+        index_pages)
 
     result = huey.enqueue(c)
-    pages_indexed = result(True)
-    print('Successfully indexed %s pages' % pages_indexed)
+    pages = result(blocking=True)
+    print('Indexed %s pages' % pages)
+
+What happens when a :py:class:`chord` is enqueued?
+
+1. All sub-tasks are placed on the queue. Workers begin executing them as they
+   are dequeued.
+2. As each sub-task completes, its return value is stored and an internal
+   completion counter is atomically incremented.
+3. When the last sub-task is complete, all sub-task results are collected in
+   order. The final callback is then enqueued with the sub-task results.
+4. The callback is executed by a worker and the final result is made available.
+
+Enqueueing a :py:class:`chord` returns a :py:class:`ChordResult`, which
+provides access to both the sub-task results and the callback result:
+
+.. code-block:: python
+
+    result = huey.enqueue(chord(
+        [fetch.s(u) for u in urls],
+        index_pages.s()))
+
+    result.results  # ResultGroup for the sub-tasks.
+    result.callback  # Result handle for callback.
+    result()  # Shortcut for `result.callback.get()`.
+
+Composing groups and chords
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Groups and chords allow the same composition APIs as pipelines. The following
+are equivalent:
+
+.. code-block:: python
+
+    @huey.task()
+    def incr(n):
+        return n + 1
+
+    @huey.task()
+    def total(ns):
+        return sum(ns)
+
+    result = huey.enqueue(
+        group([incr.s(i) for i in range(10)])
+        .then(total))
+
+    result = huey.enqueue(
+        chord([incr.s(i) for i in range(10)],
+        total))
+
+Using :py:meth:`~chord.then` or :py:meth:`~chord.error` on a :py:class:`chord`
+will attach an additional callback to the chord's callback:
+
+.. code-block:: python
+
+    result = huey.enqueue(
+        group([incr.s(i) for i in range(3)])
+        .then(total)
+        .then(incr)
+        .error(alert_admin))
+
+    # Chord result is the output of total().
+    print(result(blocking=True))  # 1 + 2 + 3 == 6.
+
+    # Results of chord pipeline are 6, 7.
+    print(result.pipeline_result(blocking=True))  # [6, 7]
+
+In this example, ``total`` receives the results from the ``incr`` subtasks.
+Then the result of ``total`` is passed to ``incr`` again. If ``total``
+raises an exception, ``alert_admin`` is executed instead.
+
+Execution flow:
+
+1. ``incr(0)``, ``incr(1)`` and ``incr(2)`` are enqueued.
+2. All three eventually finish and ``total([1, 2, 3])`` is enqueued.
+3. ``incr(6)`` is then enqueued and executed, returning ``7``.
+
+Pipelines inside chords
+^^^^^^^^^^^^^^^^^^^^^^^
+
+Individual chord members can be pipelines:
+
+.. code-block:: python
+
+    @huey.task()
+    def incr(n):
+        return n + 1
+
+    @huey.task()
+    def total(ns):
+        return sum(ns)
+
+    result = huey.enqueue(chord(
+        [incr.s(i).then(incr).then(incr) for i in range(3)],
+        total))
+
+    # First runs incr(0), incr(1), incr(2).
+    # Then: runs incr(1), incr(2), incr(3).
+    # Then: runs incr(2), incr(3), incr(4).
+    # Then: runs total([3, 4, 5])
+
+    print(result(True))  # 12.
+
+
+For more information, see the following API docs:
+
+* :py:class:`group`
+* :py:class:`chord`
+* :py:class:`ResultGroup` and :py:class:`ChordResult`
 
 
 Signals
@@ -1038,7 +1185,7 @@ can be configured using the following consumer options:
 If you would like to get email alerts when an error occurs, you can attach a
 ``logging.handlers.SMTPHandler`` to the ``huey`` namespace at level ``ERROR``:
 
-.. code:: python
+.. code-block:: python
 
     from logging.handlers import SMTPHandler
     import logging
