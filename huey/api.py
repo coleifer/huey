@@ -1163,6 +1163,7 @@ class group(object):
         # Apply error handler to all tasks.
         for task in self.tasks:
             task.error(*args, **kwargs)
+        return self
 
 
 class chord(object):
