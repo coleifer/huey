@@ -1480,6 +1480,57 @@ class TestGroupPrimitive(BaseTestCase):
         self.assertEqual(self.execute_next(), ['a', 'b', 'c'])
         self.assertEqual(r(), ['a', 'b', 'c'])
 
+    def test_group_error_handler(self):
+        error_state = []
+
+        @self.huey.task()
+        def task_a(n):
+            if n < 0:
+                raise TestError('invalid')
+            return n
+
+        @self.huey.task()
+        def on_err(exc):
+            error_state.append(repr(exc))
+
+        g = group([task_a.s(1), task_a.s(-1), task_a.s(3)])
+        g.error(on_err)
+        self.huey.enqueue(g)
+        self.assertEqual(len(self.huey), 3)
+
+        self.execute_next()  # task_a(1)
+        self.execute_next()  # task_a(-1) fails, on err enqueued.
+        self.assertEqual(len(self.huey), 2)
+        self.execute_next()  # task_a(3)
+
+        self.assertEqual(len(error_state), 0)
+        self.execute_next()  # on_err runs
+        self.assertEqual(len(error_state), 1)
+        self.assertTrue('TestError' in error_state[0])
+
+    def test_group_error_chaining(self):
+        # group.error() returns self, enabling .then() chaining.
+        @self.huey.task()
+        def fetch(n):
+            return n
+
+        @self.huey.task()
+        def on_err(exc):
+            pass
+
+        @self.huey.task()
+        def combine(results):
+            return sum(results)
+
+        result = self.huey.enqueue(
+            group([fetch.s(2), fetch.s(3)])
+            .error(on_err)
+            .then(combine))
+
+        self.assertEqual([self.execute_next() for _ in range(3)],
+                         [2, 3, 5])
+        self.assertEqual(result(), 5)
+
 
 class TestChordPrimitive(BaseTestCase):
     def funcs(self):
