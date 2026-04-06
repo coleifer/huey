@@ -846,7 +846,7 @@ tasks in parallel, optionally collecting their results and passing them to a
 final callback.
 
 group - parallel execution
-^^^^^^^^^^^^^^^^^^^^^^^^^^-
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 :py:class:`group` allows you to enqueue one or more tasks in parallel and
 gather the results. All tasks are enqueued immediately and may execute
@@ -892,12 +892,22 @@ tasks:
 
     cache_ok, db_ok = result_group(blocking=True)
 
+Error handlers can be attached to every member of a group:
+
+.. code-block:: python
+
+    @huey.task()
+    def on_fetch_error(exc):
+        logger.error('Fetch failed: %s', exc)
+
+    g = group([fetch.s(u) for u in urls]).error(on_fetch_error)
+
 chord - map / reduce
 ^^^^^^^^^^^^^^^^^^^^
 
 :py:class:`chord` is a :py:class:`group` with a callback. The member tasks are
-run in parallel and when all tasks have finished, their results (in order) are
-passed to the callback task.
+run in parallel and when all tasks are finished, their results are passed to
+the callback task in order.
 
 .. code-block:: python
 
@@ -930,24 +940,28 @@ What happens when a :py:class:`chord` is enqueued?
 
 1. All sub-tasks are placed on the queue. Workers begin executing them as they
    are dequeued.
-2. As each sub-task completes, its return value is stored and an internal
-   completion counter is atomically incremented.
+2. As each sub-task completes (or fails permanently), its return value (or
+   exception) is stored and an internal completion counter is atomically
+   incremented.
 3. When the last sub-task is complete, all sub-task results are collected in
    order. The final callback is then enqueued with the sub-task results.
 4. The callback is executed by a worker and the final result is made available.
 
 Enqueueing a :py:class:`chord` returns a :py:class:`ChordResult`, which
-provides access to both the sub-task results and the callback result:
+provides access to the final callback result, the sub-task results, and any
+tasks chained to the final callback.
 
 .. code-block:: python
 
-    result = huey.enqueue(chord(
-        [fetch.s(u) for u in urls],
-        index_pages.s()))
+    c = chord([fetch.s(u) for u in urls], index_pages).then(send_report)
 
-    result.results  # ResultGroup for the sub-tasks.
+    result = huey.enqueue(c)
+
+    result()  # Get result of index_pages (chord callback).
+    result.results  # ResultGroup for the sub-tasks (fetch(...)).
     result.callback  # Result handle for callback.
-    result()  # Shortcut for `result.callback.get()`.
+    result.pipeline_results  # ResultGroup for [index_pages, send_report]
+
 
 Composing groups and chords
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -988,7 +1002,7 @@ will attach an additional callback to the chord's callback:
     print(result(blocking=True))  # 1 + 2 + 3 == 6.
 
     # Results of chord pipeline are 6, 7.
-    print(result.pipeline_result(blocking=True))  # [6, 7]
+    print(result.pipeline_results(blocking=True))  # [6, 7]
 
 In this example, ``total`` receives the results from the ``incr`` subtasks.
 Then the result of ``total`` is passed to ``incr`` again. If ``total``
@@ -1026,6 +1040,139 @@ Individual chord members can be pipelines:
 
     print(result(True))  # 12.
 
+The chord callback is not enqueued until all sub-task pipelines have completed.
+
+chords inside chords
+^^^^^^^^^^^^^^^^^^^^
+
+chords can also contain chords:
+
+.. code-block:: python
+
+    @huey.task()
+    def fetch(url):
+        return requests.get(url).json()
+
+    @huey.task()
+    def merge(results):
+        combined = {}
+        for r in results:
+            combined.update(r)
+        return combined
+
+    @huey.task()
+    def publish(merged):
+        database.write(merged)
+
+    inner1 = chord([fetch.s(u) for u in us_urls], merge.s())
+    inner2 = chord([fetch.s(u) for u in eu_urls], merge.s())
+
+    result = huey.enqueue(
+        chord([inner1, inner2], publish.s()))
+
+In this example, two inner chords run in parallel. Each inner chord fans out
+to its own set of URLs, then merges the results. When **both** inner merge
+tasks complete, their results are collected and passed to ``publish``.
+
+Error handling in chords
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+chords are designed to **always complete**. When a sub-task fails and has no
+retries remaining, the exception is sent to the results list in place of a
+normal return value. The callback fires once all sub-tasks have completed, and
+in the event an error occurred, that sub-tasks' value is the exception.
+
+This means the callback may receive a mix of normal values and exceptions:
+
+.. code-block:: python
+
+    @huey.task()
+    def aggregate(results):
+        if any(isinstance(r, Exception) for r in results):
+            logger.warning('One of the sub-tasks failed.')
+        return process([r for r in results if not isinstance(r, Exception)])
+
+If a sub-task fails but has retries remaining, it will retry normally. The
+chord will not receive an Exception unless the sub-task has exhausted available
+retries.
+
+.. code-block:: python
+
+    @huey.task(retries=3, retry_delay=10)
+    def flaky_fetch(url):
+        return requests.get(url).json()
+
+    c = chord(
+        [flaky_fetch.s(u) for u in urls],
+        aggregate.s())
+
+If you prefer to handle errors before they reach the callback, catch
+exceptions inside your sub-tasks and return a sentinel value:
+
+.. code-block:: python
+
+    @huey.task()
+    def safe_fetch(url):
+        try:
+            return requests.get(url).json()
+        except Exception:
+            return None
+
+    @huey.task()
+    def aggregate(results):
+        valid = [r for r in results if r is not None]
+        return process(valid)
+
+Error callbacks on members work independently of the chord and can be
+applied via :py:meth:`group.error`:
+
+.. code-block:: python
+
+    @huey.task()
+    def on_fetch_error(exc):
+        logger.error('Fetch failed: %s', exc)
+
+    tasks = [fetch.s(u).error(on_fetch_error) for u in urls]
+    c = chord(tasks, aggregate.s())
+
+    # Or equivalently using group.error():
+    c = (group([fetch.s(u) for u in urls])
+         .error(on_fetch_error)
+         .then(aggregate))
+
+Error callbacks on the chord itself apply to the *callback* task:
+
+.. code-block:: python
+
+    c = chord(
+        [fetch.s(u) for u in urls],
+        aggregate.s()
+    ).error(alert_admin)
+
+In this example, ``alert_admin`` runs if ``aggregate`` raises an exception,
+*not* if a member fails.
+
+.. note::
+    Revoking a chord member will prevent it from running, which will prevent
+    the chord from ever completing. If you need to cancel a chord, revoke the
+    callback task instead.
+
+Dynamic fan-out
+^^^^^^^^^^^^^^^
+
+Because chord members must be known at enqueue time, dynamic fan-out (where
+the set of subtasks depends on a runtime value) should be done from inside
+a task:
+
+.. code-block:: python
+
+    @huey.task()
+    def discover_and_fetch(config):
+        urls = compute_urls(config)
+        result = huey.enqueue(chord(
+            [fetch.s(u) for u in urls],
+            aggregate.s()))
+        return result.callback.id  # Return the callback task id for tracking.
 
 For more information, see the following API docs:
 

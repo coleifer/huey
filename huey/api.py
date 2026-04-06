@@ -350,7 +350,7 @@ class Huey(object):
             results.append(self._enqueue_chord_member(task, config))
 
         cb_result = Result(self, chord_obj.callback)
-        pipeline = self._build_pipeline_result(chord_obj.callback, cb_result)
+        pipeline = self._build_pipeline_results(chord_obj.callback, cb_result)
         return ChordResult(results, cb_result, pipeline)
 
     def _enqueue_chord_member(self, task, config):
@@ -371,7 +371,7 @@ class Huey(object):
 
         return Result(self, tail)
 
-    def _build_pipeline_result(self, callback, callback_result):
+    def _build_pipeline_results(self, callback, callback_result):
         if not callback.on_complete:
             return
 
