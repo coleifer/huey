@@ -339,6 +339,9 @@ Huey object
         .. code-block:: pycon
 
             >>> res = slow(10)  # Returns immediately.
+
+            >>> res()  # Non-blocking read - returns None if not ready.
+
             >>> res(blocking=True)  # Block until task finishes, ~10s.
             10
 
@@ -392,27 +395,13 @@ Huey object
 
         The ``periodic_task()`` decorator marks a function for automatic
         execution by the consumer *at a specific interval*, like ``cron``.
+        The ``validate_datetime`` parameter is typically the :py:func:`crontab`
+        helper (described below). The consumer checks once per minute whether
+        the function should run.
 
-        The ``validate_datetime`` parameter is a function which accepts a
-        ``datetime`` object and returns a boolean value whether or not the
-        decorated function should execute at that time or not. The consumer
-        will send a datetime to the function once per minute, giving it the
-        same granularity as the ``cron``.
-
-        For simplicity, there is a special function :py:func:`crontab`, which
-        can be used to quickly specify intervals at which a function should
-        execute. It is described below.
-
-        Here is an example of how you might use the ``periodic_task`` decorator
-        and the :py:func:`crontab`` helper. The following task will be executed
-        every three hours, on the hour:
+        Example — execute every three hours, on the hour:
 
         .. code-block:: python
-
-            from huey import crontab
-            from huey import RedisHuey
-
-            huey = RedisHuey()
 
             @huey.periodic_task(crontab(minute='0', hour='*/3'))
             def update_feeds():
