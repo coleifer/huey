@@ -631,7 +631,7 @@ Huey object
 
             @huey.signal(SIGNAL_ERROR, SIGNAL_LOCKED)
             def task_not_run_handler(signal, task, exc=None):
-                # Do something in response to the "ERROR" or "LOCEKD" signals.
+                # Do something in response to the "ERROR" or "LOCKED" signals.
                 # Note that the "ERROR" signal includes a third parameter,
                 # which is the unhandled exception that was raised by the task.
                 # Since this parameter is not sent with the "LOCKED" signal, we
@@ -681,11 +681,11 @@ Huey object
           provides access to the member results, the callback result, and any
           tasks chained after the callback.
 
-         .. note::
-             Calling (or scheduling) a ``task``-decorated function will
-             automatically enqueue a task for execution. You only need to call
-             :py:meth:`~Huey.enqueue` directly when working with pipelines,
-             groups, or chords.
+        .. note::
+            Calling (or scheduling) a ``task``-decorated function will
+            automatically enqueue a task for execution. You only need to call
+            :py:meth:`~Huey.enqueue` directly when working with pipelines,
+            groups, or chords.
 
     .. py:method:: revoke(task, revoke_until=None, revoke_once=False)
 
@@ -1066,10 +1066,6 @@ Huey object
         :param int retries: number of times to retry the function if an
             unhandled exception occurs when it is executed.
         :param int retry_delay: number of seconds to wait between retries.
-        :param bool context: when the task is executed, include the
-            :py:class:`Task` instance as a keyword argument.
-        :param str name: name for this task. If not provided, Huey will default
-            to using the module name plus function name.
         :param expires: set expiration time for task - if task is not run
             before ``expires``, it will be discarded. The ``expires`` parameter
             can be either an integer (seconds), a timedelta, or a datetime. For
