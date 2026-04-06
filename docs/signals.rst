@@ -7,42 +7,134 @@ The consumer will send various signals as it processes tasks. Callbacks can be
 registered as signal handlers, and will be called synchronously by the consumer
 process.
 
-The following signals are implemented by Huey:
+Signal Reference
+----------------
 
-* ``SIGNAL_CANCELED``: task was canceled due to a pre-execute hook raising
-  a :py:class:`CancelExecution` exception.
-* ``SIGNAL_COMPLETE``: task has been executed successfully.
-* ``SIGNAL_ENQUEUED``: task has been enqueued (**see note**).
-* ``SIGNAL_ERROR``: task failed due to an unhandled exception.
-* ``SIGNAL_EXECUTING``: task is about to be executed.
-* ``SIGNAL_EXPIRED``: task expired.
-* ``SIGNAL_LOCKED``: failed to acquire lock, aborting task.
-* ``SIGNAL_RETRYING``: task failed, but will be retried.
-* ``SIGNAL_REVOKED``: task is revoked and will not be executed.
-* ``SIGNAL_SCHEDULED``: task is not yet ready to run and has been added to the
-  schedule for future execution.
-* ``SIGNAL_INTERRUPTED``: task is interrupted when consumer exits.
-* ``SIGNAL_TIMEOUT``: task timed-out during execution.
-* ``SIGNAL_RATE_LIMITED``: task is rate-limited.
+The following table lists all signals, when they are emitted, and any extra
+arguments passed to the handler beyond the standard ``(signal, task)`` pair.
 
-When a signal handler is called, it will be called with the following
-arguments:
+.. list-table::
+   :header-rows: 1
+   :widths: 25 50 25
 
-* ``signal``: the signal name, e.g. ``'executing'``.
-* ``task``: the :py:class:`Task` instance.
+   * - Signal
+     - When emitted
+     - Extra arguments
+   * - ``SIGNAL_ENQUEUED``
+     - Task has been placed on the queue. Emitted in both the **application
+       process** (when your code calls a task) and the **consumer** (when
+       re-enqueueing retries, periodic tasks, or scheduled tasks).
+     - None
+   * - ``SIGNAL_EXECUTING``
+     - Task is about to be executed by a worker.
+     - None
+   * - ``SIGNAL_COMPLETE``
+     - Task has finished executing successfully and the result has been stored
+       in the result-store.
+     - None
+   * - ``SIGNAL_ERROR``
+     - Task raised an unhandled exception during execution.
+     - ``exc`` -- the exception instance.
+   * - ``SIGNAL_CANCELED``
+     - Task was canceled, either by a :py:meth:`~Huey.pre_execute` hook
+       raising :py:class:`CancelExecution`, or by the task function itself
+       raising ``CancelExecution``.
+     - None
+   * - ``SIGNAL_RETRYING``
+     - Task failed but will be retried (retries remaining, or
+       :py:class:`RetryTask` was raised).
+     - None
+   * - ``SIGNAL_SCHEDULED``
+     - Task is not yet ready to run and has been added to the schedule for
+       future execution (e.g., has an ``eta`` or ``retry_delay``).
+     - None
+   * - ``SIGNAL_REVOKED``
+     - Task was revoked and will not be executed. No further signals are
+       emitted for this task.
+     - None
+   * - ``SIGNAL_EXPIRED``
+     - Task's expiration time has passed; it will not be executed.
+     - None
+   * - ``SIGNAL_LOCKED``
+     - Task could not acquire its lock (:py:meth:`Huey.lock_task`). The
+       task will not be executed.
+     - None
+   * - ``SIGNAL_TIMEOUT``
+     - Task exceeded its execution timeout.
+     - None
+   * - ``SIGNAL_RATE_LIMITED``
+     - Task was rate-limited by a :py:meth:`Huey.rate_limit`.
+     - None
+   * - ``SIGNAL_INTERRUPTED``
+     - Consumer was shut down while the task was still executing (e.g., via
+       ``SIGTERM``).
+     - None
 
-The following signals will include additional arguments:
+Signal Ordering
+---------------
 
-* ``SIGNAL_ERROR``: includes a third argument ``exc``, which is the
-  ``Exception`` that was raised while executing the task.
+Signals are emitted in a deterministic order. Understanding this order is
+important when writing signal handlers that depend on the state of the task or
+the result store.
 
-.. note::
-    Signals are run within the context of the consumer **except** that the
-    ``SIGNAL_ENQUEUED`` signal will also run within the context of your
-    application code (since your application code will typically enqueue
-    tasks). Recall that signal handlers are run sequentially and synchronously,
-    so be careful about introducing overhead in them -- particularly when they
-    may be run by the application process.
+**Successful task execution:**
+
+1. ``SIGNAL_ENQUEUED`` -- task placed on the queue (in the **application** process).
+2. ``SIGNAL_EXECUTING`` -- worker picks up the task.
+3. ``SIGNAL_COMPLETE`` -- task finished. The result is in the result store.
+4. If the task has an ``on_complete`` pipeline, the next task is enqueued
+   (emitting another ``SIGNAL_ENQUEUED``).
+
+**Task failure with retry:**
+
+1. ``SIGNAL_ENQUEUED``
+2. ``SIGNAL_EXECUTING``
+3. ``SIGNAL_ERROR`` -- exception is passed as ``exc``. The error result is
+   stored at this point.
+4. ``SIGNAL_RETRYING`` -- task will be retried.
+5. If ``retry_delay`` is set: ``SIGNAL_SCHEDULED`` (task added to the schedule
+   for later). Otherwise: ``SIGNAL_ENQUEUED`` (task re-added to the queue
+   immediately).
+
+**Task failure without retry (retries exhausted or not configured):**
+
+1. ``SIGNAL_ENQUEUED``
+2. ``SIGNAL_EXECUTING``
+3. ``SIGNAL_ERROR``
+
+**Scheduled task:**
+
+1. ``SIGNAL_ENQUEUED`` -- task placed on the queue (application process).
+2. ``SIGNAL_SCHEDULED`` -- worker sees the task is not ready to run, adds it
+   to the schedule.
+3. When the scheduler determines the task is ready: ``SIGNAL_ENQUEUED``
+   (in the **consumer** process).
+4. ``SIGNAL_EXECUTING``
+5. ``SIGNAL_COMPLETE`` (or ``SIGNAL_ERROR``, etc.)
+
+**Revoked task:**
+
+1. ``SIGNAL_ENQUEUED``
+2. ``SIGNAL_REVOKED`` -- no further signals are emitted.
+
+**Rate-limited task (with automatic retry):**
+
+1. ``SIGNAL_ENQUEUED``
+2. ``SIGNAL_EXECUTING``
+3. ``SIGNAL_RATE_LIMITED``
+4. ``SIGNAL_RETRYING``
+5. ``SIGNAL_SCHEDULED`` -- task is scheduled for the start of the next
+   rate-limit window.
+
+**Chord signals:**
+
+When a chord is enqueued, each sub-task emits its own ``SIGNAL_ENQUEUED``.
+As sub-tasks complete, they emit ``SIGNAL_COMPLETE`` (or ``SIGNAL_ERROR``).
+When the last sub-task finishes, the callback is enqueued
+(``SIGNAL_ENQUEUED``), then executed (``SIGNAL_EXECUTING``, etc.).
+
+Registering Signal Handlers
+----------------------------
 
 To register a signal handler, use the :py:meth:`Huey.signal` method:
 
@@ -61,8 +153,11 @@ To register a signal handler, use the :py:meth:`Huey.signal` method:
 
     @huey.signal(SIGNAL_COMPLETE)
     def task_success(signal, task):
-        # This handle will be called for each task that completes successfully.
+        # This handler will be called for each task that completes successfully.
         pass
+
+When no signals are specified (as in ``all_signal_handler``), the handler is
+registered for **all** signals via an internal ``"any"`` channel.
 
 Signal handlers can be unregistered using :py:meth:`Huey.disconnect_signal`.
 
@@ -184,6 +279,46 @@ re-enqueue them:
         # The consumer was shutdown before `task` finished executing.
         # Re-enqueue it.
         huey.enqueue(task)
+
+Signal Handler Error Resilience
+-------------------------------
+
+If a signal handler raises an exception, Huey **logs the exception** but
+continues processing. A broken signal handler will not prevent other signal
+handlers from running, nor will it prevent the task from being executed or
+its result from being stored.
+
+.. code-block:: python
+
+    @huey.signal(SIGNAL_COMPLETE)
+    def broken_handler(signal, task):
+        raise ValueError('oops')
+
+    @huey.signal(SIGNAL_COMPLETE)
+    def working_handler(signal, task):
+        # This will still be called, even if broken_handler raised.
+        record_completion(task.id)
+
+Signals and Immediate Mode
+--------------------------
+
+Signals fire in :ref:`immediate mode <immediate>` as well as when running the
+consumer. This makes it easy to test signal handlers:
+
+.. code-block:: python
+
+    huey.immediate = True
+
+    state = []
+
+    @huey.signal(SIGNAL_COMPLETE)
+    def on_complete(signal, task):
+        state.append(task.id)
+
+    result = add(1, 2)  # Executes immediately, fires signals.
+    assert len(state) == 1
+    assert state[0] == result.id
+
 
 Performance considerations
 --------------------------

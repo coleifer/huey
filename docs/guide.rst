@@ -227,7 +227,7 @@ between attempts:
         # ...
 
 .. note::
-    Retries and retry delay arguments can also be specified for periodic tasks.
+    ``retries`` and ``retry_delay`` can also be specified for periodic tasks.
 
 It is also possible to explicitly retry a task from within the task, by raising
 a :py:class:`RetryTask` exception. When this exception is used, the task will
@@ -251,6 +251,247 @@ For more information, see the following API documentation:
 * :py:meth:`~Huey.task` and :py:meth:`~Huey.periodic_task`
 * :py:class:`Result`
 * :py:class:`RetryTask`
+
+
+Error handling
+--------------
+
+When a task raises an unhandled exception, Huey performs several actions:
+
+1. The exception and traceback are logged.
+2. An error result is stored in the result store (a dict containing the
+   exception representation, traceback, task ID, and remaining retries).
+3. The ``SIGNAL_ERROR`` :ref:`signal <signals>` is emitted.
+4. If the task has retries remaining, it is re-enqueued (and
+   ``SIGNAL_RETRYING`` is emitted).
+5. If the task has an ``on_error`` handler, the error handler task is enqueued
+   with the exception as an argument.
+
+Reading error results
+^^^^^^^^^^^^^^^^^^^^^
+
+When you call :py:meth:`Result.get` on a task that failed, a :py:class:`TaskException`
+is raised. The ``TaskException`` has a ``metadata`` attribute containing details
+about the failure:
+
+.. code-block:: python
+
+    from huey.exceptions import TaskException
+
+    @huey.task()
+    def download(url):
+        resp = requests.get(url)
+        resp.raise_for_status()
+        return resp.text
+
+    result = download('https://example.com/missing')
+
+    try:
+        result.get(blocking=True, timeout=10)
+    except TaskException as exc:
+        print(exc.metadata['error'])      # "HTTPError('404 ...')"
+        print(exc.metadata['traceback'])  # Full traceback string.
+        print(exc.metadata['task_id'])    # UUID of the failed task.
+        print(exc.metadata['retries'])    # Retries remaining (0 if exhausted).
+
+Result handle after a retry
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+When a task fails, the error result is written to the result store. If the task
+is retried and eventually succeeds, the success result **overwrites** the error.
+However, the :py:class:`Result` object caches the result locally after the
+first read. To see the updated result after a retry, you must call
+:py:meth:`~Result.reset`:
+
+.. code-block:: python
+
+    @huey.task(retries=2, retry_delay=10)
+    def flaky_download(url):
+        resp = requests.get(url)
+        resp.raise_for_status()
+        return resp.text
+
+    result = flaky_download('https://example.com/intermittent')
+
+    try:
+        result.get(blocking=True, timeout=5)
+    except TaskException:
+        # First attempt failed. Wait for the retry to finish.
+        result.reset()  # Clear cached error so we can read the new result.
+        value = result.get(blocking=True, timeout=30)
+        # value now contains the successful return value (or raises again).
+
+For more information, see:
+
+* :py:class:`Result`
+* :py:class:`TaskException`
+
+.. _immediate:
+
+Immediate mode
+--------------
+
+Huey can be run in a special mode called *immediate* mode, which is very useful
+during testing and development. In immediate mode, Huey will execute task
+functions immediately rather than enqueueing them, while still preserving the
+APIs and behaviors one would expect when running a dedicated consumer process.
+
+Immediate mode can be enabled in two ways:
+
+.. code-block:: python
+
+    huey = RedisHuey('my-app', immediate=True)
+
+    # Or at any time, via the "immediate" attribute:
+    huey = RedisHuey('my-app')
+    huey.immediate = True
+
+To disable immediate mode:
+
+.. code-block:: python
+
+    huey.immediate = False
+
+By default, enabling immediate mode will switch your Huey instance to using
+in-memory storage. This is to prevent accidentally reading or writing to live
+storage while doing development or testing. If you prefer to use immediate mode
+with live storage, you can specify ``immediate_use_memory=False`` when creating
+your :py:class:`Huey` instance:
+
+.. code-block:: python
+
+    huey = RedisHuey('my-app', immediate_use_memory=False)
+
+You can try out immediate mode quite easily in the Python shell. In the
+following example, everything happens within the interpreter -- no separate
+consumer process is needed. In fact, because immediate mode switches to an
+in-memory storage when enabled, we don't even have to be running a Redis
+server:
+
+.. code-block:: pycon
+
+    >>> from huey import RedisHuey
+    >>> huey = RedisHuey()
+    >>> huey.immediate = True
+
+    >>> @huey.task()
+    ... def add(a, b):
+    ...     return a + b
+    ...
+
+    >>> result = add(1, 2)
+    >>> result()
+    3
+
+    >>> add.revoke(revoke_once=True)  # We can revoke tasks.
+    >>> result = add(2, 3)
+    >>> result() is None
+    True
+
+    >>> add(3, 4)()  # No longer revoked, was restored automatically.
+    7
+
+What happens if we try to schedule a task for execution in the future, while
+using immediate mode?
+
+.. code-block:: pycon
+
+    >>> result = add.schedule((4, 5), delay=60)
+    >>> result() is None  # No result.
+    True
+
+As you can see, the task was not executed. So what happened to it? The answer
+is that the task was added to the in-memory storage layer's schedule. We can
+check this by calling :py:meth:`Huey.scheduled`:
+
+.. code-block:: pycon
+
+    >>> huey.scheduled()
+    [__main__.add: 8873...bcbd @2019-03-27 02:50:06]
+
+Since immediate mode is fully synchronous, there is not a separate thread
+monitoring the schedule. The schedule can still be read or written to, but
+scheduled tasks will **not** automatically be executed and periodic tasks will
+not be enqueued.
+
+
+Testing Guidelines
+------------------
+
+When testing Huey task-decorated functions, a couple guidelines will make your
+life easier.
+
+1. Set your :py:class:`Huey` instance to :ref:`immediate`. Any code that calls
+   a task will run it synchronously, so it is safe to block on results as well.
+2. Unit test individual tasks by using the ``.call_local()`` to call the
+   underlying function.
+
+Examples:
+
+.. code-block:: python
+
+    # Consider the following Huey instance and tasks:
+    huey = RedisHuey(...)
+
+    # Fake database to check side-effects.
+    database = []
+
+    @huey.task()
+    def add(a, b):
+        return a + b
+
+    @huey.periodic_task(crontab(...))
+    def run_reports():
+        global database
+        database.append(True)  # Simulate a side-effect.
+
+        # The return values for periodic tasks are discarded when run by the
+        # Huey consumer. A return value may be helpful for testing, however, so
+        # in this example we will return something to demonstrate how to test
+        # our periodic task.
+        return 42
+
+    class TestMyTasks(unittest.TestCase):
+        def setUp(self):
+            # Make tasks run synchronously.
+            huey.immediate = True
+
+        def tearDown(self):
+            huey.immediate = False
+
+        def test_task(self):
+            result_handle = add(3, 4)
+            self.assertEqual(result_handle.get(), 7)
+
+            # Alternatively, you can also:
+            self.assertEqual(add.call_local(3, 4), 7)
+
+        def test_task_exceptions(self):
+            # We can also test exceptions.
+            result_handle = add(3, None)  # Exception logged, but not raised.
+
+            with self.assertRaises(TaskException):
+                result_handle.get()
+
+            with self.assertRaises(TypeError):
+                # Exception raised directly when using call_local().
+                add.call_local(3, None)
+
+        def test_periodic_task(self):
+            # We cannot use the result-handle from a periodic task, because the
+            # results are always discarded by the consumer. In this case it is
+            # necessary to use `.call_local()` if we want to check the return
+            # value.
+            self.assertEqual(run_reports.call_local(), 42)
+            self.assertTrue(len(database), 1)
+
+            # If our periodic task has a side-effect, however, we can call it
+            # normally and check the side-effect happened. For example, if the
+            # run_reports() periodic task wrote a row to a database, we could
+            # do something like:
+            run_reports()
+            self.assertTrue(len(database), 2)
+
 
 .. _priority:
 
@@ -835,6 +1076,57 @@ For more information, see the following API docs:
 * :py:meth:`Task.then`
 * :py:class:`ResultGroup` and :py:class:`Result`
 
+Error pipelines
+^^^^^^^^^^^^^^^
+
+Just as :py:meth:`Task.then` chains a follow-up task on success, the
+:py:meth:`Task.error` method chains a task that runs when the parent fails.
+The exception is passed as the first argument to the error handler:
+
+.. code-block:: python
+
+    @huey.task()
+    def download(url):
+        resp = requests.get(url)
+        resp.raise_for_status()
+        return resp.text
+
+    @huey.task()
+    def on_download_error(exc, url=None):
+        logger.error('Download of %s failed: %s', url, exc)
+        send_alert('Download failed', str(exc))
+
+    # Build a task with an error handler.
+    task = download.s('https://example.com/data')
+    task.error(on_download_error, url='https://example.com/data')
+    result = huey.enqueue(task)
+
+Error handlers can also be combined with success pipelines:
+
+.. code-block:: python
+
+    task = (download.s('https://example.com/data')
+            .then(parse_response)
+            .then(store_result))
+    task.error(on_download_error)
+    result = huey.enqueue(task)
+
+If ``download`` raises an exception, ``on_download_error`` is called and the
+success pipeline (``parse_response``, ``store_result``) is skipped. If
+``download`` succeeds, ``parse_response`` runs and ``on_download_error`` is
+never called.
+
+.. note::
+    The error handler is attached to the first task in the pipeline. If a
+    *later* task in the pipeline fails (e.g., ``parse_response``), the error
+    handler on ``download`` is not triggered. To handle errors in later stages,
+    attach error handlers to those tasks directly.
+
+For more information, see:
+
+* :py:meth:`Task.error`
+* :py:class:`TaskException`
+
 .. _groups-and-chords:
 
 Groups and Chords
@@ -1218,92 +1510,6 @@ exception during execution.
 For a complete list of Huey's signals and their meaning, see the :ref:`signals`
 document, and the :py:meth:`Huey.signal` API documentation.
 
-.. _immediate:
-
-Immediate mode
---------------
-
-Huey can be run in a special mode called *immediate* mode, which is very useful
-during testing and development. In immediate mode, Huey will execute task
-functions immediately rather than enqueueing them, while still preserving the
-APIs and behaviors one would expect when running a dedicated consumer process.
-
-Immediate mode can be enabled in two ways:
-
-.. code-block:: python
-
-    huey = RedisHuey('my-app', immediate=True)
-
-    # Or at any time, via the "immediate" attribute:
-    huey = RedisHuey('my-app')
-    huey.immediate = True
-
-To disable immediate mode:
-
-.. code-block:: python
-
-    huey.immediate = False
-
-By default, enabling immediate mode will switch your Huey instance to using
-in-memory storage. This is to prevent accidentally reading or writing to live
-storage while doing development or testing. If you prefer to use immediate mode
-with live storage, you can specify ``immediate_use_memory=False`` when creating
-your :py:class:`Huey` instance:
-
-.. code-block:: python
-
-    huey = RedisHuey('my-app', immediate_use_memory=False)
-
-You can try out immediate mode quite easily in the Python shell. In the
-following example, everything happens within the interpreter -- no separate
-consumer process is needed. In fact, because immediate mode switches to an
-in-memory storage when enabled, we don't even have to be running a Redis
-server:
-
-.. code-block:: pycon
-
-    >>> from huey import RedisHuey
-    >>> huey = RedisHuey()
-    >>> huey.immediate = True
-
-    >>> @huey.task()
-    ... def add(a, b):
-    ...     return a + b
-    ...
-
-    >>> result = add(1, 2)
-    >>> result()
-    3
-
-    >>> add.revoke(revoke_once=True)  # We can revoke tasks.
-    >>> result = add(2, 3)
-    >>> result() is None
-    True
-
-    >>> add(3, 4)()  # No longer revoked, was restored automatically.
-    7
-
-What happens if we try to schedule a task for execution in the future, while
-using immediate mode?
-
-.. code-block:: pycon
-
-    >>> result = add.schedule((4, 5), delay=60)
-    >>> result() is None  # No result.
-    True
-
-As you can see, the task was not executed. So what happened to it? The answer
-is that the task was added to the in-memory storage layer's schedule. We can
-check this by calling :py:meth:`Huey.scheduled`:
-
-.. code-block:: pycon
-
-    >>> huey.scheduled()
-    [__main__.add: 8873...bcbd @2019-03-27 02:50:06]
-
-Since immediate mode is fully synchronous, there is not a separate thread
-monitoring the schedule. The schedule can still be read or written to, but
-scheduled tasks will not automatically be executed.
 
 .. _logging:
 
@@ -1417,82 +1623,6 @@ weaknesses of each storage layer.
 :py:class:`BlackHoleHuey`
     All storage methods are no-ops.
 
-Testing Guidelines
-------------------
-
-When testing Huey task-decorated functions, a couple guidelines will make your
-life easier.
-
-1. Set your :py:class:`Huey` instance to :ref:`immediate`. Any code that calls
-   a task will run it synchronously, so it is safe to block on results as well.
-2. Unit test individual tasks by using the ``.call_local()`` to call the
-   underlying function.
-
-Examples:
-
-.. code-block:: python
-
-    # Consider the following Huey instance and tasks:
-    huey = RedisHuey(...)
-
-    # Fake database to check side-effects.
-    database = []
-
-    @huey.task()
-    def add(a, b):
-        return a + b
-
-    @huey.periodic_task(crontab(...))
-    def run_reports():
-        global database
-        database.append(True)  # Simulate a side-effect.
-
-        # The return values for periodic tasks are discarded when run by the
-        # Huey consumer. A return value may be helpful for testing, however, so
-        # in this example we will return something to demonstrate how to test
-        # our periodic task.
-        return 42
-
-    class TestMyTasks(unittest.TestCase):
-        def setUp(self):
-            # Make tasks run synchronously.
-            huey.immediate = True
-
-        def tearDown(self):
-            huey.immediate = False
-
-        def test_task(self):
-            result_handle = add(3, 4)
-            self.assertEqual(result_handle.get(), 7)
-
-            # Alternatively, you can also:
-            self.assertEqual(add.call_local(3, 4), 7)
-
-        def test_task_exceptions(self):
-            # We can also test exceptions.
-            result_handle = add(3, None)  # Exception logged, but not raised.
-
-            with self.assertRaises(TaskException):
-                result_handle.get()
-
-            with self.assertRaises(TypeError):
-                # Exception raised directly when using call_local().
-                add.call_local(3, None)
-
-        def test_periodic_task(self):
-            # We cannot use the result-handle from a periodic task, because the
-            # results are always discarded by the consumer. In this case it is
-            # necessary to use `.call_local()` if we want to check the return
-            # value.
-            self.assertEqual(run_reports.call_local(), 42)
-            self.assertTrue(len(database), 1)
-
-            # If our periodic task has a side-effect, however, we can call it
-            # normally and check the side-effect happened. For example, if the
-            # run_reports() periodic task wrote a row to a database, we could
-            # do something like:
-            run_reports()
-            self.assertTrue(len(database), 2)
 
 Tips and tricks
 ---------------
@@ -1541,161 +1671,90 @@ parameters using the :py:meth:`~TaskWrapper.map` method:
     >>> result_group.get(blocking=True)
     [0, 2, 6, 12, 20, 30, 42, 56, 72, 90]
 
-The Huey result-store can be used directly if you need a convenient way to
-cache arbitrary key/value data:
+Retrieving Results by Task ID
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+If you have a task ID but not the original :py:class:`Result` handle (e.g.,
+because you stored the ID in a database or session), you can retrieve the
+result using :py:meth:`Huey.result`:
+
+.. code-block:: python
+
+    # In a web handler, store the task ID when enqueuing:
+    result = process_upload(file_id)
+    session['task_id'] = result.id
+
+    # Later, in a status-checking endpoint:
+    task_id = session['task_id']
+    try:
+        value = huey.result(task_id, blocking=False, preserve=True)
+    except TaskException as exc:
+        return {'status': 'error', 'detail': exc.metadata['error']}
+
+    if value is None:
+        return {'status': 'pending'}
+    return {'status': 'complete', 'value': value}
+
+Schedule Shorthand
+^^^^^^^^^^^^^^^^^^
+
+The :py:meth:`~TaskWrapper.schedule` method accepts a delay (int/float or
+timedelta) or an ETA (datetime):
+
+.. code-block:: python
+
+    # These are all equivalent:
+    add.schedule(args=(1, 2), delay=60)
+    add.schedule(args=(1, 2), delay=timedelta(seconds=60))
+    add.schedule(args=(1, 2), eta=datetime.now() + timedelta(seconds=60))
+
+Iterating Results as They Complete
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+When working with a :py:class:`ResultGroup` (from :py:meth:`~TaskWrapper.map`
+or :py:class:`group`), you can iterate over results as they become available
+using :py:meth:`~ResultGroup.as_completed`:
+
+.. code-block:: python
+
+    result_group = huey.enqueue(group([
+        fetch.s(url) for url in urls]))
+
+    for value in result_group.as_completed():
+        # Process each result as soon as it's ready, rather than waiting
+        # for all tasks to finish.
+        process(value)
+
+Reserved Keyword Arguments
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+When calling a task-decorated function or using :py:meth:`~TaskWrapper.s`, the
+following keyword arguments are intercepted by Huey and will **not** be passed
+to your task function:
+
+* ``eta``
+* ``delay``
+* ``retries``
+* ``retry_delay``,
+* ``priority``
+* ``expires``
+* ``timeout``
+
+This means you cannot use these names as keyword arguments to your task
+function:
 
 .. code-block:: python
 
     @huey.task()
-    def calculate_something():
-        # By default, the result store treats get() like a pop(), so in
-        # order to preserve the data so it can be read again, we specify
-        # the second argument, peek=True.
-        prev_results = huey.get('calculate-something.result', peek=True)
-        if prev_results is None:
-            # No previous results found, start from the beginning.
-            data = start_from_beginning()
-        else:
-            # Only calculate what has changed since last time.
-            data = just_what_changed(prev_results)
+    def bad_example(priority=None):  # "priority" is reserved!
+        ...
 
-        # We can store the updated data back in the result store.
-        huey.put('calculate-something.result', data)
-        return data
+    # This will set the task's priority to 10, NOT pass priority=10 to
+    # the function.
+    bad_example(priority=10)
 
-See :py:meth:`Huey.get` and :py:meth:`Huey.put` for additional details.
-
-Exponential Backoff Retries
-^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-Huey tasks support specifying a number of ``retries`` and a ``retry_delay``,
-but does not support exponential backoff out-of-the-box. That's not a problem,
-as we can use a couple decorators to implement it ourselves quite easily:
-
-.. code-block:: python
-
-    import functools
-
-    def exp_backoff_task(retries=10, retry_backoff=1.15):
-        def deco(fn):
-            @functools.wraps(fn)
-            def inner(*args, **kwargs):
-                # We will register this task with `context=True`, which causes
-                # Huey to pass the task instance as a keyword argument to the
-                # decorated task function. This enables us to modify its retry
-                # delay, multiplying it by our backoff factor, in the event of
-                # an exception.
-                task = kwargs.pop('task')
-                try:
-                    return fn(*args, **kwargs)
-                except Exception as exc:
-                    task.retry_delay *= retry_backoff
-                    raise exc
-
-            # Register our wrapped task (inner()), which handles delegating to
-            # our function, and in the event of an unhandled exception,
-            # increases the retry delay by the given factor.
-            return huey.task(retries=retries, retry_delay=1, context=True)(inner)
-        return deco
-
-Example usage:
-
-.. code-block:: python
-
-    @exp_backoff_task(retries=5, retry_backoff=2)
-    def test_backoff(message):
-        print('test_backoff called:', message)
-        raise ValueError('forcing retry')
-
-If the consumer started executing our task at 12:00:00, then it would be
-retried at the following times:
-
-* 12:00:00 (first call)
-* 12:00:02 (retry 1)
-* 12:00:06 (retry 2)
-* 12:00:14 (retry 3)
-* 12:00:30 (retry 4)
-* 12:01:02 (retry 5)
-
-Dynamic periodic tasks
-^^^^^^^^^^^^^^^^^^^^^^
-
-To create periodic tasks dynamically we need to register them so that they are
-added to the in-memory schedule managed by the consumer's scheduler thread.
-Since this registry is in-memory, any dynamically defined tasks must be
-registered within the process that will ultimately schedule them: the consumer.
-
-.. warning::
-    The following example will not work with the **process** worker-type
-    option, since there is currently no way to interact with the scheduler
-    process. When threads or greenlets are used, the worker threads share the
-    same in-memory schedule as the scheduler thread, allowing modification to
-    take place.
-
-Example:
-
-.. code-block:: python
-
-    def dynamic_ptask(message):
-        print('dynamically-created periodic task: "%s"' % message)
-
-    @huey.task()
-    def schedule_message(message, cron_minutes, cron_hours='*'):
-        # Create a new function that represents the application
-        # of the "dynamic_ptask" with the provided message.
-        def wrapper():
-            dynamic_ptask(message)
-
-        # The schedule that was specified for this task.
-        schedule = crontab(cron_minutes, cron_hours)
-
-        # Need to provide a unique name for the task. There are any number of
-        # ways you can do this -- based on the arguments, etc. -- but for our
-        # example we'll just use the time at which it was declared.
-        task_name = 'dynamic_ptask_%s' % int(time.time())
-
-        huey.periodic_task(schedule, name=task_name)(wrapper)
-
-Assuming the consumer is running, we can now set up as many instances as we
-like of the "dynamic ptask" function:
-
-.. code-block:: pycon
-
-    >>> from demo import schedule_message
-    >>> schedule_message('I run every 5 minutes', '*/5')
-    <Result: task ...>
-    >>> schedule_message('I run between 0-15 and 30-45', '0-15,30-45')
-    <Result: task ...>
-
-When the consumer executes the "schedule_message" tasks, our new periodic task
-will be registered and added to the schedule.
-
-Run Arbitrary Functions as Tasks
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-Instead of explicitly needing to declare all of your tasks up-front, you can
-write a special task that accepts a dotted-path to a callable and run anything
-inside of huey (provided it is available wherever the consumer is running):
-
-.. code-block:: python
-
-    from importlib import import_module
-
-    @huey.task()
-    def path_task(path, *args, **kwargs):
-        path, name = path.rsplit('.', 1)  # e.g. path.to.module.function
-        mod = import_module(path)  # Dynamically import the module.
-        return getattr(mod, name)(*args, **kwargs)  # Call the function.
-
-    # Example usage might be:
-    # foo.py
-    def add_these(a, b):
-        return a + b
-
-    # Somewhere else, we can tell the consumer to use the "path_task" to import
-    # the foo module and call "add_these(1, 2)", storing the result in the
-    # result-store like any other task.
-    path_task('foo.add_these', 1, 2)
+If you need a parameter with one of these names, rename it or pass it
+positionally.
 
 Reading more
 ------------

@@ -147,6 +147,14 @@ Implementations of :py:class:`Huey` which handle task and result persistence.
 
     FileHuey fully supports task priorities.
 
+.. py:class:: BlackHoleHuey
+
+    :py:class:`Huey` that uses :py:class:`BlackHoleStorage`. All storage
+    operations are no-ops: enqueued tasks are silently discarded and the result
+    store is always empty. Intended for testing scenarios where you want to
+    verify that tasks are being called without actually running them or storing
+    anything.
+
 
 Huey object
 -----------
@@ -254,6 +262,25 @@ Huey object
         .. code-block:: python
 
             huey = RedisHuey(immediate=True)
+
+    .. py:method:: create_consumer(**options)
+
+        :param options: keyword arguments passed to the :py:class:`Consumer`
+            constructor (e.g. ``workers``, ``worker_type``, ``periodic``,
+            ``initial_delay``, etc.).
+        :returns: a :py:class:`Consumer` instance.
+
+        Create a consumer programmatically, rather than using the
+        ``huey_consumer.py`` command-line tool. This is useful for embedding
+        the consumer within your own application process, or for advanced
+        testing scenarios.
+
+        .. code-block:: python
+
+            consumer = huey.create_consumer(workers=4, worker_type='thread')
+            consumer.start()
+            # ... later ...
+            consumer.stop(graceful=True)
 
     .. py:method:: task(retries=0, retry_delay=0, priority=None, context=False, name=None, expires=None, timeout=None, **kwargs)
 
@@ -960,10 +987,40 @@ Huey object
         are destructive. To preserve the value for additional reads, specify
         ``peek=True``.
 
+    .. py:method:: delete(key)
+
+        :param key: key to delete from the result store.
+        :returns: boolean indicating whether the key existed and was deleted.
+
+        Remove a value from the result-store at the given key. Useful for
+        cleaning up manually-stored data created with :py:meth:`~Huey.put`.
+
+    .. py:method:: put_if_empty(key, value)
+
+        :param key: key to store data under.
+        :param value: arbitrary data to store.
+        :returns: boolean indicating whether the value was stored. Returns
+            ``False`` if the key already exists.
+
+        Atomically store a value only if the key does not already exist. This
+        is the primitive used internally by :py:class:`TaskLock` to implement
+        exclusive locking. It can also be used to build custom coordination
+        patterns like task deduplication.
+
     .. py:method:: pending(limit=None)
 
         :param int limit: optionally limit the number of tasks returned.
         :returns: a list of :py:class:`Task` instances waiting to be run.
+
+        .. note::
+            This method must deserialize every task in the queue, which can be
+            slow if the queue is large. Use :py:meth:`~Huey.pending_count` when
+            you only need the count.
+
+    .. py:method:: pending_count()
+
+        :returns: the number of tasks currently in the queue, without
+            deserializing them.
 
     .. py:method:: scheduled(limit=None)
 
@@ -971,10 +1028,28 @@ Huey object
         :returns: a list of :py:class:`Task` instances that are scheduled to
             execute at some time in the future.
 
+        .. note::
+            This method deserializes every task on the schedule. Use
+            :py:meth:`~Huey.scheduled_count` when you only need the count.
+
+    .. py:method:: scheduled_count()
+
+        :returns: the number of tasks currently in the schedule, without
+            deserializing them.
+
     .. py:method:: all_results()
 
         :returns: a dict of task-id to the serialized result data for all
             key/value pairs in the result store.
+
+    .. py:method:: result_count()
+
+        :returns: the number of key/value pairs in the result store.
+
+    .. py:method:: flush()
+
+        Remove all data from the queue, schedule, and result store. This is
+        a destructive operation. Primarily useful for testing.
 
     .. py:method:: __len__()
 
@@ -1128,6 +1203,14 @@ Huey object
         task function with the given arguments and keyword-arguments.
 
         .. note:: The returned task instance is **not** enqueued automatically.
+
+        .. warning::
+            The following keyword argument names are reserved and will be
+            intercepted by Huey rather than passed to your task function:
+            ``eta``, ``delay``, ``retries``, ``retry_delay``, ``priority``,
+            ``expires``, and ``timeout``. If your task function has a parameter
+            with one of these names, rename the parameter or pass the value
+            positionally.
 
         To illustrate the distinction, when you call a ``task()``-decorated
         function, behind-the-scenes, Huey is doing something like this:
@@ -1422,6 +1505,24 @@ Huey object
         at beginning of next rate-limit window.
     :returns: :py:class:`RateLimit` instance, which can be used as a
         decorator or context-manager.
+
+    .. py:method:: reset()
+
+        Reset the rate-limiter, clearing the current window and counter.
+        The next call to a rate-limited task will start a fresh window.
+
+    .. py:method:: current_usage()
+
+        :returns: the number of invocations in the current rate-limit window.
+            Returns ``0`` if no invocations have occurred in this window.
+
+    .. py:method:: acquire()
+
+        Check whether the rate-limit has been exceeded. If so, raises
+        :py:class:`RateLimitExceeded`. Otherwise, increments the counter and
+        returns normally. This is called automatically when the rate-limiter
+        is used as a decorator or context-manager.
+
 
 
 .. py:class:: group(tasks)
@@ -1827,7 +1928,21 @@ Result
     .. py:method:: reset()
 
         Reset the cached result and allow re-fetching a new result for the
-        given task (i.e. after a task error and subsequent retry).
+        given task. This is essential when a task fails and is retried: the
+        first call to :py:meth:`~Result.get` caches the error locally, and
+        subsequent calls return the cached error even after the retry succeeds.
+        Calling ``reset()`` clears the local cache so the next ``get()`` reads
+        from the result store again.
+
+        .. code-block:: python
+
+            result = flaky_task()
+            try:
+                result.get(blocking=True, timeout=5)
+            except TaskException:
+                result.reset()  # Clear cached error.
+                # Now we can read the result from the successful retry:
+                value = result.get(blocking=True, timeout=30)
 
 
 .. py:class:: ResultGroup
@@ -1842,6 +1957,41 @@ Result
         Call :py:meth:`~Result.get` on each individual :py:meth:`Result`
         instance in the group and returns a list of return values. Any keyword
         arguments are passed along.
+
+    .. py:method:: as_completed(backoff=1.15, max_delay=1.0)
+
+        :param float backoff: factor to increase delay between polls.
+        :param float max_delay: maximum seconds between polls.
+        :returns: a generator that yields individual result values as they
+            become available.
+
+        Iterate over results in the order they become ready, rather than the
+        order they were enqueued. This is useful when you want to begin
+        processing results as soon as possible without waiting for all tasks
+        to finish.
+
+        .. code-block:: python
+
+            result_group = huey.enqueue(group([
+                fetch.s(url) for url in urls]))
+
+            for value in result_group.as_completed():
+                process(value)
+
+        The generator polls each result handle in a round-robin fashion with
+        exponential backoff, yielding values as they appear.
+
+    .. py:method:: __getitem__(idx)
+
+        Resolves the result at the given index, blocking until it is ready.
+
+    .. py:method:: __iter__()
+
+        Iterate over the individual :py:class:`Result` instances in the group.
+
+    .. py:method:: __len__()
+
+        Return the number of results in the group.
 
 Serializer
 ----------
@@ -1868,6 +2018,38 @@ Serializer
 
         :param bytes data: serialized data.
         :returns: the deserialized object.
+
+
+.. py:class:: SignedSerializer(secret, salt='huey', **kwargs)
+
+    :param str secret: secret key used to generate HMAC signatures.
+    :param str salt: salt combined with the secret (default ``'huey'``).
+    :param kwargs: additional keyword arguments passed to the base
+        :py:class:`Serializer` (e.g. ``compression``, ``use_zlib``).
+
+    A subclass of :py:class:`Serializer` that adds an HMAC-SHA1 signature to
+    every serialized message. When deserializing, the signature is verified and
+    a ``ValueError`` is raised if the message has been tampered with.
+
+    This is useful when the storage backend (e.g. Redis) is shared or
+    network-exposed and you want to prevent malicious injection of crafted
+    pickle payloads.
+
+    .. code-block:: python
+
+        from huey import RedisHuey
+        from huey.serializer import SignedSerializer
+
+        huey = RedisHuey(
+            'my-app',
+            serializer=SignedSerializer(secret='my-secret-key'))
+
+    .. note::
+        The signed serializer detects tampering but does **not** encrypt the
+        data. Task arguments remain visible in the storage backend.
+
+    Both the application and the consumer must use the same ``secret`` and
+    ``salt``.
 
 .. _exceptions:
 
