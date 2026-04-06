@@ -74,12 +74,11 @@ then be used by any tasks that are executed by that consumer:
         db.execute_sql('select pg_sleep(%s)', (n,))
         return n
 
-.. note::
-    The above code works correctly because `peewee <https://github.com/coleifer/peewee>`_
-    stores connection state in a threadlocal. This is important if we are
-    running the workers in threads (huey's default). Every thread will be
-    sharing the same ``PostgresqlDatabase`` instance, but since the connection
-    state is thread-local, each worker thread will see only its own connection.
+The above code works correctly because `peewee <https://github.com/coleifer/peewee>`_
+stores connection state in a threadlocal. This is important if we are running
+the workers in threads (huey's default). Every thread will be sharing the same
+``PostgresqlDatabase`` instance, but since the connection state is
+thread-local, each worker thread will see only its own connection.
 
 Pre and post execute hooks
 --------------------------

@@ -11,9 +11,7 @@ read by the consumer, and the task function is looked-up in the consumer's
 registry.  Because of the way this works, it is strongly recommended
 that **all decorated functions be imported when the consumer starts up**.
 
-.. note::
-    If a task is not recognized, the consumer will raise a
-    :py:class:`HueyException`.
+If a task is not recognized, the consumer will raise a :py:class:`HueyException`.
 
 The consumer is executed with a single required parameter -- the import path to
 a :py:class:`Huey` object.  It will import the Huey instance along with
@@ -64,6 +62,6 @@ circular imports.
 To run the consumer, point it at ``main.huey``, in this way, both the ``huey``
 instance **and** the task functions are imported in a centralized location.
 
-.. code-block:: console
+.. code-block:: shell
 
-    $ huey_consumer.py main.huey
+    huey_consumer.py main.huey

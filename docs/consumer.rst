@@ -6,7 +6,7 @@ Consuming Tasks
 To run the consumer, simply point it at the "import path" to your application's
 :py:class:`Huey` instance. For example, here is how I run it on my blog:
 
-.. code-block:: bash
+.. code-block:: shell
 
     huey_consumer.py blog.main.huey --logfile=../logs/huey.log
 
@@ -161,27 +161,27 @@ Examples
 
 Running the consumer with 8 threads and a logfile for errors:
 
-.. code-block:: bash
+.. code-block:: shell
 
     huey_consumer.py my.app.huey -l /var/log/app.huey.log -w 8 -q
 
 Using multi-processing to run 4 worker processes.
 
-.. code-block:: bash
+.. code-block:: shell
 
     huey_consumer.py my.app.huey -w 4 -k process
 
 Running single-threaded with periodic task support disabled. Additionally,
 logging records are written to stdout.
 
-.. code-block:: bash
+.. code-block:: shell
 
     huey_consumer.py my.app.huey -v -n
 
 Using greenlets to run 50 workers, with no health checking and a scheduler
 granularity of 60 seconds.
 
-.. code-block:: bash
+.. code-block:: shell
 
     huey_consumer.py my.app.huey -w 50 -k greenlet -C -s 60
 
@@ -256,9 +256,9 @@ other imports:
 
 To run the consumer:
 
-.. code-block:: console
+.. code-block:: shell
 
-    $ huey_consumer.py main.huey -k greenlet -w 16
+    huey_consumer.py main.huey -k greenlet -w 16
 
 You should have a good understanding of how gevent works, its strengths and
 limitations, before using the greenlet worker type.
@@ -275,13 +275,12 @@ they are currently executing before the process exits.
 Alternatively, you can shutdown the consumer using ``SIGTERM`` and any running
 tasks will be interrupted, ensuring the process exits quickly.
 
-.. warning::
-    Huey does not guarantee at-least-once delivery of messages, and does not do
-    acknowledgement of completed tasks. This means that if you terminate the
-    consumer **without** letting it finish any currently-executing tasks, those
-    tasks will be lost. To be alerted when this occurs, you can use Huey's
-    :ref:`signals` (specifically ``signals.SIGNAL_INTERRUPTED``). The consumer
-    will emit this for tasks that are interrupted during execution.
+Huey does not guarantee at-least-once delivery of messages, and does not do
+acknowledgement of completed tasks. This means that if you terminate the
+consumer **without** letting it finish any currently-executing tasks, those
+tasks will be lost. To be alerted when this occurs, you can use Huey's
+:ref:`signals` (specifically ``signals.SIGNAL_INTERRUPTED``). The consumer
+will emit this for tasks that are interrupted during execution.
 
 Deployments
 ^^^^^^^^^^^
@@ -297,10 +296,9 @@ start the new code and new consumer, and they will operate independently of the
 previously-running consumer. When all tasks are done, you can gracefully
 shutdown the old consumer.
 
-.. note::
-    It is always a good idea to implement a Huey ``signals.SIGNAL_INTERRUPTED``
-    handler (:ref:`signals`), even if all it does is log an exception about the
-    interrupted task.
+It is always a good idea to implement a Huey ``signals.SIGNAL_INTERRUPTED``
+handler (:ref:`signals`), even if all it does is log an exception about the
+interrupted task.
 
 .. _consumer-restart:
 
@@ -310,15 +308,6 @@ Consumer restart
 To cleanly restart the consumer, including all workers, send the ``SIGHUP``
 signal. When the consumer receives the hang-up signal, any tasks being executed
 will be allowed to finish before the restart occurs.
-
-.. note::
-    If you are using Python 2.7 and either the thread or greenlet worker model,
-    it is strongly recommended that you use a process manager (such as systemd
-    or supervisor) to handle running and restarting the consumer. The reason
-    has to do with the potential of Python 2.7, when mixed with thread/greenlet
-    workers, to leak file descriptors. For more information, check out
-    `issue 374 <https://github.com/coleifer/huey/issues/374>`_ and
-    `PEP 446 <https://www.python.org/dev/peps/pep-0446/>`_.
 
 .. _process-supervisors:
 

@@ -36,9 +36,8 @@ The above is the bare minimum needed to start using huey's Django integration.
 If you like, though, you can also configure both Huey and the *consumer* using
 the settings module.
 
-.. note::
-    Huey settings are optional. If not provided, Huey will default to using
-    Redis running on localhost:6379 (standard setup).
+Huey settings are optional. If not provided, Huey will default to using Redis
+running on localhost:6379 (standard setup).
 
 Configuration is kept in ``settings.HUEY``, which can be either a dictionary or
 a :py:class:`Huey` instance. Here is an example that shows all of the supported
@@ -114,15 +113,14 @@ will automatically import any modules in your ``INSTALLED_APPS`` named
 *tasks.py*.  The consumer can be configured using both the django settings
 module and/or by specifying options from the command-line.
 
-.. note::
-    Options specified on the command line take precedence over those specified
-    in the settings module.
+Options specified on the command line take precedence over those specified in
+the settings module.
 
 To start the consumer, you simply run:
 
-.. code-block:: console
+.. code-block:: shell
 
-    $ ./manage.py run_huey
+    ./manage.py run_huey
 
 In addition to the ``HUEY.consumer`` setting dictionary, the management command
 supports all the same options as the standalone consumer. These options are
@@ -147,10 +145,8 @@ listed here.
 ``-A``, ``--disable-autoload``
     Disable automatic loading of tasks modules.
 
-.. note::
-    Due to a conflict with Django's base option list, the "verbose" option is
-    set using ``-V`` or ``--huey-verbose``. When enabled, huey logs at the
-    DEBUG level.
+Due to a conflict with Django's base option list, the "verbose" option is set
+using ``-V`` or ``--huey-verbose``. When enabled, huey logs at the DEBUG level.
 
 For more information, read the :ref:`Options for the consumer <consumer-options>` section.
 
@@ -300,7 +296,7 @@ identifier names:
     do_work_on_commit = on_commit_task(name="do_work_on_commit")(do_work)
 
 
-.. py:func:: on_commit_task(*args, **kwargs)
+.. py:function:: on_commit_task(*args, **kwargs)
 
     :param args: See :py:meth:`~Huey.task` for supported parameters.
     :param kwargs: See :py:meth:`~Huey.task` for supported parameters.

@@ -119,7 +119,6 @@ Usage and task declaration:
 
         Stop the scheduler.
 
-.. note::
-    Tasks enqueued for immediate execution will be run regardless of whether
-    the scheduler is running. You only need to start the scheduler if you plan
-    to schedule tasks in the future or run periodic tasks.
+Tasks enqueued for immediate execution will be run regardless of whether the
+scheduler is running. You only need to start the scheduler if you plan to
+schedule tasks in the future or run periodic tasks.

@@ -22,9 +22,9 @@ Example :py:meth:`~Huey.task` that adds two numbers:
 
 To test, run the consumer, specifying the import path to the ``huey`` object:
 
-.. code-block:: console
+.. code-block:: shell
 
-    $ huey_consumer.py demo.huey
+    huey_consumer.py demo.huey
 
 In a Python shell, we can call our ``add`` task:
 
@@ -35,16 +35,15 @@ In a Python shell, we can call our ``add`` task:
     >>> r()
     3
 
-.. note::
-    If you try to resolve the result (``r``) before the task has been executed,
-    then ``r()`` will return ``None``. You can avoid this by instructing the
-    result to block until the task has finished and a result is ready:
+If you try to resolve the result (``r``) before the task has been executed,
+then ``r()`` will return ``None``. You can avoid this by instructing the
+result to block until the task has finished and a result is ready:
 
-    .. code-block:: pycon
+.. code-block:: pycon
 
-        >>> r = add(1, 2)
-        >>> r(blocking=True, timeout=5)  # Wait up to 5 seconds for result.
-        3
+    >>> r = add(1, 2)
+    >>> r(blocking=True, timeout=5)  # Wait up to 5 seconds for result.
+    3
 
 What happens when we call a task function?
 
@@ -129,14 +128,13 @@ executes every 3 minutes and prints a message on consumer process stdout:
 Once a minute, the scheduler will check to see if any of the periodic tasks
 should be called. If so, the task will be enqueued for execution.
 
-.. note::
-    Because periodic tasks are called independent of any user interaction, they
-    do not accept any arguments.
+Because periodic tasks are called independent of any user interaction, they
+do not accept any arguments.
 
-    Similarly, the return-value for periodic tasks is discarded, rather than
-    being put into the result store. This is because there is not an obvious
-    way for an application to obtain a :py:class:`Result` handle to access the
-    result of a given periodic task execution.
+Similarly, the return-value for periodic tasks is discarded, rather than
+being put into the result store. This is because there is not an obvious
+way for an application to obtain a :py:class:`Result` handle to access the
+result of a given periodic task execution.
 
 The :py:func:`crontab` function accepts the following arguments:
 
@@ -275,8 +273,7 @@ Priorities can be assigned to a task function, in which case all invocations of
 the task will default to the given priority. Additionally, individual task
 invocations can be assigned a priority on a one-off basis.
 
-.. note::
-    When no priority is given, the task will default to a priority of ``0``.
+When no priority is given, the task will default to a priority of ``0``.
 
 To see how this works, lets define a task that has a priority (``10``):
 
@@ -838,6 +835,8 @@ For more information, see the following API docs:
 * :py:meth:`Task.then`
 * :py:class:`ResultGroup` and :py:class:`Result`
 
+.. _groups-and-chords:
+
 Groups and Chords
 -----------------
 
@@ -1223,11 +1222,6 @@ document, and the :py:meth:`Huey.signal` API documentation.
 
 Immediate mode
 --------------
-
-.. note::
-    Immediate mode replaces the *always eager* mode available prior to the
-    release of Huey 2. It offers many improvements over always eager mode,
-    which are described in the :ref:`changes` document.
 
 Huey can be run in a special mode called *immediate* mode, which is very useful
 during testing and development. In immediate mode, Huey will execute task
