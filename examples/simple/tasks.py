@@ -24,6 +24,10 @@ def add(a, b):
 def mul(a, b):
     return a * b
 
+@huey.task()
+def total(ns):
+    return sum(ns)
+
 
 @huey.task()
 def slow(n):
