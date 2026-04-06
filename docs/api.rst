@@ -1672,6 +1672,11 @@ Huey object
 
         Identical to :py:meth:`~ChordResult.get`.
 
+    .. py:method:: reset()
+
+        Reset the callback result and allow re-fetching a new result for the
+        given task (i.e. after a task error and subsequent retry).
+
 Result
 ------
 
