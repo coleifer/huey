@@ -1426,8 +1426,8 @@ Huey object
 
 .. py:class:: group(tasks)
 
-    A ``group`` is a lightweight wrapper around any number of tasks that may
-    be executed in parallel. When a group is enqueued, Huey returns a
+    A ``group`` is a lightweight wrapper around any number or types of tasks
+    that may be executed in parallel. When a group is enqueued, Huey returns a
     :py:class:`ResultGroup` for reading the results.
 
     :param list tasks: any number of :py:class:`Task` instances.
@@ -1455,14 +1455,222 @@ Huey object
 
         :param task: A ``task()``-decorated function (:py:class:`TaskWrapper`),
             or a :py:class:`Task` instance to run with the group results.
+        :param args: Arguments to pass to the callback task.
+        :param kwargs: Keyword arguments to pass to the callback task.
+        :returns: A :py:class:`chord` instance.
+
+        Convert a :py:class:`group` into a :py:class:`chord` by attaching a
+        callback. When all members have finished executing, the callback will
+        be enqueued with the member results (as a list, in order).
+
+        .. code-block:: python
+
+            result = huey.enqueue(
+                group([fetch.s(u) for u in urls])
+                .then(aggregate))
+
+    .. py:method:: error(task, *args, **kwargs)
+
+        :param task: A ``task()``-decorated function (:py:class:`TaskWrapper`),
+            or a :py:class:`Task` instance to run with the group results.
+        :param args: Arguments to pass to the error handler.
+        :param kwargs: Keyword arguments to pass to the error handler.
+        :returns: the group instance.
+
+        Attach an error handler to every member of the group. If any member
+        raises an exception, the error handler will be enqueued with the
+        exception as an argument. Supports chaining:
+
+        .. code-block:: python
+
+            result = huey.enqueue(
+                group([fetch.s(u) for u in urls])
+                .error(on_fetch_error)
+                .then(aggregate))
+
+.. py:class:: chord(tasks, callback)
+
+    A :py:class:`chord` consists of a group of tasks that execute in parallel
+    and a callback task. When all sub-tasks have completed (or permanently
+    failed), their results are passed in order as a list to the callback task.
+
+    :param list tasks: a list of :py:class:`Task` instances (including
+        pipelines built with :py:meth:`Task.then`), :py:class:`chord`
+        instances (for nesting), in any combination.
+    :param callback: a ``task()``-decorated function (:py:class:`TaskWrapper`),
+        or a :py:class:`Task` instance. The callback receives the list of
+        sub-task results as its first argument.
+
+    .. code-block:: python
+
+        @huey.task()
+        def fetch(url):
+            return requests.get(url).json()
+
+        @huey.task()
+        def aggregate(results):
+            return {r['id']: r for r in results}
+
+        c = chord(
+            [fetch.s(u) for u in urls],
+            aggregate.s())
+        result = huey.enqueue(c)
+
+        # result is a ChordResult.
+        data = result(blocking=True)  # Blocks until callback finishes.
+
+    Enqueueing a chord returns a :py:class:`ChordResult`.
+
+    .. note::
+        The callback always receives the member results as a list, even if
+        there is only one member. Results are ordered by the position of the
+        member in the original list, not by the order in which members
+        finished executing.
+
+    **Sub-task errors:**
+
+    Chords are designed to always complete. If a sub-task fails and exhausts
+    all its retries, the exception is used as the task result. Tasks with
+    retries will retry normally, only after retries are exhausted is the
+    exception used.
+
+    The callback may therefore receive a mix of normal return values and
+    ``Exception`` objects. See :ref:`groups-and-chords` in the guide for
+    patterns on handling mixed results.
+
+    .. note::
+        Revoking a chord member prevents it from running and will stall the
+        chord. If you need to cancel a chord, revoke the callback task instead.
+
+    **Pipeline members:**
+
+    When a chord member is a pipeline (e.g. ``fetch.s(u).then(parse)``), Huey
+    walks the ``on_complete`` chain and uses the end of the pipeline for the
+    sub-task. This ensures the chord callback is not triggered until all
+    pipeline members have fully finished.
+
+    Error callbacks placed on individual tasks within a pipeline member
+    operate independently of the chord.
+
+    .. code-block:: python
+
+        c = chord(
+            [download.s(u).then(parse).then(validate) for u in urls],
+            aggregate.s())
+
+    .. py:method:: then(task, *args, **kwargs)
+
+        :param task: A ``task()``-decorated function (:py:class:`TaskWrapper`),
+            or a :py:class:`Task` instance.
         :param args: Arguments to pass to the task.
         :param kwargs: Keyword arguments to pass to the task.
-        :returns: The group instance.
+        :returns: the :py:class:`chord` instance.
 
-        The :py:meth:`~group.then` method converts a :py:class:`group` into a
-        :py:class:`chord`. When all the tasks have finished executing and their
-        results are ready, the task specified in ``then()`` will be enqueued
-        with the group's results.
+        Chain an additional task after the chord's callback. The callback's
+        return value is passed to the chained task, exactly like
+        :py:meth:`Task.then`. Multiple calls to ``then()`` extend the chain.
+
+        When tasks are chained to the chord callback, the :py:class:`ChordResult`
+        returned by :py:meth:`Huey.enqueue` will have a non-``None``
+        ``pipeline_results`` attribute containing a :py:class:`ResultGroup`
+        for the full callback pipeline.
+
+        .. code-block:: python
+
+            result = huey.enqueue(
+                chord([fetch.s(u) for u in urls], aggregate.s())
+                .then(generate_report)
+                .then(send_email))
+
+            # result.pipeline_results is a ResultGroup with three entries:
+            # [aggregate result, generate_report result, send_email result]
+
+        Delegates to the callback's :py:meth:`Task.then`.
+
+    .. py:method:: error(task, *args, **kwargs)
+
+        :param task: A ``task()``-decorated function (:py:class:`TaskWrapper`),
+            or a :py:class:`Task` instance.
+        :param args: Arguments to pass to the error handler.
+        :param kwargs: Keyword arguments to pass to the error handler.
+        :returns: the :py:class:`chord` instance.
+
+        Attach an error handler to the chord's callback. If the callback
+        raises an exception, this task will be enqueued with the exception
+        as an argument.
+
+        .. code-block:: python
+
+            result = huey.enqueue(
+                chord([fetch.s(u) for u in urls], aggregate.s())
+                .error(alert_admin))
+
+        This handles errors in the **callback**, not in the sub-tasks. To handle
+        errors in individual members, use :py:meth:`Task.error` on each member
+        or :py:meth:`group.error` before constructing the chord.
+
+        Delegates to the callback's :py:meth:`Task.error`.
+
+    **Nested chords:**
+
+    Chord members can themselves be chords. The inner chord's callback
+    pipeline serves as the synchronization point for the outer chord.
+
+    .. code-block:: python
+
+        inner1 = chord([a.s(), b.s()], merge.s())
+        inner2 = chord([c.s(), d.s()], merge.s())
+
+        result = huey.enqueue(chord([inner1, inner2], final.s()))
+
+    When the inner chords complete and their callbacks finish, the outer
+    chord's callback (``final``) receives the two inner callback results as a
+    list. See :ref:`groups-and-chords` in the guide for a detailed example.
+
+
+.. py:class:: ChordResult(results, callback_result, pipeline=None)
+
+    Returned by :py:meth:`Huey.enqueue` when enqueueing a :py:class:`chord`.
+    Provides access to the individual member results, the callback result,
+    and the results of any tasks chained after the callback.
+
+    .. py:attribute:: results
+
+        A :py:class:`ResultGroup` containing the :py:class:`Result` handles
+        for each chord member.
+
+    .. py:attribute:: callback
+
+        A :py:class:`Result` handle for the callback task.
+
+    .. py:attribute:: pipeline_results
+
+        A :py:class:`ResultGroup` containing :py:class:`Result` handles for
+        the callback and every task chained after it via
+        :py:meth:`chord.then`. The first entry is the callback itself, followed
+        by each chained task in order.
+
+        ``None`` if no tasks were chained after the callback.
+
+        .. code-block:: python
+
+            result = huey.enqueue(
+                chord([a.s(), b.s()], combine.s())
+                .then(report)
+                .then(archive))
+
+            result.pipeline_results[0]()  # combine result
+            result.pipeline_results[1]()  # report result
+            result.pipeline_results[2]()  # archive result
+
+    .. py:method:: get(*args, **kwargs)
+
+        Shortcut for ``self.callback.get(*args, **kwargs)``. Blocks until the
+        callback finishes and returns its result.
+
+    .. py:method:: __call__(*args, **kwargs)
+
+        Identical to :py:meth:`~ChordResult.get`.
 
 Result
 ------
