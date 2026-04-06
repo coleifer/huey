@@ -2,9 +2,11 @@ import datetime
 import inspect
 import time
 
+from huey.api import ChordResult
 from huey.api import MemoryHuey
 from huey.api import PeriodicTask
 from huey.api import Result
+from huey.api import ResultGroup
 from huey.api import Task
 from huey.api import TaskWrapper
 from huey.api import chord
@@ -1571,6 +1573,25 @@ class TestChordPrimitive(BaseTestCase):
         self.assertEqual(self.execute_next(), 101)
         self.assertEqual(len(self.huey), 0)
 
+    def test_chord_result_handles(self):
+        prod, agg = self.funcs()
+
+        result = self.huey.enqueue(chord(
+            [prod.s(1), prod.s(2)], agg.s()))
+
+        self.assertTrue(isinstance(result, ChordResult))
+        self.assertTrue(isinstance(result.results, ResultGroup))
+        self.assertTrue(isinstance(result.callback, Result))
+        self.assertEqual(len(result.results), 2)
+        self.assertIsNone(result.pipeline_results)
+
+        for _ in range(3):
+            self.execute_next()
+
+        self.assertEqual(result(), 5)
+        self.assertEqual(result.results(), [2, 3])
+        self.assertEqual(result.callback(), 5)
+
     def test_chord_callback_cb(self):
         prod, agg = self.funcs()
 
@@ -1585,7 +1606,47 @@ class TestChordPrimitive(BaseTestCase):
         self.assertEqual(r.pipeline_results(), [6, None])
         self.assertEqual(self.execute_next(), 7)
         self.assertEqual(r(), 6)
+        self.assertEqual(r.results(), [1, 2, 3])
         self.assertEqual(r.pipeline_results(), [6, 7])
+        self.assertEqual(len(self.huey), 0)
+
+        c = chord([prod.s(1)], agg).then(prod).then(prod)
+        r = self.huey.enqueue(c)
+        self.assertEqual(len(self.huey), 1)
+        self.assertEqual(self.execute_next(), 2)  # prod.s(1).
+        self.assertEqual(len(self.huey), 1)
+        self.assertEqual(self.execute_next(), 2)  # agg([2]).
+        self.assertEqual(len(self.huey), 1)
+        self.assertEqual(self.execute_next(), 3)  # prod(2).
+        self.assertEqual(len(self.huey), 1)
+        self.assertEqual(self.execute_next(), 4)  # prod(3).
+        self.assertEqual(len(self.huey), 0)
+        self.assertEqual(r(), 2)
+        self.assertEqual(r.results(), [2])
+        self.assertEqual(r.pipeline_results(), [2, 3, 4])
+
+    def test_chord_callback_err(self):
+        prod, agg = self.funcs()
+        state = []
+
+        @self.huey.task()
+        def fail(ns):
+            raise ValueError('fail')
+
+        @self.huey.task()
+        def on_err(exc):
+            state.append(type(exc).__name__)
+            return 'done'
+
+        c = chord([prod.s(1), prod.s(2)], fail).error(on_err)
+        res = self.huey.enqueue(c)
+        self.assertEqual(self.execute_next(), 2)
+        self.assertEqual(self.execute_next(), 3)
+        self.assertTrue(self.execute_next() is None)  # callback fail().
+        self.assertEqual(len(self.huey), 1)
+        self.assertEqual(state, [])
+        self.assertEqual(self.execute_next(), 'done')
+        self.assertEqual(state, ['ValueError'])
         self.assertEqual(len(self.huey), 0)
 
     def test_chord_task_cb(self):
@@ -1617,6 +1678,7 @@ class TestChordPrimitive(BaseTestCase):
         self.assertEqual(self.execute_next(), -1)  # Error found.
         self.assertEqual(len(self.huey), 0)
 
+        self.assertEqual(r(), -1)
         self.assertEqual(r.results[0], 2)
         with self.assertRaises(TaskException):
             r.results[1]
@@ -1647,6 +1709,95 @@ class TestChordPrimitive(BaseTestCase):
         self.assertEqual(self.execute_next(), 99)  # err cb fired again.
         self.assertEqual(state, [1, 2])  # err cb records both errors.
         self.assertEqual(self.execute_next(), -1)  # chord cb (err).
+        self.assertEqual(r(), -1)
+
+    def test_chord_total_failure(self):
+        prod, agg = self.funcs()
+        c = chord([agg.s([None]), agg.s([None])], prod)
+        r = self.huey.enqueue(c)
+        self.assertEqual(len(self.huey), 2)
+        for _ in range(2):
+            self.assertTrue(self.execute_next() is None)
+        self.assertEqual(len(self.huey), 1)
+        self.assertTrue(self.execute_next() is None)
+        with self.assertRaises(TaskException):
+            r()
+
+        r.reset()
+        self.assertEqual(len(self.huey), 1)
+        self.assertTrue(self.execute_next() is None)
+        self.assertEqual(len(self.huey), 0)
+        with self.assertRaises(TaskException):
+            r()
+
+    def test_chord_member_error_callback_independent(self):
+        error_state = []
+
+        @self.huey.task()
+        def ident(n):
+            if n < 0:
+                raise TestError('bad')
+            return n
+
+        @self.huey.task()
+        def on_err(exc):
+            error_state.append('caught')
+            return 'onerr'
+
+        @self.huey.task()
+        def agg(results):
+            return results
+
+        tasks = [ident.s(1), ident.s(-1).error(on_err)]
+        result = self.huey.enqueue(chord(tasks, agg.s()))
+
+        self.assertEqual(self.execute_next(), 1)  # fetch(1).
+        self.assertTrue(self.execute_next() is None)  # fetch(-1).
+
+        # Both on_err and callback are in queue.
+        self.assertEqual(len(self.huey), 2)
+
+        self.assertEqual(self.execute_next(), 'onerr')
+        self.assertEqual(error_state, ['caught'])
+
+        self.execute_next()
+        self.assertEqual(result.results[0], 1)
+        with self.assertRaises(TaskException):
+            result.results[1]
+
+        res = result()
+        self.assertEqual(res[0], 1)
+        self.assertTrue(isinstance(res[1], TestError))
+
+    def test_chord_pipeline_member_tail_fails(self):
+        @self.huey.task()
+        def step1(n):
+            return n
+
+        @self.huey.task()
+        def step2(n):
+            raise TestError('step2 fail')
+
+        @self.huey.task()
+        def combine(results):
+            return results
+
+        c = chord(
+            [step1.s(1).then(step2), step1.s(2).then(step2)],
+            combine.s())
+        r = self.huey.enqueue(c)
+
+        self.assertEqual(self.execute_next(), 1)
+        self.assertEqual(self.execute_next(), 2)
+        self.execute_next()  # step2 fails, exception to chord.
+        self.execute_next()  # step2 fails, exception to chord.
+
+        self.assertEqual(len(self.huey), 1)
+        self.execute_next()
+
+        result = r()
+        self.assertTrue(isinstance(result[0], TestError))
+        self.assertTrue(isinstance(result[1], TestError))
 
     def test_chord_ordering(self):
         @self.huey.task()
@@ -1774,6 +1925,46 @@ class TestChordPrimitive(BaseTestCase):
         self.assertEqual(self.execute_next(), [
             ['a', 'b'], [['c', 'd'], ['e', 'f']], ['g', 'h'],
         ])
+
+    def test_nested_chord_callback_pipeline_tail_walking(self):
+        @self.huey.task()
+        def fetch(n):
+            return n
+
+        @self.huey.task()
+        def inner_combine(results):
+            return sum(results)
+
+        @self.huey.task()
+        def post_process(n):
+            return n * 100
+
+        @self.huey.task()
+        def outer_combine(results):
+            return results
+
+        inner = chord([fetch.s(1), fetch.s(2)],
+                      inner_combine.s().then(post_process))
+
+        r = self.huey.enqueue(chord(
+            [inner, fetch.s(99)],
+            outer_combine.s()))
+
+        # 3 leaf tasks: fetch(1), fetch(2), fetch(99).
+        self.assertEqual(len(self.huey), 3)
+
+        self.assertEqual(self.execute_next(), 1)
+        self.assertEqual(self.execute_next(), 2)
+        self.assertEqual(self.execute_next(), 99)
+
+        self.assertEqual(self.execute_next(), 3)  # inner combine.
+        self.assertEqual(self.execute_next(), 300)  # inner postprocess.
+
+        self.assertEqual(len(self.huey), 1)
+        self.assertEqual(self.execute_next(), [300, 99])
+
+        # Outer callback gets [post_process result, fetch(99) result].
+        self.assertEqual(r(), [300, 99])
 
     def test_chord_chaining(self):
         state = []

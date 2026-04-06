@@ -196,6 +196,27 @@ class TestSignals(BaseTestCase):
             SIGNAL_EXECUTING, SIGNAL_COMPLETE,
             SIGNAL_ENQUEUED, SIGNAL_EXECUTING, SIGNAL_COMPLETE])
 
+    def test_signals_chord_error(self):
+        @self.huey.task()
+        def bad():
+            raise TestError('fail')
+
+        @self.huey.task()
+        def combine(results):
+            return results
+
+        self.huey.enqueue(chord([bad.s()], combine.s()))
+
+        self.execute_next()  # bad() fails, exception to chord
+        self.execute_next()  # callback
+
+        self.assertSignals([
+            SIGNAL_ENQUEUED,
+            SIGNAL_EXECUTING, SIGNAL_ERROR,
+            SIGNAL_ENQUEUED,
+            SIGNAL_EXECUTING, SIGNAL_COMPLETE,
+        ])
+
     def test_specific_handler(self):
         extra_state = []
 

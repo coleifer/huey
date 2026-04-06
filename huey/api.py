@@ -1344,6 +1344,9 @@ class ChordResult(object):
         return self.callback.get(*args, **kwargs)
     __call__ = get
 
+    def reset(self):
+        self.callback.reset()
+
 
 dash_re = re.compile(r'(\d+)-(\d+)')
 every_re = re.compile(r'\*\/(\d+)')

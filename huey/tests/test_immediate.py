@@ -126,6 +126,18 @@ class TestImmediate(BaseTestCase):
         result_group = task_a.map(range(8))
         self.assertEqual(result_group(), [1, 2, 3, 4, 5, 6, 7, 8])
 
+    def test_group(self):
+        @self.huey.task(retries=1)
+        def a(n):
+            return n + 1
+
+        @self.huey.task()
+        def b(n):
+            return n - 1
+
+        result = self.huey.enqueue(group([a.s(1), b.s(100), a.s(2), b.s(200)]))
+        self.assertEqual(result(), [2, 99, 3, 199])
+
     def test_chord(self):
         @self.huey.task(retries=1)
         def prod(n):
@@ -139,17 +151,44 @@ class TestImmediate(BaseTestCase):
             [prod.s(i) for i in range(10)], agg))
         self.assertEqual(result(), 55)
 
-    def test_group(self):
-        @self.huey.task(retries=1)
-        def a(n):
-            return n + 1
-
+    def test_chord_nested(self):
         @self.huey.task()
-        def b(n):
-            return n - 1
+        def ident(v):
+            return v
+        @self.huey.task()
+        def agg(vs):
+            return vs
 
-        result = self.huey.enqueue(group([a.s(1), b.s(100), a.s(2), b.s(200)]))
-        self.assertEqual(result(), [2, 99, 3, 199])
+        c = chord([
+            chord([ident.s('a'), ident.s('b')], agg),
+            chord([
+                chord([ident.s('c'), ident.s('d')], agg),
+                chord([ident.s('e'), ident.s('f')], agg),
+            ], agg),
+            chord([ident.s('g'), ident.s('h')], agg),
+        ], agg)
+        r = self.huey.enqueue(c)
+        self.assertEqual(r(), [
+            ['a', 'b'], [['c', 'd'], ['e', 'f']], ['g', 'h']])
+
+    def test_chord_pipeline(self):
+        @self.huey.task()
+        def incr(v):
+            return v + 1
+        @self.huey.task()
+        def agg(vs):
+            return sum(vs)
+
+        c = chord([
+            incr.s(1).then(incr).then(incr),
+            incr.s(3).then(incr),
+            incr.s(5),
+            incr.s(7).then(incr).then(incr)], agg).then(incr).then(incr)
+        r = self.huey.enqueue(c)
+        # 4 + 5 + 6 + 10
+        self.assertEqual(r(), 25)
+        self.assertEqual(r.results(), [4, 5, 6, 10])
+        self.assertEqual(r.pipeline_results(), [25, 26, 27])
 
 
 class NoUseException(Exception): pass
