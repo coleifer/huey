@@ -136,7 +136,8 @@ being put into the result store. This is because there is not an obvious
 way for an application to obtain a :py:class:`Result` handle to access the
 result of a given periodic task execution.
 
-The :py:func:`crontab` function accepts the following arguments:
+The :py:func:`crontab` function accepts the following arguments, in the same
+order as the standard Linux crontab format:
 
 * minute
 * hour

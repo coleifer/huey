@@ -715,26 +715,30 @@ Huey object
 
     .. py:method:: enqueue(task)
 
-        :param Task task: task instance to enqueue.
-        :returns: :py:class:`Result` handle for the given task.
+        :param task: a :py:class:`Task` instance, a :py:class:`group`, or a
+            :py:class:`chord`.
 
-        Enqueue the given task. When the result store is enabled (default), the
-        return value will be a :py:class:`Result` handle which provides access
-        to the result of the task execution (as well as other things).
+        :returns: depends on the input type (see below).
 
-        If the task specifies another task to run on completion (see
-        :py:meth:`Task.then`), the return value will be a
-        :py:class:`ResultGroup`, which encapsulates a list of individual
-        :py:class:`Result` instances for the given pipeline.
+        Enqueue the given task, group, or chord for execution. When the result
+        store is enabled (default), the return value depends on what was
+        enqueued:
 
-        .. note::
-            Unless you are executing a pipeline of tasks, it should not
-            be necessary to use the :py:meth:`~Huey.enqueue` method directly.
-            Calling (or scheduling) a ``task``-decorated function will
-            automatically enqueue a task for execution.
+        * A single :py:class:`Task`: returns a :py:class:`Result` handle.
+        * A :py:class:`Task` with a pipeline (via :py:meth:`Task.then`):
+          returns a :py:class:`ResultGroup` containing a :py:class:`Result`
+          for each task in the pipeline.
+        * A :py:class:`group`: returns a :py:class:`ResultGroup` containing a
+          :py:class:`Result` for each member task.
+        * A :py:class:`chord`: returns a :py:class:`ChordResult`, which
+          provides access to the member results, the callback result, and any
+          tasks chained after the callback.
 
-            When you create a task pipeline, however, it is necessary to
-            enqueue the pipeline once it has been set up.
+         .. note::
+             Calling (or scheduling) a ``task``-decorated function will
+             automatically enqueue a task for execution. You only need to call
+             :py:meth:`~Huey.enqueue` directly when working with pipelines,
+             groups, or chords.
 
     .. py:method:: revoke(task, revoke_until=None, revoke_once=False)
 
@@ -1414,11 +1418,14 @@ Huey object
         of an unhandled exception in the parent task.
 
 
-.. py:function:: crontab(month='*', day='*', day_of_week='*', hour='*', minute='*'[, strict=False])
+.. py:function:: crontab(minute='*', hour='*', day='*', month='*', day_of_week='*'[, strict=False])
 
     Convert a "crontab"-style set of parameters into a test function that will
     return ``True`` when a given ``datetime`` matches the parameters set forth in
     the crontab.
+
+    The argument order matches the standard Linux crontab format: minute, hour,
+    day, month, day-of-week.
 
     Day-of-week uses 0=Sunday and 6=Saturday.
 
@@ -1456,9 +1463,10 @@ Huey object
     is executed at a given time.
 
     If the consumer executes a task and encounters the
-    :py:class:`TaskLockedException`, then the task will not be retried, an
+    :py:class:`TaskLockedException`, then the task will not be executed, an
     error will be logged by the consumer, and a ``SIGNAL_LOCKED`` signal will
-    be emitted.
+    be emitted. If the task is configured with retries, it will be retried
+    normally (the lock is released, so the retry has a chance to acquire it).
 
     See :py:meth:`Huey.lock_task` for example usage.
 
@@ -1910,12 +1918,17 @@ Result
 
         .. seealso:: :py:meth:`TaskWrapper.is_revoked`.
 
-    .. py:method:: reschedule(eta=None, delay=None, expires=None)
+    .. py:method:: reschedule(eta=None, delay=None, expires=None, priority=None, preserve_pipeline=True)
 
         :param datetime eta: execute function at the given time.
         :param int delay: execute function after specified delay in seconds.
         :param expires: set expiration time for task. If not provided, then the
             task's original expire time (if any) will be used.
+        :param priority: override the task's priority. If not provided, the
+            original priority is preserved.
+        :param bool preserve_pipeline: when ``True`` (default), the
+            rescheduled task retains any ``on_complete`` and ``on_error``
+            chains from the original task. Set to ``False`` to discard them.
         :returns: :py:class:`Result` handle for the new task.
 
         Reschedule the given task. The original task instance will be revoked,
@@ -2090,11 +2103,17 @@ Exceptions
     When raised from within a :py:meth:`~Huey.pre_execute` hook, this exception
     signals to the consumer that the task shall be cancelled and not run.
 
-    When raised in the body of a :py:meth:`~Huey.task`-decorated function, this
-    exception accepts a boolean ``retry`` parameter (default is ``False``). If
-    ``retry=False`` then the task will not be retried, **even if it has 1 or
-    more retries remaining**. Similarly, if ``retry=True`` then the task will
-    be retried regardless.
+    When raised in the body of a :py:meth:`~Huey.task`-decorated function, the
+    ``retry`` parameter controls whether the task is retried:
+
+    * ``retry=None`` (default): the task's normal retry policy applies. If the
+      task has retries remaining, they are decremented and the task is
+      re-enqueued. If no retries remain, the task is not retried.
+    * ``retry=True``: the task will be retried regardless of whether it was
+      declared with ``retries``. If the task has no retries, Huey sets the
+      retry count to 1 so at least one retry occurs.
+    * ``retry=False``: the task will **not** be retried, even if it has
+      retries remaining.
 
 .. py:class:: RetryTask(msg=None, eta=None, delay=None)
 
