@@ -319,43 +319,12 @@ Huey object
            result of the task function, revoke the task (assuming it hasn't
            started yet), reschedule the task, and more.
 
-        .. note::
-            Huey can be configured to execute the function immediately by
-            instantiating Huey with ``immediate=True`` -- this is useful for
-            running in debug mode or when you do not wish to run the consumer.
-
-            For more information, see the :ref:`immediate mode <immediate>`
-            section of the guide.
-
         The ``task()`` decorator returns a :py:class:`TaskWrapper`, which
-        implements special methods for enqueueing the decorated function. These
-        methods are used to :py:meth:`~TaskWrapper.schedule` the task to run in
-        the future, chain tasks to form a pipeline, and more.
+        implements special methods for enqueueing the decorated function,
+        :py:meth:`~TaskWrapper.schedule` it for the future, chain tasks to
+        form a pipeline, and more.
 
-        Example:
-
-        .. code-block:: python
-
-            from huey import RedisHuey
-
-            huey = RedisHuey()
-
-            @huey.task()
-            def add(a, b):
-                return a + b
-
-        Whenever the ``add()`` function is called, the actual execution will
-        occur when the consumer dequeues the message.
-
-        .. code-block:: pycon
-
-            >>> res = add(1, 2)
-            >>> res
-            <Result: task 6b6f36fc-da0d-4069-b46c-c0d4ccff1df6>
-            >>> res()
-            3
-
-        To further illustrate this point:
+        Example task:
 
         .. code-block:: python
 
@@ -364,8 +333,8 @@ Huey object
                 time.sleep(n)
                 return n
 
-        Calling the ``slow()`` task will return immediately. We can, however,
-        block until the task finishes by waiting for the result:
+        Calling the ``slow()`` task will return immediately. We can block until
+        the task finishes by waiting for the result:
 
         .. code-block:: pycon
 
@@ -373,46 +342,22 @@ Huey object
             >>> res(blocking=True)  # Block until task finishes, ~10s.
             10
 
-        .. note::
-            The return value of any calls to the decorated function depends on
-            whether the :py:class:`Huey` instance is configured to store the
-            results of tasks (``results=True`` is the default). When the result
-            store is disabled, calling a task-decorated function will return
-            ``None`` instead of a result handle.
+        When ``context=True``, the :py:class:`Task` instance is passed to
+        your function as a ``task`` keyword argument. This gives access to
+        the task ID, remaining retries, and :ref:`cooperative timeout
+        <cooperative-timeout>` APIs.
 
-        In some cases, it may be useful to receive the :py:class:`Task`
-        instance itself as an argument.
+        When the result store is disabled (``results=False``), calling a
+        task-decorated function returns ``None`` instead of a
+        :py:class:`Result` handle.
 
-        .. code-block:: python
+        If you stack additional decorators on a task function, note that
+        decorators **above** ``@huey.task()`` run in the calling process,
+        while decorators **below** it run in the consumer worker.
 
-            @huey.task(context=True)  # Include task as an argument.
-            def print_a_task_id(message, task=None):
-                print('%s: %s' % (message, task.id))
-
-
-            print_a_task_id('hello')
-            print_a_task_id('goodbye')
-
-        This would cause the consumer would print something like::
-
-            hello: e724a743-e63e-4400-ac07-78a2fa242b41
-            goodbye: 606f36fc-da0d-4069-b46c-c0d4ccff1df6
-
-        .. note::
-            When using other decorators on task functions, make sure that you
-            understand when they will be evaluated. In the following example
-            the decorator ``a`` will be evaluated in the calling process, while
-            ``b`` will be evaluated in the worker process.
-
-            .. code-block:: python
-
-                @a
-                @huey.task()
-                @b
-                def task():
-                    pass
-
-        For more information, see :py:class:`TaskWrapper`, :py:class:`Task`,
+        For a thorough walkthrough with examples, see the :ref:`guide`. For
+        the full :py:class:`TaskWrapper` API (scheduling, pipelines,
+        revocation, etc.), see :py:class:`TaskWrapper`, :py:class:`Task`,
         and :py:class:`Result`.
 
     .. py:method:: periodic_task(validate_datetime, retries=0, retry_delay=0, priority=None, context=False, name=None, expires=None, timeout=None, **kwargs)
