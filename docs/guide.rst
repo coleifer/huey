@@ -1077,6 +1077,22 @@ For more information, see the following API docs:
 * :py:meth:`Task.then`
 * :py:class:`ResultGroup` and :py:class:`Result`
 
+.. warning::
+    If a pipeline step returns ``None`` and :py:class:`Huey` was initialized
+    with ``store_none=False`` (the default), the result for that step will
+    not be written to the result store. When you read the :py:class:`ResultGroup`,
+    that step's value will appear as ``None`` and be indistinguishable from
+    "result not ready yet."
+
+    Pipeline *execution* is unaffected: the next task in the chain still runs,
+    but it receives no additional arguments from the ``None``-returning step
+    (since ``None`` is treated as "no data to pass").
+
+    If your pipeline steps may legitimately return ``None`` and you need to
+    read results from the :py:class:`ResultGroup`, initialize Huey with
+    ``store_none=True`` or (preferable) have your tasks return a sentinel value
+    instead.
+
 Error pipelines
 ^^^^^^^^^^^^^^^
 
@@ -1449,6 +1465,14 @@ In this example, ``alert_admin`` runs if ``aggregate`` raises an exception,
     the chord from ever completing. If you need to cancel a chord, revoke the
     callback task instead.
 
+.. note::
+    Unlike regular tasks, chord sub-task results are stored unconditionally
+    by the chord's internal bookkeeping. If a sub-task returns ``None``, the
+    callback will correctly receive ``None`` in the results list regardless
+    of the ``store_none`` setting. You do not need ``store_none=True`` for
+    chords to work with ``None`` return values.
+
+
 Dynamic fan-out
 ^^^^^^^^^^^^^^^
 
@@ -1508,9 +1532,54 @@ exception during execution.
     typically a bad idea to introduce any slow operations into a signal
     handler.
 
-For a complete list of Huey's signals and their meaning, see the :ref:`signals`
-document, and the :py:meth:`Huey.signal` API documentation.
+Huey emits the following signals:
 
+* ``SIGNAL_ENQUEUED`` - task has been placed on the queue.
+* ``SIGNAL_EXECUTING`` - task is about to be executed by a worker.
+* ``SIGNAL_COMPLETE`` - task finished successfully.
+* ``SIGNAL_ERROR`` - task raised an unhandled exception. Handler receives an
+  extra ``exc`` argument containing the exception instance.
+* ``SIGNAL_CANCELED`` - task was canceled via :py:class:`CancelExecution`.
+* ``SIGNAL_RETRYING`` - task failed but will be retried.
+* ``SIGNAL_SCHEDULED`` - task was added to the schedule for future execution.
+* ``SIGNAL_REVOKED`` - task was revoked and will not be executed.
+* ``SIGNAL_EXPIRED`` - task's expiration time passed before execution.
+* ``SIGNAL_LOCKED`` - task could not acquire its lock.
+* ``SIGNAL_TIMEOUT`` - task exceeded its execution timeout.
+* ``SIGNAL_RATE_LIMITED`` - task was rate-limited.
+* ``SIGNAL_INTERRUPTED`` - consumer was shut down while the task was still
+  executing.
+
+All signals are available in the ``huey.signals`` module. For signal ordering,
+registration details, and examples, see the :ref:`signals` document and the
+:py:meth:`Huey.signal` API documentation.
+
+Consumer shutdown and interrupted tasks
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+When the consumer is shut down gracefully (``SIGINT`` / Ctrl+C), it finishes
+executing any in-progress tasks before exiting. However, if the consumer is
+killed with ``SIGTERM`` or crashes, tasks that are mid-execution are lost and
+will not be retried automatically.
+
+Huey tracks in-flight tasks internally. When the consumer shuts down, it calls
+:py:meth:`Huey.notify_interrupted_tasks`, which emits ``SIGNAL_INTERRUPTED``
+for each task that was still executing. You can use this signal to re-enqueue
+interrupted tasks:
+
+.. code-block:: python
+
+    from huey.signals import SIGNAL_INTERRUPTED
+
+    @huey.signal(SIGNAL_INTERRUPTED)
+    def on_interrupted(signal, task, *args, **kwargs):
+        # Re-enqueue the task so it will be executed again.
+        huey.enqueue(task)
+
+.. warning::
+    Re-enqueueing interrupted tasks means the task may run more than once.
+    If your task is not idempotent, consider tracking execution state
+    externally (e.g. in a database) rather than blindly re-enqueueing.
 
 .. _logging:
 

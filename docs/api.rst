@@ -713,6 +713,19 @@ Huey object
         are provided, then the handler is disconnected from any signals it may
         have been connected to.
 
+    .. py:method:: notify_interrupted_tasks()
+
+        Emit ``SIGNAL_INTERRUPTED`` for every task that is currently being
+        executed (i.e. in-flight). This is called automatically by the consumer
+        during shutdown. Application code should not normally need to call this
+        method directly, but it is available for custom consumer implementations
+        or advanced testing.
+
+        Tasks are tracked from the moment execution begins until execution
+        completes (or fails). If the consumer is killed mid-task, those tasks
+        remain in the ``_tasks_in_flight`` set, and this method emits
+        ``SIGNAL_INTERRUPTED`` for each one.
+
     .. py:method:: enqueue(task)
 
         :param task: a :py:class:`Task` instance, a :py:class:`group`, or a
@@ -884,15 +897,37 @@ Huey object
 
     .. py:method:: flush_locks(*names)
 
-        :param names: additional lock-names to flush.
-        :returns: set of lock names that were set and subsequently cleared.
+        :param names: optional additional lock-names to flush.
+        :returns: set of lock names that were held and subsequently cleared.
 
-        Flush any locks that may be held. Top-level tasks or functions that use
-        the :py:meth:`~Huey.lock_task` decorator will be registered as
-        import-time side-effects, but it is possible that locks in nested
-        scopes (e.g. a context-manager inside a task function) will not be
-        registered. These undiscovered locks can be flushed by passing their
-        lock-names explicitly.
+        Flush any locks that may be held. Locks created by using
+        :py:meth:`~Huey.lock_task` as a **decorator** are automatically
+        discovered (registered at import time). Locks created inside a
+        function body using the **context-manager** form are not automatically
+        discovered, and their names must be passed explicitly.
+
+        When ``names`` are provided, both the discovered locks **and** the
+        explicitly named locks are flushed.
+
+        .. code-block:: python
+
+            # Decorator form — automatically discovered:
+            @huey.periodic_task(crontab(minute='*/5'))
+            @huey.lock_task('reports-lock')
+            def generate_report():
+                run_report()
+
+            # Context-manager form — NOT automatically discovered:
+            @huey.task()
+            def backup():
+                with huey.lock_task('db-backup'):
+                    do_db_backup()
+
+            # Flush discovered locks only:
+            huey.flush_locks()  # Clears 'reports-lock' if held.
+
+            # Flush discovered locks AND the context-manager lock:
+            huey.flush_locks('db-backup')  # Clears both.
 
     .. py:method:: rate_limit(name, limit, per, retry=True)
 
@@ -1276,6 +1311,20 @@ Huey object
             rg.get(blocking=True)
 
             # [0, 2, 6, 12, 20, 30, 42, 56, 72, 90]
+
+    .. py:method:: unregister()
+
+        :returns: boolean indicating whether the task was found and removed
+            from the registry.
+
+        Remove this task from Huey's internal task registry. After
+        unregistering, the consumer will no longer be able to deserialize or
+        execute instances of this task. If the task is a periodic task, it will
+        also be removed from the periodic task schedule.
+
+        This is primarily useful when working with dynamically-created periodic
+        tasks that need to be removed at runtime.
+
 
 
 .. py:class:: Task(args=None, kwargs=None, id=None, eta=None, retries=None, retry_delay=None, expires=None, timeout=None, on_complete=None, on_error=None)
