@@ -6,10 +6,8 @@ import shutil
 import sys
 import threading
 import unittest
-try:
-    from queue import Queue
-except ImportError:
-    from Queue import Queue
+import uuid
+from queue import Queue
 
 from redis.connection import ConnectionPool
 from redis import Redis
@@ -23,6 +21,7 @@ from huey.api import SqliteHuey
 from huey.constants import EmptyData
 from huey.consumer import Consumer
 from huey.exceptions import ConfigurationError
+from huey.exceptions import ResultTimeout
 from huey.storage import FileStorage
 from huey.storage import MemoryStorage
 from huey.storage import RedisExpireStorage
@@ -130,6 +129,12 @@ class StorageTests(object):
         self.assertEqual(self.s.result_store_size(), 0)
         self.assertEqual(self.s.result_items(), {})
 
+    def test_wait_result(self):
+        key = str(uuid.uuid4())
+        self.assertFalse(self.s.wait_result(key, timeout=0.1))
+        self.s.put_data(key, b'v1', is_result=True)
+        self.assertTrue(self.s.wait_result(key, timeout=1))
+
     def test_priority(self):
         if not self.s.priority:
             raise unittest.SkipTest('priority support required')
@@ -206,6 +211,11 @@ class TestRedisStorage(StorageTests, BaseTestCase):
 
         # None values are fine, however.
         RedisHuey(host=None, port=None, db=None, url='redis://localhost')
+
+
+class TestRedisStorageWaitResult(TestRedisStorage):
+    def get_huey(self):
+        return RedisHuey(utc=False, notify_result=True, notify_result_ttl=30)
 
 
 class TestRedisExpireStorage(StorageTests, BaseTestCase):

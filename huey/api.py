@@ -83,24 +83,11 @@ class Huey(object):
             generate_nightly_report()
     """
     storage_class = None
-    _deprecated_params = ('result_store', 'events', 'store_errors',
-                          'global_registry')
 
     def __init__(self, name='huey', results=True, store_none=False, utc=True,
                  immediate=False, serializer=None, compression=False,
-                 use_zlib=False, immediate_use_memory=True, always_eager=None,
-                 storage_class=None, **storage_kwargs):
-        if always_eager is not None:
-            warnings.warn('"always_eager" parameter is deprecated, use '
-                          '"immediate" instead', DeprecationWarning)
-            immediate = always_eager
-
-        invalid = [p for p in self._deprecated_params
-                   if storage_kwargs.pop(p, None) is not None]
-        if invalid:
-            warnings.warn('the following Huey initialization arguments are no '
-                          'longer supported: %s' % ', '.join(invalid),
-                          DeprecationWarning)
+                 use_zlib=False, immediate_use_memory=True, storage_class=None,
+                 **storage_kwargs):
 
         self.name = name
         self.results = results
@@ -1245,7 +1232,7 @@ class Result(object):
         elif not blocking:
             return
 
-        if self.huey.storage.wait_data(self.id, timeout, backoff, max_delay):
+        if self.huey.storage.wait_result(self.id, timeout, backoff, max_delay):
             res = self._get(preserve)
             if res is not EmptyData:
                 return self._result

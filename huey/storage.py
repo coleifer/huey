@@ -177,15 +177,15 @@ class BaseStorage(object):
         """
         raise NotImplementedError
 
-    def wait_data(self, key, timeout=None, backoff=1.15, max_delay=1.0):
+    def wait_result(self, key, timeout=None, backoff=1.15, max_delay=1.0):
         """
         Block until a result is available for the given key, or until the
         timeout expires. Returns True if the result is available, or False if
         the timeout expired.
 
         The default implementation polls with exponential backoff, but Redis
-        subclasses may override with BLPOP or SUBSCRIBE for lower latency
-        result notification.
+        subclasses provide option to override with BLPOP for lower latency
+        result notification (specify notify_result=True).
         """
         deadline = None if timeout is None else time.monotonic() + timeout
         delay = 0.05
@@ -420,6 +420,7 @@ class RedisStorage(BaseStorage):
 
     def __init__(self, name='huey', blocking=True, read_timeout=1,
                  connection_pool=None, url=None, client_name=None,
+                 notify_result=False, notify_result_ttl=86400,
                  **connection_params):
 
         if Redis is None:
@@ -455,12 +456,20 @@ class RedisStorage(BaseStorage):
         self.error_key = 'huey.errors.%s' % self.name
         self.counter_key = 'huey.counters.%s' % self.name
         self.notify_prefix = 'huey.notify.%s.' % self.name
+        self.notify_result = notify_result  # Use result notification.
+        self.notify_result_ttl = notify_result_ttl
 
         if client_name is not None:
             self.conn.client_setname(client_name)
 
         self.blocking = blocking
         self.read_timeout = read_timeout
+
+        try:
+            redis_version = self.conn.info()['redis_version']
+        except Exception:
+            redis_version = '0.0.0'
+        self.redis_version = tuple(int(i) for i in redis_version.split('.'))
 
     def clean_name(self, name):
         return re.sub('[^A-Za-z0-9_]', '', name)
@@ -519,11 +528,11 @@ class RedisStorage(BaseStorage):
 
     def put_data(self, key, value, is_result=False):
         self.conn.hset(self.result_key, key, value)
-        if is_result:
+        if is_result and self.notify_result:
             nkey = self.notify_prefix + key
             pipe = self.conn.pipeline()
             pipe.lpush(nkey, b'1')
-            pipe.expire(nkey, 86400)
+            pipe.expire(nkey, self.notify_result_ttl)
             pipe.execute()
 
     def peek_data(self, key):
@@ -541,13 +550,19 @@ class RedisStorage(BaseStorage):
         exists, val, n = pipe.execute()
         return EmptyData if not exists else val
 
-    def wait_data(self, key, timeout=None, backoff=1.15, max_delay=1.0):
+    def wait_result(self, key, timeout=None, backoff=1.15, max_delay=1.0):
+        if not self.notify_result:
+            return super(RedisStorage, self).wait_result(key, timeout,
+                                                         backoff, max_delay)
+
         if self.has_data_for_key(key):
             return True
         nkey = self.notify_prefix + key
         timeout = timeout or 0
+        if timeout > 0 and self.redis_version[0] < 6:
+            timeout = min(1, int(timeout))  # Timeout must be int for R < 6.
         try:
-            result = self.conn.blpop(nkey, timeout=int(timeout))
+            result = self.conn.blpop(nkey, timeout=timeout)
         except (ConnectionError, TimeoutError):
             return False
 
@@ -604,7 +619,7 @@ class RedisExpireStorage(RedisStorage):
             nkey = self.notify_prefix + key
             pipe = self.conn.pipeline()
             pipe.lpush(nkey, b'1')
-            pipe.expire(nkey, 86400)
+            pipe.expire(nkey, self.notify_result_ttl)
             pipe.execute()
         else:
             self.conn.set(self.result_key(key), value)
