@@ -18,6 +18,7 @@ from huey.api import PriorityRedisHuey
 from huey.api import RedisExpireHuey
 from huey.api import RedisHuey
 from huey.api import SqliteHuey
+from huey.api import chord
 from huey.constants import EmptyData
 from huey.consumer import Consumer
 from huey.exceptions import ConfigurationError
@@ -179,14 +180,23 @@ class StorageTests(object):
         def task_a(n):
             return n + 1
 
+        @self.huey.task()
+        def total(ns):
+            return sum(ns)
+
         with self.consumer_context():
             r1 = task_a(1)
             r2 = task_a(2)
             r3 = task_a(3)
 
+            c = chord([task_a.s(1), task_a.s(2)], total)
+            cr = self.huey.enqueue(c)
+
             self.assertEqual(r1.get(blocking=True, timeout=5), 2)
             self.assertEqual(r2.get(blocking=True, timeout=5), 3)
             self.assertEqual(r3.get(blocking=True, timeout=5), 4)
+            self.assertEqual(cr.get(blocking=True, timeout=5), 5)
+            self.assertEqual(cr.results(), [2, 3])
 
             task_a.revoke()
             self.assertTrue(task_a.is_revoked())

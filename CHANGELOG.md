@@ -10,6 +10,8 @@ Changelog
 * Remove Python 2.x compatibility.
 * Add new `incr(key, amount=1)` to storage API for atomic increment primitive.
 * Add `chord()` (map -> reduce) and `group()` (map) primitives.
+* New option for low-latency result fetching, available for RedisHuey. To use,
+  pass ``notify_result=True`` when initializing your Huey instance.
 
 [View commits](https://github.com/coleifer/huey/compare/2.6.0...HEAD)
 
