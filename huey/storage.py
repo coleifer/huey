@@ -566,7 +566,11 @@ class RedisStorage(BaseStorage):
         except (ConnectionError, TimeoutError):
             return False
 
-        return result is not None
+        if result is not None:
+            self.conn.delete(nkey)
+            return True
+
+        return False
 
     def has_data_for_key(self, key):
         return self.conn.hexists(self.result_key, key)

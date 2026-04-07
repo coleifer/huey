@@ -41,6 +41,10 @@ Implementations of :py:class:`Huey` which handle task and result persistence.
     :param port: port number.
     :param password: password for Redis.
     :param int db: Redis database to use (typically 0-15, default is 0).
+    :param bool notify_result: use a blocking-pop on a result-ready key to
+        enable low-latency result reading.
+    :param int notify_result_ttl: TTL for result-ready key to automatically
+        expire un-awaited results.
 
     The `redis-py documentation <https://redis-py.readthedocs.io/en/latest/>`_
     contains the complete list of arguments supported by the Redis client.
@@ -101,6 +105,10 @@ Implementations of :py:class:`Huey` which handle task and result persistence.
     :param port: port number.
     :param password: password for Redis.
     :param int db: Redis database to use (typically 0-15, default is 0).
+    :param bool notify_result: use a blocking-pop on a result-ready key to
+        enable low-latency result reading.
+    :param int notify_result_ttl: TTL for result-ready key to automatically
+        expire un-awaited results.
 
 .. py:class:: PriorityRedisExpireHuey
 
