@@ -22,6 +22,7 @@ config_defaults = (
     ('simple_log', None),
     ('flush_locks', False),
     ('extra_locks', None),
+    ('max_tasks', None),
 )
 config_keys = [param for param, _ in config_defaults]
 
@@ -39,7 +40,7 @@ def option(name, **options):
 class OptionParserHandler(object):
     def get_worker_options(self):
         return (
-            # -w, -k, -d, -m, -b, -c, -C, -f
+            # -w, -k, -d, -m, -b, -c, -C, -f, -M
             option('workers', type='int',
                    help='number of worker threads/processes (default=1)'),
             option(('k', 'worker-type'), choices=WORKER_TYPES,
@@ -70,6 +71,9 @@ class OptionParserHandler(object):
                    help=('flush all locks when starting consumer.')),
             option(('L', 'extra-locks'), dest='extra_locks',
                    help=('additional locks to flush, separated by comma.')),
+            option(('M', 'max_tasks'), dest='max_tasks', metavar='COUNT',
+                   help='restart worker after it has executed COUNT tasks',
+                   type='int'),
         )
 
     def get_scheduler_options(self):

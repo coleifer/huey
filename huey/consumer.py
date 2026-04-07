@@ -29,6 +29,8 @@ from huey.utils import thread_timeout
 
 class ConsumerStopped(Exception): pass
 
+class WorkerRecycle(Exception): pass
+
 
 class BaseProcess(object):
     process_name = 'BaseProcess'
@@ -87,10 +89,13 @@ class Worker(BaseProcess):
     """
     process_name = 'Worker'
 
-    def __init__(self, huey, default_delay, max_delay, backoff):
+    def __init__(self, huey, default_delay, max_delay, backoff,
+                 max_tasks=None):
         self.delay = self.default_delay = default_delay
         self.max_delay = max_delay
         self.backoff = backoff
+        self.max_tasks = max_tasks
+        self.task_count = 0
         super(Worker, self).__init__(huey)
 
     def initialize(self):
@@ -124,6 +129,12 @@ class Worker(BaseProcess):
                 except Exception as exc:
                     self._logger.exception('Unhandled error during execution '
                                            'of task %s.', task.id)
+                finally:
+                    self.task_count += 1
+                    if self.max_tasks and self.task_count >= self.max_tasks:
+                        self._logger.info('Worker reached max tasks (%d), '
+                                          'exiting.', self.max_tasks)
+                        raise WorkerRecycle()
             elif not self.huey.storage.blocking:
                 self.sleep()
 
@@ -269,7 +280,7 @@ class Consumer(object):
                  backoff=1.15, max_delay=10.0, scheduler_interval=1,
                  worker_type=WORKER_THREAD, check_worker_health=True,
                  health_check_interval=10, flush_locks=False,
-                 extra_locks=None):
+                 extra_locks=None, max_tasks=None):
 
         self._logger = logging.getLogger('huey.consumer')
         if huey.immediate:
@@ -283,6 +294,11 @@ class Consumer(object):
         self.default_delay = initial_delay  # Default queue polling interval.
         self.backoff = backoff  # Exponential backoff factor when queue empty.
         self.max_delay = max_delay  # Maximum interval between polling events.
+        self.max_tasks = max_tasks  # Max tasks to execute before recycling.
+
+        if max_tasks and not check_worker_health:
+            raise ConfigurationError('max_tasks requires check_worker_health '
+                                     'be enabled.')
 
         # Ensure that the scheduler runs at an interval between 1 and 60s.
         self.scheduler_interval = max(min(scheduler_interval, 60), 1)
@@ -353,7 +369,8 @@ class Consumer(object):
             huey=self.huey,
             default_delay=self.default_delay,
             max_delay=self.max_delay,
-            backoff=self.backoff)
+            backoff=self.backoff,
+            max_tasks=self.max_tasks)
 
     def _create_scheduler(self):
         return self.scheduler_class(
@@ -376,6 +393,8 @@ class Consumer(object):
                     process.loop()
             except KeyboardInterrupt:
                 pass
+            except WorkerRecycle:
+                self._logger.info('Process %s restarting (max tasks).', name)
             except:
                 self._logger.exception('Process %s died!', name)
             finally:

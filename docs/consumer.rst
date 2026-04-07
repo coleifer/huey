@@ -152,6 +152,11 @@ their default values.
     not be discovered during consumer startup, but you wish to ensure they are
     cleared. Implies ``--flush-locks``.
 
+``-M``, ``--max-tasks``
+    Restart a worker after it has executed the given number of tasks. This
+    option requires that the worker health check be enabled. If it is not, an
+    error will be raised.
+
 ``-s``, ``--scheduler-interval``
     The frequency with which the scheduler should run. By default this will run
     every second, but you can increase the interval to as much as 60 seconds.
