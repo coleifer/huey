@@ -3,15 +3,16 @@ Changelog
 
 ## master
 
+* Add `chord()` (map -> reduce) and `group()` (map) primitives.
 * Add `timeout` (using SIGALRM for process and gevent.Timeout for greenlet) to
   control task running time. For threads, unfortunately, there's no good
   mechanism so instead APIs for cooperatively checking timeout are provided on
   the Task instance.
-* Remove Python 2.x compatibility.
-* Add new `incr(key, amount=1)` to storage API for atomic increment primitive.
-* Add `chord()` (map -> reduce) and `group()` (map) primitives.
 * New option for low-latency result fetching, available for RedisHuey. To use,
   pass ``notify_result=True`` when initializing your Huey instance.
+* Add new `incr(key, amount=1)` to storage API for atomic increment primitive.
+  This is used by `chord()`.
+* Remove Python 2.x compatibility.
 
 [View commits](https://github.com/coleifer/huey/compare/2.6.0...HEAD)
 
