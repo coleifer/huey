@@ -45,6 +45,19 @@ result to block until the task has finished and a result is ready:
     >>> r(blocking=True, timeout=5)  # Wait up to 5 seconds for result.
     3
 
+You can also check to see if a result is ready using :py:meth:`Result.is_ready`:
+
+.. code-block:: pycon
+
+    >>> r = add(1, 2)
+    >>> r.is_ready()
+    False
+
+    >>> r.is_ready()  # A few moments later.
+    True
+    >>> r()
+    3
+
 What happens when we call a task function?
 
 1. When the ``add()`` function is called, a message representing the call is
@@ -1228,7 +1241,7 @@ the callback task in order.
     @huey.task()
     def index_pages(results):
         for url, html in results:
-            self.search.index(url, html)
+            search.index(url, html)
 
         return len(results)
 

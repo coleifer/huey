@@ -55,12 +55,14 @@ class TestQueue(BaseTestCase):
 
         result = task_a(3)
         self.assertTrue(isinstance(result, Result))
+        self.assertFalse(result.is_ready())
         self.assertEqual(len(self.huey), 1)  # One item in queue.
         task = self.huey.dequeue()
         self.assertEqual(len(self.huey), 0)  # No items in queue.
         self.assertEqual(self.huey.result_count(), 0)  # No results.
 
         self.assertEqual(result.id, task.id)  # Result points to task.
+        self.assertFalse(result.is_ready())
         self.assertTrue(result.get() is None)
 
         # Execute task, placing result in result store and returning the value
@@ -70,6 +72,7 @@ class TestQueue(BaseTestCase):
         # Data is present in result store, we can read it from the result
         # instance, and after reading the value is removed.
         self.assertEqual(self.huey.result_count(), 1)
+        self.assertTrue(result.is_ready())
         self.assertEqual(result.get(), 4)
         self.assertEqual(self.huey.result_count(), 0)
 
@@ -108,6 +111,23 @@ class TestQueue(BaseTestCase):
         self.assertEqual(self.execute_next(), 1)
         self.assertEqual(self.huey.result_count(), 1)
         self.assertEqual(r(), 1)
+
+    def test_result_readiness(self):
+        @self.huey.task()
+        def task_a(n):
+            return n + 1
+
+        r = task_a(1)
+        self.assertFalse(r.is_ready())
+        self.assertEqual(self.execute_next(), 2)
+        self.assertTrue(r.is_ready())
+        self.assertEqual(r(), 2)
+
+        r = task_a(2)
+        self.assertFalse(r.is_ready())
+        self.assertEqual(self.execute_next(), 3)
+        self.assertEqual(r(), 3)
+        self.assertTrue(r.is_ready())  # Invert order of checks - OK.
 
     def test_scheduling(self):
         @self.huey.task()

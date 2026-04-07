@@ -1203,7 +1203,7 @@ class Result(object):
         # blocking=True. We'll also specify a 4 second timeout so we don't
         # block forever if the consumer goes down:
         result2 = my_task(2, 3)
-        print result(blocking=True, timeout=4)
+        print(result(blocking=True, timeout=4))
     """
     def __init__(self, huey, task):
         self.huey = huey
@@ -1220,6 +1220,9 @@ class Result(object):
 
     def __call__(self, *args, **kwargs):
         return self.get(*args, **kwargs)
+
+    def is_ready(self):
+        return self._get() is not EmptyData
 
     def _get(self, preserve=False):
         task_id = self.id

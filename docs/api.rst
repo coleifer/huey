@@ -1410,10 +1410,10 @@ Huey object
 
     Acceptable inputs:
 
-    - "*" = every distinct value
-    - "\*/n" = run every "n" times, i.e. hours='\*/4' == 0, 4, 8, 12, 16, 20
-    - "m-n" = run every time m..n
-    - "m,n" = run on m and n
+    - `*` = every distinct value
+    - `*/n` = run every "n" times, i.e. hours=`*/4` == 0, 4, 8, 12, 16, 20
+    - `m-n` = run every time m..n
+    - `m,n` = run on m and n
 
     :param bool strict: cause crontab to raise a ``ValueError`` if an input
        does not match a supported input format.
@@ -1831,6 +1831,11 @@ Result
     .. py:attribute:: id
 
         Returns the unique id of the corresponding task.
+
+    .. py:method:: is_ready()
+
+        :returns: whether the task result value is available.
+        :rtype: bool
 
     .. py:method:: get(blocking=False, timeout=None, backoff=1.15, max_delay=1.0, revoke_on_timeout=False, preserve=False)
 
