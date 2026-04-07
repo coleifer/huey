@@ -1239,25 +1239,23 @@ class Result(object):
 
     def get_raw_result(self, blocking=False, timeout=None, backoff=1.15,
                        max_delay=1.0, revoke_on_timeout=False, preserve=False):
-        if not blocking:
+        res = self._get(preserve)
+        if res is not EmptyData:
+            return res
+        elif not blocking:
+            return
+
+        if self.huey.storage.wait_data(self.id, timeout, backoff, max_delay):
             res = self._get(preserve)
             if res is not EmptyData:
-                return res
-        else:
-            start = time.monotonic()
-            delay = .1
-            while self._result is EmptyData:
-                if timeout and time.monotonic() - start >= timeout:
-                    if revoke_on_timeout:
-                        self.revoke()
-                    raise ResultTimeout('timed out waiting for result')
-                if delay > max_delay:
-                    delay = max_delay
-                if self._get(preserve) is EmptyData:
-                    time.sleep(delay)
-                    delay *= backoff
+                return self._result
 
-            return self._result
+        if timeout is not None:
+            if revoke_on_timeout:
+                self.revoke()
+            raise ResultTimeout('timed out waiting for result')
+
+        return self._result
 
     def get(self, blocking=False, timeout=None, backoff=1.15, max_delay=1.0,
             revoke_on_timeout=False, preserve=False):

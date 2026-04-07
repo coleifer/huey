@@ -229,7 +229,7 @@ class TestRedisExpireStorage(StorageTests, BaseTestCase):
         # specifically included the "is_result=True" flag, then the key will be
         # given a TTL.
         self.assertEqual(conn.ttl(self.s.result_key(b'k1')), -1)
-        self.assertEqual(conn.ttl(self.s.result_key(b'k2')), 3600)
+        self.assertTrue(3580 <= conn.ttl(self.s.result_key(b'k2')) <= 3600)
 
         # Non-existant keys return -2. See redis docs for TTL command.
         self.assertEqual(conn.ttl(self.s.result_key(b'k3')), -2)

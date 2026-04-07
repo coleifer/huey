@@ -177,6 +177,26 @@ class BaseStorage(object):
         """
         raise NotImplementedError
 
+    def wait_data(self, key, timeout=None, backoff=1.15, max_delay=1.0):
+        """
+        Block until a result is available for the given key, or until the
+        timeout expires. Returns True if the result is available, or False if
+        the timeout expired.
+
+        The default implementation polls with exponential backoff, but Redis
+        subclasses may override with BLPOP or SUBSCRIBE for lower latency
+        result notification.
+        """
+        deadline = None if timeout is None else time.monotonic() + timeout
+        delay = 0.05
+        while True:
+            if self.has_data_for_key(key):
+                return True
+            if deadline is not None and time.monotonic() >= deadline:
+                return False
+            time.sleep(min(delay, max_delay))
+            delay *= backoff
+
     def delete_data(self, key):
         """
         Delete the value at the given key, if it exists.
@@ -434,6 +454,7 @@ class RedisStorage(BaseStorage):
         self.result_key = 'huey.results.%s' % self.name
         self.error_key = 'huey.errors.%s' % self.name
         self.counter_key = 'huey.counters.%s' % self.name
+        self.notify_prefix = 'huey.notify.%s.' % self.name
 
         if client_name is not None:
             self.conn.client_setname(client_name)
@@ -498,6 +519,12 @@ class RedisStorage(BaseStorage):
 
     def put_data(self, key, value, is_result=False):
         self.conn.hset(self.result_key, key, value)
+        if is_result:
+            nkey = self.notify_prefix + key
+            pipe = self.conn.pipeline()
+            pipe.lpush(nkey, b'1')
+            pipe.expire(nkey, 86400)
+            pipe.execute()
 
     def peek_data(self, key):
         pipe = self.conn.pipeline()
@@ -513,6 +540,18 @@ class RedisStorage(BaseStorage):
         pipe.hdel(self.result_key, key)
         exists, val, n = pipe.execute()
         return EmptyData if not exists else val
+
+    def wait_data(self, key, timeout=None, backoff=1.15, max_delay=1.0):
+        if self.has_data_for_key(key):
+            return True
+        nkey = self.notify_prefix + key
+        timeout = timeout or 0
+        try:
+            result = self.conn.blpop(nkey, timeout=int(timeout))
+        except (ConnectionError, TimeoutError):
+            return False
+
+        return result is not None
 
     def has_data_for_key(self, key):
         return self.conn.hexists(self.result_key, key)
@@ -560,6 +599,13 @@ class RedisExpireStorage(RedisStorage):
             # We only want to expire task result data. If we are storing an
             # important metadata like a revocation key, we need to preserve it.
             self.conn.setex(self.result_key(key), self._expire_time, value)
+            if isinstance(key, bytes):
+                key = key.decode('utf8')
+            nkey = self.notify_prefix + key
+            pipe = self.conn.pipeline()
+            pipe.lpush(nkey, b'1')
+            pipe.expire(nkey, 86400)
+            pipe.execute()
         else:
             self.conn.set(self.result_key(key), value)
 
