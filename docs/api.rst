@@ -2130,7 +2130,7 @@ Storage
 
 Huey comes with several built-in storage implementations:
 
-.. py:class:: RedisStorage(name='huey', blocking=True, read_timeout=1, connection_pool=None, url=None, client_name=None, **connection_params)
+.. py:class:: RedisStorage(name='huey', blocking=True, read_timeout=1, connection_pool=None, url=None, client_name=None, notify_result=False, notify_result_ttl=86400, **connection_params)
 
     :param bool blocking: Use blocking-pop when reading from the queue (as
         opposed to polling). Default is true.
@@ -2139,13 +2139,17 @@ Huey comes with several built-in storage implementations:
     :param connection_pool: a redis-py ``ConnectionPool`` instance.
     :param url: url for Redis connection.
     :param client_name: name used to identify Redis clients used by Huey.
+    :param bool notify_result: use a blocking-pop on a result-ready key to
+        enable low-latency result reading.
+    :param int notify_result_ttl: TTL for result-ready key to automatically
+        expire un-awaited results.
 
     Additional keyword arguments will be passed directly to the Redis client
     constructor. See the `redis-py documentation <https://redis-py.readthedocs.io/en/latest/>`_
     for the complete list of arguments supported by the Redis client.
 
 
-.. py:class:: RedisExpireStorage(name='huey', expire_time=86400, blocking=True, read_timeout=1, connection_pool=None, url=None, client_name=None, **connection_params)
+.. py:class:: RedisExpireStorage(name='huey', expire_time=86400, blocking=True, read_timeout=1, connection_pool=None, url=None, client_name=None, notify_result=False, notify_result_ttl=86400, **connection_params)
 
     :param int expire_time: TTL for results of individual tasks.
 
@@ -2158,7 +2162,7 @@ Huey comes with several built-in storage implementations:
     clean-up.
 
 
-.. py:class:: PriorityRedisStorage(name='huey', blocking=True, read_timeout=1, connection_pool=None, url=None, client_name=None, **connection_params)
+.. py:class:: PriorityRedisStorage(name='huey', blocking=True, read_timeout=1, connection_pool=None, url=None, client_name=None, notify_result=False, notify_result_ttl=86400, **connection_params)
 
     :param bool blocking: Use blocking-zpopmin when reading from the queue (as
         opposed to polling). Default is true.
@@ -2167,6 +2171,10 @@ Huey comes with several built-in storage implementations:
     :param connection_pool: a redis-py ``ConnectionPool`` instance.
     :param url: url for Redis connection.
     :param client_name: name used to identify Redis clients used by Huey.
+    :param bool notify_result: use a blocking-pop on a result-ready key to
+        enable low-latency result reading.
+    :param int notify_result_ttl: TTL for result-ready key to automatically
+        expire un-awaited results.
 
     Redis storage that uses a different data-structure for the task queue in
     order to support task priorities.
@@ -2261,11 +2269,13 @@ Huey comes with several built-in storage implementations:
 
     .. py:method:: flush_schedule()
 
-    .. py:method:: put_data(key, value)
+    .. py:method:: put_data(key, value, is_result=False)
 
     .. py:method:: peek_data(key)
 
     .. py:method:: pop_data(key)
+
+    .. py:method:: wait_result(key, timeout=None, backoff=1.15, max_delay=1.0)
 
     .. py:method:: put_if_empty(key, value)
 
