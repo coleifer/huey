@@ -12,7 +12,6 @@ from huey.api import TaskWrapper
 from huey.api import chord
 from huey.api import crontab
 from huey.api import group
-from huey.api import _unsupported
 from huey.constants import EmptyData
 from huey.exceptions import CancelExecution
 from huey.exceptions import ConfigurationError
@@ -2440,10 +2439,6 @@ class TestHueyAPIs(BaseTestCase):
         for test in tests:
             self.huey.put('key', test)
             self.assertEqual(self.huey.get('key'), test)
-
-    def test_unsupported(self):
-        FooHuey = _unsupported('FooHuey', 'foo')
-        self.assertRaises(ConfigurationError, FooHuey)
 
 
 class TestMultipleHuey(BaseTestCase):

@@ -1434,14 +1434,6 @@ crontab.hourly = partial(crontab, minute='0')
 crontab.daily = partial(crontab, minute='0', hour='0')
 
 
-def _unsupported(name, library):
-    class UnsupportedHuey(Huey):
-        def __init__(self, *args, **kwargs):
-            raise ConfigurationError('Cannot initialize "%s", %s module not '
-                                     'installed.' % (name, library))
-    return UnsupportedHuey
-
-
 # Convenience wrappers for the various storage implementations.
 class BlackHoleHuey(Huey):
     storage_class = BlackHoleStorage
