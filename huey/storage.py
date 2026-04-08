@@ -732,20 +732,7 @@ class PriorityRedisStorage(RedisPriorityQueue, RedisStorage): pass
 class PriorityRedisExpireStorage(RedisPriorityQueue, RedisExpireStorage): pass
 
 
-class _ConnectionState(object):
-    def __init__(self, **kwargs):
-        super(_ConnectionState, self).__init__(**kwargs)
-        self.reset()
-    def reset(self):
-        self.conn = None
-        self.closed = True
-    def set_connection(self, conn):
-        self.conn = conn
-        self.closed = False
-class _ConnectionLocal(_ConnectionState, threading.local): pass
-
 # Python 2.x may return <buffer> object for BLOB columns.
-to_bytes = lambda b: bytes(b) if not isinstance(b, bytes) else b
 to_blob = lambda b: sqlite3.Binary(b)
 
 
@@ -755,41 +742,45 @@ class BaseSqlStorage(BaseStorage):
 
     def __init__(self, *args, **kwargs):
         super(BaseSqlStorage, self).__init__(*args, **kwargs)
-        self._state = _ConnectionLocal()
+        self.lock = threading.Lock()
+        self._conn = None
         self.initialize_schema()
 
     def close(self):
-        if self._state.closed: return False
-        self._state.conn.close()
-        self._state.reset()
+        if self._conn is None:
+            return False
+        with self.lock:
+            self._conn.close()
+            self._conn = None
         return True
 
     @property
     def conn(self):
-        if self._state.closed:
-            self._state.set_connection(self._create_connection())
-        return self._state.conn
+        if self._conn is None:
+            self._conn = self._create_connection()
+        return self._conn
 
     def _create_connection(self):
         raise NotImplementedError
 
     @contextlib.contextmanager
     def db(self, commit=False, close=False):
-        conn = self.conn
-        cursor = conn.cursor()
-        try:
-            if commit: cursor.execute(self.begin_sql)
-            yield cursor
-        except Exception:
-            if commit: conn.rollback()
-            raise
-        else:
-            if commit: conn.commit()
-        finally:
-            cursor.close()
-            if close:
-                conn.close()
-                self._state.reset()
+        with self.lock:
+            conn = self.conn
+            cursor = conn.cursor()
+            try:
+                if commit: cursor.execute(self.begin_sql)
+                yield cursor
+            except Exception:
+                if commit: conn.rollback()
+                raise
+            else:
+                if commit: conn.commit()
+            finally:
+                cursor.close()
+                if close:
+                    conn.close()
+                    self._conn = None
 
     def initialize_schema(self):
         with self.db(commit=True, close=True) as curs:
@@ -850,6 +841,7 @@ class SqliteStorage(BaseSqlStorage):
 
     def _create_connection(self):
         conn = sqlite3.connect(self.filename, timeout=self._timeout,
+                               check_same_thread=False,
                                **self._conn_kwargs)
         conn.isolation_level = None  # Autocommit mode.
         conn.execute('pragma journal_mode="%s"' % self._journal_mode)
@@ -871,7 +863,7 @@ class SqliteStorage(BaseSqlStorage):
                 tid, data = result
                 curs.execute('delete from task where id = ?', (tid,))
                 if curs.rowcount == 1:
-                    return to_bytes(data)
+                    return data
 
     def queue_size(self):
         return self.sql('select count(id) from task where queue=?',
@@ -884,7 +876,7 @@ class SqliteStorage(BaseSqlStorage):
             sql += ' limit ?'
             params = (self.name, limit)
 
-        return [to_bytes(i) for i, in self.sql(sql, params, results=True)]
+        return [i for i, in self.sql(sql, params, results=True)]
 
     def flush_queue(self):
         self.sql('delete from task where queue=?', (self.name,), commit=True)
@@ -902,7 +894,7 @@ class SqliteStorage(BaseSqlStorage):
             id_list, data = [], []
             for task_id, task_data in curs.fetchall():
                 id_list.append(task_id)
-                data.append(to_bytes(task_data))
+                data.append(task_data)
             if id_list:
                 plist = ','.join('?' * len(id_list))
                 curs.execute('delete from schedule where id IN (%s)' % plist,
@@ -920,7 +912,7 @@ class SqliteStorage(BaseSqlStorage):
             sql += ' limit ?'
             params = (self.name, limit)
 
-        return [to_bytes(i) for i, in self.sql(sql, params, results=True)]
+        return [i for i, in self.sql(sql, params, results=True)]
 
     def flush_schedule(self):
         self.sql('delete from schedule where queue = ?', (self.name,), True)
@@ -932,7 +924,7 @@ class SqliteStorage(BaseSqlStorage):
     def peek_data(self, key):
         res = self.sql('select value from kv where queue = ? and key = ?',
                        (self.name, key), results=True)
-        return to_bytes(res[0][0]) if res else EmptyData
+        return res[0][0] if res else EmptyData
 
     def pop_data(self, key):
         with self.db(commit=True) as curs:
@@ -941,7 +933,7 @@ class SqliteStorage(BaseSqlStorage):
                              'returning value', (self.name, key))
                 result = curs.fetchone()
                 if result is not None:
-                    return to_bytes(result[0])
+                    return result[0]
             else:
                 curs.execute('select value from kv where queue = ? and key = ?',
                              (self.name, key))
@@ -950,7 +942,7 @@ class SqliteStorage(BaseSqlStorage):
                     curs.execute('delete from kv where queue=? and key=?',
                                  (self.name, key))
                     if curs.rowcount == 1:
-                        return to_bytes(result[0])
+                        return result[0]
             return EmptyData
 
     def has_data_for_key(self, key):
@@ -1002,7 +994,7 @@ class SqliteStorage(BaseSqlStorage):
     def result_items(self):
         res = self.sql('select key, value from kv where queue=?', (self.name,),
                        results=True)
-        return dict((k, to_bytes(v)) for k, v in res)
+        return dict((k, v) for k, v in res)
 
     def flush_results(self):
         self.sql('delete from kv where queue=?', (self.name,), True)
