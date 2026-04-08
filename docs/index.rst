@@ -29,6 +29,7 @@ huey supports:
 * task expiration
 * task locking, rate-limits and timeouts
 * task pipelines and chains
+* groups (fan-out), chords (map / reduce)
 
 .. image:: http://i.imgur.com/2EpRs.jpg
 
