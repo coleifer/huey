@@ -732,10 +732,6 @@ class PriorityRedisStorage(RedisPriorityQueue, RedisStorage): pass
 class PriorityRedisExpireStorage(RedisPriorityQueue, RedisExpireStorage): pass
 
 
-# Python 2.x may return <buffer> object for BLOB columns.
-to_blob = lambda b: sqlite3.Binary(b)
-
-
 class BaseSqlStorage(BaseStorage):
     begin_sql = 'begin'
     ddl = []
@@ -837,6 +833,8 @@ class SqliteStorage(BaseSqlStorage):
                 'primary key',
                 'primary key autoincrement')
 
+        self.to_blob = lambda b: sqlite3.Binary(b)
+
         super(SqliteStorage, self).__init__(name)
 
     def _create_connection(self):
@@ -852,7 +850,7 @@ class SqliteStorage(BaseSqlStorage):
 
     def enqueue(self, data, priority=None):
         self.sql('insert into task (queue, data, priority) values (?, ?, ?)',
-                 (self.name, to_blob(data), priority or 0), commit=True)
+                 (self.name, self.to_blob(data), priority or 0), commit=True)
 
     def dequeue(self):
         with self.db(commit=True) as curs:
@@ -882,7 +880,7 @@ class SqliteStorage(BaseSqlStorage):
         self.sql('delete from task where queue=?', (self.name,), commit=True)
 
     def add_to_schedule(self, data, ts):
-        params = (self.name, to_blob(data), ts.timestamp())
+        params = (self.name, self.to_blob(data), ts.timestamp())
         self.sql('insert into schedule (queue, data, timestamp) '
                  'values (?, ?, ?)', params, commit=True)
 
@@ -919,7 +917,8 @@ class SqliteStorage(BaseSqlStorage):
 
     def put_data(self, key, value, is_result=False):
         self.sql('insert or replace into kv (queue, key, value) '
-                 'values (?, ?, ?)', (self.name, key, to_blob(value)), True)
+                 'values (?, ?, ?)',
+                 (self.name, key, self.to_blob(value)), True)
 
     def peek_data(self, key):
         res = self.sql('select value from kv where queue = ? and key = ?',
@@ -954,7 +953,7 @@ class SqliteStorage(BaseSqlStorage):
             with self.db(commit=True) as curs:
                 curs.execute('insert or abort into kv '
                              '(queue, key, value) values (?, ?, ?)',
-                             (self.name, key, to_blob(value)))
+                             (self.name, key, self.to_blob(value)))
         except sqlite3.IntegrityError:
             return False
         else:
