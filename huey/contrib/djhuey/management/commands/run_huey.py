@@ -1,6 +1,6 @@
 import logging
 import sys
-
+import multiprocessing
 from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.utils.module_loading import autodiscover_modules
