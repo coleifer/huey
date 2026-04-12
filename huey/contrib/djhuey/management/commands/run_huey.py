@@ -49,13 +49,17 @@ class Command(BaseCommand):
 
         # Python 3.8+ on MacOS uses an incompatible multiprocess model. In this
         # case we must explicitly configure mp to use fork().
-        if ((sys.version_info >= (3, 8) and sys.platform == 'darwin') or
-            (sys.version_info >= (3, 14))):
-            import multiprocessing
-            try:
+        # Python 3.14+ on Windows fails using the fork method
+        try:
+            if sys.platform == 'win32' or \
+               (sys.platform == 'darwin' and sys.version_info >= (3, 8)) or \
+               sys.version_info >= (3, 14):
+                multiprocessing.set_start_method('spawn', force=True)
+            else:
+                # Unix/Linux or Older Mac systems maintain their beloved fork
                 multiprocessing.set_start_method('fork')
-            except (RuntimeError, ValueError):
-                pass
+        except (RuntimeError, ValueError):
+            pass
 
         consumer_options = {}
         try:
