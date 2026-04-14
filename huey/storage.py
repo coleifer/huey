@@ -620,11 +620,12 @@ class RedisExpireStorage(RedisStorage):
             self.conn.setex(self.result_key(key), self._expire_time, value)
             if isinstance(key, bytes):
                 key = key.decode('utf8')
-            nkey = self.notify_prefix + key
-            pipe = self.conn.pipeline()
-            pipe.lpush(nkey, b'1')
-            pipe.expire(nkey, self.notify_result_ttl)
-            pipe.execute()
+            if self.notify_result:
+                nkey = self.notify_prefix + key
+                pipe = self.conn.pipeline()
+                pipe.lpush(nkey, b'1')
+                pipe.expire(nkey, self.notify_result_ttl)
+                pipe.execute()
         else:
             self.conn.set(self.result_key(key), value)
 

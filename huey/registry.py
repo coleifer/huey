@@ -93,12 +93,6 @@ class Registry(object):
             chord_config)
 
     def create_task(self, message):
-        # Compatibility with Huey 1.11 message format.
-        if not isinstance(message, Message) and isinstance(message, tuple):
-            tid, name, eta, retries, retry_delay, (args, kwargs), oc = message
-            message = Message(tid, name, eta, retries, retry_delay, None, args,
-                              kwargs, oc, None)
-
         TaskClass = self.string_to_task(message.name)
 
         on_complete = None

@@ -24,7 +24,7 @@ if gzip is not None:
 
 
 def is_compressed(data):
-    return data and data[0] == 0x1f or data[0] == 0x78
+    return data and (data[0] == 0x1f or data[0] == 0x78)
 
 
 class Serializer(object):

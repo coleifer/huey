@@ -202,6 +202,7 @@ def greenlet_timeout(seconds):
     if gevent is None:
         logger.warning('gevent is required for greenlet-worker timeout')
         yield
+        return
 
     timer = gevent.Timeout(seconds, TaskTimeout('timeout (%ss)' % seconds))
     timer.start()
