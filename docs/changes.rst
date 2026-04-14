@@ -1,5 +1,17 @@
 .. _changes:
 
+Changes in 3.0
+==============
+
+The 3.0 release of Huey is API-compatible with the previous versions. The main
+change is the addtion of a number of new features:
+
+* :py:class:`chord` and :py:class:`group` - :ref:`description <groups-and-chords>`
+* :ref:`task timeouts <task-timeouts>`
+* :ref:`rate limiting <rate-limiting>`
+* low-latency result notification (Redis-only) via ``notify_results=True``.
+* removed Python 2.x compatibility.
+
 Changes in 2.0
 ==============
 

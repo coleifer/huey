@@ -796,6 +796,8 @@ Expiration times can also be specified when scheduling tasks:
         eta=one_hr,
         expires=one_hr + timedelta(seconds=60))
 
+.. _task-timeouts:
+
 Task timeouts
 -------------
 
@@ -916,6 +918,8 @@ Examples:
             do_db_backup()
 
 See :py:meth:`Huey.lock_task` for API documentation.
+
+.. _rate-limiting:
 
 Rate-Limiting
 -------------

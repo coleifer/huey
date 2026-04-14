@@ -123,6 +123,7 @@ Table of contents
    api
    contrib
    troubleshooting
+   recipes
    changes
 
 Huey is named in honor of my cat

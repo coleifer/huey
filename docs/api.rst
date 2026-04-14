@@ -59,6 +59,13 @@ Implementations of :py:class:`Huey` which handle task and result persistence.
     consumer to react to a new message as soon as it is available without
     resorting to polling.
 
+    For low-latency result-fetching, you can specify ``notify_result=True``
+    when instantiating ``RedisHuey`` (or subclasses). This works by
+    coordinating result readiness through a blocking pop on a dedicated result
+    list. By default this result-readiness list will expire after 86400 seconds,
+    but this can be controlled with the ``notify_result_ttl`` parameter.
+    **All RedisHuey** implementations support these options.
+
     .. seealso:: :py:class:`RedisStorage`
 
 .. py:class:: PriorityRedisHuey
@@ -452,20 +459,14 @@ Huey object
             * :py:meth:`Huey.put`
             * :py:meth:`Huey.get`
 
-    .. py:method:: context_task(obj, retries=0, retry_delay=0, context=False, name=None, **kwargs)
+    .. py:method:: context_task(obj, as_argument=False, **kwargs)
 
         :param obj: object that implements the context-manager APIs.
-        :param bool as_argument: pass the context-manager object into the
-            decorated task as the first argument.
-        :param int retries: number of times to retry the function if an
-            unhandled exception occurs when it is executed.
-        :param int retry_delay: number of seconds to wait in-between retries.
-        :param bool context: when the task is executed, include the
-            :py:class:`Task` instance as a parameter.
-        :param str name: name for this task. If not provided, Huey will default
-            to using the module name plus function name.
-        :param kwargs: arbitrary key/value arguments that are passed to the
-            :py:class:`TaskWrapper` instance.
+        :param bool as_argument: pass the return value of the context-manager's
+            ``__enter__`` method into the decorated task as the first argument.
+        :param kwargs: additional keyword arguments are forwarded to
+            :py:meth:`~Huey.task` (e.g. ``retries``, ``retry_delay``,
+            ``priority``, ``context``, ``name``, ``expires``, ``timeout``).
         :returns: a :py:class:`TaskWrapper` that wraps the decorated function
             and exposes a number of APIs for enqueueing the task.
 
@@ -485,6 +486,16 @@ Huey object
             @huey.context_task(db)
             def with_context_task(n):
                 return do_something(n)
+
+        When ``as_argument=True``, the value returned by ``__enter__`` is
+        passed as the first positional argument to the task function:
+
+        .. code-block:: python
+
+            @huey.context_task(db, as_argument=True)
+            def with_ctx(conn, n):
+                # conn is the value returned by db.__enter__()
+                return conn.execute(n)
 
     .. py:method:: pre_execute(name=None)
 
@@ -2255,44 +2266,6 @@ Huey comes with several built-in storage implementations:
     to be empty. Intended for testing only.
 
 
-.. py:class:: BaseStorage(name='huey', **storage_kwargs)
+.. autoclass:: huey.storage.BaseStorage
+   :members:
 
-    .. py:method:: enqueue(data, priority=None)
-
-    .. py:method:: dequeue()
-
-    .. py:method:: queue_size()
-
-    .. py:method:: enqueued_items(limit=None)
-
-    .. py:method:: flush_queue()
-
-    .. py:method:: add_to_schedule(data, timestamp)
-
-    .. py:method:: read_schedule(timestamp)
-
-    .. py:method:: schedule_size()
-
-    .. py:method:: scheduled_items(limit=None)
-
-    .. py:method:: flush_schedule()
-
-    .. py:method:: put_data(key, value, is_result=False)
-
-    .. py:method:: peek_data(key)
-
-    .. py:method:: pop_data(key)
-
-    .. py:method:: wait_result(key, timeout=None, backoff=1.15, max_delay=1.0)
-
-    .. py:method:: put_if_empty(key, value)
-
-    .. py:method:: has_data_for_key(key)
-
-    .. py:method:: incr(key, amount=1)
-
-    .. py:method:: result_store_size()
-
-    .. py:method:: result_items()
-
-    .. py:method:: flush_results()
