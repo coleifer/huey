@@ -6,7 +6,7 @@
 huey
 ====
 
-.. image:: http://media.charlesleifer.com/blog/photos/huey2-logo.png
+.. image:: https://media.charlesleifer.com/blog/photos/huey3-logo.png
 
 *a lightweight alternative*.
 
