@@ -3,6 +3,10 @@ Changelog
 
 ## master
 
+[View commits](https://github.com/coleifer/huey/compare/3.0.0...HEAD)
+
+## 3.0.0
+
 * Add `chord()` (map -> reduce) and `group()` (map) primitives.
 * Add `timeout` (using SIGALRM for process and gevent.Timeout for greenlet) to
   control task running time. For threads, unfortunately, there's no good
@@ -21,7 +25,7 @@ Changelog
   provides a mechanism for pub/sub or other notification of result readiness.
 * Remove Python 2.x compatibility.
 
-[View commits](https://github.com/coleifer/huey/compare/2.6.0...HEAD)
+[View commits](https://github.com/coleifer/huey/compare/2.6.0...3.0.0)
 
 ## 2.6.0
 
