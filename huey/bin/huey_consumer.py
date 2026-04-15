@@ -3,6 +3,7 @@
 import logging
 import os
 import sys
+import multiprocessing
 
 from huey.constants import WORKER_PROCESS
 from huey.consumer import Consumer
@@ -41,28 +42,29 @@ def consumer_main():
                if v is not None}
     config = ConsumerConfig(**options)
     config.validate()
-
-    if sys.platform == 'win32' and config.worker_type == WORKER_PROCESS:
-        err('Error:  huey cannot be run in "process"-mode on Windows.')
-        sys.exit(1)
-
     huey_instance = load_huey(args[0])
 
-    # Set up logging for the "huey" namespace.
     logger = logging.getLogger('huey')
     config.setup_logger(logger)
+    os.environ['HUEY_LOGLEVEL'] = str(logger.level)
+    
+    # It is injected into the configuration so that the Consumer passes it on to 
+    # the child processes in Windows ("spawn") and they can rebuild the instance.
+    if args:
+        config.values['huey_import_path'] = args[0]
 
     consumer = huey_instance.create_consumer(**config.values)
     consumer.run()
 
-
 if __name__ == '__main__':
-    # MacOS on 3.8+ and Linux on 3.14+ need to explicitly specify forking.
-    if ((sys.version_info >= (3, 8) and sys.platform == 'darwin') or
-        (sys.version_info >= (3, 14))):
-        import multiprocessing
+    # We explicitly set 'fork' on platforms that support it. 
+    # On Windows, 'fork' is not available so we skip this
+    # entirely — Windows always uses 'spawn' by default.
+    if sys.platform != 'win32':
         try:
-            multiprocessing.set_start_method('fork')
+            if 'fork' in multiprocessing.get_all_start_methods():
+                multiprocessing.set_start_method('fork')
         except (ValueError, RuntimeError):
             pass
+
     consumer_main()

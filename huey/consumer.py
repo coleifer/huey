@@ -265,6 +265,109 @@ WORKER_TO_ENVIRONMENT = {
     WORKER_PROCESS: ProcessEnvironment,
 }
 
+def _child_sigterm_handler(signum, frame):
+    """
+    Safe handler to kill the child process on Windows/spawn.
+    Avoid using lambdas with empty generators that can freeze the OS (windows).
+    """
+    raise KeyboardInterrupt
+
+def _spawn_child_setup(huey_import_path, worker_type, django_settings_module=None):
+    """
+    Common setup for all child processes under Windows 'spawn'.
+    Re-imports the Django/Huey environment so tasks are registered.
+    Returns the reconstructed huey instance.
+    """
+    import importlib
+
+    huey_logger = logging.getLogger('huey')
+    if not huey_logger.handlers:
+        handler = logging.StreamHandler()
+        formatter = logging.Formatter('[%(asctime)s] %(levelname)s [PID:%(process)d] %(name)s: %(message)s')
+        handler.setFormatter(formatter)
+        huey_logger.addHandler(handler)
+        log_level = int(os.environ.get('HUEY_LOGLEVEL', logging.INFO))
+        huey_logger.setLevel(log_level)
+
+    # Bootstrap Django settings in the child process.
+    # Under Windows 'spawn', the child starts clean — env vars from the parent
+    # are NOT inherited automatically, so we pass the settings module explicitly.
+    if django_settings_module:
+        os.environ.setdefault('DJANGO_SETTINGS_MODULE', django_settings_module)
+        try:
+            import django
+            from django.utils.module_loading import autodiscover_modules
+            
+            django.setup()
+            if os.environ.get('HUEY_DISABLE_AUTOLOAD') != '1':
+                autodiscover_modules('tasks')
+        except ImportError:
+            huey_logger.warning("DJANGO_SETTINGS_MODULE is defined, but Django is not installed.")
+
+    # Now import the huey instance (registry is now populated).
+    # e.g. 'huey.contrib.djhuey.HUEY' -> module='huey.contrib.djhuey', attr='HUEY'
+    module_path, attr = huey_import_path.rsplit('.', 1)
+    module = importlib.import_module(module_path)
+    huey = getattr(module, attr)
+
+    if worker_type == WORKER_PROCESS:
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
+        signal.signal(signal.SIGTERM, _child_sigterm_handler)
+    return huey
+
+
+def _worker_runner(huey_import_path, worker_type, stop_flag,
+                   default_delay, max_delay, backoff, max_tasks,
+                   django_settings_module=None):
+    """
+    Entry point for WORKER child processes under Windows 'spawn'.
+    Receives only picklable primitives. Reconstructs Huey in the child.
+    """
+    huey = _spawn_child_setup(huey_import_path, worker_type,
+                              django_settings_module)
+
+    worker = Worker(huey, default_delay=default_delay, max_delay=max_delay,
+                    backoff=backoff, max_tasks=max_tasks)
+    worker.initialize()
+    try:
+        while not stop_flag.is_set():
+            worker.loop()
+    except KeyboardInterrupt:
+        pass
+    except WorkerRecycle:
+        logging.getLogger('huey.consumer').info('Worker restarting (max tasks).')
+    except Exception:
+        logging.getLogger('huey.consumer').exception('Worker died!')
+    finally:
+        pid = os.getpid()
+        logging.getLogger('huey.consumer').info('Worker process %s - shutdown', pid)
+        worker.shutdown()
+
+
+def _scheduler_runner(huey_import_path, worker_type, stop_flag,
+                      scheduler_interval, periodic,
+                      django_settings_module=None):
+    """
+    Entry point for SCHEDULER child process under Windows 'spawn'.
+    Receives only picklable primitives. Reconstructs Huey in the child.
+    """
+    huey = _spawn_child_setup(huey_import_path, worker_type,
+                              django_settings_module)
+
+    scheduler = Scheduler(huey, interval=scheduler_interval, periodic=periodic)
+    scheduler.initialize()
+    try:
+        while not stop_flag.is_set():
+            scheduler.loop()
+    except KeyboardInterrupt:
+        pass
+    except Exception:
+        logging.getLogger('huey.consumer').exception('Scheduler died!')
+    finally:
+        pid = os.getpid()
+        logging.getLogger('huey.consumer').info('Worker process %s - shutdown', pid)
+        scheduler.shutdown()
+
 
 class Consumer(object):
     """
@@ -280,7 +383,7 @@ class Consumer(object):
                  backoff=1.15, max_delay=10.0, scheduler_interval=1,
                  worker_type=WORKER_THREAD, check_worker_health=True,
                  health_check_interval=10, flush_locks=False,
-                 extra_locks=None, max_tasks=None):
+                 extra_locks=None, max_tasks=None, huey_import_path=None):
 
         self._logger = logging.getLogger('huey.consumer')
         if huey.immediate:
@@ -295,6 +398,7 @@ class Consumer(object):
         self.backoff = backoff  # Exponential backoff factor when queue empty.
         self.max_delay = max_delay  # Maximum interval between polling events.
         self.max_tasks = max_tasks  # Max tasks to execute before recycling.
+        self.huey_import_path = huey_import_path
 
         if max_tasks and not check_worker_health:
             raise ConfigurationError('max_tasks requires check_worker_health '
@@ -383,23 +487,69 @@ class Consumer(object):
         Repeatedly call the `loop()` method of the given process. Unhandled
         exceptions in the `loop()` method will cause the process to terminate.
         """
-        def _run():
-            if self.worker_type == WORKER_PROCESS:
-                self._set_child_signal_handlers()
+        import multiprocessing
+        import sys
 
-            process.initialize()
-            try:
-                while not self.stop_flag.is_set():
-                    process.loop()
-            except KeyboardInterrupt:
-                pass
-            except WorkerRecycle:
-                self._logger.info('Process %s restarting (max tasks).', name)
-            except:
-                self._logger.exception('Process %s died!', name)
-            finally:
-                process.shutdown()
-        return self.environment.create_process(_run, name)
+        ctx_method = multiprocessing.get_start_method(allow_none=True)
+        is_spawn = (ctx_method == 'spawn') or (sys.platform == 'win32')
+
+        if self.worker_type == WORKER_PROCESS and is_spawn:
+            import functools
+            huey_path = getattr(self, 'huey_import_path', None) or getattr(self, '_huey_import_path', None)
+            
+            django_settings = os.environ.get('DJANGO_SETTINGS_MODULE')
+
+            if not huey_path and django_settings:
+                huey_path = 'huey.contrib.djhuey.HUEY'
+
+            if not huey_path:
+                raise ConfigurationError(
+                    'Cannot use worker_type="process" on Windows (or spawn) without '
+                    'providing huey_import_path. Pass the fully-qualified import path '
+                    'to your Huey instance.'
+                )
+
+            if isinstance(process, Scheduler):
+                runnable = functools.partial(
+                    _scheduler_runner,
+                    huey_path,
+                    self.worker_type,
+                    self.stop_flag,
+                    self.scheduler_interval,
+                    self.periodic,
+                    django_settings,
+                )
+            else:
+                runnable = functools.partial(
+                    _worker_runner,
+                    huey_path,
+                    self.worker_type,
+                    self.stop_flag,
+                    self.default_delay,
+                    self.max_delay,
+                    self.backoff,
+                    self.max_tasks,
+                    django_settings,
+                )
+        else:
+            def runnable():
+                if self.worker_type == WORKER_PROCESS and not is_spawn:
+                    self._set_child_signal_handlers()
+
+                process.initialize()
+                try:
+                    while not self.stop_flag.is_set():
+                        process.loop()
+                except KeyboardInterrupt:
+                    pass
+                except WorkerRecycle:
+                    self._logger.info('Process %s restarting (max tasks).', name)
+                except Exception:
+                    self._logger.exception('Process %s died!', name)
+                finally:
+                    process.shutdown()
+                    
+        return self.environment.create_process(runnable, name)
 
     def start(self):
         """
@@ -524,7 +674,8 @@ class Consumer(object):
         restart_occurred = False
         for i, (worker, worker_t) in enumerate(self.worker_threads):
             if not self.environment.is_alive(worker_t):
-                self._logger.warning('Worker %d died, restarting.', i + 1)
+                pid_dead = getattr(worker_t, 'pid', '???')
+                self._logger.warning('Worker %d (PID:%s) died, restarting.', i + 1, pid_dead)
                 worker = self._create_worker()
                 worker_t = self._create_process(worker, 'Worker-%d' % (i + 1))
                 worker_t.start()
@@ -537,7 +688,8 @@ class Consumer(object):
             self._logger.debug('Workers are up and running.')
 
         if not self.environment.is_alive(self.scheduler):
-            self._logger.warning('Scheduler died, restarting.')
+            pid_dead = getattr(self.scheduler, 'pid', '???')
+            self._logger.warning('Scheduler (PID:%s) died, restarting.', pid_dead)
             scheduler = self._create_scheduler()
             self.scheduler = self._create_process(scheduler, 'Scheduler')
             self.scheduler.start()

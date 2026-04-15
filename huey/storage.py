@@ -620,12 +620,11 @@ class RedisExpireStorage(RedisStorage):
             self.conn.setex(self.result_key(key), self._expire_time, value)
             if isinstance(key, bytes):
                 key = key.decode('utf8')
-            if self.notify_result:
-                nkey = self.notify_prefix + key
-                pipe = self.conn.pipeline()
-                pipe.lpush(nkey, b'1')
-                pipe.expire(nkey, self.notify_result_ttl)
-                pipe.execute()
+            nkey = self.notify_prefix + key
+            pipe = self.conn.pipeline()
+            pipe.lpush(nkey, b'1')
+            pipe.expire(nkey, self.notify_result_ttl)
+            pipe.execute()
         else:
             self.conn.set(self.result_key(key), value)
 
@@ -743,6 +742,27 @@ class BaseSqlStorage(BaseStorage):
         self._conn = None
         self.initialize_schema()
 
+    def __getstate__(self):
+        """
+        Called by pickle (used by multiprocessing 'spawn' on Windows).
+        We must exclude the live DB connection and the threading.Lock,
+        both of which are not picklable. The child process will recreate
+        them via __setstate__.
+        """
+        state = self.__dict__.copy()
+        state['_conn'] = None          # drop live connection
+        state['lock'] = None           # drop unpicklable Lock
+        return state
+
+    def __setstate__(self, state):
+        """
+        Restore state in the child process. Recreate the lock and let the
+        connection be created lazily on first use.
+        """
+        self.__dict__.update(state)
+        self.lock = threading.Lock()   # fresh lock in child process
+        # _conn stays None; it will be created lazily via the conn property
+
     def close(self):
         if self._conn is None:
             return False
@@ -755,6 +775,20 @@ class BaseSqlStorage(BaseStorage):
     def conn(self):
         if self._conn is None:
             self._conn = self._create_connection()
+            # We secure the schema for databases in memory after unpickling.
+            # We don't use self.initialize_schema() here because it would close the connection.
+            if getattr(self, 'filename', None) == ':memory:':
+                curs = self._conn.cursor()
+                try:
+                    curs.execute(self.begin_sql)
+                    for sql in self.ddl:
+                        curs.execute(sql)
+                    self._conn.commit()
+                except Exception:
+                    self._conn.rollback()
+                    raise
+                finally:
+                    curs.close()
         return self._conn
 
     def _create_connection(self):
@@ -789,6 +823,14 @@ class BaseSqlStorage(BaseStorage):
             curs.execute(query, params or ())
             if results:
                 return curs.fetchall()
+
+
+def _sqlite_binary(b):
+    """
+    Module-level wrapper for sqlite3.Binary so it can be pickled by
+    multiprocessing 'spawn' on Windows. Lambda functions are not picklable.
+    """
+    return sqlite3.Binary(b)
 
 
 class SqliteStorage(BaseSqlStorage):
@@ -834,7 +876,7 @@ class SqliteStorage(BaseSqlStorage):
                 'primary key',
                 'primary key autoincrement')
 
-        self.to_blob = lambda b: sqlite3.Binary(b)
+        self.to_blob = _sqlite_binary  # module-level fn, picklable on Windows
 
         super(SqliteStorage, self).__init__(name)
 
