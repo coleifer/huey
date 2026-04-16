@@ -71,7 +71,7 @@ class OptionParserHandler(object):
                    help=('flush all locks when starting consumer.')),
             option(('L', 'extra-locks'), dest='extra_locks',
                    help=('additional locks to flush, separated by comma.')),
-            option(('M', 'max_tasks'), dest='max_tasks', metavar='COUNT',
+            option(('M', 'max-tasks'), dest='max_tasks', metavar='COUNT',
                    help='restart worker after it has executed COUNT tasks',
                    type='int'),
         )
