@@ -199,6 +199,8 @@ Memory growing in consumer process
 
     Solutions:
 
+    * Specify ``-M num`` / ``--max-tasks=num`` to force workers to restart
+      after executing the given number ``num`` tasks. It's harsh but effective.
     * Restart the consumer periodically (``supervisord``'s ``autorestart`` or
       a cron job that sends ``SIGHUP``).
     * Use thread or greenlet workers, which share memory with the main process
