@@ -1703,6 +1703,46 @@ class TestChordPrimitive(BaseTestCase):
             r.results[1]
         self.assertEqual(r.results[2], 3)
 
+    def test_chord_member_retry_then_success(self):
+        # A chord member that fails once, then succeeds on retry, should
+        # notify the chord with the success value -- not the initial failure.
+        # The first attempt's exception is not passed to the callback because
+        # retries remain; only the successful value propagates.
+        attempts = {}
+
+        @self.huey.task(retries=1)
+        def flaky(n):
+            attempts[n] = attempts.get(n, 0) + 1
+            if attempts[n] == 1:
+                raise TestError('transient')
+            return n * 10
+
+        @self.huey.task()
+        def agg(ns):
+            return sum(ns)
+
+        c = chord([flaky.s(1), flaky.s(2)], agg)
+        r = self.huey.enqueue(c)
+        self.assertEqual(len(self.huey), 2)
+
+        # Both members fail on the first attempt; chord not notified yet.
+        self.assertTrue(self.execute_next() is None)
+        self.assertTrue(self.execute_next() is None)
+        self.assertEqual(len(self.huey), 2)  # Both re-enqueued for retry.
+
+        # Retries succeed in order; each success notifies the chord.
+        self.assertEqual(self.execute_next(), 10)
+        self.assertEqual(len(self.huey), 1)  # Waiting on 2nd retry.
+        self.assertEqual(self.execute_next(), 20)
+        self.assertEqual(len(self.huey), 1)  # Callback enqueued.
+
+        self.assertEqual(self.execute_next(), 30)  # agg([10, 20]).
+        self.assertEqual(len(self.huey), 0)
+
+        self.assertEqual(r(), 30)
+        self.assertEqual(r.results(), [10, 20])
+        self.assertEqual(attempts, {1: 2, 2: 2})
+
     def test_chord_error_cb(self):
         prod, agg = self.funcs()
         state = []
