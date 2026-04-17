@@ -1502,6 +1502,17 @@ Huey object
     rescheduled to run at the start of the next window when ``retry=True`` or
     the task itself has one or more ``retries``.
 
+    Interaction between task retries and the ``retry`` flag on the rate-limit:
+
+    * ``retry=True``, task has no retries: task will be retried at the start of
+      the next window (or ``task.retry_delay`` if specified).
+    * ``retry=True``, task has 1 or more retries: same as above, except task's
+      own retry count is *preserved*.
+    * ``retry=False``, task has no retries: error is the final state, task is
+      not rescheduled.
+    * ``retry=False``, task has 1 or more retries: task retries decrement
+      normally and the task's ``retry_delay`` is honored.
+
     Rate-limited tasks emit a ``SIGNAL_RATE_LIMITED``.
 
     :param str name: Name to use for the rate-limiter.
