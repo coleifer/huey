@@ -15,7 +15,7 @@ huey is:
 * a task queue
 * written in python
 * clean and simple API
-* redis, sqlite, file-system, or in-memory storage
+* redis (or valkey/redict), sqlite, file-system, or in-memory storage
 * `example code <https://github.com/coleifer/huey/tree/master/examples/>`_.
 
 huey supports:
