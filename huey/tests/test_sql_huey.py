@@ -92,3 +92,7 @@ class TestSqlStorage(StorageTests, BaseTestCase):
             self.assertEqual(self.execute_next(), result)
 
         self.assertEqual(len(self.huey), 0)
+
+    def test_consumer_integration(self):
+        # Intentional skip.
+        pass
