@@ -3,7 +3,16 @@ Changelog
 
 ## master
 
-[View commits](https://github.com/coleifer/huey/compare/3.0.0...HEAD)
+[View commits](https://github.com/coleifer/huey/compare/3.0.1...HEAD)
+
+## 3.0.1
+
+* Fix bug in redis version parsing when using Elasticache or any other that
+  sends major/minor. redis-py incorrectly parses these as floats because
+  there's only a single decimal, so the version check was breaking.
+* Rename max task option `--max-tasks` (previously was `--max_tasks`).
+
+[View commits](https://github.com/coleifer/huey/compare/3.0.0...3.0.1)
 
 ## 3.0.0
 
