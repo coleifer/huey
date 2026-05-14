@@ -465,11 +465,13 @@ class RedisStorage(BaseStorage):
         self.blocking = blocking
         self.read_timeout = read_timeout
 
+        # Try to be robust against weird values in version.
         try:
-            redis_version = self.conn.info()['redis_version']
+            redis_version = str(self.conn.info()['redis_version'])
         except Exception:
             redis_version = '0.0.0'
-        self.redis_version = tuple(int(i) for i in redis_version.split('.'))
+        self.redis_version = tuple(int(i) if i.isdigit() else 999
+                                   for i in redis_version.split('.'))
 
     def clean_name(self, name):
         return re.sub('[^A-Za-z0-9_]', '', name)
