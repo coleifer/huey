@@ -1,10 +1,20 @@
 import datetime
 import os
+import shutil
 import time
 import unittest
+try:
+    import fcntl
+except ImportError:
+    fcntl = None
 
+from huey.exceptions import TaskTimeout
+from huey.utils import FileLock
 from huey.utils import UTC
+from huey.utils import normalize_expire_time
 from huey.utils import normalize_time
+from huey.utils import process_timeout
+from huey.utils import utcnow
 
 
 class FakePacific(datetime.tzinfo):
@@ -66,3 +76,59 @@ class TestNormalizeTime(unittest.TestCase):
 
         # When utc=True there's no change, since the timestamp is already UTC.
         self.assertEqual(normalize_time(ts, utc=True), ts_local)
+
+    def test_zero_delay(self):
+        # A delay of zero means "now" -- it is not treated as missing.
+        for utc in (False, True):
+            ref = utcnow() if utc else datetime.datetime.now()
+            for delay in (0, datetime.timedelta(seconds=0)):
+                eta = normalize_time(delay=delay, utc=utc)
+                self.assertTrue(eta is not None)
+                self.assertTrue(abs((eta - ref).total_seconds()) < 5)
+
+            # Same for expiration: expires=0 means "expires immediately",
+            # not "never expires".
+            expires = normalize_expire_time(0, utc=utc)
+            self.assertTrue(abs((expires - ref).total_seconds()) < 5)
+
+        # Omitting both eta and delay is still an error.
+        self.assertRaises(ValueError, normalize_time)
+
+
+class TestFileLock(unittest.TestCase):
+    lock_file = '/tmp/huey-test-filelock/.lock'
+
+    def tearDown(self):
+        dirname = os.path.dirname(self.lock_file)
+        if os.path.exists(dirname):
+            shutil.rmtree(dirname)
+
+    @unittest.skipIf(fcntl is None, 'requires fcntl')
+    def test_construct_preserves_lock_file(self):
+        lock1 = FileLock(self.lock_file)
+        lock1.acquire()
+        try:
+            inode = os.stat(self.lock_file).st_ino
+
+            # Constructing a second lock on the same path (e.g. another
+            # storage instance starting up) must not unlink the file the
+            # first lock is holding.
+            FileLock(self.lock_file)
+            self.assertTrue(os.path.exists(self.lock_file))
+            self.assertEqual(os.stat(self.lock_file).st_ino, inode)
+        finally:
+            lock1.release()
+
+
+class TestProcessTimeout(unittest.TestCase):
+    def test_subsecond_timeout(self):
+        # Sub-second timeouts fire. Previously alarm(int(0.15)) == alarm(0),
+        # which cancelled the timer, silently disabling the timeout.
+        with self.assertRaises(TaskTimeout):
+            with process_timeout(0.15):
+                time.sleep(2)
+
+    def test_timeout_cancel(self):
+        with process_timeout(0.15):
+            pass
+        time.sleep(0.2)  # No stray alarm fires after the context exits.

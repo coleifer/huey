@@ -3,8 +3,10 @@ from huey.contrib.helpers import RedisSemaphore
 from huey.contrib.helpers import lock_task_semaphore
 from huey.exceptions import TaskLockedException
 from huey.tests.base import BaseTestCase
+from huey.tests.test_storage import requires_redis
 
 
+@requires_redis
 class TestLockTaskSemaphore(BaseTestCase):
     def setUp(self):
         super(TestLockTaskSemaphore, self).setUp()

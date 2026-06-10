@@ -322,12 +322,13 @@ class MemoryStorage(BaseStorage):
             heapq.heappush(self._queue, (priority, self._c, data))
 
     def dequeue(self):
-        try:
-            _, _, data = heapq.heappop(self._queue)
-        except IndexError:
-            pass
-        else:
-            return data
+        with self._lock:
+            try:
+                _, _, data = heapq.heappop(self._queue)
+            except IndexError:
+                pass
+            else:
+                return data
 
     def queue_size(self):
         return len(self._queue)
@@ -342,7 +343,8 @@ class MemoryStorage(BaseStorage):
         self._queue = []
 
     def add_to_schedule(self, data, ts):
-        heapq.heappush(self._schedule, (ts, data))
+        with self._lock:
+            heapq.heappush(self._schedule, (ts, data))
 
     def read_schedule(self, ts):
         with self._lock:
@@ -380,6 +382,13 @@ class MemoryStorage(BaseStorage):
 
     def has_data_for_key(self, key):
         return key in self._results
+
+    def put_if_empty(self, key, value):
+        with self._lock:
+            if key in self._results:
+                return False
+            self._results[key] = value
+            return True
 
     def incr(self, key, amount=1):
         with self._lock:
@@ -491,9 +500,11 @@ class RedisStorage(BaseStorage):
                 return self.conn.brpop(
                     self.queue_key,
                     timeout=self.read_timeout)[1]
-            except (ConnectionError, TimeoutError, TypeError, IndexError):
+            except (TimeoutError, TypeError, IndexError):
                 # Unfortunately, there is no way to differentiate a socket
-                # timing out and a host being unreachable.
+                # timing out and a host being unreachable. ConnectionError is
+                # allowed to propagate, however, so the worker logs the error
+                # and applies backoff, rather than busy-looping silently.
                 return None
         else:
             return self.conn.rpop(self.queue_key)
@@ -502,8 +513,11 @@ class RedisStorage(BaseStorage):
         return self.conn.llen(self.queue_key)
 
     def enqueued_items(self, limit=None):
-        limit = limit or -1
-        return self.conn.lrange(self.queue_key, 0, limit)[::-1]
+        if limit:
+            # Take items from the consumption end of the list, e.g. the next
+            # `limit` tasks to be dequeued.
+            return self.conn.lrange(self.queue_key, -limit, -1)[::-1]
+        return self.conn.lrange(self.queue_key, 0, -1)[::-1]
 
     def flush_queue(self):
         self.conn.delete(self.queue_key)
@@ -562,7 +576,7 @@ class RedisStorage(BaseStorage):
         nkey = self.notify_prefix + key
         timeout = timeout or 0
         if timeout > 0 and self.redis_version[0] < 6:
-            timeout = min(1, int(timeout))  # Timeout must be int for R < 6.
+            timeout = max(1, int(timeout))  # Timeout must be int for R < 6.
         try:
             result = self.conn.blpop(nkey, timeout=timeout)
         except (ConnectionError, TimeoutError):
@@ -709,9 +723,11 @@ class RedisPriorityQueue(object):
                 _, res, _ = self.conn.bzpopmin(
                     self.queue_key,
                     timeout=self.read_timeout)
-            except (ConnectionError, TimeoutError, TypeError, IndexError):
+            except (TimeoutError, TypeError, IndexError):
                 # Unfortunately, there is no way to differentiate a socket
-                # timing out and a host being unreachable.
+                # timing out and a host being unreachable. ConnectionError is
+                # allowed to propagate, however, so the worker logs the error
+                # and applies backoff, rather than busy-looping silently.
                 return
             else:
                 return res[8:]
@@ -725,7 +741,7 @@ class RedisPriorityQueue(object):
         return self.conn.zcard(self.queue_key)
 
     def enqueued_items(self, limit=None):
-        items = self.conn.zrange(self.queue_key, 0, limit or -1)
+        items = self.conn.zrange(self.queue_key, 0, limit - 1 if limit else -1)
         return [item[8:] for item in items]  # Unprefix the data.
 
 
@@ -1163,21 +1179,32 @@ class FileStorage(BaseStorage):
         return os.path.join(self.result_path, *prefix_filename)
 
     def put_data(self, key, value, is_result=False):
+        with self.lock:
+            self._put_data(key, value)
+
+    def _put_data(self, key, value):
+        # Write a key/value pair. The lock must already be held.
         if isinstance(key, str):
             key = key.encode('utf8')
 
         filename = self.path_for_key(key)
         dirname = os.path.dirname(filename)
 
-        with self.lock:
-            if not os.path.exists(dirname):
-                os.makedirs(dirname)
+        if not os.path.exists(dirname):
+            os.makedirs(dirname)
 
-            with open(self.path_for_key(key), 'wb') as fh:
-                key_len = len(key)
-                fh.write(struct.pack('>I', key_len))
-                fh.write(key)
-                fh.write(value)
+        with open(filename, 'wb') as fh:
+            key_len = len(key)
+            fh.write(struct.pack('>I', key_len))
+            fh.write(key)
+            fh.write(value)
+
+    def put_if_empty(self, key, value):
+        with self.lock:
+            if os.path.exists(self.path_for_key(key)):
+                return False
+            self._put_data(key, value)
+            return True
 
     def _unpack_result(self, data):
         key_len, = struct.unpack('>I', data[:4])

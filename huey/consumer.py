@@ -171,6 +171,7 @@ class Scheduler(BaseProcess):
         self._next_loop += self.interval
         if self._next_loop < time.monotonic():
             self._logger.debug('scheduler skipping iteration to avoid race.')
+            self._next_loop = time.monotonic()
             return
 
         try:
@@ -183,7 +184,11 @@ class Scheduler(BaseProcess):
                 self.huey.enqueue(task)
 
         if self.periodic and self._next_periodic <= time.monotonic():
-            self._next_periodic += self.periodic_task_seconds
+            # If the scheduler stalled (e.g. suspend/resume), skip past any
+            # missed checks rather than running them all back-to-back, which
+            # would enqueue duplicates for the current minute.
+            while self._next_periodic <= time.monotonic():
+                self._next_periodic += self.periodic_task_seconds
             self.enqueue_periodic_tasks(now)
 
         self.sleep_for_interval(current, self.interval)
@@ -326,6 +331,7 @@ class Consumer(object):
         # also store a boolean flag to indicate whether we should restart after
         # the processes are cleaned up.
         self._received_signal = False
+        self._signum = None
         self._restart = False
         self._graceful = True
         self.stop_flag = self.environment.get_stop_flag()
@@ -461,6 +467,10 @@ class Consumer(object):
             else:
                 self._logger.info('All workers have stopped.')
         else:
+            if self.worker_type == WORKER_GREENLET:
+                # Interrupt worker greenlets that are blocked on I/O.
+                gevent.killall([t for _, t in self.worker_threads],
+                               KeyboardInterrupt)
             self._logger.info('Shutting down')
 
     def run(self):
@@ -500,6 +510,8 @@ class Consumer(object):
             self.stop()
         else:
             if self._received_signal:
+                self._logger.info('Received %s',
+                                  signal.Signals(self._signum).name)
                 self.stop(graceful=self._graceful)
 
         if self.stop_flag.is_set():
@@ -562,27 +574,26 @@ class Consumer(object):
         if hasattr(signal, 'SIGHUP'):
             signal.signal(signal.SIGHUP, self._handle_restart_signal)
 
+    # Note: the signal handlers below only set simple flags. Logging (and, for
+    # greenlet workers, killing the worker greenlets) happens in the main loop
+    # and stop() -- neither is safe to perform in a signal handler.
+
     def _handle_interrupt_signal_gevent(self, sig_num, frame):
-        self._logger.info('Received SIGINT')
         self._received_signal = True
+        self._signum = sig_num
         self._restart = False
         self._graceful = True
         signal.signal(signal.SIGINT, signal.default_int_handler)
 
     def _handle_stop_signal(self, sig_num, frame):
-        self._logger.info('Received SIGTERM')
         self._received_signal = True
+        self._signum = sig_num
         self._restart = False
         self._graceful = False
-        if self.worker_type == WORKER_GREENLET:
-            def kill_workers():
-                gevent.killall([t for _, t in self.worker_threads],
-                               KeyboardInterrupt)
-            gevent.spawn(kill_workers)
 
     def _handle_restart_signal(self, sig_num, frame):
-        self._logger.info('Received SIGHUP, will restart')
         self._received_signal = True
+        self._signum = sig_num
         self._restart = True
         self._graceful = True  # Restart shuts down gracefully.
 

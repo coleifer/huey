@@ -61,6 +61,33 @@ class TestRegistry(BaseTestCase):
         self.assertTrue(task2.expires is None)
         self.assertTrue(task2.expires_resolved is None)
 
+    def test_user_task_kwarg_preserved(self):
+        @self.huey.task()
+        def task_t(**kwargs):
+            return kwargs
+
+        task = task_t.s(task='user-value')
+        message = self.registry.create_message(task)
+        self.assertEqual(message.kwargs, {'task': 'user-value'})
+
+        task2 = self.registry.create_task(message)
+        self.assertEqual(task2.kwargs, {'task': 'user-value'})
+        self.assertEqual(task2.execute(), {'task': 'user-value'})
+
+    def test_context_task_reserialization(self):
+        @self.huey.task(context=True)
+        def task_c(n, task=None):
+            return (n, task.id)
+
+        t = task_c.s(3)
+        self.assertEqual(t.execute(), (3, t.id))
+
+        # Executing a context task does not pollute its kwargs, so it can be
+        # re-serialized (e.g. for retry) without leaking the task instance.
+        self.assertEqual(t.kwargs, {})
+        message = self.registry.create_message(t)
+        self.assertEqual(message.kwargs, {})
+
     def test_missing_task(self):
         @self.huey.task()
         def task_a():

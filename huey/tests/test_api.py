@@ -1703,6 +1703,56 @@ class TestChordPrimitive(BaseTestCase):
             r.results[1]
         self.assertEqual(r.results[2], 3)
 
+    def test_chord_revoked_member(self):
+        @self.huey.task()
+        def prod(n):
+            return n + 1
+
+        @self.huey.task()
+        def agg(ns):
+            return ns
+
+        c = chord([prod.s(i) for i in range(3)], agg.s())
+        r = self.huey.enqueue(c)
+        self.assertEqual(len(self.huey), 3)
+
+        # NB: indexing into the ResultGroup performs a blocking get().
+        list(r.results)[1].revoke()
+
+        self.assertEqual(self.execute_next(), 1)
+        self.assertTrue(self.execute_next() is None)  # Revoked, not run.
+        self.assertEqual(self.execute_next(), 3)
+
+        # The callback still fires, with a placeholder result contributed
+        # for the revoked task.
+        self.assertEqual(len(self.huey), 1)
+        self.assertEqual(self.execute_next(), [1, None, 3])
+        self.assertEqual(r(), [1, None, 3])
+
+    def test_chord_expired_member(self):
+        @self.huey.task()
+        def prod(n):
+            return n + 1
+
+        @self.huey.task()
+        def agg(ns):
+            return ns
+
+        past = datetime.datetime.now() - datetime.timedelta(minutes=1)
+        c = chord([prod.s(0), prod.s(1, expires=past), prod.s(2)], agg.s())
+        r = self.huey.enqueue(c)
+        self.assertEqual(len(self.huey), 3)
+
+        self.assertEqual(self.execute_next(), 1)
+        self.assertTrue(self.execute_next() is None)  # Expired, not run.
+        self.assertEqual(self.execute_next(), 3)
+
+        # The callback still fires, with a placeholder result contributed
+        # for the expired task.
+        self.assertEqual(len(self.huey), 1)
+        self.assertEqual(self.execute_next(), [1, None, 3])
+        self.assertEqual(r(), [1, None, 3])
+
     def test_chord_member_retry_then_success(self):
         # A chord member that fails once, then succeeds on retry, should
         # notify the chord with the success value -- not the initial failure.

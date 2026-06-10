@@ -137,6 +137,28 @@ class TestConsumerIntegration(BaseTestCase):
         self.work_on_tasks(consumer, 1)
         self.assertEqual(state, ['p1', 'p2', 'p1'])  # No change, not executed.
 
+    def test_scheduler_periodic_catch_up(self):
+        @self.huey.periodic_task(crontab(minute='*'))
+        def task_p():
+            pass
+
+        consumer = self.consumer(workers=1)
+        scheduler = consumer._create_scheduler()
+        scheduler._next_loop = time.monotonic() + 60
+
+        # Simulate a 5-minute stall (e.g. suspend/resume): the periodic check
+        # timestamp is far in the past. The scheduler skips the missed checks
+        # and fires once for the current minute, rather than running the
+        # back-to-back checks, which would enqueue duplicate tasks.
+        scheduler._next_periodic = time.monotonic() - 300
+        scheduler.loop(datetime.datetime(2000, 1, 1, 0, 0))
+        self.assertEqual(len(self.huey), 1)
+        self.assertTrue(scheduler._next_periodic > time.monotonic())
+
+        # Subsequent iterations do not re-fire for the stalled period.
+        scheduler.loop(datetime.datetime(2000, 1, 1, 0, 0))
+        self.assertEqual(len(self.huey), 1)
+
 
 class TestConsumerConfig(BaseTestCase):
     def test_default_config(self):

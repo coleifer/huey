@@ -9,8 +9,12 @@ import unittest
 import uuid
 from queue import Queue
 
-from redis.connection import ConnectionPool
-from redis import Redis
+try:
+    from redis.connection import ConnectionPool
+    from redis import Redis
+    from redis.exceptions import ConnectionError as RedisConnectionError
+except ImportError:
+    ConnectionPool = Redis = RedisConnectionError = None
 
 from huey.api import Huey
 from huey.api import MemoryHuey
@@ -29,6 +33,21 @@ from huey.storage import RedisExpireStorage
 from huey.tests.base import BaseTestCase
 from huey.tests.base import TRAVIS
 from huey.tests.base import slow_test
+
+
+def get_redis_version():
+    # Major version of the locally-running redis server, or 0 if the redis
+    # client library or server are not available.
+    if Redis is None:
+        return 0
+    try:
+        info = Redis().info()
+    except Exception:
+        return 0
+    return int(info['redis_version'].split('.', 1)[0])
+
+REDIS_VERSION = get_redis_version()
+requires_redis = unittest.skipIf(REDIS_VERSION == 0, 'requires redis server')
 
 
 class StorageTests(object):
@@ -207,7 +226,27 @@ class TestMemoryStorage(StorageTests, BaseTestCase):
     def get_huey(self):
         return MemoryHuey(utc=False)
 
+    def test_put_if_empty_concurrent(self):
+        nthreads, nkeys = 8, 20
+        barrier = threading.Barrier(nthreads)
+        winners = []
 
+        def run(n):
+            barrier.wait()
+            for i in range(nkeys):
+                if self.s.put_if_empty(b'k-%d' % i, b'%d' % n):
+                    winners.append(i)
+
+        threads = [threading.Thread(target=run, args=(n,))
+                   for n in range(nthreads)]
+        for t in threads: t.start()
+        for t in threads: t.join()
+
+        # Each key was acquired by exactly one thread.
+        self.assertEqual(sorted(winners), list(range(nkeys)))
+
+
+@requires_redis
 class TestRedisStorage(StorageTests, BaseTestCase):
     def get_huey(self):
         return RedisHuey(utc=False)
@@ -228,6 +267,7 @@ class TestRedisStorageWaitResult(TestRedisStorage):
         return RedisHuey(utc=False, notify_result=True, notify_result_ttl=30)
 
 
+@requires_redis
 class TestRedisExpireStorage(StorageTests, BaseTestCase):
     # Note that this does not subclass the StorageTests. This is partly because
     # the functionality should already be covered by the TestRedisStorage, as
@@ -303,20 +343,86 @@ class TestRedisExpireStorage(StorageTests, BaseTestCase):
         self.assertEqual(self.huey.result_count(), 2)  # r1 and r3 still there.
 
 
-def get_redis_version():
-    return int(Redis().info()['redis_version'].split('.', 1)[0])
-
-
-@unittest.skipIf(get_redis_version() < 5, 'Requires Redis >= 5.0')
+@unittest.skipIf(REDIS_VERSION < 5, 'Requires Redis >= 5.0')
 class TestPriorityRedisStorage(TestRedisStorage):
     def get_huey(self):
         return PriorityRedisHuey(utc=False)
 
 
-@unittest.skipIf(get_redis_version() < 5, 'Requires Redis >= 5.0')
+@unittest.skipIf(REDIS_VERSION < 5, 'Requires Redis >= 5.0')
 class TestPriorityRedisStorageNotBlocking(TestRedisStorage):
     def get_huey(self):
         return PriorityRedisHuey(utc=False, blocking=False)
+
+
+@unittest.skipIf(Redis is None, 'requires redis python module')
+class TestRedisStorageOffline(BaseTestCase):
+    # Verify client-side behavior using a stub client -- these tests do not
+    # require a live redis server.
+    def get_huey(self):
+        return RedisHuey(utc=False)
+
+    def test_dequeue_error_handling(self):
+        s = self.huey.storage
+
+        class StubConnErr(object):
+            def brpop(self, key, timeout=None):
+                raise RedisConnectionError('cannot connect')
+        s.conn = StubConnErr()
+
+        # Connection errors propagate, so the worker logs the error and
+        # applies backoff rather than treating it as an empty queue.
+        self.assertRaises(RedisConnectionError, s.dequeue)
+
+        class StubEmpty(object):
+            def brpop(self, key, timeout=None):
+                return None  # BRPOP timed out, queue is empty.
+        s.conn = StubEmpty()
+        self.assertTrue(s.dequeue() is None)
+
+    def test_wait_result_timeout_clamp(self):
+        huey = RedisHuey(utc=False, notify_result=True)
+        s = huey.storage
+        captured = []
+
+        class StubConn(object):
+            def hexists(self, key, k):
+                return False
+            def blpop(self, key, timeout=None):
+                captured.append(timeout)
+                return None
+        s.conn = StubConn()
+
+        s.redis_version = (5, 0, 0)
+        self.assertFalse(s.wait_result('k1', timeout=30))
+        self.assertFalse(s.wait_result('k1', timeout=0.5))
+
+        s.redis_version = (7, 4, 0)
+        self.assertFalse(s.wait_result('k1', timeout=0.5))
+
+        # For redis < 6 the timeout is coerced to an int >= 1 (rather than
+        # being clamped *down* to at-most 1 second, or, for sub-second floats,
+        # truncated to zero -- which blocks indefinitely). Newer servers
+        # receive the timeout unmodified.
+        self.assertEqual(captured, [30, 1, 0.5])
+
+    def test_enqueued_items_limit(self):
+        s = self.huey.storage
+        calls = []
+
+        class StubConn(object):
+            def lrange(self, key, start, stop):
+                calls.append((start, stop))
+                # Head of the redis list is the most-recently enqueued item.
+                return [b'i2', b'i1', b'i0']
+        s.conn = StubConn()
+
+        self.assertEqual(s.enqueued_items(), [b'i0', b'i1', b'i2'])
+        self.assertEqual(s.enqueued_items(3), [b'i0', b'i1', b'i2'])
+
+        # With a limit, items are read from the consumption end of the list,
+        # e.g. the next-N items to be dequeued.
+        self.assertEqual(calls, [(0, -1), (-3, -1)])
 
 
 class TestSqliteStorage(StorageTests, BaseTestCase):

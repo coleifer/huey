@@ -419,9 +419,15 @@ class Huey(object):
         elif self.is_revoked(task, timestamp, False):
             logger.warning('Task %s was revoked, not executing', task)
             self._emit(S.SIGNAL_REVOKED, task)
+            if task.chord_config is not None:
+                # Contribute a placeholder result for the skipped task so the
+                # chord callback can still fire when the rest are done.
+                self._check_chord(task, None)
         elif task.expires_resolved and task.expires_resolved < timestamp:
             logger.info('Task %s expired, not executing.', task)
             self._emit(S.SIGNAL_EXPIRED, task)
+            if task.chord_config is not None:
+                self._check_chord(task, None)
         else:
             logger.info('Executing %s', task)
             self._emit(S.SIGNAL_EXECUTING, task)
@@ -433,6 +439,8 @@ class Huey(object):
                 self._run_pre_execute(task)
             except CancelExecution:
                 self._emit(S.SIGNAL_CANCELED, task)
+                if task.chord_config is not None:
+                    self._check_chord(task, None)
                 return
 
         start = time.monotonic()
@@ -958,7 +966,10 @@ class TaskWrapper(object):
         def execute(self):
             args, kwargs = self.data
             if self.context:
-                kwargs['task'] = self
+                # Inject the task instance into a copy of the kwargs so the
+                # original data is not polluted (e.g. when the task is
+                # re-serialized for retry).
+                kwargs = dict(kwargs, task=self)
             return func(*args, **kwargs)
 
         attrs = {
