@@ -3,6 +3,10 @@ Changelog
 
 ## master
 
+[View commits](https://github.com/coleifer/huey/compare/3.0.2...master)
+
+## 3.0.2
+
 * Redis blocking dequeue no longer swallows `ConnectionError` -- the error
   propagates to the worker, which logs it and applies exponential backoff.
   Previously a downed redis server caused workers to busy-loop silently.
@@ -37,7 +41,7 @@ Changelog
 * Redis-dependent tests are skipped when no local redis server is reachable,
   instead of failing at import time.
 
-[View commits](https://github.com/coleifer/huey/compare/3.0.1...HEAD)
+[View commits](https://github.com/coleifer/huey/compare/3.0.1...3.0.2)
 
 ## 3.0.1
 
