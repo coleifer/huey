@@ -102,7 +102,7 @@ def normalize_expire_time(expires, utc=True):
 
 
 def normalize_time(eta=None, delay=None, utc=True):
-    if not ((delay is None) ^ (eta is None)):
+    if (delay is None) == (eta is None):
         raise ValueError('Specify either an eta (datetime) or delay (seconds)')
     elif delay is not None:
         method = (utc and utcnow or
