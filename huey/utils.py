@@ -110,7 +110,9 @@ def normalize_time(eta=None, delay=None, utc=True):
         if not isinstance(delay, datetime.timedelta):
             delay = datetime.timedelta(seconds=delay)
         return method() + delay
-    elif eta:
+    elif not isinstance(eta, datetime.datetime):
+        raise ValueError('eta must be a datetime instance')
+    else:
         has_tz = not is_naive(eta)
         if utc:
             if not has_tz:
