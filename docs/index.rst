@@ -95,13 +95,13 @@ Run the consumer with four worker processes:
 
 .. code-block:: shell
 
-    huey_consumer.py my_app.huey -k process -w 4
+    huey_consumer my_app.huey -k process -w 4
 
 To run the consumer with a single worker thread (default):
 
 .. code-block:: shell
 
-    huey_consumer.py my_app.huey
+    huey_consumer my_app.huey
 
 If your work-loads are mostly IO-bound, you can run the consumer with threads
 or greenlets instead. Because greenlets are so lightweight, you can run quite a
@@ -109,7 +109,7 @@ few of them efficiently:
 
 .. code-block:: shell
 
-    huey_consumer.py my_app.huey -k greenlet -w 32
+    huey_consumer my_app.huey -k greenlet -w 32
 
 For more information, see the :ref:`consuming-tasks` document.
 

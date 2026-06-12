@@ -66,11 +66,14 @@ Notes:
 
 * journald captures stdout/stderr, so run the consumer *without* the ``-l``
   logfile option and read logs with ``journalctl -u huey``.
-* ``systemctl reload huey`` triggers huey's graceful restart (``SIGHUP``).
-  The consumer re-executes itself with the same PID, which is why the unit
-  uses ``Type=exec``.
-* ``Restart=on-failure`` will not fight you when you stop the service
-  intentionally; use ``Restart=always`` if you prefer belt-and-braces.
+* ``systemctl reload huey`` triggers huey's graceful restart (``SIGHUP``):
+  the consumer re-executes itself in-place, keeping the same PID. Avoid
+  ``Type=forking``; the unit's ``Type=exec`` is correct, and also surfaces
+  launch errors at startup.
+* ``Restart=on-failure`` restarts the consumer after a crash, but leaves it
+  stopped after a clean exit (e.g. a graceful ``kill -INT``). Use
+  ``Restart=always`` to bring it back regardless. ``systemctl stop`` never
+  triggers an automatic restart with either setting.
 
 supervisord
 -----------
@@ -95,7 +98,7 @@ Notes:
 
 * ``STOPSIGNAL SIGINT`` makes ``docker stop`` request a graceful shutdown.
   The default grace period is only 10 seconds, however, so stop with
-  ``docker stop --timeout 60 <container>`` (or set ``stop_grace_period`` in
+  ``docker stop -t 60 <container>`` (or set ``stop_grace_period`` in
   compose) to give in-flight tasks time to finish.
 * Always use the exec form of ``CMD`` (the JSON-array form, with no shell),
   so the consumer runs as PID 1 and receives signals directly.

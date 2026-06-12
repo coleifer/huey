@@ -8,7 +8,7 @@ To run the consumer, simply point it at the "import path" to your application's
 
 .. code-block:: shell
 
-    huey_consumer.py blog.main.huey --logfile=../logs/huey.log
+    huey_consumer blog.main.huey --logfile=../logs/huey.log
 
 The concept of the "import path" has been the source of a few questions, but
 it is quite simple. It is simply the dotted-path you might use if you were
@@ -21,8 +21,8 @@ to try and import the "huey" object in the interactive interpreter:
 You may run into trouble though when "blog" is not on your python-path. To
 work around this:
 
-1. Manually specify your pythonpath: ``PYTHONPATH=/some/dir/:$PYTHONPATH huey_consumer.py blog.main.huey``.
-2. Run ``huey_consumer.py`` from the directory your config module is in. I use
+1. Manually specify your pythonpath: ``PYTHONPATH=/some/dir/:$PYTHONPATH huey_consumer blog.main.huey``.
+2. Run the consumer from the directory your config module is in. I use
    supervisord to manage my huey process, so I set the ``directory`` to the
    root of my site.
 3. Create a wrapper and hack ``sys.path``.
@@ -168,27 +168,27 @@ Running the consumer with 8 threads and a logfile for errors:
 
 .. code-block:: shell
 
-    huey_consumer.py my.app.huey -l /var/log/app.huey.log -w 8 -q
+    huey_consumer my.app.huey -l /var/log/app.huey.log -w 8 -q
 
 Using multi-processing to run 4 worker processes.
 
 .. code-block:: shell
 
-    huey_consumer.py my.app.huey -w 4 -k process
+    huey_consumer my.app.huey -w 4 -k process
 
 Running single-threaded with periodic task support disabled. Additionally,
 logging records are written to stdout.
 
 .. code-block:: shell
 
-    huey_consumer.py my.app.huey -v -n
+    huey_consumer my.app.huey -v -n
 
 Using greenlets to run 50 workers, with no health checking and a scheduler
 granularity of 60 seconds.
 
 .. code-block:: shell
 
-    huey_consumer.py my.app.huey -w 50 -k greenlet -C -s 60
+    huey_consumer my.app.huey -w 50 -k greenlet -C -s 60
 
 .. _worker-types:
 
@@ -263,7 +263,7 @@ To run the consumer:
 
 .. code-block:: shell
 
-    huey_consumer.py main.huey -k greenlet -w 16
+    huey_consumer main.huey -k greenlet -w 16
 
 You should have a good understanding of how gevent works, its strengths and
 limitations, before using the greenlet worker type.
@@ -340,13 +340,15 @@ Barebones supervisor config using 4 worker threads:
 
     [program:my_huey]
     directory=/path/to/project/
-    command=/path/to/huey/bin/huey_consumer.py my_app.huey -w 4
+    command=/path/to/venv/bin/huey_consumer my_app.huey -w 4
     user=someuser
     autostart=true
     autorestart=true
     stdout_logfile=/var/log/huey.log
     stderr_logfile=/var/log/huey.err
-    environment=PYTHONPATH="/path/to/project:$PYTHONPATH"
+    ; Note: supervisor does not perform shell expansion, so a literal
+    ; "$PYTHONPATH" cannot be used here.
+    environment=PYTHONPATH="/path/to/project"
     ; Huey shuts down gracefully on SIGINT, allowing workers to finish their
     ; current task. Supervisor's default stopsignal is TERM, which huey
     ; treats as "stop immediately" -- so be sure to specify INT here.
@@ -367,7 +369,7 @@ Barebones systemd config using 4 worker threads:
     User=someuser
     Group=somegroup
     WorkingDirectory=/path/to/project/
-    ExecStart=/path/to/huey/bin/huey_consumer.py my_app.huey -w 4
+    ExecStart=/path/to/venv/bin/huey_consumer my_app.huey -w 4
     Restart=always
     # Huey shuts down gracefully on SIGINT, allowing workers to finish their
     # current task. systemd's default KillSignal is SIGTERM, which huey
@@ -381,8 +383,8 @@ Barebones systemd config using 4 worker threads:
     WantedBy=multi-user.target
 
 .. note::
-    Django users may replace ``huey/bin/huey_consumer.py`` with the appropriate
-    path to ``manage.py run_huey``.
+    Django users may replace ``huey_consumer`` with the appropriate path to
+    ``manage.py run_huey``.
 
 
 .. _multiple-consumers:
@@ -403,9 +405,9 @@ except one.
 
 For example:
 
-* Server A (main): ``huey_consumer.py myapp.huey -w 8 -k process``
-* Server B: ``huey_consumer.py myapp.huey -w 8 -k process --no-periodic``
-* Server C: ``huey_consumer.py myapp.huey -w 8 -k process --no-periodic``
+* Server A (main): ``huey_consumer myapp.huey -w 8 -k process``
+* Server B: ``huey_consumer myapp.huey -w 8 -k process --no-periodic``
+* Server C: ``huey_consumer myapp.huey -w 8 -k process --no-periodic``
 
 Since each Huey consumer must be able to communicate with the queue and
 result-store, Redis or another network-accessible storage backend must be used.

@@ -221,7 +221,7 @@ Huey object
 
     .. code-block:: console
 
-        $ huey_consumer.py demo.huey -w 4
+        $ huey_consumer demo.huey -w 4
 
     To add two numbers, the "huey" way:
 
@@ -286,7 +286,7 @@ Huey object
         :returns: a :py:class:`Consumer` instance.
 
         Create a consumer programmatically, rather than using the
-        ``huey_consumer.py`` command-line tool. This is useful for embedding
+        ``huey_consumer`` command-line tool. This is useful for embedding
         the consumer within your own application process, or for advanced
         testing scenarios.
 

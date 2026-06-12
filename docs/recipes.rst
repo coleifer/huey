@@ -263,7 +263,7 @@ shutdown (``SIGINT``) before supervisor sends ``SIGTERM``:
 .. code-block:: ini
 
     [program:my_huey]
-    command=/path/to/huey_consumer.py my_app.huey -w 4
+    command=/path/to/venv/bin/huey_consumer my_app.huey -w 4
     stopwaitsecs=30
     stopsignal=INT
 
@@ -534,14 +534,16 @@ imports clean, and the instances can share a connection pool:
 
     pool = ConnectionPool(host='localhost', port=6379, max_connections=20)
 
-    emails = RedisHuey('myapp.emails', connection_pool=pool)
-    reports = RedisHuey('myapp.reports', connection_pool=pool)
+    emails = RedisHuey('myapp_emails', connection_pool=pool)
+    reports = RedisHuey('myapp_reports', connection_pool=pool)
 
 Tasks are routed by the decorator used to declare them:
 
 .. code-block:: python
 
     # myapp/tasks.py
+    from huey import crontab
+
     from myapp.queues import emails, reports
 
     @emails.task(retries=2)
@@ -561,8 +563,8 @@ Each queue gets its own consumer, tuned independently:
 
 .. code-block:: shell
 
-    huey_consumer.py myapp.queues.emails  -w 8 -k greenlet
-    huey_consumer.py myapp.queues.reports -w 2 -k process
+    huey_consumer myapp.queues.emails  -w 8 -k greenlet
+    huey_consumer myapp.queues.reports -w 2 -k process
 
 Running N consumers means supervising N processes. With systemd this is a
 single template unit, ``/etc/systemd/system/huey@.service``, where ``%i``
@@ -610,7 +612,9 @@ Pitfalls to be aware of:
   (:ref:`multiple-consumers`).
 * The queue ``name`` is the storage namespace. Two instances with the same
   name on the same storage are the same queue; instances sharing a sqlite
-  file must use distinct names.
+  file must use distinct names. Note that the Redis storage sanitizes the
+  name, stripping all characters besides alphanumerics and underscores --
+  so names must remain distinct *after* sanitization.
 * ``immediate`` mode is a per-instance setting -- in tests, remember to flip
   it on every instance.
 
@@ -638,8 +642,9 @@ current master automatically after a failover:
         [('10.0.0.1', 26379), ('10.0.0.2', 26379), ('10.0.0.3', 26379)],
         # IMPORTANT: the socket timeout must comfortably exceed the
         # consumer's blocking read timeout (default 1s). If it does not,
-        # every blocking dequeue raises TimeoutError at the socket level
-        # and the consumer degrades to logging errors and polling.
+        # every blocking dequeue times out at the socket level and is
+        # indistinguishable from an empty queue -- the consumer silently
+        # degrades to polling, with no errors logged.
         socket_timeout=5.0)
 
     huey = RedisHuey(
@@ -671,11 +676,12 @@ apply backoff, the scheduler does the same, and once Sentinel promotes a new
 master the pool reconnects to it automatically -- no restart required. Two
 caveats to understand: Redis replication is asynchronous, so writes that land
 in the failover window (enqueues, results) can be lost when the old master's
-unreplicated data is discarded; and a task that was dequeued but unfinished
-when its worker lost the connection is gone -- which is huey's normal
-at-most-once behavior on worker death, not something Sentinel introduces.
-High-availability Redis does not make individual tasks durable; pair it with
-idempotent task design and the :ref:`recipe-interrupted-tasks` recipe.
+unreplicated data is discarded; and dequeueing is destructive, so a task that
+has been handed to a worker exists only in that worker's memory -- if the
+worker dies mid-task it is gone, which is huey's normal at-most-once behavior,
+not something Sentinel introduces. High-availability Redis does not make
+individual tasks durable; pair it with idempotent task design and the
+:ref:`recipe-interrupted-tasks` recipe.
 
 **Valkey and Redict** are wire-compatible with Redis and work with
 :py:class:`RedisHuey` unchanged -- simply point it at your valkey host (the
@@ -761,9 +767,15 @@ a small decorator:
 The consumer is pointed at an entry module that imports the app and all of
 the tasks (see :ref:`imports`):
 
+.. code-block:: python
+
+    # main.py
+    from app import app, huey
+    import tasks  # Import tasks so they are registered with the instance.
+
 .. code-block:: shell
 
-    huey_consumer.py main.huey -w 4
+    huey_consumer main.huey -w 4
 
 A complete, runnable application is available in `examples/flask_ex
 <https://github.com/coleifer/huey/tree/master/examples/flask_ex>`_.
@@ -831,7 +843,7 @@ while this coroutine waits:
 Notes:
 
 * The consumer runs separately, exactly as with any huey application:
-  ``huey_consumer.py tasks.huey -w 4``.
+  ``huey_consumer tasks.huey -w 4``.
 * Task functions are plain ``def`` functions -- huey does not execute
   ``async def`` tasks. IO-bound workloads can still get high concurrency in
   the consumer via ``-k greenlet``.

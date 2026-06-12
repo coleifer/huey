@@ -64,4 +64,4 @@ instance **and** the task functions are imported in a centralized location.
 
 .. code-block:: shell
 
-    huey_consumer.py main.huey
+    huey_consumer main.huey

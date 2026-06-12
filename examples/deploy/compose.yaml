@@ -16,6 +16,8 @@ services:
   # same code and the same task registry.
   worker:
     build: .
+    # NOTE: if you scale this service, add "-n" here and run a single
+    # separate service (without "-n") to enqueue periodic tasks.
     command: ["huey_consumer", "my_app.huey", "-w", "4"]
     environment:
       REDIS_HOST: redis

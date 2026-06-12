@@ -28,7 +28,7 @@ Tasks not running
     quick way to check is to open up a python shell and try to import the
     configuration.
 
-    Example syntax: ``huey_consumer.py main_module.huey``
+    Example syntax: ``huey_consumer main_module.huey``
 
 Tasks not returning results
     Ensure that you have not accidentally specified ``results=False`` when
@@ -114,7 +114,7 @@ Task locks are stuck after consumer crash
       locks on startup.
     * If you have locks created inside context managers (not as decorators),
       they may not be automatically discovered. Use ``-L`` / ``--extra-locks``
-      to specify their names: ``huey_consumer.py app.huey -f -L my-lock-name``.
+      to specify their names: ``huey_consumer app.huey -f -L my-lock-name``.
     * Manually clear a specific lock from your application code:
 
       .. code-block:: python
@@ -257,9 +257,12 @@ ReadOnlyError after a Redis failover
     Sentinel-managed connection pool so the client re-discovers the current
     master automatically: see :ref:`recipe-redis-sentinel`.
 
-Consumer logs constant errors / stops blocking when using Sentinel
+Task latency increased after switching to Sentinel
     When connecting through ``redis.sentinel.Sentinel``, the ``socket_timeout``
     must comfortably exceed the consumer's blocking read timeout (default 1
-    second). If the socket timeout is shorter, every blocking dequeue times
-    out at the socket level, and the consumer falls back to logging errors and
-    polling. See :ref:`recipe-redis-sentinel` for a working configuration.
+    second). If the socket timeout is shorter, every blocking dequeue times out
+    at the socket level and is indistinguishable from an empty queue: the
+    consumer silently degrades to polling with backoff -- no errors are logged,
+    but an idle consumer may take up to ``--max-delay`` seconds (default 10) to
+    notice new tasks. See :ref:`recipe-redis-sentinel` for a working
+    configuration.

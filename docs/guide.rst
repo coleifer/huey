@@ -24,7 +24,7 @@ To test, run the consumer, specifying the import path to the ``huey`` object:
 
 .. code-block:: shell
 
-    huey_consumer.py demo.huey
+    huey_consumer demo.huey
 
 In a Python shell, we can call our ``add`` task:
 
