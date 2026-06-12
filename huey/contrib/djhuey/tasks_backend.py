@@ -1,9 +1,9 @@
 """
-Backend for the django.tasks framework (Django 6.0+) which enqueues tasks
-into huey. Tasks declared with the ``django.tasks.task`` decorator are
-executed by the regular huey consumer (``manage.py run_huey``), side-by-side
-with any native huey tasks, using the shared huey instance configured by
-``settings.HUEY``.
+Backend for the django.tasks framework (Django 6.0+, or older Djangos using
+the django-tasks backport package) which enqueues tasks into huey. Tasks
+declared with the ``django.tasks.task`` decorator are executed by the regular
+huey consumer (``manage.py run_huey``), side-by-side with any native huey
+tasks, using the shared huey instance configured by ``settings.HUEY``.
 
 Usage::
 
@@ -35,16 +35,32 @@ from datetime import datetime
 from traceback import format_exception
 
 from django.db import transaction
-from django.tasks import Task as DjangoTask
-from django.tasks import TaskContext, TaskResult, TaskResultStatus
-from django.tasks.backends.base import BaseTaskBackend
-from django.tasks.base import TaskError
-from django.tasks.exceptions import InvalidTask
-from django.tasks.exceptions import TaskResultDoesNotExist
-from django.tasks.signals import task_enqueued, task_finished, task_started
 from django.utils import timezone
-from django.utils.json import normalize_json
 from django.utils.module_loading import import_string
+
+try:
+    from django.tasks import Task as DjangoTask
+    from django.tasks import TaskContext, TaskResult, TaskResultStatus
+    from django.tasks.backends.base import BaseTaskBackend
+    from django.tasks.base import TaskError
+    from django.tasks.exceptions import InvalidTask
+    from django.tasks.exceptions import TaskResultDoesNotExist
+    from django.tasks.signals import task_enqueued, task_finished, task_started
+    from django.utils.json import normalize_json
+except ImportError:
+    # Django < 6.0: the django-tasks backport provides the same API.
+    from django_tasks.base import Task as DjangoTask
+    from django_tasks.base import TaskContext, TaskResult, TaskResultStatus
+    from django_tasks.backends.base import BaseTaskBackend
+    from django_tasks.base import TaskError
+    from django_tasks.exceptions import TaskResultDoesNotExist
+    from django_tasks.signals import task_enqueued, task_finished, task_started
+    from django_tasks.utils import normalize_json
+    try:
+        from django_tasks.exceptions import InvalidTask
+    except ImportError:
+        # django-tasks <= 0.12 used the InvalidTaskError name.
+        from django_tasks.exceptions import InvalidTaskError as InvalidTask
 
 from huey.contrib.djhuey import HUEY, close_db
 

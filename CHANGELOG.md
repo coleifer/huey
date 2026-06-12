@@ -3,6 +3,8 @@ Changelog
 
 ## master
 
+* The django.tasks backend is now also compatible with the `django-tasks`
+  backport package, extending support to pre-6.0 Django.
 * Use an explicit `fork` multiprocessing context for process workers, rather
   than setting the global start-method from the consumer entry-points. Fixes
   `-k process` on MacOS 3.8+ / Linux 3.14+ when the consumer is started via

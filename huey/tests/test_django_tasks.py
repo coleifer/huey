@@ -4,9 +4,9 @@ import time
 import unittest
 
 
-django_tasks_available = (
-    importlib.util.find_spec('django') is not None and
-    importlib.util.find_spec('django.tasks') is not None)
+django_tasks_available = importlib.util.find_spec('django') is not None and (
+    importlib.util.find_spec('django.tasks') is not None or
+    importlib.util.find_spec('django_tasks') is not None)
 
 if django_tasks_available:
     import django
@@ -25,12 +25,23 @@ if django_tasks_available:
     django.setup()
 
     from django.db import transaction
-    from django.tasks import TaskResultStatus, default_task_backend, task
-    from django.tasks.exceptions import InvalidTask
-    from django.tasks.exceptions import TaskResultDoesNotExist
-    from django.tasks.exceptions import TaskResultMismatch
     from django.test import override_settings
     from django.utils import timezone
+
+    try:
+        from django.tasks import TaskResultStatus, default_task_backend, task
+        from django.tasks.exceptions import InvalidTask
+        from django.tasks.exceptions import TaskResultDoesNotExist
+        from django.tasks.exceptions import TaskResultMismatch
+    except ImportError:
+        # Django < 6.0: the django-tasks backport provides the same API.
+        from django_tasks import TaskResultStatus, default_task_backend, task
+        from django_tasks.exceptions import TaskResultDoesNotExist
+        from django_tasks.exceptions import TaskResultMismatch
+        try:
+            from django_tasks.exceptions import InvalidTask
+        except ImportError:
+            from django_tasks.exceptions import InvalidTaskError as InvalidTask
 
     from huey.contrib.djhuey import HUEY
     from huey.tests.base import BaseTestCase
@@ -60,7 +71,8 @@ if django_tasks_available:
     anon_task = task(lambda: 1)
 
 
-@unittest.skipIf(not django_tasks_available, 'requires django 6.0+')
+@unittest.skipIf(not django_tasks_available,
+                 'requires django.tasks or django-tasks backport')
 class TestDjangoTasksBackend(unittest.TestCase):
     def setUp(self):
         HUEY.immediate = False

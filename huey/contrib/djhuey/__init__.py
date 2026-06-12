@@ -157,13 +157,17 @@ def db_periodic_task(*args, **kwargs):
 
 
 def _register_tasks_backend():
-    # When the django.tasks framework is available (Django 6.0+), import the
-    # backend module so its shim task is registered with the consumer.
+    # When the django.tasks framework is available (Django 6.0+, or via the
+    # django-tasks backport package), import the backend module so its shim
+    # task is registered with the consumer.
     try:
         import django.tasks
     except ImportError:
-        return
-    from huey.contrib.djhuey import tasks_backend  # noqa: F401
+        try:
+            import django_tasks
+        except ImportError:
+            return
+    from huey.contrib.djhuey import tasks_backend
 
 
 def on_commit_task(*args, **kwargs):

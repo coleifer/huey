@@ -10,7 +10,8 @@ integration provides:
 2. Running the consumer as a Django management command.
 3. Auto-discovery of ``tasks.py`` modules to simplify task importing.
 4. Properly manage database connections.
-5. A :ref:`backend <django-task>` for the ``django.tasks`` framework (Django 6.0 and newer).
+5. A :ref:`backend <django-task>` for the ``django.tasks`` framework (Django
+   6.0 and newer, or older Djangos using the django-tasks backport).
 
 Supported Django versions are those officially supported at https://www.djangoproject.com/download/#supported-versions
 
@@ -318,7 +319,9 @@ Django 6.0 includes `django.tasks
 interface for defining and enqueueing background tasks. Django does not ship
 a production backend for actually running them - huey provides one. Tasks
 declared with the ``django.tasks.task`` decorator are stored and executed by
-the regular huey consumer, side-by-side with your native huey tasks.
+the regular huey consumer, side-by-side with your native huey tasks. On older
+Django versions, the backend works identically with the `django-tasks
+<https://github.com/RealOrangeOne/django-tasks>`_ backport package.
 
 To use it, declare the backend in ``settings.TASKS``. The backend uses the
 shared huey instance configured by ``settings.HUEY``, as described above:
