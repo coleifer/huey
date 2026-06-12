@@ -10,7 +10,8 @@ result, Huey must poll the storage backend to determine if the result is ready
 which means lots of opportunity for an asynchronous solution.
 
 In order to simplify this, Huey provides two helpers for ``await``-ing task
-results:
+results. For a complete example of wiring Huey into an async web application,
+see :ref:`recipe-fastapi`.
 
 .. py:function:: aget_result(result, backoff=1.15, max_delay=1.0, preserve=False)
 

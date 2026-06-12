@@ -248,3 +248,18 @@ Task decorated with ``@huey.task()`` blocks when called
     instance. In immediate mode, tasks are executed synchronously by the caller.
     This is by design for testing and debugging, but if you see this behavior
     unexpectedly, ensure ``huey.immediate`` is ``False`` in production.
+
+ReadOnlyError after a Redis failover
+    ``ReadOnlyError: You can't write against a read only replica`` means huey
+    is connected to a Redis instance that has been demoted to replica --
+    typically because huey was pointed at a static host (or load-balancer
+    address) in a replicated setup, and a failover occurred. Use a
+    Sentinel-managed connection pool so the client re-discovers the current
+    master automatically: see :ref:`recipe-redis-sentinel`.
+
+Consumer logs constant errors / stops blocking when using Sentinel
+    When connecting through ``redis.sentinel.Sentinel``, the ``socket_timeout``
+    must comfortably exceed the consumer's blocking read timeout (default 1
+    second). If the socket timeout is shorter, every blocking dequeue times
+    out at the socket level, and the consumer falls back to logging errors and
+    polling. See :ref:`recipe-redis-sentinel` for a working configuration.

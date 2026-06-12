@@ -16,6 +16,8 @@ Supported Django versions are those officially supported at https://www.djangopr
 
 .. note::
    For multiple-queue support, check out `gaiacoop/django-huey <https://github.com/gaiacoop/django-huey>`_.
+   For a discussion of when multiple queues are useful (and when task
+   priorities are the simpler answer), see :ref:`recipe-multiple-queues`.
 
 Setting things up
 ^^^^^^^^^^^^^^^^^

@@ -1,0 +1,30 @@
+services:
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis-data:/data
+
+  web:
+    build: .
+    command: ["gunicorn", "my_app.wsgi"]
+    environment:
+      REDIS_HOST: redis
+    depends_on:
+      - redis
+
+  # The worker is built from the same image as the web app, so both see the
+  # same code and the same task registry.
+  worker:
+    build: .
+    command: ["huey_consumer", "my_app.huey", "-w", "4"]
+    environment:
+      REDIS_HOST: redis
+    depends_on:
+      - redis
+    # Time allowed for a graceful shutdown (SIGINT, via the image's
+    # STOPSIGNAL) before the container is killed. Set this to comfortably
+    # exceed your longest-running task.
+    stop_grace_period: 60s
+
+volumes:
+  redis-data:

@@ -287,6 +287,8 @@ tasks will be lost. To be alerted when this occurs, you can use Huey's
 :ref:`signals` (specifically ``signals.SIGNAL_INTERRUPTED``). The consumer
 will emit this for tasks that are interrupted during execution.
 
+.. _consumer-deployments:
+
 Deployments
 ^^^^^^^^^^^
 
@@ -321,6 +323,16 @@ supervisord and systemd
 
 Huey plays nicely with both `supervisord <https://supervisord.org/>`_,
 `systemd <https://systemd.io/>`_ and presumably any other process supervisor.
+For complete deployment examples -- including Docker, Docker Compose and
+PaaS configurations, along with a production checklist -- see
+:ref:`deployment`.
+
+.. warning::
+    Both supervisord and systemd stop processes with ``SIGTERM`` by default,
+    which huey treats as "stop immediately, interrupting any running tasks".
+    Huey's graceful-shutdown signal is ``SIGINT``, so be sure to configure
+    the stop signal as shown below -- otherwise tasks will be interrupted on
+    every deploy, regardless of how long the supervisor is told to wait.
 
 Barebones supervisor config using 4 worker threads:
 
@@ -335,8 +347,12 @@ Barebones supervisor config using 4 worker threads:
     stdout_logfile=/var/log/huey.log
     stderr_logfile=/var/log/huey.err
     environment=PYTHONPATH="/path/to/project:$PYTHONPATH"
-    ; Increase this if you want to ensure long-running tasks are not
-    ; interrupted during shutdown.
+    ; Huey shuts down gracefully on SIGINT, allowing workers to finish their
+    ; current task. Supervisor's default stopsignal is TERM, which huey
+    ; treats as "stop immediately" -- so be sure to specify INT here.
+    stopsignal=INT
+    ; How long to wait for in-flight tasks to finish before escalating to
+    ; SIGKILL. Increase this if you have long-running tasks.
     stopwaitsecs=30
 
 Barebones systemd config using 4 worker threads:
@@ -353,6 +369,13 @@ Barebones systemd config using 4 worker threads:
     WorkingDirectory=/path/to/project/
     ExecStart=/path/to/huey/bin/huey_consumer.py my_app.huey -w 4
     Restart=always
+    # Huey shuts down gracefully on SIGINT, allowing workers to finish their
+    # current task. systemd's default KillSignal is SIGTERM, which huey
+    # treats as "stop immediately" -- so override it here.
+    KillSignal=SIGINT
+    # How long to wait for in-flight tasks to finish before escalating to
+    # SIGKILL. Increase this if you have long-running tasks.
+    TimeoutStopSec=60
 
     [Install]
     WantedBy=multi-user.target
@@ -386,6 +409,11 @@ For example:
 
 Since each Huey consumer must be able to communicate with the queue and
 result-store, Redis or another network-accessible storage backend must be used.
+
+.. note::
+    This section covers running multiple consumers against a *single* queue.
+    To run multiple *queues* -- for example, to give different classes of
+    task their own worker pools -- see :ref:`recipe-multiple-queues`.
 
 .. _consumer-internals:
 

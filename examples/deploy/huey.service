@@ -1,0 +1,30 @@
+[Unit]
+Description=huey consumer for my_app
+After=network.target redis.service
+
+[Service]
+Type=exec
+User=appuser
+Group=appuser
+WorkingDirectory=/srv/my_app
+# Run the consumer directly -- no shell-script wrappers -- so that signals
+# are delivered to the Python process. See github issue #88.
+ExecStart=/srv/my_app/venv/bin/huey_consumer my_app.huey -w 4 -k thread
+
+# Huey shuts down gracefully on SIGINT, allowing workers to finish their
+# current task. systemd's default KillSignal is SIGTERM, which huey treats
+# as "stop immediately, interrupting any running tasks" -- so override it.
+KillSignal=SIGINT
+# How long to wait for in-flight tasks to finish before escalating to
+# SIGKILL. Set this to comfortably exceed your longest-running task.
+TimeoutStopSec=60
+
+# "systemctl reload huey" maps to huey's graceful restart (SIGHUP). The
+# consumer re-executes itself in-place, keeping the same PID.
+ExecReload=/bin/kill -HUP $MAINPID
+
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

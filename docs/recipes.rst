@@ -499,3 +499,344 @@ like of the "dynamic ptask" function:
 
 When the consumer executes the "schedule_message" tasks, our new periodic task
 will be registered and added to the schedule.
+
+.. _recipe-multiple-queues:
+
+Multiple Queues
+---------------
+
+A huey application consists of a :py:class:`Huey` instance (which is a named
+queue), tasks registered with that instance, and a consumer process that runs
+them. One instance is one queue, served by one consumer -- and routing
+therefore happens at decoration time: whichever instance's ``task()``
+decorator you use is the queue the task runs on.
+
+Before reaching for a second queue, consider whether :ref:`task priorities
+<priority>` solve your problem. If the goal is simply "urgent tasks should
+jump the line", priorities give you that with one queue and no extra
+processes. Separate queues earn their keep when you want:
+
+* Different concurrency or worker-type per class of task -- e.g.
+  ``-k process`` for CPU-bound work and ``-k greenlet -w 50`` for IO-bound
+  work.
+* Isolation -- a flood of cheap tasks must never be able to starve your
+  critical tasks of workers.
+* Per-machine routing -- certain tasks should only run on certain hosts.
+
+To run multiple queues, declare multiple instances. A dedicated module keeps
+imports clean, and the instances can share a connection pool:
+
+.. code-block:: python
+
+    # myapp/queues.py
+    from huey import RedisHuey
+    from redis import ConnectionPool
+
+    pool = ConnectionPool(host='localhost', port=6379, max_connections=20)
+
+    emails = RedisHuey('myapp.emails', connection_pool=pool)
+    reports = RedisHuey('myapp.reports', connection_pool=pool)
+
+Tasks are routed by the decorator used to declare them:
+
+.. code-block:: python
+
+    # myapp/tasks.py
+    from myapp.queues import emails, reports
+
+    @emails.task(retries=2)
+    def send_email(to, subject, body):
+        ...
+
+    @reports.task()
+    def build_report(day):
+        ...
+
+    @reports.periodic_task(crontab(minute='0', hour='3'))
+    def nightly_rollup():
+        # Enqueued by the *reports* consumer's scheduler only.
+        ...
+
+Each queue gets its own consumer, tuned independently:
+
+.. code-block:: shell
+
+    huey_consumer.py myapp.queues.emails  -w 8 -k greenlet
+    huey_consumer.py myapp.queues.reports -w 2 -k process
+
+Running N consumers means supervising N processes. With systemd this is a
+single template unit, ``/etc/systemd/system/huey@.service``, where ``%i``
+expands to the attribute name in ``myapp.queues``:
+
+.. code-block:: ini
+
+    [Unit]
+    Description=huey consumer for %i
+
+    [Service]
+    WorkingDirectory=/srv/myapp
+    ExecStart=/srv/myapp/venv/bin/huey_consumer myapp.queues.%i -w 4
+    KillSignal=SIGINT
+    TimeoutStopSec=60
+    Restart=on-failure
+
+    [Install]
+    WantedBy=multi-user.target
+
+.. code-block:: shell
+
+    systemctl enable --now huey@emails huey@reports
+
+(See :ref:`deployment` for the full discussion of supervisor configuration.)
+
+This works with any storage backend. Since the sqlite storage namespaces all
+of its tables by queue name, multiple instances can even share a single
+database file:
+
+.. code-block:: python
+
+    emails = SqliteHuey('emails', filename='/var/lib/myapp/huey.db')
+    reports = SqliteHuey('reports', filename='/var/lib/myapp/huey.db')
+
+Pitfalls to be aware of:
+
+* Everything is per-instance: results, schedules, locks and revocations. A
+  :py:class:`Result` handle can only be read through the instance that
+  produced it, and revoking a task on one queue has no effect on another.
+* Periodic tasks belong to the instance that declared them, and are enqueued
+  by that instance's consumer. No coordination is needed between consumers of
+  *different* queues -- the ``-n`` / ``--no-periodic`` dance is only required
+  when running multiple consumers of the *same* queue
+  (:ref:`multiple-consumers`).
+* The queue ``name`` is the storage namespace. Two instances with the same
+  name on the same storage are the same queue; instances sharing a sqlite
+  file must use distinct names.
+* ``immediate`` mode is a per-instance setting -- in tests, remember to flip
+  it on every instance.
+
+Django users wanting multiple queues with the ``settings.HUEY``-style
+configuration should check out the third-party
+`django-huey <https://github.com/gaiacoop/django-huey>`_ package.
+
+.. _recipe-redis-sentinel:
+
+High-Availability Redis: Sentinel, Valkey and Cluster
+-----------------------------------------------------
+
+:py:class:`RedisHuey` accepts a pre-configured ``connection_pool``, which
+means huey works with `Redis Sentinel
+<https://redis.io/docs/latest/operate/oss_and_stack/management/sentinel/>`_
+out-of-the-box. The pool returned by ``master_for()`` re-discovers the
+current master automatically after a failover:
+
+.. code-block:: python
+
+    from redis.sentinel import Sentinel
+    from huey import RedisHuey
+
+    sentinel = Sentinel(
+        [('10.0.0.1', 26379), ('10.0.0.2', 26379), ('10.0.0.3', 26379)],
+        # IMPORTANT: the socket timeout must comfortably exceed the
+        # consumer's blocking read timeout (default 1s). If it does not,
+        # every blocking dequeue raises TimeoutError at the socket level
+        # and the consumer degrades to logging errors and polling.
+        socket_timeout=5.0)
+
+    huey = RedisHuey(
+        'my-app',
+        connection_pool=sentinel.master_for('my-master').connection_pool)
+
+Always use ``master_for()``. Huey reads *and* writes on every code-path, so a
+``slave_for()`` pool will fail with ``ReadOnlyError``. If your deployment
+requires authentication, pass ``password=`` for the data nodes and
+``sentinel_kwargs={'password': '...'}`` for the sentinels themselves.
+
+Django users configure this by assigning the instance directly (djhuey
+accepts a :py:class:`Huey` instance as well as a settings dict):
+
+.. code-block:: python
+
+    # settings.py
+    from redis.sentinel import Sentinel
+    from huey import RedisHuey
+
+    sentinel = Sentinel([('10.0.0.1', 26379), ...], socket_timeout=5.0)
+    HUEY = RedisHuey(
+        'my-app',
+        connection_pool=sentinel.master_for('my-master').connection_pool)
+
+**What happens during a failover.** The consumer is failover-tolerant by
+construction: when the master goes away, workers log the dequeue error and
+apply backoff, the scheduler does the same, and once Sentinel promotes a new
+master the pool reconnects to it automatically -- no restart required. Two
+caveats to understand: Redis replication is asynchronous, so writes that land
+in the failover window (enqueues, results) can be lost when the old master's
+unreplicated data is discarded; and a task that was dequeued but unfinished
+when its worker lost the connection is gone -- which is huey's normal
+at-most-once behavior on worker death, not something Sentinel introduces.
+High-availability Redis does not make individual tasks durable; pair it with
+idempotent task design and the :ref:`recipe-interrupted-tasks` recipe.
+
+**Valkey and Redict** are wire-compatible with Redis and work with
+:py:class:`RedisHuey` unchanged -- simply point it at your valkey host (the
+``redis-py`` client speaks to either). If you prefer the official
+``valkey-glide`` client, huey ships ``ValkeyGlideHuey`` in
+``huey.contrib.valkey_glide``.
+
+**Redis Cluster.** Huey's Redis usage is single-key (the one Lua script was
+made cluster-safe in 2.4.2), but :py:class:`RedisHuey` constructs a standard
+redis-py client and connection pool, and does not support redis-py's
+``RedisCluster`` client directly. For high availability, Sentinel is the
+supported topology.
+
+.. _recipe-flask:
+
+Using Huey with Flask
+---------------------
+
+Huey is framework-agnostic and needs no extension to work with Flask. There
+are only two questions to answer: where to declare the :py:class:`Huey`
+instance, and how to give tasks access to the application context.
+
+Declare the instance alongside (or before) the app, and import it from your
+tasks module:
+
+.. code-block:: python
+
+    # app.py
+    from flask import Flask
+    from huey import RedisHuey
+
+    app = Flask(__name__)
+    huey = RedisHuey('my-app')
+
+.. code-block:: python
+
+    # tasks.py
+    from app import app, huey
+
+    @huey.task()
+    def send_welcome_email(user_id):
+        # Tasks run in the consumer process, outside any request. If the
+        # task uses Flask extensions (database, mail, etc.), give it an
+        # application context:
+        with app.app_context():
+            user = User.query.get(user_id)
+            mail.send(make_welcome_message(user))
+
+Views simply call the task to enqueue it:
+
+.. code-block:: python
+
+    # views.py
+    from app import app
+    from tasks import send_welcome_email
+
+    @app.route('/signup/', methods=['POST'])
+    def signup():
+        user = create_user(request.form)
+        send_welcome_email(user.id)
+        return redirect(url_for('welcome'))
+
+If most of your tasks need the application context, wrap the boilerplate in
+a small decorator:
+
+.. code-block:: python
+
+    import functools
+
+    def flask_task(*task_args, **task_kwargs):
+        def decorator(fn):
+            @functools.wraps(fn)
+            def inner(*args, **kwargs):
+                with app.app_context():
+                    return fn(*args, **kwargs)
+            return huey.task(*task_args, **task_kwargs)(inner)
+        return decorator
+
+    @flask_task(retries=2)
+    def send_welcome_email(user_id):
+        ...
+
+The consumer is pointed at an entry module that imports the app and all of
+the tasks (see :ref:`imports`):
+
+.. code-block:: shell
+
+    huey_consumer.py main.huey -w 4
+
+A complete, runnable application is available in `examples/flask_ex
+<https://github.com/coleifer/huey/tree/master/examples/flask_ex>`_.
+
+.. _recipe-fastapi:
+
+Using Huey with FastAPI
+-----------------------
+
+Huey works well as the background task-queue for an async application like
+FastAPI: task functions themselves are regular (synchronous) functions
+executed by the consumer in a separate process, while the web app enqueues
+work and awaits results without blocking the event loop.
+
+Declare the instance and tasks in their own module, as usual:
+
+.. code-block:: python
+
+    # tasks.py
+    from huey import RedisHuey
+
+    huey = RedisHuey('my-app')
+
+    @huey.task()
+    def generate_report(user_id):
+        ...  # Heavy lifting happens in the consumer.
+        return report_data
+
+Enqueueing from an async request handler is fine as-is -- it is a single,
+fast storage write:
+
+.. code-block:: python
+
+    # api.py
+    from fastapi import FastAPI
+    from huey.contrib.asyncio import aget_result
+
+    from tasks import generate_report, huey
+
+    app = FastAPI()
+
+    @app.post('/report/{user_id}')
+    async def begin_report(user_id: int):
+        rh = generate_report(user_id)
+        return {'task_id': rh.id}
+
+    @app.get('/report/status/{task_id}')
+    async def report_status(task_id: str):
+        # Non-blocking, non-destructive read of the result store.
+        value = huey.result(task_id, preserve=True)
+        return {'ready': value is not None, 'value': value}
+
+To hold the request open until the task finishes, await the result with the
+:ref:`asyncio helpers <asyncio>` -- other requests continue to be served
+while this coroutine waits:
+
+.. code-block:: python
+
+    @app.post('/report/{user_id}/wait')
+    async def report_wait(user_id: int):
+        rh = generate_report(user_id)
+        value = await aget_result(rh)
+        return {'value': value}
+
+Notes:
+
+* The consumer runs separately, exactly as with any huey application:
+  ``huey_consumer.py tasks.huey -w 4``.
+* Task functions are plain ``def`` functions -- huey does not execute
+  ``async def`` tasks. IO-bound workloads can still get high concurrency in
+  the consumer via ``-k greenlet``.
+* If a task raised an exception, reading its result raises
+  :py:class:`TaskException` -- handle it in the status endpoint if your
+  tasks can fail.
+* ``huey.result(task_id)`` is destructive by default; ``preserve=True``
+  keeps the result so the status endpoint can be polled repeatedly.
