@@ -377,10 +377,6 @@ Supported functionality:
     importable from their module path - lambdas cannot be enqueued.
     Coroutine (``async def``) tasks are not supported.
 
-.. note::
-    The usual delivery semantics apply: tasks are delivered at-most-once, and
-    a task interrupted by an abrupt consumer shutdown will not be retried.
-
 
 DEBUG and Synchronous Execution
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
