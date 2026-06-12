@@ -6,8 +6,7 @@ import sys
 import threading
 import time
 
-from multiprocessing import Event as ProcessEvent
-from multiprocessing import Process
+import multiprocessing
 
 try:
     import gevent
@@ -249,11 +248,22 @@ class GreenletEnvironment(Environment):
 
 
 class ProcessEnvironment(Environment):
+    def __init__(self):
+        # Huey's worker/scheduler runnables are closures over live objects
+        # (sockets, locks, the Huey instance itself) and cannot be pickled,
+        # so the spawn/forkserver start methods cannot work.
+        try:
+            self.mp = multiprocessing.get_context('fork')
+        except ValueError:
+            raise ConfigurationError(
+                'The "process" worker type requires the fork() start-method '
+                'and cannot be used on this platform.')
+
     def get_stop_flag(self):
-        return ProcessEvent()
+        return self.mp.Event()
 
     def create_process(self, runnable, name):
-        p = Process(target=runnable, name=name)
+        p = self.mp.Process(target=runnable, name=name)
         p.daemon = True
         return p
 

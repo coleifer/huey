@@ -1,5 +1,7 @@
 import datetime
+import sys
 import time
+import unittest
 
 from huey.api import crontab
 from huey.consumer import Consumer
@@ -187,6 +189,16 @@ class TestConsumerConfig(BaseTestCase):
         self.assertEqual(consumer.max_delay, 4)
         self.assertEqual(consumer.scheduler_interval, 30)
         self.assertFalse(consumer._health_check)
+
+    @unittest.skipIf(sys.platform == 'win32', 'requires fork()')
+    def test_process_environment_uses_fork(self):
+        # The worker/scheduler runnables cannot be pickled, so the process
+        # environment must use the fork start-method regardless of the
+        # platform default (spawn on MacOS 3.8+, forkserver on Linux 3.14+).
+        cfg = ConsumerConfig(worker_type='process')
+        cfg.validate()
+        consumer = self.huey.create_consumer(**cfg.values)
+        self.assertEqual(consumer.environment.mp.get_start_method(), 'fork')
 
     def test_invalid_values(self):
         def assertInvalid(**kwargs):

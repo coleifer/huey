@@ -3,6 +3,12 @@ Changelog
 
 ## master
 
+* Use an explicit `fork` multiprocessing context for process workers, rather
+  than setting the global start-method from the consumer entry-points. Fixes
+  `-k process` on MacOS 3.8+ / Linux 3.14+ when the consumer is started via
+  the `huey_consumer` console-script or a programmatic
+  `create_consumer().run()`.
+
 [View commits](https://github.com/coleifer/huey/compare/3.0.3...master)
 
 ## 3.0.3
