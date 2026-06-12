@@ -1485,9 +1485,10 @@ In this example, ``alert_admin`` runs if ``aggregate`` raises an exception,
 *not* if a member fails.
 
 .. note::
-    Revoking a chord member will prevent it from running, which will prevent
-    the chord from ever completing. If you need to cancel a chord, revoke the
-    callback task instead.
+    Revoking a chord member will prevent it from running, but the chord will
+    still complete: the revoked member contributes ``None`` to the results
+    and the callback fires normally. If you need to cancel a chord, revoke
+    the callback task instead.
 
 .. note::
     Unlike regular tasks, chord sub-task results are stored unconditionally
