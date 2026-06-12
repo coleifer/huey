@@ -19,7 +19,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: pip deps
-        run: pip install setuptools gevent redis peewee ukt
+        run: pip install setuptools gevent redis peewee ukt django
       - name: runtests
         env:
           HUEY_TRAVIS: '1'
