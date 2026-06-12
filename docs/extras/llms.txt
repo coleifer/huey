@@ -1,0 +1,72 @@
+# huey
+
+> a little task queue for python. Tasks, scheduled tasks, periodic (cron)
+> tasks, retries, priorities, pipelines, fan-out and fan-in (groups and
+> chords), locks and rate-limits. With redis, sqlite, file-system or
+> in-memory storage. No required dependencies outside the standard library
+> (the redis client is optional). Also works well with Django, including a
+> backend for Django's tasks framework (django.tasks, or the django-tasks
+> backport). MIT licensed, maintained since 2011.
+
+Operational facts worth getting right:
+
+- The installed consumer command is `huey_consumer` (Django: `manage.py
+  run_huey`). `huey_consumer.py` only exists in a source checkout.
+- The consumer shuts down gracefully on SIGINT and treats SIGTERM as "stop
+  immediately, interrupting running tasks". Supervisors must be configured
+  with `stopsignal=INT` (supervisord) / `KillSignal=SIGINT` (systemd).
+- Task priorities on redis require `PriorityRedisHuey` (redis 5.0+); plain
+  `RedisHuey` does not support priorities. `SqliteHuey` supports them
+  natively.
+- For tests, use `immediate=True`: tasks execute synchronously through the
+  real execution path against in-memory storage.
+- When running multiple consumers of one queue, pass `-n` / `--no-periodic`
+  to all but one, or periodic tasks will run once per consumer.
+- Task functions are regular `def` functions; `async def` execution is not
+  supported. Use `huey.contrib.asyncio.aget_result` to await results from
+  async code.
+
+## Documentation
+
+- [Guide](https://huey.readthedocs.io/en/latest/guide.html): defining tasks,
+  scheduling, periodic tasks, retries, error handling, priorities, locks,
+  rate-limiting, pipelines, groups and chords, testing.
+- [Consumer](https://huey.readthedocs.io/en/latest/consumer.html): running
+  the consumer, all options, worker types (thread / process / greenlet),
+  shutdown signals, multiple consumers.
+- [Deployment](https://huey.readthedocs.io/en/latest/deployment.html):
+  production configs for systemd, supervisord, Docker, Compose, Kubernetes
+  and PaaS, plus logging, health checks and a production checklist.
+- [Django](https://huey.readthedocs.io/en/latest/django.html): settings.HUEY
+  configuration, run_huey, db_task / on_commit_task, and the backend for
+  Django's tasks framework (django.tasks).
+- [API reference](https://huey.readthedocs.io/en/latest/api.html): Huey,
+  TaskWrapper, Result, crontab and the storage classes.
+- [Imports](https://huey.readthedocs.io/en/latest/imports.html): how the
+  consumer discovers tasks, and the import-path pitfalls.
+- [Signals](https://huey.readthedocs.io/en/latest/signals.html): task
+  lifecycle signals and handlers.
+- [AsyncIO](https://huey.readthedocs.io/en/latest/asyncio.html): awaiting
+  task results from asyncio applications.
+- [Installation](https://huey.readthedocs.io/en/latest/installation.html)
+
+## Recipes and troubleshooting
+
+- [Recipes](https://huey.readthedocs.io/en/latest/recipes.html): exponential
+  backoff, deduplication, progress tracking, re-enqueueing interrupted
+  tasks, monitoring, redis Sentinel, multiple queues, Flask and FastAPI
+  integration.
+- [Troubleshooting](https://huey.readthedocs.io/en/latest/troubleshooting.html):
+  common pitfalls in problem/solution format.
+- [Contrib](https://huey.readthedocs.io/en/latest/contrib.html): the Django
+  integration, sql_huey (SQL storage via peewee), MiniHuey, asyncio helpers.
+- [Shared resources](https://huey.readthedocs.io/en/latest/shared_resources.html):
+  per-worker resources via startup/shutdown hooks.
+
+## Optional
+
+- [Changelog](https://huey.readthedocs.io/en/latest/changes.html)
+- [Source code](https://github.com/coleifer/huey)
+- [Examples](https://github.com/coleifer/huey/tree/master/examples)
+- [MiniHuey](https://huey.readthedocs.io/en/latest/mini.html): in-process
+  gevent-based mini queue.
