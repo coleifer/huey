@@ -3,11 +3,15 @@ Changelog
 
 ## master
 
+[View commits](https://github.com/coleifer/huey/compare/3.0.3...master)
+
+## 3.0.3
+
 * Add a Django 6.0 task backend - pretty much works the same way the normal
   Django integration works (manage.py run_huey), but using Django's canonical
   APIs and decorator. Docs [here](https://huey.readthedocs.io/en/latest/django.html#django-task).
 
-[View commits](https://github.com/coleifer/huey/compare/3.0.2...master)
+[View commits](https://github.com/coleifer/huey/compare/3.0.2...3.0.3)
 
 ## 3.0.2
 
