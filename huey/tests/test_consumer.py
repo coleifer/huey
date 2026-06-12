@@ -1,8 +1,12 @@
 import datetime
+import os
+import shutil
 import sys
+import tempfile
 import time
 import unittest
 
+from huey import SqliteHuey
 from huey.api import crontab
 from huey.consumer import Consumer
 from huey.consumer import Scheduler
@@ -209,3 +213,33 @@ class TestConsumerConfig(BaseTestCase):
         assertInvalid(scheduler_interval=90)
         assertInvalid(scheduler_interval=7)
         assertInvalid(scheduler_interval=45)
+
+
+class TestProcessWorkers(unittest.TestCase):
+    @unittest.skipIf(sys.platform == 'win32', 'requires fork()')
+    @slow_test()
+    def test_process_worker_integration(self):
+        # End-to-end check that tasks execute in forked worker processes,
+        # regardless of the platform's default start-method. Memory storage
+        # cannot be used here (the forked workers would operate on copies),
+        # so run against a sqlite database shared by parent and children.
+        tmp_dir = tempfile.mkdtemp()
+        huey = SqliteHuey('proctest', filename=os.path.join(tmp_dir, 'h.db'))
+
+        @huey.task()
+        def add_pid(a, b):
+            return (a + b, os.getpid())
+
+        consumer = huey.create_consumer(workers=2, worker_type='process')
+        consumer.start()
+        try:
+            r1, r2 = add_pid(1, 2), add_pid(3, 4)
+            val1, pid1 = r1.get(blocking=True, timeout=10)
+            val2, pid2 = r2.get(blocking=True, timeout=10)
+            self.assertEqual((val1, val2), (3, 7))
+            # The tasks ran in worker processes, not in this process.
+            self.assertNotEqual(pid1, os.getpid())
+            self.assertNotEqual(pid2, os.getpid())
+        finally:
+            consumer.stop(graceful=True)
+            shutil.rmtree(tmp_dir, ignore_errors=True)
