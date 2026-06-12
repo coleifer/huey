@@ -10,6 +10,7 @@ integration provides:
 2. Running the consumer as a Django management command.
 3. Auto-discovery of ``tasks.py`` modules to simplify task importing.
 4. Properly manage database connections.
+5. A backend for the django.tasks framework (Django 6.0 and newer).
 
 Supported Django versions are those officially supported at https://www.djangoproject.com/download/#supported-versions
 
@@ -303,6 +304,80 @@ identifier names:
 
     Enqueue the decorated function for execution after the transaction commits.
     If no transaction is active, task will be enqueued immediately.
+
+
+Django task framework (django.tasks)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Django 6.0 includes `django.tasks
+<https://docs.djangoproject.com/en/stable/topics/tasks/>`_, a standard
+interface for defining and enqueueing background tasks. Django does not ship
+a production backend for actually running them - huey provides one. Tasks
+declared with the ``django.tasks.task`` decorator are stored and executed by
+the regular huey consumer, side-by-side with your native huey tasks.
+
+To use it, declare the backend in ``settings.TASKS``. The backend uses the
+shared huey instance configured by ``settings.HUEY``, as described above:
+
+.. code-block:: python
+
+    # settings.py
+    TASKS = {
+        'default': {
+            'BACKEND': 'huey.contrib.djhuey.tasks_backend.HueyBackend',
+        },
+    }
+
+Tasks are declared and enqueued using the standard django.tasks APIs - no
+huey imports are necessary:
+
+.. code-block:: python
+
+    from django.tasks import task
+
+    @task
+    def send_welcome_email(user_id):
+        ...
+
+    # In a view, etc:
+    result = send_welcome_email.enqueue(user.id)
+    result.id      # Unique identifier, usable with get_result().
+    result.status  # READY -> RUNNING -> SUCCESSFUL or FAILED.
+
+    # Later, check on it:
+    result.refresh()
+    if result.is_finished:
+        print(result.return_value)
+
+The consumer is run exactly as before - ``manage.py run_huey`` - and executes
+django.tasks tasks and native huey tasks side-by-side.
+
+Supported functionality:
+
+* ``run_after`` is mapped onto huey's ``eta`` and handled by the scheduler.
+* ``priority`` is supported when the storage engine supports priorities, e.g.
+  ``SqliteHuey`` or ``PriorityRedisHuey``. With plain ``RedisHuey``, declaring
+  a task with a non-zero priority raises ``InvalidTask``.
+* Results: ``get_result()``, ``refresh()``, return values and errors (with
+  tracebacks) are fully supported. Task status is tracked in the huey result
+  store, so ``RedisExpireHuey`` will expire result data automatically.
+* Database connections are closed after each task, equivalent to
+  :py:func:`db_task`.
+* Transactional enqueueing: add ``'ENQUEUE_ON_COMMIT': True`` to the backend
+  declaration to defer enqueueing until the active transaction commits
+  (equivalent to :py:func:`on_commit_task`).
+* Immediate mode applies as usual: when ``DEBUG=True``, tasks execute
+  synchronously, through the same code-path the consumer uses.
+
+.. note::
+    The django.tasks framework requires task functions to be defined at the
+    module level, and the huey backend additionally requires that they are
+    importable from their module path - lambdas cannot be enqueued.
+    Coroutine (``async def``) tasks are not supported.
+
+.. note::
+    The usual delivery semantics apply: tasks are delivered at-most-once, and
+    a task interrupted by an abrupt consumer shutdown will not be retried.
 
 
 DEBUG and Synchronous Execution
