@@ -10,7 +10,7 @@ integration provides:
 2. Running the consumer as a Django management command.
 3. Auto-discovery of ``tasks.py`` modules to simplify task importing.
 4. Properly manage database connections.
-5. A backend for the django.tasks framework (Django 6.0 and newer).
+5. A :ref:`backend <django-task>` for the ``django.tasks`` framework (Django 6.0 and newer).
 
 Supported Django versions are those officially supported at https://www.djangoproject.com/download/#supported-versions
 
@@ -306,8 +306,10 @@ identifier names:
     If no transaction is active, task will be enqueued immediately.
 
 
-Django task framework (django.tasks)
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.. _django-task:
+
+Django task framework
+---------------------
 
 Django 6.0 includes `django.tasks
 <https://docs.djangoproject.com/en/stable/topics/tasks/>`_, a standard

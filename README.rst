@@ -9,6 +9,7 @@ huey is:
 * clean and simple API
 * redis (or valkey/redict), sqlite, file-system, or in-memory storage
 * `example code <https://github.com/coleifer/huey/tree/master/examples/>`_.
+* `django <https://huey.readthedocs.io/en/latest/django.html>` (native or via django.tasks)
 * `read the documentation <https://huey.readthedocs.io/>`_.
 
 huey supports:

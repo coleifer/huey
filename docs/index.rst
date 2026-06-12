@@ -16,6 +16,7 @@ huey is:
 * written in python
 * clean and simple API
 * redis (or valkey/redict), sqlite, file-system, or in-memory storage
+* :ref:`django <django>` (native or via django.tasks)
 * `example code <https://github.com/coleifer/huey/tree/master/examples/>`_.
 
 huey supports:
