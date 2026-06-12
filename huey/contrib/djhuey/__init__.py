@@ -156,6 +156,16 @@ def db_periodic_task(*args, **kwargs):
     return decorator
 
 
+def _register_tasks_backend():
+    # When the django.tasks framework is available (Django 6.0+), import the
+    # backend module so its shim task is registered with the consumer.
+    try:
+        import django.tasks
+    except ImportError:
+        return
+    from huey.contrib.djhuey import tasks_backend  # noqa: F401
+
+
 def on_commit_task(*args, **kwargs):
     """
     This task will register a post-commit callback to enqueue the task. A
@@ -188,3 +198,6 @@ def on_commit_task(*args, **kwargs):
         inner.call_local = fn
         return inner
     return decorator
+
+
+_register_tasks_backend()
