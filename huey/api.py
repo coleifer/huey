@@ -30,6 +30,7 @@ from huey.serializer import Serializer
 from huey.storage import BlackHoleStorage
 from huey.storage import FileStorage
 from huey.storage import MemoryStorage
+from huey.storage import PostgresStorage
 from huey.storage import PriorityRedisExpireStorage
 from huey.storage import PriorityRedisStorage
 from huey.storage import RedisExpireStorage
@@ -1454,6 +1455,9 @@ class MemoryHuey(Huey):
 
 class SqliteHuey(Huey):
     storage_class = SqliteStorage
+
+class PostgresHuey(Huey):
+    storage_class = PostgresStorage
 
 class RedisHuey(Huey):
     storage_class = RedisStorage
