@@ -10,8 +10,9 @@ huey is:
 
 huey has:
 
-* support for redis (or valkey/redict), sqlite, file-system, or in-memory storage
-* zero dependencies (``redis-py`` required to use redis-like brokers).
+* support for redis (or valkey/redict), postgres, sqlite, file-system, or in-memory storage
+* zero dependencies (``redis-py`` required to use redis-like brokers,
+  ``psycopg`` for postgres).
 * `example code <https://github.com/coleifer/huey/tree/master/examples/>`_.
 * `django <https://huey.readthedocs.io/en/latest/django.html>`_ integration (native or via django.tasks)
 * `documentation <https://huey.readthedocs.io/>`_.
@@ -115,7 +116,8 @@ Although Huey was designed with Redis in mind, the storage system implements a
 simple API and many other tools could be used instead of Redis if that's your
 preference.
 
-Huey comes with builtin support for Redis, Sqlite and in-memory storage.
+Huey comes with builtin support for Redis, Postgres, Sqlite and in-memory
+storage.
 
 Documentation
 ----------------

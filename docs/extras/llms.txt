@@ -2,9 +2,9 @@
 
 > a little task queue for python. Tasks, scheduled tasks, periodic (cron)
 > tasks, retries, priorities, pipelines, fan-out and fan-in (groups and
-> chords), locks and rate-limits. With redis, sqlite, file-system or
-> in-memory storage. No required dependencies outside the standard library
-> (the redis client is optional). Also works well with Django, including a
+> chords), locks and rate-limits. With redis, postgres, sqlite, file-system
+> or in-memory storage. No required dependencies outside the standard library
+> (the redis and postgres clients are optional). Also works well with Django, including a
 > backend for Django's tasks framework (django.tasks, or the django-tasks
 > backport). MIT licensed, maintained since 2011.
 

@@ -16,6 +16,13 @@ is required to utilize Redis for your task storage:
 
     pip install redis
 
+Similarly, `psycopg <https://www.psycopg.org/>`_ (version 3.2 or newer) is
+required to use Postgres for your task storage:
+
+.. code-block:: shell
+
+    pip install psycopg
+
 If your tasks are IO-bound rather than CPU-bound, you might consider using the
 ``greenlet`` worker type. To use the greenlet workers, you need to
 install ``gevent``:

@@ -3,6 +3,10 @@ Changelog
 
 ## master
 
+* Add first-class Postgres support: `PostgresHuey`. Workers use LISTEN/NOTIFY
+  when a task is enqueued, giving Redis-like dequeue latency without polling,
+  and dequeues use `select ... for update skip locked` so any number of
+  consumers can share one database (requires psycopg 3.2+).
 * The django.tasks backend is now also compatible with the `django-tasks`
   backport package, extending support to pre-6.0 Django.
 * Use an explicit `fork` multiprocessing context for process workers, rather

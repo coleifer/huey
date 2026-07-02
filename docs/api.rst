@@ -138,6 +138,44 @@ Implementations of :py:class:`Huey` which handle task and result persistence.
 
     .. seealso:: :py:class:`SqliteStorage`
 
+.. py:class:: PostgresHuey
+
+    :py:class:`Huey` that utilizes PostgreSQL for queue, schedule and result
+    storage. Requires `psycopg <https://www.psycopg.org/>`_ 3.2 or newer
+    (``pip install huey[postgres]``).
+
+    Workers use ``LISTEN``/``NOTIFY`` for low-latency dequeue without
+    polling. The worker polls once before waiting and polls again when the
+    wait times out, so a missed notification delays a task by at most
+    ``read_timeout`` seconds and can never lose one.
+
+    Commonly-used keyword arguments for storage configuration:
+
+    :param str dsn: connection string or URL, e.g.
+        ``postgresql://user:pass@host:5432/dbname``. Alternatively, discrete
+        connection parameters (``host``, ``port``, ``dbname``, ``user``,
+        ``password``, etc.) may be given as additional keyword arguments,
+        which are passed directly to ``psycopg.connect()``.
+    :param connection: zero-argument callable returning a new ``psycopg``
+        connection, to integrate with the application's own connection
+        machinery. Huey manages the lifetime of the connections it obtains.
+    :param bool blocking: wake workers using LISTEN/NOTIFY (default true).
+        Set to false to fall back to polling, e.g. when connecting through
+        PgBouncer in transaction-pooling mode, which breaks LISTEN.
+    :param read_timeout: maximum seconds a blocking dequeue waits before the
+        worker loops and polls again. Default is 1 second.
+    :param str table_prefix: prefix for the four tables huey creates
+        (``<prefix>_task``, ``<prefix>_schedule``, ``<prefix>_kv``,
+        ``<prefix>_counter``). Default is ``huey``. Tables are created
+        automatically if they do not exist.
+
+    Each worker thread or process maintains one additional connection used
+    for LISTEN, so a consumer with N workers holds N+1 connections.
+
+    PostgresHuey fully supports task priorities.
+
+    .. seealso:: :py:class:`PostgresStorage`
+
 .. py:class:: MemoryHuey
 
     :py:class:`Huey` that uses in-memory storage. Only should be used when
@@ -2248,6 +2286,32 @@ Huey comes with several built-in storage implementations:
         were enqueued.
     :param kwargs: Additional keyword arguments passed to the ``sqlite3``
         connection constructor.
+
+
+.. py:class:: PostgresStorage(name='huey', dsn=None, connection=None, blocking=True, read_timeout=1, table_prefix='huey', **connection_params)
+
+    :param str dsn: connection string or URL for ``psycopg.connect()``.
+    :param connection: zero-argument callable returning a new ``psycopg``
+        connection.
+    :param bool blocking: use LISTEN/NOTIFY to block on dequeue rather than
+        polling. Default is true.
+    :param read_timeout: timeout to use when performing a blocking dequeue,
+        default is 1 second.
+    :param str table_prefix: prefix for huey's tables, default ``huey``.
+    :param connection_params: additional keyword arguments passed directly to
+        ``psycopg.connect()``.
+
+    Requires psycopg 3.2 or newer. Dequeues use ``select ... for update skip locked``,
+    so any number of consumers can safely share one database.
+
+    .. note::
+        PgBouncer in transaction-pooling mode does not support LISTEN. Either
+        use session pooling or a direct connection for huey, or specify
+        ``blocking=False`` to use polling instead.
+
+    .. note::
+        When using the greenlet worker model, install psycopg in pure-Python
+        mode (the C extension bypasses the sockets patched by gevent).
 
 
 .. py:class:: FileStorage(name, path, levels=2, use_thread_lock=False)
