@@ -6,6 +6,7 @@ from huey.api import BlackHoleHuey
 from huey.api import Huey
 from huey.api import FileHuey
 from huey.api import MemoryHuey
+from huey.api import PostgresHuey
 from huey.api import PriorityRedisExpireHuey
 from huey.api import PriorityRedisHuey
 from huey.api import RedisExpireHuey
