@@ -1082,12 +1082,11 @@ class PostgresStorage(BaseSqlStorage):
         self._inherited = []
         self._conn_pid = None
 
-        # Each worker thread gets its own LISTEN connection on first dequeue.
-        # Tracked per-thread so connections belonging to dead threads can be
-        # reaped, e.g. when workers are recycled by max-tasks or restarts.
+        # Each worker thread gets its own LISTEN connection on first
+        # dequeue. A dead thread's connection is released by GC: psycopg
+        # only sends the protocol Terminate from the creating process, so
+        # this is safe on both sides of a fork.
         self._listen_local = threading.local()
-        self._listen_conns = {}  # thread -> (pid, conn)
-        self._listen_lock = threading.Lock()
 
         super(PostgresStorage, self).__init__(name)
 
@@ -1121,23 +1120,15 @@ class PostgresStorage(BaseSqlStorage):
             pass
 
     def close(self):
-        with self._listen_lock:
-            for pid, conn in self._listen_conns.values():
-                if pid == os.getpid():
-                    self._close_quiet(conn)
-                else:
-                    self._inherited.append(conn)
-            self._listen_conns.clear()
-        return super(PostgresStorage, self).close()
-
-    def _reap_listen_conns(self):
-        # Called with _listen_lock held.
-        for thread in [t for t in self._listen_conns if not t.is_alive()]:
-            pid, conn = self._listen_conns.pop(thread)
-            if pid == os.getpid():
+        local = self._listen_local
+        conn = getattr(local, 'conn', None)
+        if conn is not None:
+            if local.pid == os.getpid():
                 self._close_quiet(conn)
             else:
                 self._inherited.append(conn)
+            local.conn = None
+        return super(PostgresStorage, self).close()
 
     def _listen_conn(self):
         local = self._listen_local
@@ -1148,17 +1139,11 @@ class PostgresStorage(BaseSqlStorage):
                 self._inherited.append(conn)
             else:
                 self._close_quiet(conn)
-            with self._listen_lock:
-                self._listen_conns.pop(threading.current_thread(), None)
             conn = local.conn = None
         if conn is None:
             conn = self._connect()
             conn.execute('listen "%s"' % self.channel.replace('"', '""'))
             local.conn, local.pid = conn, os.getpid()
-            with self._listen_lock:
-                self._reap_listen_conns()
-                self._listen_conns[threading.current_thread()] = \
-                        (os.getpid(), conn)
         return conn
 
     def enqueue(self, data, priority=None):

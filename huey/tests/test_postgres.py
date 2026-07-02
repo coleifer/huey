@@ -1,7 +1,9 @@
+import gc
 import os
 import threading
 import time
 import unittest
+import weakref
 
 try:
     import psycopg
@@ -109,21 +111,21 @@ class TestPostgresStorage(StorageTests, BaseTestCase):
         s.flush_all()
         s.close()
 
-    def test_dead_thread_listen_conns_reaped(self):
-        def dq(): self.s.dequeue()
+    def test_dead_thread_listen_conn_released(self):
+        refs = []
 
-        conns = []
+        def dq():
+            self.s.dequeue()
+            refs.append(weakref.ref(self.s._listen_local.conn))
+
         for _ in range(3):
             t = threading.Thread(target=dq)
             t.start()
             t.join()
-            with self.s._listen_lock:
-                conns.extend(c for _, c in self.s._listen_conns.values()
-                             if c not in conns)
 
-        self.assertEqual(len(conns), 3)
-        self.assertEqual(len(self.s._listen_conns), 1)
-        self.assertEqual(sum(1 for c in conns if not c.closed), 1)
+        gc.collect()
+        self.assertEqual(len(refs), 3)
+        self.assertTrue(all(r() is None for r in refs))
 
     @unittest.skipIf(not hasattr(os, 'fork'), 'requires os.fork()')
     def test_fork_reconnect(self):
