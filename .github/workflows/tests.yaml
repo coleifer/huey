@@ -9,6 +9,19 @@ jobs:
         image: redis
         ports:
           - 6379:6379
+      postgres:
+        image: postgres
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: huey_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     strategy:
       fail-fast: false
       matrix:
@@ -19,8 +32,9 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: pip deps
-        run: pip install setuptools gevent redis peewee ukt django
+        run: pip install setuptools gevent redis peewee psycopg ukt django
       - name: runtests
         env:
           HUEY_TRAVIS: '1'
+          HUEY_PG_DSN: postgresql://postgres:postgres@localhost:5432/huey_test
         run: python runtests.py -v 2 -s
