@@ -1045,7 +1045,14 @@ class PostgresStorage(BaseSqlStorage):
         self.table_schedule = prefix + '_schedule'
         self.table_task = prefix + '_task'
         self.table_counter = prefix + '_counter'
-        self.channel = '%s.q.%s' % (prefix, name)
+
+        # Postgres channel names longer than 63 bytes raise "channel name
+        # too long" from pg_notify(), which would break every enqueue.
+        channel = '%s.q.%s' % (prefix, name)
+        if len(channel.encode('utf-8')) > 63:
+            digest = hashlib.md5(channel.encode('utf-8')).hexdigest()
+            channel = 'huey.q.%s' % digest
+        self.channel = channel
 
         self.ddl = [q.format(p=prefix) for q in (
             'create table if not exists {p}_kv ('
@@ -1076,8 +1083,10 @@ class PostgresStorage(BaseSqlStorage):
         self._conn_pid = None
 
         # Each worker thread gets its own LISTEN connection on first dequeue.
+        # Tracked per-thread so connections belonging to dead threads can be
+        # reaped, e.g. when workers are recycled by max-tasks or restarts.
         self._listen_local = threading.local()
-        self._listen_conns = set()
+        self._listen_conns = {}  # thread -> (pid, conn)
         self._listen_lock = threading.Lock()
 
         super(PostgresStorage, self).__init__(name)
@@ -1113,10 +1122,22 @@ class PostgresStorage(BaseSqlStorage):
 
     def close(self):
         with self._listen_lock:
-            for conn in self._listen_conns:
-                self._close_quiet(conn)
+            for pid, conn in self._listen_conns.values():
+                if pid == os.getpid():
+                    self._close_quiet(conn)
+                else:
+                    self._inherited.append(conn)
             self._listen_conns.clear()
         return super(PostgresStorage, self).close()
+
+    def _reap_listen_conns(self):
+        # Called with _listen_lock held.
+        for thread in [t for t in self._listen_conns if not t.is_alive()]:
+            pid, conn = self._listen_conns.pop(thread)
+            if pid == os.getpid():
+                self._close_quiet(conn)
+            else:
+                self._inherited.append(conn)
 
     def _listen_conn(self):
         local = self._listen_local
@@ -1128,14 +1149,16 @@ class PostgresStorage(BaseSqlStorage):
             else:
                 self._close_quiet(conn)
             with self._listen_lock:
-                self._listen_conns.discard(conn)
+                self._listen_conns.pop(threading.current_thread(), None)
             conn = local.conn = None
         if conn is None:
             conn = self._connect()
             conn.execute('listen "%s"' % self.channel.replace('"', '""'))
             local.conn, local.pid = conn, os.getpid()
             with self._listen_lock:
-                self._listen_conns.add(conn)
+                self._reap_listen_conns()
+                self._listen_conns[threading.current_thread()] = \
+                        (os.getpid(), conn)
         return conn
 
     def enqueue(self, data, priority=None):

@@ -99,6 +99,32 @@ class TestPostgresStorage(StorageTests, BaseTestCase):
         for huey in hueys:
             huey.storage.close()
 
+    def test_long_queue_name(self):
+        huey = PostgresHuey('q' * 80, dsn=PG_DSN, utc=False, read_timeout=0.1)
+        s = huey.storage
+        self.assertTrue(len(s.channel.encode('utf-8')) <= 63)
+        s.enqueue(b'data')
+        self.assertEqual(s.dequeue(), b'data')
+        self.assertTrue(s.dequeue() is None)  # Exercise the listen path.
+        s.flush_all()
+        s.close()
+
+    def test_dead_thread_listen_conns_reaped(self):
+        def dq(): self.s.dequeue()
+
+        conns = []
+        for _ in range(3):
+            t = threading.Thread(target=dq)
+            t.start()
+            t.join()
+            with self.s._listen_lock:
+                conns.extend(c for _, c in self.s._listen_conns.values()
+                             if c not in conns)
+
+        self.assertEqual(len(conns), 3)
+        self.assertEqual(len(self.s._listen_conns), 1)
+        self.assertEqual(sum(1 for c in conns if not c.closed), 1)
+
     @unittest.skipIf(not hasattr(os, 'fork'), 'requires os.fork()')
     def test_fork_reconnect(self):
         self.assertEqual(self.s.queue_size(), 0)  # Open parent connection.
