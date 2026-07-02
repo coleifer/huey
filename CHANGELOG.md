@@ -3,6 +3,10 @@ Changelog
 
 ## master
 
+[View commits](https://github.com/coleifer/huey/compare/3.1.0...master)
+
+## 3.1.0
+
 * Add first-class Postgres support: `PostgresHuey`. Workers use LISTEN/NOTIFY
   when a task is enqueued, giving Redis-like dequeue latency without polling,
   and dequeues use `select ... for update skip locked` so any number of
@@ -15,7 +19,7 @@ Changelog
   the `huey_consumer` console-script or a programmatic
   `create_consumer().run()`.
 
-[View commits](https://github.com/coleifer/huey/compare/3.0.3...master)
+[View commits](https://github.com/coleifer/huey/compare/3.0.3...3.1.0)
 
 ## 3.0.3
 
