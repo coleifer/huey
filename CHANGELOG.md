@@ -3,12 +3,16 @@ Changelog
 
 ## master
 
+[View commits](https://github.com/coleifer/huey/compare/3.1.1...master)
+
+## 3.1.1
+
 * Ensure we use a safe name for long postgres queue names. PG has a 63 byte
   limit on the channel name.
 * Ensure recycled worker threads no longer leak their LISTEN connections
   w/Postgres.
 
-[View commits](https://github.com/coleifer/huey/compare/3.1.0...master)
+[View commits](https://github.com/coleifer/huey/compare/3.1.0...3.1.1)
 
 ## 3.1.0
 
