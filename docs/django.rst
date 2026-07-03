@@ -93,6 +93,8 @@ The following ``huey_class`` implementations are provided out-of-the-box:
   keys automatically if results are not read and supports priority.
 * ``huey.SqliteHuey`` - uses Sqlite, full support for task priorities. Accepts
   a ``filename`` parameter for the path to the database file.
+* ``huey.PostgresHuey`` - uses Postgres, full support for task priorities. See
+  :ref:`django-postgres` for connection and schema configuration.
 * ``huey.FileHuey`` - uses filesystem for storage. Accepts a ``path`` parameter
   for the base storage directory.
 
@@ -108,6 +110,75 @@ shown how you can create a connection pool:
 
     pool = ConnectionPool(host='my.redis.host', port=6379, max_connections=20)
     HUEY = RedisHuey('my-app', connection_pool=pool)
+
+.. _django-postgres:
+
+Using Postgres for storage
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+:py:class:`PostgresHuey` lets you use your existing Postgres database as the
+task queue, schedule and result store (``pip install huey[postgres]``). Two
+integration points are worth calling out for Django users.
+
+Schema creation
+"""""""""""""""
+
+By default the storage backend issues ``create table if not exists`` for its
+tables when it is instantiated. Because ``settings.HUEY`` is evaluated at import
+time, that means every process importing ``huey.contrib.djhuey`` -- including
+your web workers -- will connect and attempt to create the tables, which
+requires the ``CREATE`` privilege and clashes with a migrations-managed schema.
+
+Pass ``create_tables=False`` to disable the automatic DDL and create the tables
+once, explicitly, using the ``create_huey_tables`` management command:
+
+.. code-block:: python
+
+    # settings.py
+    HUEY = {
+        'huey_class': 'huey.PostgresHuey',
+        'create_tables': False,
+        'connection': {'dsn': 'postgresql:///my_db'},
+    }
+
+.. code-block:: shell
+
+    ./manage.py create_huey_tables
+
+Reusing the Django database configuration
+"""""""""""""""""""""""""""""""""""""""""
+
+Rather than duplicating your credentials in ``settings.HUEY``, you can point the
+storage at the same database Django uses by passing a ``connection`` callable.
+The callable must return a **new**, dedicated ``psycopg`` connection -- do not
+hand back ``django.db.connection``. Huey enables autocommit on the connection
+and holds a long-lived one open for ``LISTEN``, neither of which is compatible
+with Django's per-request connection or its transaction handling.
+
+.. code-block:: python
+
+    # settings.py
+    import psycopg
+    from django.conf import settings
+
+    def huey_connection():
+        db = settings.DATABASES['default']
+        return psycopg.connect(
+            dbname=db['NAME'],
+            user=db.get('USER') or None,
+            password=db.get('PASSWORD') or None,
+            host=db.get('HOST') or None,
+            port=db.get('PORT') or None)
+
+    HUEY = {
+        'huey_class': 'huey.PostgresHuey',
+        'create_tables': False,
+        'connection': {'connection': huey_connection},
+    }
+
+To ensure a task is not enqueued until the surrounding transaction commits (for
+example, when it references a row created in the same view), use
+:py:func:`on_commit_task` as described in :ref:`django-transactions`.
 
 Running the Consumer
 ^^^^^^^^^^^^^^^^^^^^
@@ -238,6 +309,8 @@ automatically close the connection for you.
     @db_periodic_task(crontab(minute='*/5'))
     def every_five_mins():
         # This is a periodic task that executes queries.
+
+.. _django-transactions:
 
 Enqueueing After Commit
 ^^^^^^^^^^^^^^^^^^^^^^^

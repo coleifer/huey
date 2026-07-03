@@ -111,6 +111,28 @@ class TestPostgresStorage(StorageTests, BaseTestCase):
         s.flush_all()
         s.close()
 
+    def test_create_tables(self):
+        prefix = 'huey_ct_test'
+        admin = psycopg.connect(PG_DSN, autocommit=True)
+        def tables():
+            cur = admin.execute('select tablename from pg_tables where '
+                                'tablename like %s', (prefix + '%',))
+            return sorted(r[0] for r in cur.fetchall())
+        for tbl in tables():
+            admin.execute('drop table if exists %s' % tbl)
+        try:
+            huey = PostgresHuey('ct', dsn=PG_DSN, table_prefix=prefix,
+                                create_tables=False, read_timeout=0.1)
+            self.assertEqual(tables(), [])  # Construction issued no DDL.
+
+            huey.storage.initialize_schema()
+            self.assertEqual(len(tables()), 4)
+            huey.storage.close()
+        finally:
+            for tbl in tables():
+                admin.execute('drop table if exists %s' % tbl)
+            admin.close()
+
     def test_dead_thread_listen_conn_released(self):
         refs = []
 

@@ -2288,7 +2288,7 @@ Huey comes with several built-in storage implementations:
         connection constructor.
 
 
-.. py:class:: PostgresStorage(name='huey', dsn=None, connection=None, blocking=True, read_timeout=1, table_prefix='huey', **connection_params)
+.. py:class:: PostgresStorage(name='huey', dsn=None, connection=None, blocking=True, read_timeout=1, table_prefix='huey', create_tables=True, **connection_params)
 
     :param str dsn: connection string or URL for ``psycopg.connect()``.
     :param connection: zero-argument callable returning a new ``psycopg``
@@ -2298,6 +2298,10 @@ Huey comes with several built-in storage implementations:
     :param read_timeout: timeout to use when performing a blocking dequeue,
         default is 1 second.
     :param str table_prefix: prefix for huey's tables, default ``huey``.
+    :param bool create_tables: issue ``create table if not exists`` for huey's
+        tables when the storage is instantiated. Default is true. Set to false
+        to manage the schema yourself, e.g. via Django migrations or the
+        ``create_huey_tables`` management command.
     :param connection_params: additional keyword arguments passed directly to
         ``psycopg.connect()``.
 

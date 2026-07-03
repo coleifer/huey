@@ -761,10 +761,12 @@ class BaseSqlStorage(BaseStorage):
     ddl = []
 
     def __init__(self, *args, **kwargs):
+        create_tables = kwargs.pop('create_tables', True)
         super(BaseSqlStorage, self).__init__(*args, **kwargs)
         self.lock = threading.Lock()
         self._conn = None
-        self.initialize_schema()
+        if create_tables:
+            self.initialize_schema()
 
     def close(self):
         if self._conn is None:
@@ -1028,7 +1030,8 @@ class SqliteStorage(BaseSqlStorage):
 
 class PostgresStorage(BaseSqlStorage):
     def __init__(self, name='huey', dsn=None, connection=None, blocking=True,
-                 read_timeout=1, table_prefix='huey', **connection_params):
+                 read_timeout=1, table_prefix='huey', create_tables=True,
+                 **connection_params):
         if psycopg is None:
             raise ConfigurationError('"psycopg" (version 3.2 or newer) not '
                                      'found, cannot use Postgres storage '
@@ -1088,7 +1091,7 @@ class PostgresStorage(BaseSqlStorage):
         # this is safe on both sides of a fork.
         self._listen_local = threading.local()
 
-        super(PostgresStorage, self).__init__(name)
+        super(PostgresStorage, self).__init__(name, create_tables=create_tables)
 
     def _connect(self):
         if self.connection is not None:

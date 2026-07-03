@@ -3,6 +3,13 @@ Changelog
 
 ## master
 
+* Add `create_tables` option to the SQL storage backends (default true). Pass
+  `create_tables=False` to skip the automatic `create table if not exists` at
+  init, e.g. to manage huey's schema via Django migrations rather than have
+  every web worker attempt DDL on import.
+* Add a `create_huey_tables` Django management command to create the tables when
+  `create_tables=False`.
+
 [View commits](https://github.com/coleifer/huey/compare/3.1.1...master)
 
 ## 3.1.1
