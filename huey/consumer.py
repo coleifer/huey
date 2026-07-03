@@ -411,7 +411,7 @@ class Consumer(object):
                 pass
             except WorkerRecycle:
                 self._logger.info('Process %s restarting (max tasks).', name)
-            except:
+            except Exception:
                 self._logger.exception('Process %s died!', name)
             finally:
                 process.shutdown()
@@ -515,7 +515,7 @@ class Consumer(object):
         except KeyboardInterrupt:
             self._logger.info('Received SIGINT')
             self.stop(graceful=True)
-        except:
+        except Exception:
             self._logger.exception('Error in consumer.')
             self.stop()
         else:
