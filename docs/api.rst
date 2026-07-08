@@ -1169,7 +1169,7 @@ Huey object
         execute again until :py:meth:`TaskWrapper.restore` is called.
 
         This function can be called multiple times, but each call will
-        supercede any restrictions from the previous revocation.
+        supersede any restrictions from the previous revocation.
 
         .. code-block:: python
 
@@ -2273,7 +2273,7 @@ Huey comes with several built-in storage implementations:
     :param str filename: sqlite database filename.
     :param int cache_mb: sqlite page-cache size in megabytes.
     :param bool fsync: if enabled, all writes to the Sqlite database will be
-        synchonized. This provides greater safety from database corruption in
+        synchronized. This provides greater safety from database corruption in
         the event of sudden power-loss.
     :param str journal_mode: sqlite journaling mode to use. Defaults to using
         write-ahead logging, which enables readers to coexist with a single
