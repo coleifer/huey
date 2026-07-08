@@ -1,0 +1,199 @@
+{% import "admin/huey/_macros.html" as h %}
+
+{# ---- stat tiles ---- #}
+<div class="row g-3 mb-4">
+  {% set tiles = [
+    (live.pending, 'Pending', ''),
+    (live.scheduled, 'Scheduled', ''),
+    (live.results, 'Results', ''),
+    (overview.inflight, 'Running', 'text-primary'),
+    (overview.completed, 'Completed 24h', 'text-success'),
+    (overview.errors, 'Errors 24h', 'text-danger'),
+  ] %}
+  {% for value, label, cls in tiles %}
+  <div class="col-6 col-md-4 col-xl-2">
+    <div class="card h-100"><div class="card-body huey-tile text-center py-3">
+      <div class="val {{ cls }}">{{ value if value is not none else '&mdash;'|safe }}</div>
+      <div class="lbl text-body-secondary">{{ label }}</div>
+    </div></div>
+  </div>
+  {% endfor %}
+  <div class="col-6 col-md-4 col-xl-2">
+    <div class="card h-100"><div class="card-body huey-tile text-center py-3">
+      <div class="val">{{ '%.1f%%'|format(overview.error_rate * 100) }}</div>
+      <div class="lbl text-body-secondary">Error rate</div>
+    </div></div>
+  </div>
+</div>
+
+{# ---- throughput ---- #}
+<div class="card mb-4"><div class="card-body">
+  <div class="d-flex justify-content-between mb-2">
+    <h6 class="mb-0">Throughput <span class="text-body-secondary fw-normal">&middot; last {{ throughput.complete|length }} min</span></h6>
+    <div class="small">
+      <span class="text-success">&#9632;</span> completed
+      <span class="text-danger ms-2">&#9632;</span> errors
+    </div>
+  </div>
+  <div class="huey-chart">{{ h.barchart(throughput.complete, throughput.error) }}</div>
+  <div class="d-flex justify-content-between text-body-secondary mt-1" style="font-size: .7rem;">
+    <span>{{ throughput.complete|length }} min ago</span><span>now</span>
+  </div>
+</div></div>
+
+<div class="row g-4">
+  {# ---- registered tasks ---- #}
+  <div class="col-lg-7">
+    <div class="card h-100"><div class="card-body">
+      <h6>Registered tasks</h6>
+      <div class="table-responsive">
+      <table class="table table-sm table-hover huey-tbl mb-0">
+        <thead><tr>
+          <th>Task</th><th class="text-end">Ran</th><th class="text-end">OK</th>
+          <th class="text-end">Err</th><th class="text-end">Avg</th><th></th>
+        </tr></thead>
+        <tbody>
+        {% for t in known %}
+          {% set s = stats_map.get(t.full) %}
+          <tr>
+            <td><span class="fw-semibold" title="{{ t.full }}">{{ t.task }}</span>
+                {% if t.revoked %}<span class="badge bg-dark">revoked</span>{% endif %}</td>
+            <td class="text-end">{{ s.executed if s else 0 }}</td>
+            <td class="text-end text-success">{{ s.completed if s else 0 }}</td>
+            <td class="text-end {{ 'text-danger' if s and s.errors else 'text-body-secondary' }}">{{ s.errors if s else 0 }}</td>
+            <td class="text-end">{{ h.dur(s.avg) if s else '&mdash;'|safe }}</td>
+            <td class="text-end">
+              <form method="post" action="{{ url_for(panel.get_url_name('action')) }}" class="d-inline">
+                <input type="hidden" name="task" value="{{ t.full }}">
+                {% if t.revoked %}
+                  <input type="hidden" name="op" value="restore_task">
+                  <button class="btn btn-sm btn-outline-secondary py-0">Restore</button>
+                {% else %}
+                  <input type="hidden" name="op" value="revoke_task">
+                  <button class="btn btn-sm btn-outline-danger py-0">Revoke</button>
+                {% endif %}
+              </form>
+            </td>
+          </tr>
+        {% else %}
+          <tr><td colspan="6" class="text-body-secondary text-center py-3">No registered tasks.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      </div>
+    </div></div>
+  </div>
+
+  {# ---- currently running ---- #}
+  <div class="col-lg-5">
+    <div class="card h-100"><div class="card-body">
+      <h6>Currently running <span class="badge bg-primary">{{ inflight|length }}</span></h6>
+      <div class="table-responsive">
+      <table class="table table-sm huey-tbl mb-0">
+        <thead><tr><th>Task</th><th>ID</th><th class="text-end">Elapsed</th></tr></thead>
+        <tbody>
+        {% for r in inflight %}
+          <tr><td class="fw-semibold">{{ r.task }}</td>
+              <td class="huey-mono text-body-secondary">{{ r.id[:8] }}</td>
+              <td class="text-end">{{ h.elapsed(r.elapsed) }}</td></tr>
+        {% else %}
+          <tr><td colspan="3" class="text-body-secondary text-center py-3">Nothing running.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      </div>
+    </div></div>
+  </div>
+</div>
+
+{# ---- recent events ---- #}
+<div class="card mt-4"><div class="card-body">
+  <h6>Recent events</h6>
+  <div class="table-responsive">
+  <table class="table table-sm table-hover huey-tbl mb-0">
+    <thead><tr><th>Time</th><th>Task</th><th>Signal</th><th class="text-end">Duration</th><th>Error</th></tr></thead>
+    <tbody>
+    {% for e in events %}
+      <tr>
+        <td class="huey-mono text-body-secondary">{{ e.time }}</td>
+        <td class="fw-semibold">{{ e.task }}</td>
+        <td>{{ h.sigbadge(e.signal) }}</td>
+        <td class="text-end">{{ h.dur(e.duration) }}</td>
+        <td class="huey-err text-danger small" title="{{ e.error or '' }}">{{ e.error or '' }}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="5" class="text-body-secondary text-center py-3">No events recorded yet.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div></div>
+
+{# ---- pending + scheduled ---- #}
+<div class="row g-4 mt-0">
+  <div class="col-lg-6">
+    <div class="card h-100"><div class="card-body">
+      <h6>Pending <span class="badge bg-secondary">{{ live.pending if live.pending is not none else '?' }}</span></h6>
+      <div class="table-responsive">
+      <table class="table table-sm huey-tbl mb-0">
+        <thead><tr><th>Task</th><th>ID</th><th class="text-end">Prio</th><th></th></tr></thead>
+        <tbody>
+        {% for p in pending %}
+          <tr><td class="fw-semibold">{{ p.task }}</td>
+              <td class="huey-mono text-body-secondary">{{ p.id[:8] }}</td>
+              <td class="text-end">{{ p.priority or 0 }}</td>
+              <td class="text-end">
+                <form method="post" action="{{ url_for(panel.get_url_name('action')) }}" class="d-inline">
+                  <input type="hidden" name="op" value="revoke_id">
+                  <input type="hidden" name="id" value="{{ p.id }}">
+                  <button class="btn btn-sm btn-outline-danger py-0">Revoke</button>
+                </form>
+              </td></tr>
+        {% else %}
+          <tr><td colspan="4" class="text-body-secondary text-center py-3">Queue empty.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      </div>
+    </div></div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card h-100"><div class="card-body">
+      <h6>Scheduled <span class="badge bg-secondary">{{ live.scheduled if live.scheduled is not none else '?' }}</span></h6>
+      <div class="table-responsive">
+      <table class="table table-sm huey-tbl mb-0">
+        <thead><tr><th>Task</th><th>ID</th><th>ETA</th><th></th></tr></thead>
+        <tbody>
+        {% for s in scheduled %}
+          <tr><td class="fw-semibold">{{ s.task }}</td>
+              <td class="huey-mono text-body-secondary">{{ s.id[:8] }}</td>
+              <td class="small">{{ s.eta or '&mdash;'|safe }}</td>
+              <td class="text-end">
+                <form method="post" action="{{ url_for(panel.get_url_name('action')) }}" class="d-inline">
+                  <input type="hidden" name="op" value="revoke_id">
+                  <input type="hidden" name="id" value="{{ s.id }}">
+                  <button class="btn btn-sm btn-outline-danger py-0">Revoke</button>
+                </form>
+              </td></tr>
+        {% else %}
+          <tr><td colspan="4" class="text-body-secondary text-center py-3">Nothing scheduled.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      </div>
+    </div></div>
+  </div>
+</div>
+
+{# ---- danger zone ---- #}
+<div class="card mt-4 border-danger-subtle"><div class="card-body">
+  <h6 class="text-danger">Danger zone</h6>
+  <div class="d-flex flex-wrap gap-2">
+    {% for op, label in [('flush_queue', 'Flush queue'), ('flush_schedule', 'Flush schedule'), ('flush_results', 'Flush results'), ('flush_locks', 'Flush locks')] %}
+    <form method="post" action="{{ url_for(panel.get_url_name('action')) }}" onsubmit="return confirm('{{ label }}? This cannot be undone.');">
+      <input type="hidden" name="op" value="{{ op }}">
+      <button class="btn btn-sm btn-outline-danger">{{ label }}</button>
+    </form>
+    {% endfor %}
+  </div>
+</div></div>

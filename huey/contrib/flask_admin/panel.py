@@ -1,6 +1,6 @@
 import os
 
-from flask import jsonify, redirect, render_template, request, url_for
+from flask import redirect, render_template, request, url_for
 from jinja2 import ChoiceLoader, FileSystemLoader
 
 from flask_peewee.admin import AdminPanel
@@ -111,15 +111,14 @@ class HueyPanel(AdminPanel):
     def get_urls(self):
         return (
             ('/', self.index),
-            ('/data', self.data),
+            ('/fragment', self.fragment),
             ('/action', self.action),
         )
 
-    def index(self):
+    def _context(self):
         breakdown = self.stats.task_breakdown()
-        return render_template(
-            'admin/huey/dashboard.html', panel=self, admin=self.admin,
-            live=self._live(), overview=self._overview(),
+        return dict(
+            panel=self, live=self._live(), overview=self._overview(),
             stats_map={row['full']: row for row in breakdown},
             inflight=self.stats.inflight(),
             events=self.stats.recent_events(self.event_limit),
@@ -127,12 +126,12 @@ class HueyPanel(AdminPanel):
             known=self._known_tasks(),
             throughput=self.stats.throughput(self.throughput_minutes))
 
-    def data(self):
-        return jsonify(
-            live=self._live(), overview=self._overview(),
-            inflight=self.stats.inflight(),
-            events=self.stats.recent_events(self.event_limit),
-            throughput=self.stats.throughput(self.throughput_minutes))
+    def index(self):
+        return render_template('admin/huey/dashboard.html', admin=self.admin,
+                               **self._context())
+
+    def fragment(self):
+        return render_template('admin/huey/_content.html', **self._context())
 
     def action(self):
         op = request.form.get('op')

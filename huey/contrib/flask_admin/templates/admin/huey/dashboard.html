@@ -1,5 +1,4 @@
 {% extends "admin/base.html" %}
-{% import "admin/huey/_macros.html" as h %}
 
 {% block title %}Huey{% endblock %}
 {% block content_title %}Huey{% endblock %}
@@ -15,8 +14,7 @@
   .huey-tile { font-variant-numeric: tabular-nums; }
   .huey-tile .val { font-size: 1.6rem; line-height: 1.1; font-weight: 600; }
   .huey-tile .lbl { font-size: .75rem; text-transform: uppercase; letter-spacing: .03em; }
-  .huey-chart svg { width: 100%; height: 60px; display: block; }
-  .huey-spark { display: block; }
+  .huey-chart svg { width: 100%; height: 64px; display: block; }
   table.huey-tbl { font-variant-numeric: tabular-nums; }
   table.huey-tbl td, table.huey-tbl th { vertical-align: middle; }
   .huey-mono { font-family: var(--bs-font-monospace); font-size: .8rem; }
@@ -25,278 +23,21 @@
 {% endblock %}
 
 {% block content %}
-<div id="huey-root" data-url="{{ url_for(panel.get_url_name('data')) }}">
-
-  {# ---- stat tiles ---- #}
-  <div class="row g-3 mb-4">
-    {% set tiles = [
-      ('hp-pending', live.pending, 'Pending', ''),
-      ('hp-scheduled', live.scheduled, 'Scheduled', ''),
-      ('hp-results', live.results, 'Results', ''),
-      ('hp-running', overview.inflight, 'Running', 'text-primary'),
-      ('hp-completed', overview.completed, 'Completed 24h', 'text-success'),
-      ('hp-errors', overview.errors, 'Errors 24h', 'text-danger'),
-    ] %}
-    {% for id, value, label, cls in tiles %}
-    <div class="col-6 col-md-4 col-xl-2">
-      <div class="card h-100"><div class="card-body huey-tile text-center py-3">
-        <div class="val {{ cls }}" id="{{ id }}">{{ value if value is not none else '&mdash;'|safe }}</div>
-        <div class="lbl text-body-secondary">{{ label }}</div>
-      </div></div>
-    </div>
-    {% endfor %}
-    <div class="col-6 col-md-4 col-xl-2">
-      <div class="card h-100"><div class="card-body huey-tile text-center py-3">
-        <div class="val" id="hp-errorrate">{{ '%.1f%%'|format(overview.error_rate * 100) }}</div>
-        <div class="lbl text-body-secondary">Error rate</div>
-      </div></div>
-    </div>
-  </div>
-
-  {# ---- throughput ---- #}
-  <div class="card mb-4"><div class="card-body">
-    <div class="d-flex justify-content-between mb-2">
-      <h6 class="mb-0">Throughput <span class="text-body-secondary fw-normal">&middot; last {{ throughput.complete|length }} min</span></h6>
-      <div class="small">
-        <span class="text-success">&#9632;</span> completed
-        <span class="text-danger ms-2">&#9632;</span> errors
-      </div>
-    </div>
-    <div class="huey-chart" id="hp-chart-complete">{{ h.sparkline(throughput.complete, 600, 60, '#198754') }}</div>
-    <div class="huey-chart mt-1" id="hp-chart-error">{{ h.sparkline(throughput.error, 600, 60, '#dc3545') }}</div>
-  </div></div>
-
-  <div class="row g-4">
-    {# ---- registered tasks ---- #}
-    <div class="col-lg-7">
-      <div class="card h-100"><div class="card-body">
-        <h6>Registered tasks</h6>
-        <div class="table-responsive">
-        <table class="table table-sm table-hover huey-tbl mb-0">
-          <thead><tr>
-            <th>Task</th><th class="text-end">Ran</th><th class="text-end">OK</th>
-            <th class="text-end">Err</th><th class="text-end">Avg</th><th></th>
-          </tr></thead>
-          <tbody>
-          {% for t in known %}
-            {% set s = stats_map.get(t.full) %}
-            <tr>
-              <td><span class="fw-semibold" title="{{ t.full }}">{{ t.task }}</span>
-                  {% if t.revoked %}<span class="badge bg-dark">revoked</span>{% endif %}</td>
-              <td class="text-end">{{ s.executed if s else 0 }}</td>
-              <td class="text-end text-success">{{ s.completed if s else 0 }}</td>
-              <td class="text-end {{ 'text-danger' if s and s.errors else 'text-body-secondary' }}">{{ s.errors if s else 0 }}</td>
-              <td class="text-end">{{ h.dur(s.avg) if s else '&mdash;'|safe }}</td>
-              <td class="text-end">
-                <form method="post" action="{{ url_for(panel.get_url_name('action')) }}" class="d-inline">
-                  <input type="hidden" name="task" value="{{ t.full }}">
-                  {% if t.revoked %}
-                    <input type="hidden" name="op" value="restore_task">
-                    <button class="btn btn-sm btn-outline-secondary py-0">Restore</button>
-                  {% else %}
-                    <input type="hidden" name="op" value="revoke_task">
-                    <button class="btn btn-sm btn-outline-danger py-0">Revoke</button>
-                  {% endif %}
-                </form>
-              </td>
-            </tr>
-          {% else %}
-            <tr><td colspan="6" class="text-body-secondary text-center py-3">No registered tasks.</td></tr>
-          {% endfor %}
-          </tbody>
-        </table>
-        </div>
-      </div></div>
-    </div>
-
-    {# ---- currently running ---- #}
-    <div class="col-lg-5">
-      <div class="card h-100"><div class="card-body">
-        <h6>Currently running <span class="badge bg-primary" id="hp-running-count">{{ inflight|length }}</span></h6>
-        <div class="table-responsive">
-        <table class="table table-sm huey-tbl mb-0">
-          <thead><tr><th>Task</th><th>ID</th><th class="text-end">Elapsed</th></tr></thead>
-          <tbody id="hp-running-body">
-          {% for r in inflight %}
-            <tr><td class="fw-semibold">{{ r.task }}</td>
-                <td class="huey-mono text-body-secondary">{{ r.id[:8] }}</td>
-                <td class="text-end">{{ h.elapsed(r.elapsed) }}</td></tr>
-          {% else %}
-            <tr><td colspan="3" class="text-body-secondary text-center py-3">Nothing running.</td></tr>
-          {% endfor %}
-          </tbody>
-        </table>
-        </div>
-      </div></div>
-    </div>
-  </div>
-
-  {# ---- recent events ---- #}
-  <div class="card mt-4"><div class="card-body">
-    <h6>Recent events</h6>
-    <div class="table-responsive">
-    <table class="table table-sm table-hover huey-tbl mb-0">
-      <thead><tr><th>Time</th><th>Task</th><th>Signal</th><th class="text-end">Duration</th><th>Error</th></tr></thead>
-      <tbody id="hp-events-body">
-      {% for e in events %}
-        <tr>
-          <td class="huey-mono text-body-secondary">{{ e.time }}</td>
-          <td class="fw-semibold">{{ e.task }}</td>
-          <td>{{ h.sigbadge(e.signal) }}</td>
-          <td class="text-end">{{ h.dur(e.duration) }}</td>
-          <td class="huey-err text-danger small" title="{{ e.error or '' }}">{{ e.error or '' }}</td>
-        </tr>
-      {% else %}
-        <tr><td colspan="5" class="text-body-secondary text-center py-3">No events recorded yet.</td></tr>
-      {% endfor %}
-      </tbody>
-    </table>
-    </div>
-  </div></div>
-
-  {# ---- pending + scheduled ---- #}
-  <div class="row g-4 mt-0">
-    <div class="col-lg-6">
-      <div class="card h-100"><div class="card-body">
-        <h6>Pending <span class="badge bg-secondary">{{ live.pending if live.pending is not none else '?' }}</span></h6>
-        <div class="table-responsive">
-        <table class="table table-sm huey-tbl mb-0">
-          <thead><tr><th>Task</th><th>ID</th><th class="text-end">Prio</th><th></th></tr></thead>
-          <tbody>
-          {% for p in pending %}
-            <tr><td class="fw-semibold">{{ p.task }}</td>
-                <td class="huey-mono text-body-secondary">{{ p.id[:8] }}</td>
-                <td class="text-end">{{ p.priority or 0 }}</td>
-                <td class="text-end">
-                  <form method="post" action="{{ url_for(panel.get_url_name('action')) }}" class="d-inline">
-                    <input type="hidden" name="op" value="revoke_id">
-                    <input type="hidden" name="id" value="{{ p.id }}">
-                    <button class="btn btn-sm btn-outline-danger py-0">Revoke</button>
-                  </form>
-                </td></tr>
-          {% else %}
-            <tr><td colspan="4" class="text-body-secondary text-center py-3">Queue empty.</td></tr>
-          {% endfor %}
-          </tbody>
-        </table>
-        </div>
-      </div></div>
-    </div>
-    <div class="col-lg-6">
-      <div class="card h-100"><div class="card-body">
-        <h6>Scheduled <span class="badge bg-secondary">{{ live.scheduled if live.scheduled is not none else '?' }}</span></h6>
-        <div class="table-responsive">
-        <table class="table table-sm huey-tbl mb-0">
-          <thead><tr><th>Task</th><th>ID</th><th>ETA</th><th></th></tr></thead>
-          <tbody>
-          {% for s in scheduled %}
-            <tr><td class="fw-semibold">{{ s.task }}</td>
-                <td class="huey-mono text-body-secondary">{{ s.id[:8] }}</td>
-                <td class="small">{{ s.eta or '&mdash;'|safe }}</td>
-                <td class="text-end">
-                  <form method="post" action="{{ url_for(panel.get_url_name('action')) }}" class="d-inline">
-                    <input type="hidden" name="op" value="revoke_id">
-                    <input type="hidden" name="id" value="{{ s.id }}">
-                    <button class="btn btn-sm btn-outline-danger py-0">Revoke</button>
-                  </form>
-                </td></tr>
-          {% else %}
-            <tr><td colspan="4" class="text-body-secondary text-center py-3">Nothing scheduled.</td></tr>
-          {% endfor %}
-          </tbody>
-        </table>
-        </div>
-      </div></div>
-    </div>
-  </div>
-
-  {# ---- danger zone ---- #}
-  <div class="card mt-4 border-danger-subtle"><div class="card-body">
-    <h6 class="text-danger">Danger zone</h6>
-    <div class="d-flex flex-wrap gap-2">
-      {% for op, label in [('flush_queue', 'Flush queue'), ('flush_schedule', 'Flush schedule'), ('flush_results', 'Flush results'), ('flush_locks', 'Flush locks')] %}
-      <form method="post" action="{{ url_for(panel.get_url_name('action')) }}" onsubmit="return confirm('{{ label }}? This cannot be undone.');">
-        <input type="hidden" name="op" value="{{ op }}">
-        <button class="btn btn-sm btn-outline-danger">{{ label }}</button>
-      </form>
-      {% endfor %}
-    </div>
-  </div></div>
-
+<div id="hp-content" data-url="{{ url_for(panel.get_url_name('fragment')) }}">
+  {% include "admin/huey/_content.html" %}
 </div>
 
 <script>
 (function () {
-  var root = document.getElementById('huey-root');
-  if (!root) return;
-  var url = root.getAttribute('data-url');
-  var BADGE = {complete:'success', error:'danger', retrying:'warning',
-    executing:'primary', enqueued:'secondary', scheduled:'info', revoked:'dark',
-    canceled:'dark', locked:'secondary', 'rate-limited':'secondary',
-    timeout:'warning', expired:'warning', interrupted:'warning'};
-
-  function esc(s) {
-    return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
-      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; });
-  }
-  function set(id, v) { var e = document.getElementById(id); if (e) e.textContent = v; }
-  function fmtDur(s) {
-    if (s == null) return '—';
-    return s < 1 ? Math.round(s * 1000) + ' ms' : s.toFixed(2) + ' s';
-  }
-  function fmtElapsed(s) {
-    if (s < 60) return s.toFixed(1) + 's';
-    if (s < 3600) return Math.floor(s / 60) + 'm ' + Math.floor(s % 60) + 's';
-    return Math.floor(s / 3600) + 'h ' + Math.floor((s % 3600) / 60) + 'm';
-  }
-  function renderSpark(el, data, color) {
-    var w = 600, hh = 60, n = data.length || 1, bw = w / n;
-    var mx = Math.max.apply(null, data.concat([1]));
-    var bars = data.map(function (v, i) {
-      var bh = (v / mx) * (hh - 2);
-      return '<rect x="' + (i * bw).toFixed(2) + '" y="' + (hh - bh).toFixed(2) +
-        '" width="' + (bw * 0.72).toFixed(2) + '" height="' + bh.toFixed(2) +
-        '" fill="' + color + '"></rect>';
-    }).join('');
-    el.innerHTML = '<svg class="huey-spark" viewBox="0 0 ' + w + ' ' + hh +
-      '" preserveAspectRatio="none">' + bars + '</svg>';
-  }
-
+  var box = document.getElementById('hp-content');
+  if (!box) return;
+  var url = box.getAttribute('data-url');
+  var last = '';
   function refresh() {
-    fetch(url, {headers: {'X-Requested-With': 'fetch'}}).then(function (r) {
-      return r.json();
-    }).then(function (d) {
-      set('hp-pending', d.live.pending == null ? '—' : d.live.pending);
-      set('hp-scheduled', d.live.scheduled == null ? '—' : d.live.scheduled);
-      set('hp-results', d.live.results == null ? '—' : d.live.results);
-      set('hp-running', d.overview.inflight);
-      set('hp-completed', d.overview.completed);
-      set('hp-errors', d.overview.errors);
-      set('hp-errorrate', (d.overview.error_rate * 100).toFixed(1) + '%');
-      set('hp-running-count', d.inflight.length);
-
-      document.getElementById('hp-running-body').innerHTML = d.inflight.length ?
-        d.inflight.map(function (r) {
-          return '<tr><td class="fw-semibold">' + esc(r.task) +
-            '</td><td class="huey-mono text-body-secondary">' + esc(r.id.slice(0, 8)) +
-            '</td><td class="text-end">' + fmtElapsed(r.elapsed) + '</td></tr>';
-        }).join('') :
-        '<tr><td colspan="3" class="text-body-secondary text-center py-3">Nothing running.</td></tr>';
-
-      document.getElementById('hp-events-body').innerHTML = d.events.length ?
-        d.events.map(function (e) {
-          return '<tr><td class="huey-mono text-body-secondary">' + esc(e.time) +
-            '</td><td class="fw-semibold">' + esc(e.task) +
-            '</td><td><span class="badge bg-' + (BADGE[e.signal] || 'secondary') +
-            '">' + esc(e.signal) + '</span></td><td class="text-end">' +
-            fmtDur(e.duration) + '</td><td class="huey-err text-danger small" title="' +
-            esc(e.error) + '">' + esc(e.error) + '</td></tr>';
-        }).join('') :
-        '<tr><td colspan="5" class="text-body-secondary text-center py-3">No events recorded yet.</td></tr>';
-
-      renderSpark(document.getElementById('hp-chart-complete'), d.throughput.complete, '#198754');
-      renderSpark(document.getElementById('hp-chart-error'), d.throughput.error, '#dc3545');
-    }).catch(function () {});
+    fetch(url, {headers: {'X-Requested-With': 'fetch'}})
+      .then(function (r) { return r.text(); })
+      .then(function (html) { if (html !== last) { last = html; box.innerHTML = html; } })
+      .catch(function () {});
   }
   setInterval(refresh, 5000);
 })();

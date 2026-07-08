@@ -10,6 +10,36 @@
   </svg>
 {% endmacro %}
 
+{% macro barchart(complete, error, w=600, h=56) %}
+  {% set n = (complete|length) or 1 %}
+  {% set bw = w / n %}
+  {% set pad = 4 %}
+  {% set base = h - pad %}
+  {% set ph = base - pad %}
+  {% set ns = namespace(mx=1) %}
+  {% for i in range(n) %}
+    {% set tot = complete[i] + (error[i] if error else 0) %}
+    {% if tot > ns.mx %}{% set ns.mx = tot %}{% endif %}
+  {% endfor %}
+  <svg class="huey-barchart" viewBox="0 0 {{ w }} {{ h }}" preserveAspectRatio="none">
+    <rect x="0" y="{{ pad }}" width="{{ w }}" height="{{ ph }}" fill="currentColor" opacity="0.035"></rect>
+    {% for gx in [n // 4, n // 2, 3 * n // 4] %}
+      <line x1="{{ '%.1f'|format(gx * bw) }}" y1="{{ pad }}" x2="{{ '%.1f'|format(gx * bw) }}" y2="{{ base }}" stroke="currentColor" opacity="0.09" vector-effect="non-scaling-stroke"></line>
+    {% endfor %}
+    {% for i in range(n) %}
+      {% set c = complete[i] %}
+      {% set e = error[i] if error else 0 %}
+      {% set x = i * bw + bw * 0.15 %}
+      {% set bwid = bw * 0.7 %}
+      {% set hc = (c / ns.mx) * ph %}
+      {% set he = (e / ns.mx) * ph %}
+      {% if c %}<rect x="{{ '%.2f'|format(x) }}" y="{{ '%.2f'|format(base - hc) }}" width="{{ '%.2f'|format(bwid) }}" height="{{ '%.2f'|format(hc) }}" fill="var(--bs-success, #198754)"></rect>{% endif %}
+      {% if e %}<rect x="{{ '%.2f'|format(x) }}" y="{{ '%.2f'|format(base - hc - he) }}" width="{{ '%.2f'|format(bwid) }}" height="{{ '%.2f'|format(he) }}" fill="var(--bs-danger, #dc3545)"></rect>{% endif %}
+    {% endfor %}
+    <line x1="0" y1="{{ base }}" x2="{{ w }}" y2="{{ base }}" stroke="currentColor" opacity="0.25" vector-effect="non-scaling-stroke"></line>
+  </svg>
+{% endmacro %}
+
 {% macro sigbadge(signal) %}
   {%- set m = {'complete': 'success', 'error': 'danger', 'retrying': 'warning',
                'executing': 'primary', 'enqueued': 'secondary', 'scheduled': 'info',
