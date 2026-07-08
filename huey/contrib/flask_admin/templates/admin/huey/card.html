@@ -1,0 +1,45 @@
+{% extends "admin/panels/base.html" %}
+{% import "admin/huey/_macros.html" as h %}
+
+{% block panel_title %}Huey{% if not enabled %} <span class="badge bg-secondary fw-normal">metrics off</span>{% endif %}{% endblock %}
+
+{% block panel_content %}
+<div class="row text-center g-2 mb-2" style="font-variant-numeric: tabular-nums;">
+  <div class="col">
+    <div class="fs-4 lh-1">{{ live.pending if live.pending is not none else '&mdash;'|safe }}</div>
+    <div class="text-body-secondary small">Pending</div>
+  </div>
+  <div class="col">
+    <div class="fs-4 lh-1">{{ live.scheduled if live.scheduled is not none else '&mdash;'|safe }}</div>
+    <div class="text-body-secondary small">Scheduled</div>
+  </div>
+  <div class="col">
+    <div class="fs-4 lh-1">{{ live.results if live.results is not none else '&mdash;'|safe }}</div>
+    <div class="text-body-secondary small">Results</div>
+  </div>
+  {% if overview %}
+  <div class="col">
+    <div class="fs-4 lh-1">{{ overview.inflight }}</div>
+    <div class="text-body-secondary small">Running</div>
+  </div>
+  {% endif %}
+</div>
+
+{% if overview %}
+<div class="d-flex justify-content-between align-items-end pt-1">
+  <div class="small">
+    <span class="text-success fw-semibold">{{ overview.completed }}</span> done &middot;
+    <span class="text-danger fw-semibold">{{ overview.errors }}</span> errors
+    <span class="text-body-secondary">/ 24h</span>
+  </div>
+  <div>{{ h.sparkline(spark, 96, 26, '#198754') }}</div>
+</div>
+{% else %}
+<p class="small text-body-secondary mb-2">
+  Live queue stats only. Call <code>enable_huey_admin(huey)</code> in your
+  consumer for throughput, errors and per-task metrics.
+</p>
+{% endif %}
+
+<a class="stretched-link small fw-semibold" href="{{ detail_url }}">Manage &rarr;</a>
+{% endblock %}

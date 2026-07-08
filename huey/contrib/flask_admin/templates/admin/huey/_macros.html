@@ -1,0 +1,24 @@
+{% macro sparkline(data, w=120, h=28, color='#0d6efd') %}
+  {% set n = (data|length) or 1 %}
+  {% set mx = (data|max) if (data and (data|max) > 0) else 1 %}
+  {% set bw = w / n %}
+  <svg class="huey-spark" width="{{ w }}" height="{{ h }}" viewBox="0 0 {{ w }} {{ h }}" preserveAspectRatio="none">
+    {% for v in data %}
+      {% set bh = (v / mx) * (h - 2) %}
+      <rect x="{{ '%.2f'|format(loop.index0 * bw) }}" y="{{ '%.2f'|format(h - bh) }}" width="{{ '%.2f'|format(bw * 0.72) }}" height="{{ '%.2f'|format(bh) }}" fill="{{ color }}"></rect>
+    {% endfor %}
+  </svg>
+{% endmacro %}
+
+{% macro sigbadge(signal) %}
+  {%- set m = {'complete': 'success', 'error': 'danger', 'retrying': 'warning',
+               'executing': 'primary', 'enqueued': 'secondary', 'scheduled': 'info',
+               'revoked': 'dark', 'canceled': 'dark', 'locked': 'secondary',
+               'rate-limited': 'secondary', 'timeout': 'warning',
+               'expired': 'warning', 'interrupted': 'warning'} -%}
+  <span class="badge bg-{{ m.get(signal, 'secondary') }}">{{ signal }}</span>
+{%- endmacro %}
+
+{% macro dur(seconds) %}{% if seconds is none %}<span class="text-body-secondary">&mdash;</span>{% elif seconds < 1 %}{{ '%d'|format(seconds * 1000) }} ms{% else %}{{ '%.2f'|format(seconds) }} s{% endif %}{% endmacro %}
+
+{% macro elapsed(seconds) %}{% if seconds < 60 %}{{ '%.1f'|format(seconds) }}s{% elif seconds < 3600 %}{{ '%d'|format(seconds // 60) }}m {{ '%d'|format(seconds % 60) }}s{% else %}{{ '%d'|format(seconds // 3600) }}h {{ '%d'|format((seconds % 3600) // 60) }}m{% endif %}{% endmacro %}
