@@ -6,8 +6,6 @@ Huey Extensions
 The ``huey.contrib`` package contains modules that provide extra functionality
 beyond the core APIs.
 
-.. include:: mini.rst
-
 .. include:: django.rst
 
 .. include:: asyncio.rst
@@ -15,3 +13,5 @@ beyond the core APIs.
 .. include:: stats.rst
 
 .. include:: flask_admin.rst
+
+.. include:: mini.rst
