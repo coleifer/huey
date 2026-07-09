@@ -3,6 +3,7 @@
 #
 import datetime
 import heapq
+import itertools
 import logging
 import time
 from functools import wraps
@@ -30,6 +31,7 @@ class MiniHuey(object):
         self._periodic_interval = datetime.timedelta(seconds=60)
         self._periodic_tasks = []
         self._scheduled_tasks = []
+        self._counter = itertools.count()
         self._shutdown = Event()
         self._pool = Pool(pool_size)
         self._run_t = None
@@ -57,7 +59,8 @@ class MiniHuey(object):
                                      'eta (datetime) must be specified.')
                 async_result = MiniHueyResult()
                 heapq.heappush(self._scheduled_tasks,
-                               (eta, fn, args, kwargs, async_result))
+                               (eta, next(self._counter), fn, args, kwargs,
+                                async_result))
                 return async_result
 
             _inner.schedule = _schedule
@@ -95,7 +98,8 @@ class MiniHuey(object):
             ret = fn(*args, **kwargs)
         except Exception as exc:
             logger.exception('task %s failed' % fn.__name__)
-            async_result.set_exception(exc)
+            if async_result is not None:
+                async_result.set_exception(exc)
             raise
         else:
             duration = time.monotonic() - start
@@ -122,7 +126,7 @@ class MiniHuey(object):
                 while self._scheduled_tasks and \
                       self._scheduled_tasks[0][0] <= now:
 
-                    eta, fn, args, kwargs, async_result = (
+                    eta, _, fn, args, kwargs, async_result = (
                         heapq.heappop(self._scheduled_tasks))
                     self._enqueue(fn, args, kwargs, async_result)
 
