@@ -129,7 +129,7 @@ also provides an optional admin integration for Django:
 
 .. image:: https://huey.readthedocs.io/en/latest/_images/django-admin.png
 
-`flask-peewee <https://flask-peewee.readthedocs.io/>`_ also supports an admin
+Huey also provides `flask-peewee <https://flask-peewee.readthedocs.io/>`_ admin
 integration based on the same underlying stat-tracking system:
 
 .. image:: https://huey.readthedocs.io/en/latest/_images/flask-admin-panel.png
