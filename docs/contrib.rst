@@ -11,3 +11,5 @@ beyond the core APIs.
 .. include:: django.rst
 
 .. include:: asyncio.rst
+
+.. include:: flask_admin.rst
