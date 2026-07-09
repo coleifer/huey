@@ -239,7 +239,7 @@ Using gevent
 Gevent works by monkey-patching various Python modules, such as ``socket``,
 ``ssl``, ``time``, etc. In order for your application to be able to switch
 tasks reliably, you should apply the monkey-patch at the very beginning of
-your code -- before anything else gets loaded.
+your code, before anything else gets loaded.
 
 Suppose we have defined an entrypoint for our application named
 ``main.py``, which imports our :py:class:`Huey` instance, our tasks, and
@@ -323,15 +323,14 @@ supervisord and systemd
 
 Huey plays nicely with both `supervisord <https://supervisord.org/>`_,
 `systemd <https://systemd.io/>`_ and presumably any other process supervisor.
-For complete deployment examples -- including Docker, Docker Compose and
-PaaS configurations, along with a production checklist -- see
-:ref:`deployment`.
+For complete deployment examples (Docker, Docker Compose, PaaS
+configurations) and a production checklist, see :ref:`deployment`.
 
 .. warning::
     Both supervisord and systemd stop processes with ``SIGTERM`` by default,
     which huey treats as "stop immediately, interrupting any running tasks".
     Huey's graceful-shutdown signal is ``SIGINT``, so be sure to configure
-    the stop signal as shown below -- otherwise tasks will be interrupted on
+    the stop signal as shown below. Otherwise tasks will be interrupted on
     every deploy, regardless of how long the supervisor is told to wait.
 
 Barebones supervisor config using 4 worker threads:
@@ -351,7 +350,7 @@ Barebones supervisor config using 4 worker threads:
     environment=PYTHONPATH="/path/to/project"
     ; Huey shuts down gracefully on SIGINT, allowing workers to finish their
     ; current task. Supervisor's default stopsignal is TERM, which huey
-    ; treats as "stop immediately" -- so be sure to specify INT here.
+    ; treats as "stop immediately", so be sure to specify INT here.
     stopsignal=INT
     ; How long to wait for in-flight tasks to finish before escalating to
     ; SIGKILL. Increase this if you have long-running tasks.
@@ -373,7 +372,7 @@ Barebones systemd config using 4 worker threads:
     Restart=always
     # Huey shuts down gracefully on SIGINT, allowing workers to finish their
     # current task. systemd's default KillSignal is SIGTERM, which huey
-    # treats as "stop immediately" -- so override it here.
+    # treats as "stop immediately", so override it here.
     KillSignal=SIGINT
     # How long to wait for in-flight tasks to finish before escalating to
     # SIGKILL. Increase this if you have long-running tasks.
@@ -414,8 +413,8 @@ result-store, Redis or another network-accessible storage backend must be used.
 
 .. note::
     This section covers running multiple consumers against a *single* queue.
-    To run multiple *queues* -- for example, to give different classes of
-    task their own worker pools -- see :ref:`recipe-multiple-queues`.
+    To run multiple *queues* (for example, to give different classes of
+    task their own worker pools), see :ref:`recipe-multiple-queues`.
 
 .. _consumer-internals:
 
@@ -435,7 +434,7 @@ workers will be run in their threads, processes or greenlets.
 These three components coordinate the receipt, scheduling, and execution of
 your tasks, respectively.
 
-1. You call a function -- huey has decorated it, which triggers a message being
+1. You call a function that huey has decorated, which triggers a message being
    put into the queue (e.g a Redis list). At this point your application
    returns immediately, returning a :py:class:`Result` object.
 2. In the consumer process, the worker(s) will be listening for new messages

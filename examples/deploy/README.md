@@ -1,7 +1,7 @@
 Production deployment configurations for the huey consumer: systemd,
 supervisord, Docker and Docker Compose.
 
-These files are included verbatim in the documentation -- see the
+These files are included verbatim in the documentation. See the
 "Deploying to Production" document at https://huey.readthedocs.io/ for
 the full discussion of each, including Kubernetes and PaaS notes and a
 production checklist.

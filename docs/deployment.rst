@@ -45,8 +45,8 @@ Two related points:
   interrupted tasks (:ref:`recipe-interrupted-tasks`). As with any queue,
   design tasks to be idempotent wherever possible.
 * Do not wrap the consumer in a shell script. The supervisor must signal the
-  Python process directly; an intermediate shell will interfere with signal
-  delivery.
+  Python process directly, as an intermediate shell will interfere with
+  signal delivery.
 
 systemd
 -------
@@ -68,7 +68,7 @@ Notes:
   logfile option and read logs with ``journalctl -u huey``.
 * ``systemctl reload huey`` triggers huey's graceful restart (``SIGHUP``):
   the consumer re-executes itself in-place, keeping the same PID. Avoid
-  ``Type=forking``; the unit's ``Type=exec`` is correct, and also surfaces
+  ``Type=forking``. The unit's ``Type=exec`` is correct, and also surfaces
   launch errors at startup.
 * ``Restart=on-failure`` restarts the consumer after a crash, but leaves it
   stopped after a clean exit (e.g. a graceful ``kill -INT``). Use
@@ -148,7 +148,7 @@ The things that matter:
   graceful shutdown for free. Without it, the kubelet sends ``SIGTERM`` and
   running tasks are interrupted. (Alternatively, use a ``lifecycle.preStop``
   hook, or simply rely on the ``SIGNAL_INTERRUPTED`` re-enqueue recipe.)
-* ``terminationGracePeriodSeconds`` is the SIGKILL deadline -- set it to
+* ``terminationGracePeriodSeconds`` is the SIGKILL deadline: set it to
   comfortably exceed your longest-running task.
 * With ``replicas > 1``, periodic tasks must only be enqueued by one
   consumer. The simple pattern: a scalable worker Deployment started with
@@ -237,7 +237,7 @@ Production checklist
   (:ref:`deployment-signals`).
 * A ``SIGNAL_INTERRUPTED`` handler re-enqueues interrupted tasks, or your
   tasks are idempotent (:ref:`recipe-interrupted-tasks`).
-* Exactly one consumer enqueues periodic tasks; all others run with ``-n``
+* Exactly one consumer enqueues periodic tasks and all others run with ``-n``
   (:ref:`multiple-consumers`).
 * The consumer is run directly - no shell-script wrappers.
 * Result data is read (or expired) so the result store does not grow without

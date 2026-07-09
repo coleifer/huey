@@ -34,7 +34,7 @@ arguments passed to the handler beyond the standard ``(signal, task)`` pair.
      - None
    * - ``SIGNAL_ERROR``
      - Task raised an unhandled exception during execution.
-     - ``exc`` -- the exception instance.
+     - ``exc``: the exception instance.
    * - ``SIGNAL_CANCELED``
      - Task was canceled, either by a :py:meth:`~Huey.pre_execute` hook
        raising :py:class:`CancelExecution`, or by the task function itself
@@ -53,7 +53,7 @@ arguments passed to the handler beyond the standard ``(signal, task)`` pair.
        emitted for this task.
      - None
    * - ``SIGNAL_EXPIRED``
-     - Task's expiration time has passed; it will not be executed.
+     - Task's expiration time has passed, so it will not be executed.
      - None
    * - ``SIGNAL_LOCKED``
      - Task could not acquire its lock (:py:meth:`Huey.lock_task`). The
@@ -79,9 +79,9 @@ the result store.
 
 **Successful task execution:**
 
-1. ``SIGNAL_ENQUEUED`` -- task placed on the queue (in the **application** process).
-2. ``SIGNAL_EXECUTING`` -- worker picks up the task.
-3. ``SIGNAL_COMPLETE`` -- task finished. The result is in the result store.
+1. ``SIGNAL_ENQUEUED``: task placed on the queue (in the **application** process).
+2. ``SIGNAL_EXECUTING``: worker picks up the task.
+3. ``SIGNAL_COMPLETE``: task finished. The result is in the result store.
 4. If the task has an ``on_complete`` pipeline, the next task is enqueued
    (emitting another ``SIGNAL_ENQUEUED``).
 
@@ -89,9 +89,9 @@ the result store.
 
 1. ``SIGNAL_ENQUEUED``
 2. ``SIGNAL_EXECUTING``
-3. ``SIGNAL_ERROR`` -- exception is passed as ``exc``. The error result is
+3. ``SIGNAL_ERROR``: exception is passed as ``exc``. The error result is
    stored at this point.
-4. ``SIGNAL_RETRYING`` -- task will be retried.
+4. ``SIGNAL_RETRYING``: task will be retried.
 5. If ``retry_delay`` is set: ``SIGNAL_SCHEDULED`` (task added to the schedule
    for later). Otherwise: ``SIGNAL_ENQUEUED`` (task re-added to the queue
    immediately).
@@ -104,8 +104,8 @@ the result store.
 
 **Scheduled task:**
 
-1. ``SIGNAL_ENQUEUED`` -- task placed on the queue (application process).
-2. ``SIGNAL_SCHEDULED`` -- worker sees the task is not ready to run, adds it
+1. ``SIGNAL_ENQUEUED``: task placed on the queue (application process).
+2. ``SIGNAL_SCHEDULED``: worker sees the task is not ready to run, adds it
    to the schedule.
 3. When the scheduler determines the task is ready: ``SIGNAL_ENQUEUED``
    (in the **consumer** process).
@@ -115,7 +115,7 @@ the result store.
 **Revoked task:**
 
 1. ``SIGNAL_ENQUEUED``
-2. ``SIGNAL_REVOKED`` -- no further signals are emitted.
+2. ``SIGNAL_REVOKED``: no further signals are emitted.
 
 **Rate-limited task (with automatic retry):**
 
@@ -123,7 +123,7 @@ the result store.
 2. ``SIGNAL_EXECUTING``
 3. ``SIGNAL_RATE_LIMITED``
 4. ``SIGNAL_RETRYING``
-5. ``SIGNAL_SCHEDULED`` -- task is scheduled for the start of the next
+5. ``SIGNAL_SCHEDULED``: task is scheduled for the start of the next
    rate-limit window.
 
 **Chord signals:**
@@ -331,7 +331,7 @@ the consumer.
 
 For example, if you implement a signal handler that posts some data to REST
 API, everything might work fine until the REST API goes down or stops being
-responsive -- which will cause the signal handler to block, which then prevents
+responsive, which will cause the signal handler to block, which then prevents
 the consumer from moving on to the next task.
 
 Another consideration is the :ref:`management of shared resources <shared_resources>`

@@ -41,10 +41,10 @@ Exponential Backoff Retries
 
 Huey supports ``retries`` and ``retry_delay``, but does not support exponential
 backoff out-of-the-box. Exponential backoff is important when calling external
-services -- without it, a fleet of workers retrying at the same interval can
+services. Without it, a fleet of workers retrying at the same interval can
 create a "thundering herd" that overwhelms a recovering service.
 
-We can implement exponential backoff with a small decorator that leverages
+We can implement exponential backoff with a small decorator that uses
 the ``context=True`` parameter to access and modify the task instance:
 
 .. code-block:: python
@@ -113,7 +113,7 @@ The :py:meth:`~TaskWrapper.schedule` method accepts an ``id`` parameter:
         id='sync-user-%s' % user_id)
 
 .. warning::
-    Huey does not de-duplicate by ID at the queue level -- both messages will
+    Huey does not de-duplicate by ID at the queue level, so both messages will
     exist in the queue. However, the result store will only track one result per
     ID. If true at-most-once delivery matters, combine a deterministic ID with
     the task deduplication recipe below.
@@ -227,7 +227,7 @@ skip a task if an identical one is already running:
         dedup_key = 'dedup:%s:%s' % (task.name, hash(task.data))
         huey.delete(dedup_key)
 
-:py:meth:`Huey.put_if_empty` is atomic -- it stores the value only if the key
+:py:meth:`Huey.put_if_empty` is atomic. It stores the value only if the key
 does not already exist, and returns ``False`` if the key was already present.
 The post-execute hook clears the key so that the same arguments can be
 processed again in the future.
@@ -348,7 +348,7 @@ shows how to time task execution and record it to a metrics system:
 
 .. warning::
     Signal handlers are executed synchronously by the consumer worker. Keep
-    them fast -- a slow signal handler blocks the worker from picking up the
+    them fast, as a slow signal handler blocks the worker from picking up the
     next task. If your metrics client performs network I/O, consider buffering
     writes or using an async client.
 
@@ -381,7 +381,7 @@ consumer. If a message has been tampered with, deserialization will raise a
 ``ValueError``.
 
 .. note::
-    The signed serializer does **not** encrypt the data -- it only detects
+    The signed serializer does **not** encrypt the data, it only detects
     tampering. The task arguments are still visible in Redis. If you need
     encryption, you can subclass :py:class:`Serializer` and implement your
     own ``_serialize``/``_deserialize`` methods using a library like
@@ -480,7 +480,7 @@ Example:
         schedule = crontab(cron_minutes, cron_hours)
 
         # Need to provide a unique name for the task. There are any number of
-        # ways you can do this -- based on the arguments, etc. -- but for our
+        # ways you can do this (based on the arguments, etc.) but for our
         # example we'll just use the time at which it was declared.
         task_name = 'dynamic_ptask_%s' % int(time.time())
 
@@ -507,7 +507,7 @@ Multiple Queues
 
 A huey application consists of a :py:class:`Huey` instance (which is a named
 queue), tasks registered with that instance, and a consumer process that runs
-them. One instance is one queue, served by one consumer -- and routing
+them. One instance is one queue, served by one consumer, and routing
 therefore happens at decoration time: whichever instance's ``task()``
 decorator you use is the queue the task runs on.
 
@@ -516,12 +516,12 @@ Before reaching for a second queue, consider whether :ref:`task priorities
 jump the line", priorities give you that with one queue and no extra
 processes. Separate queues earn their keep when you want:
 
-* Different concurrency or worker-type per class of task -- e.g.
+* Different concurrency or worker-type per class of task, e.g.
   ``-k process`` for CPU-bound work and ``-k greenlet -w 50`` for IO-bound
   work.
-* Isolation -- a flood of cheap tasks must never be able to starve your
+* Isolation, where a flood of cheap tasks must never be able to starve your
   critical tasks of workers.
-* Per-machine routing -- certain tasks should only run on certain hosts.
+* Per-machine routing, where certain tasks should only run on certain hosts.
 
 To run multiple queues, declare multiple instances. A dedicated module keeps
 imports clean, and the instances can share a connection pool:
@@ -607,15 +607,15 @@ Pitfalls to be aware of:
   produced it, and revoking a task on one queue has no effect on another.
 * Periodic tasks belong to the instance that declared them, and are enqueued
   by that instance's consumer. No coordination is needed between consumers of
-  *different* queues -- the ``-n`` / ``--no-periodic`` dance is only required
+  *different* queues. The ``-n`` / ``--no-periodic`` dance is only required
   when running multiple consumers of the *same* queue
   (:ref:`multiple-consumers`).
 * The queue ``name`` is the storage namespace. Two instances with the same
-  name on the same storage are the same queue; instances sharing a sqlite
+  name on the same storage are the same queue, and instances sharing a sqlite
   file must use distinct names. Note that the Redis storage sanitizes the
-  name, stripping all characters besides alphanumerics and underscores --
-  so names must remain distinct *after* sanitization.
-* ``immediate`` mode is a per-instance setting -- in tests, remember to flip
+  name, stripping all characters besides alphanumerics and underscores, so
+  names must remain distinct *after* sanitization.
+* ``immediate`` mode is a per-instance setting. In tests, remember to flip
   it on every instance.
 
 Django users wanting multiple queues with the ``settings.HUEY``-style
@@ -643,7 +643,7 @@ current master automatically after a failover:
         # IMPORTANT: the socket timeout must comfortably exceed the
         # consumer's blocking read timeout (default 1s). If it does not,
         # every blocking dequeue times out at the socket level and is
-        # indistinguishable from an empty queue -- the consumer silently
+        # indistinguishable from an empty queue: the consumer silently
         # degrades to polling, with no errors logged.
         socket_timeout=5.0)
 
@@ -673,18 +673,18 @@ accepts a :py:class:`Huey` instance as well as a settings dict):
 **What happens during a failover.** The consumer is failover-tolerant by
 construction: when the master goes away, workers log the dequeue error and
 apply backoff, the scheduler does the same, and once Sentinel promotes a new
-master the pool reconnects to it automatically -- no restart required. Two
-caveats to understand: Redis replication is asynchronous, so writes that land
-in the failover window (enqueues, results) can be lost when the old master's
-unreplicated data is discarded; and dequeueing is destructive, so a task that
-has been handed to a worker exists only in that worker's memory -- if the
-worker dies mid-task it is gone, which is huey's normal at-most-once behavior,
-not something Sentinel introduces. High-availability Redis does not make
-individual tasks durable; pair it with idempotent task design and the
-:ref:`recipe-interrupted-tasks` recipe.
+master the pool reconnects to it automatically, with no restart required.
+Two caveats to understand. First, Redis replication is asynchronous, so
+writes that land in the failover window (enqueues, results) can be lost when
+the old master's unreplicated data is discarded. Second, dequeueing is
+destructive, so a task that has been handed to a worker exists only in that
+worker's memory, and if the worker dies mid-task it is gone. This is huey's
+normal at-most-once behavior, not something Sentinel introduces.
+High-availability Redis does not make individual tasks durable, so pair it
+with idempotent task design and the :ref:`recipe-interrupted-tasks` recipe.
 
 **Valkey and Redict** are wire-compatible with Redis and work with
-:py:class:`RedisHuey` unchanged -- simply point it at your valkey host (the
+:py:class:`RedisHuey` unchanged: simply point it at your valkey host (the
 ``redis-py`` client speaks to either). If you prefer the official
 ``valkey-glide`` client, huey ships ``ValkeyGlideHuey`` in
 ``huey.contrib.valkey_glide``.
@@ -804,7 +804,7 @@ Declare the instance and tasks in their own module, as usual:
         ...  # Heavy lifting happens in the consumer.
         return report_data
 
-Enqueueing from an async request handler is fine as-is -- it is a single,
+Enqueueing from an async request handler is fine as-is, since it is a single,
 fast storage write:
 
 .. code-block:: python
@@ -829,7 +829,7 @@ fast storage write:
         return {'ready': value is not None, 'value': value}
 
 To hold the request open until the task finishes, await the result with the
-:ref:`asyncio helpers <asyncio>` -- other requests continue to be served
+:ref:`asyncio helpers <asyncio>`. Other requests continue to be served
 while this coroutine waits:
 
 .. code-block:: python
@@ -844,11 +844,11 @@ Notes:
 
 * The consumer runs separately, exactly as with any huey application:
   ``huey_consumer tasks.huey -w 4``.
-* Task functions are plain ``def`` functions -- huey does not execute
+* Task functions are plain ``def`` functions, huey does not execute
   ``async def`` tasks. IO-bound workloads can still get high concurrency in
   the consumer via ``-k greenlet``.
 * If a task raised an exception, reading its result raises
-  :py:class:`TaskException` -- handle it in the status endpoint if your
+  :py:class:`TaskException`, so handle it in the status endpoint if your
   tasks can fail.
-* ``huey.result(task_id)`` is destructive by default; ``preserve=True``
+* ``huey.result(task_id)`` is destructive by default. ``preserve=True``
   keeps the result so the status endpoint can be polled repeatedly.

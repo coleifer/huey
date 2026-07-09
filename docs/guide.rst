@@ -319,7 +319,7 @@ is retried and eventually succeeds, the success result **overwrites** the error.
 However, the :py:class:`Result` object caches the result locally after the
 first read. To see the updated result after a retry, you must call
 :py:meth:`~Result.reset` (only with the default
-``store_intermediate_errors=True``; see :ref:`store-intermediate-errors`):
+``store_intermediate_errors=True``, see :ref:`store-intermediate-errors`):
 
 .. code-block:: python
 
@@ -422,7 +422,7 @@ your :py:class:`Huey` instance:
     huey = RedisHuey('my-app', immediate_use_memory=False)
 
 You can try out immediate mode quite easily in the Python shell. In the
-following example, everything happens within the interpreter -- no separate
+following example, everything happens within the interpreter and no separate
 consumer process is needed. In fact, because immediate mode switches to an
 in-memory storage when enabled, we don't even have to be running a Redis
 server:
@@ -1318,8 +1318,8 @@ What happens when a :py:class:`chord` is enqueued?
 4. The callback is executed by a worker and the final result is made available.
 
 .. note::
-    A sub-task that is skipped without executing -- because it was revoked,
-    expired, or cancelled by a pre-execute hook -- still counts towards chord
+    A sub-task that is skipped without executing (because it was revoked,
+    expired, or cancelled by a pre-execute hook) still counts towards chord
     completion and contributes ``None`` as its result. A sub-task that is
     interrupted by an abrupt consumer shutdown, however, is lost (tasks are
     delivered at-most-once), in which case the callback will not fire.

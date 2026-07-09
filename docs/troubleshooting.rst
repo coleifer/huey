@@ -194,7 +194,7 @@ Consumer seems slow / tasks have high latency
 
 Memory growing in consumer process
     When using process workers (``-k process``), child processes are not
-    recycled -- they run for the lifetime of the consumer. If tasks allocate
+    recycled. They run for the lifetime of the consumer. If tasks allocate
     large data structures, memory may accumulate over time.
 
     Solutions:
@@ -251,7 +251,7 @@ Task decorated with ``@huey.task()`` blocks when called
 
 ReadOnlyError after a Redis failover
     ``ReadOnlyError: You can't write against a read only replica`` means huey
-    is connected to a Redis instance that has been demoted to replica --
+    is connected to a Redis instance that has been demoted to replica,
     typically because huey was pointed at a static host (or load-balancer
     address) in a replicated setup, and a failover occurred. Use a
     Sentinel-managed connection pool so the client re-discovers the current
@@ -262,7 +262,7 @@ Task latency increased after switching to Sentinel
     must comfortably exceed the consumer's blocking read timeout (default 1
     second). If the socket timeout is shorter, every blocking dequeue times out
     at the socket level and is indistinguishable from an empty queue: the
-    consumer silently degrades to polling with backoff -- no errors are logged,
+    consumer silently degrades to polling with backoff. No errors are logged,
     but an idle consumer may take up to ``--max-delay`` seconds (default 10) to
     notice new tasks. See :ref:`recipe-redis-sentinel` for a working
     configuration.
