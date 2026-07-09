@@ -368,7 +368,7 @@ class MemoryStorage(BaseStorage):
         return len(self._schedule)
 
     def scheduled_items(self, limit=None):
-        items = sorted(data for _, data in self._schedule)
+        items = [data for _, data in sorted(self._schedule)]
         if limit:
             items = items[:limit]
         return items
@@ -855,9 +855,11 @@ class SqliteStorage(BaseSqlStorage):
         # NOTE: changing an existing database is not supported, so you will
         # need to delete and re-create it to change this value.
         if strict_fifo:
-            self.ddl[3] = self.table_task.replace(
+            ddl = list(self.ddl)
+            ddl[3] = self.table_task.replace(
                 'primary key',
                 'primary key autoincrement')
+            self.ddl = ddl
 
         self.to_blob = lambda b: sqlite3.Binary(b)
 
