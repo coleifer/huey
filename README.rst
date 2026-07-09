@@ -127,12 +127,12 @@ Frameworks
 Huey provides Django integration either natively or via ``django.tasks``. Huey
 also provides an optional admin integration for Django:
 
-.. image:: https://media.charlesleifer.com/blog/photos/django-admin-0.png
+.. image:: https://huey.readthedocs.io/en/latest/_images/django-admin.png
 
 `flask-peewee <https://flask-peewee.readthedocs.io/>`_ also supports an admin
 integration based on the same underlying stat-tracking system:
 
-.. image:: https://media.charlesleifer.com/blog/photos/flask-admin-panel.png
+.. image:: https://huey.readthedocs.io/en/latest/_images/flask-admin-panel.png
 
 Other frameworks can use the `stats <https://huey.readthedocs.io/en/latest/contrib.html#task-statistics>`_
 extension to collect and display this information.
