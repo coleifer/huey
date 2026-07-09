@@ -1,29 +1,25 @@
 {% import "admin/huey/_macros.html" as h %}
 
 {# ---- stat tiles ---- #}
-<div class="row g-3 mb-4">
-  {% set tiles = [
-    (live.pending, 'Pending', ''),
-    (live.scheduled, 'Scheduled', ''),
-    (live.results, 'Results', ''),
-    (overview.inflight, 'Running', 'text-primary'),
-    (overview.completed, 'Completed 24h', 'text-success'),
-    (overview.errors, 'Errors 24h', 'text-danger'),
-  ] %}
-  {% for value, label, cls in tiles %}
-  <div class="col-6 col-md-4 col-xl-2">
+{% set tiles = [
+  (live.pending, 'Pending', '', None),
+  (live.scheduled, 'Scheduled', '', None),
+  (live.results, 'Results', '', None),
+  (overview.inflight, 'Running', 'text-primary', None),
+  (overview.completed, 'Completed 24h', 'text-success', None),
+  (overview.errors, 'Errors 24h', 'text-danger',
+   '%.1f%% error rate'|format(overview.error_rate * 100)),
+] %}
+<div class="row row-cols-2 row-cols-md-3 g-3 mb-4">
+  {% for value, label, cls, sub in tiles %}
+  <div class="col">
     <div class="card h-100"><div class="card-body huey-tile text-center py-3">
       <div class="val {{ cls }}">{{ value if value is not none else '&mdash;'|safe }}</div>
       <div class="lbl text-body-secondary">{{ label }}</div>
+      {% if sub %}<div class="sub text-body-secondary">{{ sub }}</div>{% endif %}
     </div></div>
   </div>
   {% endfor %}
-  <div class="col-6 col-md-4 col-xl-2">
-    <div class="card h-100"><div class="card-body huey-tile text-center py-3">
-      <div class="val">{{ '%.1f%%'|format(overview.error_rate * 100) }}</div>
-      <div class="lbl text-body-secondary">Error rate</div>
-    </div></div>
-  </div>
 </div>
 
 {# ---- throughput ---- #}
