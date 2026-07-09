@@ -3,19 +3,23 @@ Changelog
 
 ## master
 
+[View commits](https://github.com/coleifer/huey/compare/3.2.0...master)
+
+## 3.2.0
+
+* Add `store_intermediate_errors` option (default true, preserving current
+  behavior). When false, a task that fails with retries remaining no longer
+  writes its exception to the result store or runs its `on_error` handler until
+  the retries are exhausted, so a blocking `Result.get()` waits for the *final*
+  outcome instead of raising on the first failed attempt.
 * Add `create_tables` option to the SQL storage backends (default true). Pass
   `create_tables=False` to skip the automatic `create table if not exists` at
   init, e.g. to manage huey's schema via Django migrations rather than have
   every web worker attempt DDL on import.
 * Add a `create_huey_tables` Django management command to create the tables when
   `create_tables=False`.
-* Add `store_intermediate_errors` option (default true, preserving current
-  behavior). When false, a task that fails with retries remaining no longer
-  writes its exception to the result store or runs its `on_error` handler until
-  the retries are exhausted, so a blocking `Result.get()` waits for the final
-  outcome instead of raising on the first failed attempt.
 * Fix `on_error` handlers accumulating one exception argument per failed attempt
-  across retries; a handler now receives only the current attempt's exception.
+  across retries. Handlers now receives only the current attempt's exception.
 * Add `huey.contrib.stats`, a task-statistics engine: `enable_stats(huey, db)`
   records task signals into two peewee tables (`huey_event`, `huey_inflight`)
   and exposes a `HueyStats` query API for throughput, per-task timing,
@@ -24,12 +28,12 @@ Changelog
   task execution.
 * Add a Flask-Peewee admin panel, `huey.contrib.flask_admin.HueyPanel`,
   registered w/ `admin.register_panel('Huey', HueyPanel, huey)`. It renders the
-  recorded stats as a dashboard card plus a standalone page -- live queue
-  depths, throughput, per-task stats, running tasks and recent events -- w/
+  recorded stats as a dashboard card plus a standalone page with live queue
+  depths, throughput, per-task stats, running tasks and recent events. Has
   controls to revoke/restore tasks and flush the queue, schedule, results or
-  locks. Requires flask-peewee's `register_panel` extra-argument support.
+  locks. Requires flask-peewee 4.0.1+.
 
-[View commits](https://github.com/coleifer/huey/compare/3.1.1...master)
+[View commits](https://github.com/coleifer/huey/compare/3.1.1...3.2.0)
 
 ## 3.1.1
 
