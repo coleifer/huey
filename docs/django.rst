@@ -3,6 +3,8 @@
 Django
 ------
 
+.. image:: django-admin.png
+
 Huey comes with special integration for use with the Django framework. The
 integration provides:
 
@@ -12,13 +14,10 @@ integration provides:
 4. Properly manage database connections.
 5. A :ref:`backend <django-task>` for the ``django.tasks`` framework (Django
    6.0 and newer, or older Djangos using the django-tasks backport).
+6. Optional :ref:`Admin integration <django-admin-stats>` for visibility and
+   managing your Huey queue.
 
 Supported Django versions are those officially supported at https://www.djangoproject.com/download/#supported-versions
-
-.. note::
-   For multiple-queue support, check out `gaiacoop/django-huey <https://github.com/gaiacoop/django-huey>`_.
-   For a discussion of when multiple queues are useful (and when task
-   priorities are the simpler answer), see :ref:`recipe-multiple-queues`.
 
 Setting things up
 ^^^^^^^^^^^^^^^^^

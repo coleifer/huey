@@ -22,7 +22,9 @@ huey has:
 * zero dependencies (``redis-py`` required to use redis-like brokers,
   ``psycopg`` for postgres).
 * `example code <https://github.com/coleifer/huey/tree/master/examples/>`_.
-* :ref:`django <django>` integration (native or via django.tasks)
+* :ref:`django <django>` integration (native or via django.tasks) with
+  optional `admin <https://media.charlesleifer.com/blog/photos/django-admin-0.png>`_
+  integration for visibility and management.
 
 huey supports:
 
