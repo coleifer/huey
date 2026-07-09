@@ -3,6 +3,13 @@ Changelog
 
 ## master
 
+* Add a Django admin dashboard for task statistics. Adding
+  `huey.contrib.djhuey.stats` to `INSTALLED_APPS` starts the
+  `huey.contrib.stats` recorder in every process (incl. the consumer) and adds
+  a Huey section to the admin: a dashboard w/ the same live stats and controls
+  as the flask-peewee panel, plus a filterable event log. Stats are stored via
+  peewee in the default Django database -- no migrations needed.
+
 [View commits](https://github.com/coleifer/huey/compare/3.2.0...master)
 
 ## 3.2.0

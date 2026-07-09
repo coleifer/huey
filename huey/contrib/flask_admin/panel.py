@@ -5,7 +5,9 @@ from jinja2 import ChoiceLoader, FileSystemLoader
 
 from flask_peewee.admin import AdminPanel
 
+from huey.contrib.stats import dashboard_context
 from huey.contrib.stats import enable_stats
+from huey.contrib.stats import live_counts
 
 
 TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), 'templates')
@@ -38,58 +40,12 @@ class HueyPanel(AdminPanel):
     def detail_url(self):
         return url_for(self.get_url_name('index'))
 
-    def _live(self):
-        data = {}
-        for key, method in (('pending', self.huey.pending_count),
-                            ('scheduled', self.huey.scheduled_count),
-                            ('results', self.huey.result_count)):
-            try:
-                data[key] = method()
-            except Exception:
-                data[key] = None
-        return data
-
-    def _pending(self):
-        try:
-            return [{'task': type(t).__name__, 'id': t.id,
-                     'priority': t.priority, 'eta': t.eta}
-                    for t in self.huey.pending(self.list_limit)]
-        except Exception:
-            return []
-
-    def _scheduled(self):
-        try:
-            return [{'task': type(t).__name__, 'id': t.id, 'eta': t.eta}
-                    for t in self.huey.scheduled(self.list_limit)]
-        except Exception:
-            return []
-
-    def _known_tasks(self):
-        out = []
-        for full, task_class in sorted(self.huey._registry._registry.items()):
-            try:
-                revoked = self.huey.is_revoked(task_class)
-            except Exception:
-                revoked = False
-            out.append({'full': full, 'task': task_class.__name__,
-                        'revoked': revoked})
-        return out
-
-    def _overview(self):
-        window = self.stats.window_counts()
-        completed = window.get('complete', 0)
-        errors = window.get('error', 0)
-        total = completed + errors
-        return {'completed': completed, 'errors': errors,
-                'retries': window.get('retrying', 0),
-                'error_rate': (errors / total) if total else 0,
-                'inflight': len(self.stats.inflight())}
-
     def get_context(self):
-        context = {'live': self._live(), 'detail_url': self.detail_url(),
+        context = {'live': live_counts(self.huey),
+                   'detail_url': self.detail_url(),
                    'enabled': True, 'overview': None, 'spark': []}
         try:
-            context['overview'] = self._overview()
+            context['overview'] = self.stats.overview()
             context['spark'] = self.stats.throughput(30)['complete']
         except Exception:
             context['enabled'] = False
@@ -103,15 +59,10 @@ class HueyPanel(AdminPanel):
         )
 
     def _context(self):
-        breakdown = self.stats.task_breakdown()
-        return dict(
-            panel=self, live=self._live(), overview=self._overview(),
-            stats_map={row['full']: row for row in breakdown},
-            inflight=self.stats.inflight(),
-            events=self.stats.recent_events(self.event_limit),
-            pending=self._pending(), scheduled=self._scheduled(),
-            known=self._known_tasks(),
-            throughput=self.stats.throughput(self.throughput_minutes))
+        context = dashboard_context(self.huey, self.stats, self.list_limit,
+                                    self.event_limit, self.throughput_minutes)
+        context['panel'] = self
+        return context
 
     def index(self):
         return render_template('admin/huey/dashboard.html', admin=self.admin,

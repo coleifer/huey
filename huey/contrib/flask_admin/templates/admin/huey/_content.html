@@ -50,7 +50,7 @@
         </tr></thead>
         <tbody>
         {% for t in known %}
-          {% set s = stats_map.get(t.full) %}
+          {% set s = t.stats %}
           <tr>
             <td><span class="fw-semibold" title="{{ t.full }}">{{ t.task }}</span>
                 {% if t.revoked %}<span class="badge bg-dark">revoked</span>{% endif %}</td>

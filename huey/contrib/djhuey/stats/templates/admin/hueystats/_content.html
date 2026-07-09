@@ -1,0 +1,170 @@
+{% load hueystats %}
+{% if not enabled %}
+<p class="errornote">The stats recorder is not running. Check the server logs
+for start-up errors from <code>huey.contrib.djhuey.stats</code>.</p>
+{% else %}
+
+<div class="hs-tiles">
+  {% for t in tiles %}
+  <div class="hs-tile">
+    <div class="val {{ t.cls }}">{{ t.value|default_if_none:"—" }}</div>
+    <div class="lbl">{{ t.label }}</div>
+    {% if t.sub %}<div class="sub">{{ t.sub }}</div>{% endif %}
+  </div>
+  {% endfor %}
+</div>
+
+<div class="module hs-mod">
+  <h2>Throughput &middot; last {{ throughput.complete|length }} min</h2>
+  <div class="hs-pad">
+    <div class="hs-legend">
+      <span class="hs-ok">&#9632;</span> completed
+      <span class="hs-err">&#9632;</span> errors
+    </div>
+    <div class="hs-chart">{% barchart throughput.complete throughput.error %}</div>
+    <div class="hs-axis">
+      <span>{{ throughput.complete|length }} min ago</span><span>now</span>
+    </div>
+  </div>
+</div>
+
+<div class="hs-cols hs-mod">
+  <div class="module">
+    <h2>Registered tasks</h2>
+    <table class="hs-tbl">
+      <thead><tr>
+        <th>Task</th><th class="hs-r">Ran</th><th class="hs-r">OK</th>
+        <th class="hs-r">Err</th><th class="hs-r">Avg</th><th></th>
+      </tr></thead>
+      <tbody>
+      {% for t in known %}{% with s=t.stats %}
+        <tr>
+          <td><strong title="{{ t.full }}">{{ t.task }}</strong>
+              {% if t.revoked %}<span class="hs-badge hs-sig-dark">revoked</span>{% endif %}</td>
+          <td class="hs-r">{{ s.executed }}</td>
+          <td class="hs-r hs-ok">{{ s.completed }}</td>
+          <td class="hs-r {% if s.errors %}hs-err{% else %}hs-quiet{% endif %}">{{ s.errors }}</td>
+          <td class="hs-r">{{ s.avg|dur }}</td>
+          <td class="hs-r">
+            <form method="post" action="{% url 'admin:hueystats_dashboard_action' %}" class="hs-act">
+              {% csrf_token %}
+              <input type="hidden" name="task" value="{{ t.full }}">
+              {% if t.revoked %}
+                <input type="hidden" name="op" value="restore_task">
+                <button class="hs-btn">Restore</button>
+              {% else %}
+                <input type="hidden" name="op" value="revoke_task">
+                <button class="hs-btn hs-btn-danger">Revoke</button>
+              {% endif %}
+            </form>
+          </td>
+        </tr>
+      {% endwith %}{% empty %}
+        <tr><td colspan="6" class="hs-empty">No registered tasks.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="module">
+    <h2>Currently running &middot; {{ inflight|length }}</h2>
+    <table class="hs-tbl">
+      <thead><tr><th>Task</th><th>ID</th><th class="hs-r">Elapsed</th></tr></thead>
+      <tbody>
+      {% for r in inflight %}
+        <tr><td><strong>{{ r.task }}</strong></td>
+            <td class="hs-mono hs-quiet">{{ r.id|slice:":8" }}</td>
+            <td class="hs-r">{{ r.elapsed|elapsed }}</td></tr>
+      {% empty %}
+        <tr><td colspan="3" class="hs-empty">Nothing running.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="module hs-mod">
+  <h2>Recent events</h2>
+  <table class="hs-tbl">
+    <thead><tr><th>Time</th><th>Task</th><th>Signal</th>
+               <th class="hs-r">Duration</th><th>Error</th></tr></thead>
+    <tbody>
+    {% for e in events %}
+      <tr>
+        <td class="hs-mono hs-quiet">{{ e.time }}</td>
+        <td><strong>{{ e.task }}</strong></td>
+        <td>{% sigbadge e.signal %}</td>
+        <td class="hs-r">{{ e.duration|dur }}</td>
+        <td class="hs-errmsg" title="{{ e.error|default:'' }}">{{ e.error|default:'' }}</td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="5" class="hs-empty">No events recorded yet.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="hs-cols-2 hs-mod">
+  <div class="module">
+    <h2>Pending &middot; {{ live.pending|default_if_none:"?" }}</h2>
+    <table class="hs-tbl">
+      <thead><tr><th>Task</th><th>ID</th><th class="hs-r">Prio</th><th></th></tr></thead>
+      <tbody>
+      {% for p in pending %}
+        <tr><td><strong>{{ p.task }}</strong></td>
+            <td class="hs-mono hs-quiet">{{ p.id|slice:":8" }}</td>
+            <td class="hs-r">{{ p.priority|default_if_none:0 }}</td>
+            <td class="hs-r">
+              <form method="post" action="{% url 'admin:hueystats_dashboard_action' %}" class="hs-act">
+                {% csrf_token %}
+                <input type="hidden" name="op" value="revoke_id">
+                <input type="hidden" name="id" value="{{ p.id }}">
+                <button class="hs-btn hs-btn-danger">Revoke</button>
+              </form>
+            </td></tr>
+      {% empty %}
+        <tr><td colspan="4" class="hs-empty">Queue empty.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="module">
+    <h2>Scheduled &middot; {{ live.scheduled|default_if_none:"?" }}</h2>
+    <table class="hs-tbl">
+      <thead><tr><th>Task</th><th>ID</th><th>ETA</th><th></th></tr></thead>
+      <tbody>
+      {% for s in scheduled %}
+        <tr><td><strong>{{ s.task }}</strong></td>
+            <td class="hs-mono hs-quiet">{{ s.id|slice:":8" }}</td>
+            <td>{{ s.eta|default_if_none:"—" }}</td>
+            <td class="hs-r">
+              <form method="post" action="{% url 'admin:hueystats_dashboard_action' %}" class="hs-act">
+                {% csrf_token %}
+                <input type="hidden" name="op" value="revoke_id">
+                <input type="hidden" name="id" value="{{ s.id }}">
+                <button class="hs-btn hs-btn-danger">Revoke</button>
+              </form>
+            </td></tr>
+      {% empty %}
+        <tr><td colspan="4" class="hs-empty">Nothing scheduled.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="module hs-mod">
+  <h2>Danger zone</h2>
+  <div class="hs-pad hs-danger-zone">
+    {% for op, label in danger_ops %}
+    <form method="post" action="{% url 'admin:hueystats_dashboard_action' %}"
+          onsubmit="return confirm('{{ label }}? This cannot be undone.');">
+      {% csrf_token %}
+      <input type="hidden" name="op" value="{{ op }}">
+      <button class="hs-btn hs-btn-danger">{{ label }}</button>
+    </form>
+    {% endfor %}
+  </div>
+</div>
+
+{% endif %}

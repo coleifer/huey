@@ -1,0 +1,90 @@
+{% extends "admin/base_site.html" %}
+
+{% block extrastyle %}{{ block.super }}
+<style>
+  :root {
+    --hs-ok: #1e8e4e; --hs-err: #c9302c; --hs-warn: #b58105;
+    --hs-run: #2b6cb0; --hs-info: #17a2b8; --hs-dark: #495057;
+  }
+  html[data-theme="dark"] {
+    --hs-ok: #37b45f; --hs-err: #e05252; --hs-warn: #d9a62e;
+    --hs-run: #5b9bd5; --hs-info: #45b8c9; --hs-dark: #868e96;
+  }
+  @media (prefers-color-scheme: dark) {
+    html[data-theme="auto"] {
+      --hs-ok: #37b45f; --hs-err: #e05252; --hs-warn: #d9a62e;
+      --hs-run: #5b9bd5; --hs-info: #45b8c9; --hs-dark: #868e96;
+    }
+  }
+  .hs-ok { color: var(--hs-ok); } .hs-err { color: var(--hs-err); }
+  .hs-run { color: var(--hs-run); }
+  .hs-quiet { color: var(--body-quiet-color); }
+  .hs-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+              gap: 12px; margin-bottom: 16px; }
+  .hs-tile { background: var(--darkened-bg); border: 1px solid var(--hairline-color);
+             border-radius: 6px; padding: 12px 8px; text-align: center;
+             font-variant-numeric: tabular-nums; }
+  .hs-tile .val { font-size: 1.6rem; line-height: 1.1; font-weight: 600; }
+  .hs-tile .lbl { font-size: .7rem; text-transform: uppercase; letter-spacing: .03em;
+                  color: var(--body-quiet-color); margin-top: 2px; }
+  .hs-tile .sub { font-size: .7rem; color: var(--body-quiet-color); margin-top: 1px; }
+  .hs-cols { display: grid; grid-template-columns: 3fr 2fr; gap: 16px; align-items: start; }
+  .hs-cols-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+  @media (max-width: 1024px) { .hs-cols, .hs-cols-2 { grid-template-columns: 1fr; } }
+  .hs-mod { margin-bottom: 16px; }
+  .hs-pad { padding: 10px; }
+  .hs-chart svg { width: 100%; height: 64px; display: block; }
+  .hs-legend { font-size: .75rem; color: var(--body-quiet-color); margin-bottom: 6px; }
+  .hs-axis { display: flex; justify-content: space-between; font-size: .7rem;
+             color: var(--body-quiet-color); margin-top: 4px; }
+  table.hs-tbl { width: 100%; font-variant-numeric: tabular-nums; }
+  table.hs-tbl td, table.hs-tbl th { vertical-align: middle; }
+  .hs-r { text-align: right; }
+  .hs-mono { font-family: var(--font-family-monospace); font-size: .75rem; }
+  .hs-errmsg { max-width: 28rem; white-space: nowrap; overflow: hidden;
+               text-overflow: ellipsis; color: var(--hs-err); font-size: .75rem; }
+  .hs-empty { text-align: center; color: var(--body-quiet-color); padding: 12px; }
+  .hs-badge { display: inline-block; padding: .1em .55em; border-radius: 99px;
+              font-size: .68rem; color: #fff; background: var(--hs-dark); }
+  .hs-sig-ok { background: var(--hs-ok); } .hs-sig-err { background: var(--hs-err); }
+  .hs-sig-warn { background: var(--hs-warn); } .hs-sig-run { background: var(--hs-run); }
+  .hs-sig-info { background: var(--hs-info); } .hs-sig-dark { background: var(--hs-dark); }
+  .hs-sig-quiet { background: var(--body-quiet-color); }
+  .hs-bar-ok { fill: var(--hs-ok); } .hs-bar-err { fill: var(--hs-err); }
+  form.hs-act { display: inline; }
+  .hs-btn { font-size: .7rem; padding: 2px 8px; cursor: pointer; border-radius: 4px;
+            background: var(--body-bg); color: var(--body-fg);
+            border: 1px solid var(--border-color); }
+  .hs-btn-danger { color: var(--hs-err); border-color: var(--hs-err); }
+  .hs-danger-zone { display: flex; flex-wrap: wrap; gap: 8px; }
+</style>
+{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">Home</a> &rsaquo; Huey
+</div>
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+  <div id="hs-content" data-url="{% url 'admin:hueystats_dashboard_fragment' %}">
+    {% include "admin/hueystats/_content.html" %}
+  </div>
+</div>
+<script>
+(function () {
+  var box = document.getElementById('hs-content');
+  if (!box) return;
+  var url = box.getAttribute('data-url');
+  var last = '';
+  function refresh() {
+    fetch(url, {headers: {'X-Requested-With': 'fetch'}})
+      .then(function (r) { return r.text(); })
+      .then(function (html) { if (html !== last) { last = html; box.innerHTML = html; } })
+      .catch(function () {});
+  }
+  setInterval(refresh, 5000);
+})();
+</script>
+{% endblock %}

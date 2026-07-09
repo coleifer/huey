@@ -249,6 +249,70 @@ class HueyStats(object):
                     complete[slot] += 1
         return {'complete': complete, 'error': error}
 
+    def overview(self, seconds=86400):
+        window = self.window_counts(seconds)
+        completed = window.get(S.SIGNAL_COMPLETE, 0)
+        errors = window.get(S.SIGNAL_ERROR, 0)
+        total = completed + errors
+        return {'completed': completed, 'errors': errors,
+                'retries': window.get(S.SIGNAL_RETRYING, 0),
+                'error_rate': (errors / total) if total else 0,
+                'inflight': len(self.inflight())}
+
+
+def live_counts(huey):
+    data = {}
+    for key, method in (('pending', huey.pending_count),
+                        ('scheduled', huey.scheduled_count),
+                        ('results', huey.result_count)):
+        try:
+            data[key] = method()
+        except Exception:
+            data[key] = None
+    return data
+
+
+def pending_tasks(huey, limit=50):
+    try:
+        return [{'task': type(t).__name__, 'id': t.id, 'priority': t.priority,
+                 'eta': t.eta} for t in huey.pending(limit)]
+    except Exception:
+        return []
+
+
+def scheduled_tasks(huey, limit=50):
+    try:
+        return [{'task': type(t).__name__, 'id': t.id, 'eta': t.eta}
+                for t in huey.scheduled(limit)]
+    except Exception:
+        return []
+
+
+def known_tasks(huey):
+    out = []
+    for full, task_class in sorted(huey._registry._registry.items()):
+        try:
+            revoked = huey.is_revoked(task_class)
+        except Exception:
+            revoked = False
+        out.append({'full': full, 'task': task_class.__name__,
+                    'revoked': revoked})
+    return out
+
+
+def dashboard_context(huey, stats, list_limit=50, event_limit=50,
+                      throughput_minutes=60):
+    stats_map = {row['full']: row for row in stats.task_breakdown()}
+    known = known_tasks(huey)
+    for row in known:
+        row['stats'] = stats_map.get(row['full'])
+    return {'live': live_counts(huey), 'overview': stats.overview(),
+            'known': known, 'inflight': stats.inflight(),
+            'events': stats.recent_events(event_limit),
+            'pending': pending_tasks(huey, list_limit),
+            'scheduled': scheduled_tasks(huey, list_limit),
+            'throughput': stats.throughput(throughput_minutes)}
+
 
 def enable_stats(huey, db, **kwargs):
     stats = getattr(huey, '_stats', None)
