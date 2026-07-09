@@ -10,7 +10,7 @@
   (overview.errors, 'Errors 24h', 'text-danger',
    '%.1f%% error rate'|format(overview.error_rate * 100)),
 ] %}
-<div class="row row-cols-2 row-cols-md-3 g-3 mb-4">
+<div class="row row-cols-2 row-cols-md-3 row-cols-xl-6 g-3 mb-4">
   {% for value, label, cls, sub in tiles %}
   <div class="col">
     <div class="card h-100"><div class="card-body huey-tile text-center py-3">
