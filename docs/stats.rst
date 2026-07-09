@@ -4,15 +4,16 @@ Task statistics
 ---------------
 
 :py:func:`enable_stats` attaches a lightweight recorder to a :py:class:`Huey`
-instance that persists task signals -- enqueued, executing, complete, error,
-retrying, and so on -- into a pair of `peewee <http://docs.peewee-orm.com/>`_
+instance that persists task signals (enqueued, executing, complete, error,
+retrying, and so on) into a pair of `peewee <http://docs.peewee-orm.com/>`_
 tables. From those tables you can compute throughput, error-rates, per-task
 timing and a live view of what is currently running.
 
 The recorder depends only on peewee and writes to any peewee ``Database`` you
 give it (SQLite, Postgres, MySQL). It is the engine behind the
-:ref:`Flask-Peewee admin panel <flask-admin>`, but it stands on its own -- use
-it to feed a custom dashboard, a metrics exporter or a CLI report.
+:ref:`Flask-Peewee admin panel <flask-admin>` and the
+:ref:`Django admin dashboard <django-admin-stats>`, but it stands on its own:
+use it to feed a custom dashboard, a metrics exporter or a CLI report.
 
 Enabling
 ^^^^^^^^
@@ -46,8 +47,8 @@ share one database without their data mixing.
 Querying
 ^^^^^^^^
 
-The :py:class:`HueyStats` object returned by :py:func:`enable_stats` -- also
-available afterwards as ``huey._stats`` -- exposes read helpers:
+The :py:class:`HueyStats` object returned by :py:func:`enable_stats` (also
+available afterwards as ``huey._stats``) exposes read helpers:
 
 .. code-block:: python
 

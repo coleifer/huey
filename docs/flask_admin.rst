@@ -46,8 +46,8 @@ Registering the panel also calls :py:func:`~huey.contrib.stats.enable_stats`,
 so the stats tables are created when the admin site starts up and the web
 process records any signals it sees (such as tasks enqueued from a request).
 
-To capture task **execution** -- and therefore the throughput, per-task and
-event views -- also enable the recorder in the consumer (:ref:`task-stats`).
+To capture task **execution**, which feeds the throughput, per-task and event
+views, enable the recorder in the consumer as well (:ref:`task-stats`).
 Without it, the panel still shows the live queue counts (pending, scheduled,
 results), but the history tables remain empty.
 

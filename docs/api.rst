@@ -239,7 +239,7 @@ Huey object
     call to be enqueued for execution by the consumer.
 
     Typically your application will only need one Huey instance, but you can
-    have as many as you like -- the only caveat is that one consumer process
+    have as many as you like; the only caveat is that one consumer process
     must be executed for each Huey instance.
 
     Example usage:
@@ -461,7 +461,7 @@ Huey object
         helper (described below). The consumer checks once per minute whether
         the function should run.
 
-        Example — execute every three hours, on the hour:
+        Example, executing every three hours, on the hour:
 
         .. code-block:: python
 
@@ -567,7 +567,7 @@ Huey object
             @huey.pre_execute()
             def my_pre_execute_hook(task):
                 if datetime.datetime.now().weekday() == 6:
-                    raise CancelExecution('Sunday -- no work will be done.')
+                    raise CancelExecution('Sunday, no work will be done.')
 
     .. py:method:: unregister_pre_execute(name_or_fn)
 
@@ -911,13 +911,13 @@ Huey object
 
         .. code-block:: python
 
-            # Decorator form — automatically discovered:
+            # Decorator form, automatically discovered:
             @huey.periodic_task(crontab(minute='*/5'))
             @huey.lock_task('reports-lock')
             def generate_report():
                 run_report()
 
-            # Context-manager form — NOT automatically discovered:
+            # Context-manager form, NOT automatically discovered:
             @huey.task()
             def backup():
                 with huey.lock_task('db-backup'):
