@@ -17,28 +17,15 @@ class HueyPanel(AdminPanel):
     event_limit = 50
     throughput_minutes = 60
 
-    huey = None
-    stats = None
-    _bind_huey = None
-    _bind_db = None
-    _bind_opts = {}
-
-    @classmethod
-    def bind(cls, huey, db=None, **kwargs):
-        return type('HueyPanel', (cls,), {'_bind_huey': huey, '_bind_db': db,
-                                          '_bind_opts': kwargs})
-
-    def __init__(self, admin, title):
+    def __init__(self, admin, title, huey, db=None, **kwargs):
         super(HueyPanel, self).__init__(admin, title)
-        if self._bind_huey is None:
-            raise RuntimeError('HueyPanel must be bound to a huey instance: '
-                               'admin.register_panel("Huey", HueyPanel.bind(huey))')
-        db = self._bind_db or getattr(getattr(admin, 'auth', None), 'db', None)
+        db = db or getattr(getattr(admin, 'auth', None), 'db', None)
         if db is None:
             raise RuntimeError('No database available for huey stats; pass one '
-                               'explicitly: HueyPanel.bind(huey, db)')
-        self.huey = self._bind_huey
-        self.stats = enable_huey_admin(self.huey, db, **self._bind_opts)
+                               'explicitly: '
+                               'admin.register_panel("Huey", HueyPanel, huey, db)')
+        self.huey = huey
+        self.stats = enable_huey_admin(self.huey, db, **kwargs)
         self._install_templates(admin.app)
 
     def _install_templates(self, app):

@@ -34,3 +34,6 @@ version = { attr = "huey.__version__" }
 
 [tool.setuptools.packages.find]
 include = ["huey*"]
+
+[tool.setuptools.package-data]
+"huey.contrib.flask_admin" = ["templates/admin/huey/*.html"]
