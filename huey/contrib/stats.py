@@ -250,10 +250,10 @@ class HueyStats(object):
         return {'complete': complete, 'error': error}
 
 
-def enable_huey_admin(huey, db, **kwargs):
-    stats = getattr(huey, '_flask_admin_stats', None)
+def enable_stats(huey, db, **kwargs):
+    stats = getattr(huey, '_stats', None)
     if stats is None:
         stats = HueyStats(huey, db, **kwargs)
-        huey._flask_admin_stats = stats
+        huey._stats = stats
         stats.connect()
     return stats

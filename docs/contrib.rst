@@ -12,4 +12,6 @@ beyond the core APIs.
 
 .. include:: asyncio.rst
 
+.. include:: stats.rst
+
 .. include:: flask_admin.rst

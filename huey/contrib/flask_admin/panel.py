@@ -5,7 +5,7 @@ from jinja2 import ChoiceLoader, FileSystemLoader
 
 from flask_peewee.admin import AdminPanel
 
-from huey.contrib.flask_admin.stats import enable_huey_admin
+from huey.contrib.stats import enable_stats
 
 
 TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), 'templates')
@@ -25,7 +25,7 @@ class HueyPanel(AdminPanel):
                                'explicitly: '
                                'admin.register_panel("Huey", HueyPanel, huey, db)')
         self.huey = huey
-        self.stats = enable_huey_admin(self.huey, db, **kwargs)
+        self.stats = enable_stats(self.huey, db, **kwargs)
         self._install_templates(admin.app)
 
     def _install_templates(self, app):
