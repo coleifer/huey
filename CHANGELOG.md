@@ -3,6 +3,10 @@ Changelog
 
 ## master
 
+[View commits](https://github.com/coleifer/huey/compare/3.2.1...master)
+
+## 3.2.1
+
 * Add a Django admin dashboard for task statistics. Adding
   `huey.contrib.djhuey.stats` to `INSTALLED_APPS` starts the
   `huey.contrib.stats` recorder in every process (incl. the consumer) and adds
@@ -10,7 +14,7 @@ Changelog
   as the flask-peewee panel, plus a filterable event log. Stats are stored via
   peewee in the default Django database and require no migrations.
 
-[View commits](https://github.com/coleifer/huey/compare/3.2.0...master)
+[View commits](https://github.com/coleifer/huey/compare/3.2.0...3.2.1)
 
 ## 3.2.0
 
