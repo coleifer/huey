@@ -72,7 +72,7 @@ API
 .. py:function:: enable_stats(huey, db[, **options])
 
     Attach a stats recorder to ``huey`` and begin writing task events to
-    ``db``. Idempotent per huey instance; returns a :py:class:`HueyStats`.
+    ``db``. Idempotent per huey instance. Returns a :py:class:`HueyStats`.
 
     :param huey: the :py:class:`Huey` instance to monitor.
     :param db: a peewee ``Database`` or flask-peewee ``Database`` in which the

@@ -150,7 +150,7 @@ Reusing the Django database configuration
 
 Rather than duplicating your credentials in ``settings.HUEY``, you can point the
 storage at the same database Django uses by passing a ``connection`` callable.
-The callable must return a **new**, dedicated ``psycopg`` connection; do not
+The callable must return a **new**, dedicated ``psycopg`` connection. Do not
 hand back ``django.db.connection``. Huey enables autocommit on the connection
 and holds a long-lived one open for ``LISTEN``, neither of which is compatible
 with Django's per-request connection or its transaction handling.

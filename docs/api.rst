@@ -224,7 +224,7 @@ Huey object
         compatibility. See :ref:`store-intermediate-errors`.
     :param bool utc: use UTC internally, convert naive datetimes from local
         time to UTC (if local time is other than UTC).
-    :param bool immediate: useful for debugging; causes tasks to be executed
+    :param bool immediate: useful for debugging, causes tasks to be executed
         synchronously in the application.
     :param Serializer serializer: serializer implementation for tasks and
         result data. The default implementation uses ``pickle``.
@@ -239,7 +239,7 @@ Huey object
     call to be enqueued for execution by the consumer.
 
     Typically your application will only need one Huey instance, but you can
-    have as many as you like; the only caveat is that one consumer process
+    have as many as you like. The only caveat is that one consumer process
     must be executed for each Huey instance.
 
     Example usage:

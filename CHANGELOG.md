@@ -8,7 +8,7 @@ Changelog
   `huey.contrib.stats` recorder in every process (incl. the consumer) and adds
   a Huey section to the admin: a dashboard w/ the same live stats and controls
   as the flask-peewee panel, plus a filterable event log. Stats are stored via
-  peewee in the default Django database; no migrations needed.
+  peewee in the default Django database and require no migrations.
 
 [View commits](https://github.com/coleifer/huey/compare/3.2.0...master)
 
@@ -31,7 +31,7 @@ Changelog
   records task signals into two peewee tables (`huey_event`, `huey_inflight`)
   and exposes a `HueyStats` query API for throughput, per-task timing,
   error-rates, in-flight and recent-event views. Depends only on peewee, so it
-  can back a custom dashboard or exporter; enable it in the consumer to capture
+  can back a custom dashboard or exporter. Enable it in the consumer to capture
   task execution.
 * Add a Flask-Peewee admin panel, `huey.contrib.flask_admin.HueyPanel`,
   registered w/ `admin.register_panel('Huey', HueyPanel, huey)`. It renders the
@@ -81,7 +81,7 @@ Changelog
   propagates to the worker, which logs it and applies exponential backoff.
   Previously a downed redis server caused workers to busy-loop silently.
 * Chord callbacks now fire when a member task is revoked, expired or cancelled
-  by a pre-execute hook; the skipped member contributes a `None` placeholder
+  by a pre-execute hook. The skipped member contributes a `None` placeholder
   result. Previously the callback was silently lost.
 * Scheduler skips missed periodic checks after a stall (e.g. suspend/resume)
   instead of running them back-to-back, which enqueued duplicate periodic
@@ -96,7 +96,7 @@ Changelog
 * Process-worker task timeouts use `signal.setitimer()`, so float / sub-second
   timeouts work. Previously a timeout less than 1 second was silently ignored
   (`alarm(0)` cancels the timer) and fractional seconds were truncated.
-* Consumer signal handlers only set flags; logging and greenlet cleanup now
+* Consumer signal handlers only set flags. Logging and greenlet cleanup now
   happen in the main loop, avoiding re-entrant I/O from signal context.
 * A user-supplied task kwarg named `task` is no longer dropped during
   serialization. Context tasks (`context=True`) inject the task instance into
@@ -106,7 +106,7 @@ Changelog
 * `normalize_time()` treats `delay=0` as "now" rather than ignoring it, so
   e.g. `expires=0` means "expires immediately" instead of "never expires".
 * Redis `enqueued_items(limit)` returned `limit + 1` items from the producer
-  end of the queue; it now returns the next-`limit` items to be dequeued,
+  end of the queue. It now returns the next-`limit` items to be dequeued,
   matching the other storage backends.
 * Redis-dependent tests are skipped when no local redis server is reachable,
   instead of failing at import time.
