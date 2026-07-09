@@ -8,7 +8,7 @@ Changelog
   `huey.contrib.stats` recorder in every process (incl. the consumer) and adds
   a Huey section to the admin: a dashboard w/ the same live stats and controls
   as the flask-peewee panel, plus a filterable event log. Stats are stored via
-  peewee in the default Django database -- no migrations needed.
+  peewee in the default Django database; no migrations needed.
 
 [View commits](https://github.com/coleifer/huey/compare/3.2.0...master)
 
@@ -77,11 +77,11 @@ Changelog
 
 ## 3.0.2
 
-* Redis blocking dequeue no longer swallows `ConnectionError` -- the error
+* Redis blocking dequeue no longer swallows `ConnectionError`: the error
   propagates to the worker, which logs it and applies exponential backoff.
   Previously a downed redis server caused workers to busy-loop silently.
 * Chord callbacks now fire when a member task is revoked, expired or cancelled
-  by a pre-execute hook -- the skipped member contributes a `None` placeholder
+  by a pre-execute hook; the skipped member contributes a `None` placeholder
   result. Previously the callback was silently lost.
 * Scheduler skips missed periodic checks after a stall (e.g. suspend/resume)
   instead of running them back-to-back, which enqueued duplicate periodic
@@ -96,7 +96,7 @@ Changelog
 * Process-worker task timeouts use `signal.setitimer()`, so float / sub-second
   timeouts work. Previously a timeout less than 1 second was silently ignored
   (`alarm(0)` cancels the timer) and fractional seconds were truncated.
-* Consumer signal handlers only set flags -- logging and greenlet cleanup now
+* Consumer signal handlers only set flags; logging and greenlet cleanup now
   happen in the main loop, avoiding re-entrant I/O from signal context.
 * A user-supplied task kwarg named `task` is no longer dropped during
   serialization. Context tasks (`context=True`) inject the task instance into
