@@ -638,7 +638,7 @@ class RedisExpireStorage(RedisStorage):
         if is_result:
             # We only want to expire task result data. If we are storing an
             # important metadata like a revocation key, we need to preserve it.
-            self.conn.setex(self.result_key(key), self._expire_time, value)
+            self.conn.set(self.result_key(key), value, ex=self._expire_time)
             if isinstance(key, bytes):
                 key = key.decode('utf8')
             if self.notify_result:
