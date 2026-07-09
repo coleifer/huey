@@ -23,8 +23,8 @@ huey has:
   ``psycopg`` for postgres).
 * `example code <https://github.com/coleifer/huey/tree/master/examples/>`_.
 * :ref:`django <django>` integration (native or via django.tasks) with
-  optional `admin <https://huey.readthedocs.io/en/latest/_images/django-admin.png>`_
-  integration for visibility and management.
+  optional :ref:`admin integration <django-admin-stats>`_ for visibility and
+  management.
 
 huey supports:
 
