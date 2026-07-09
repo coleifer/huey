@@ -16,6 +16,18 @@ Changelog
   outcome instead of raising on the first failed attempt.
 * Fix `on_error` handlers accumulating one exception argument per failed attempt
   across retries; a handler now receives only the current attempt's exception.
+* Add `huey.contrib.stats`, a task-statistics engine: `enable_stats(huey, db)`
+  records task signals into two peewee tables (`huey_event`, `huey_inflight`)
+  and exposes a `HueyStats` query API for throughput, per-task timing,
+  error-rates, in-flight and recent-event views. Depends only on peewee, so it
+  can back a custom dashboard or exporter; enable it in the consumer to capture
+  task execution.
+* Add a Flask-Peewee admin panel, `huey.contrib.flask_admin.HueyPanel`,
+  registered w/ `admin.register_panel('Huey', HueyPanel, huey)`. It renders the
+  recorded stats as a dashboard card plus a standalone page -- live queue
+  depths, throughput, per-task stats, running tasks and recent events -- w/
+  controls to revoke/restore tasks and flush the queue, schedule, results or
+  locks. Requires flask-peewee's `register_panel` extra-argument support.
 
 [View commits](https://github.com/coleifer/huey/compare/3.1.1...master)
 
