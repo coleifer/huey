@@ -9,6 +9,13 @@ Changelog
   every web worker attempt DDL on import.
 * Add a `create_huey_tables` Django management command to create the tables when
   `create_tables=False`.
+* Add `store_intermediate_errors` option (default true, preserving current
+  behavior). When false, a task that fails with retries remaining no longer
+  writes its exception to the result store or runs its `on_error` handler until
+  the retries are exhausted, so a blocking `Result.get()` waits for the final
+  outcome instead of raising on the first failed attempt.
+* Fix `on_error` handlers accumulating one exception argument per failed attempt
+  across retries; a handler now receives only the current attempt's exception.
 
 [View commits](https://github.com/coleifer/huey/compare/3.1.1...master)
 

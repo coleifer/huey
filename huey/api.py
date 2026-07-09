@@ -1,3 +1,4 @@
+import copy
 import datetime
 import inspect
 import itertools
@@ -56,6 +57,11 @@ class Huey(object):
     :param name: a name for the task queue, e.g. your application's name.
     :param bool results: whether to store task results.
     :param bool store_none: whether to store ``None`` in the result store.
+    :param bool store_intermediate_errors: when a task fails but has retries
+        remaining, store the intermediate exception in the result store and run
+        any ``on_error`` handler. When ``False``, the error is withheld until
+        the task's retries are exhausted. Defaults to ``True`` for backwards
+        compatibility.
     :param bool utc: use UTC internally by converting from local time.
     :param bool immediate: useful for debugging; causes tasks to be executed
         synchronously in the application.
@@ -88,11 +94,12 @@ class Huey(object):
     def __init__(self, name='huey', results=True, store_none=False, utc=True,
                  immediate=False, serializer=None, compression=False,
                  use_zlib=False, immediate_use_memory=True, storage_class=None,
-                 **storage_kwargs):
+                 store_intermediate_errors=True, **storage_kwargs):
 
         self.name = name
         self.results = results
         self.store_none = store_none
+        self.store_intermediate_errors = store_intermediate_errors
         self.utc = utc
         self._immediate = immediate
         self.immediate_use_memory = immediate_use_memory
@@ -514,11 +521,15 @@ class Huey(object):
         if not isinstance(task, PeriodicTask):
             self.get(task.revoke_id)
 
+        surface_error = (exception is not None and
+                         (self.store_intermediate_errors or not task.retries))
+
         if self.results and not isinstance(task, PeriodicTask):
-            if exception is not None:
+            if surface_error:
                 error_data = self.build_error_result(task, exception)
                 self.put_result(task.id, Error(error_data))
-            elif task_value is not None or self.store_none:
+            elif exception is None and (task_value is not None or
+                                        self.store_none):
                 self.put_result(task.id, task_value)
 
         if self._post_execute:
@@ -532,8 +543,10 @@ class Huey(object):
             next_task = task.on_complete
             next_task.extend_data(task_value)
             self.enqueue(next_task)
-        elif task.on_error and exception is not None:
-            next_task = task.on_error
+        elif task.on_error and surface_error:
+            # Fire with only this attempt's exception; copy so the append does
+            # not accumulate on the shared handler when the task is retried.
+            next_task = copy.copy(task.on_error)
             next_task.extend_data(exception)
             self.enqueue(next_task)
 

@@ -281,6 +281,9 @@ When a task raises an unhandled exception, Huey performs several actions:
 5. If the task has an ``on_error`` handler, the error handler task is enqueued
    with the exception as an argument.
 
+Steps 2 and 5 run on every failed attempt by default. To defer them until a
+task's retries are exhausted, see :ref:`store-intermediate-errors`.
+
 Reading error results
 ^^^^^^^^^^^^^^^^^^^^^
 
@@ -315,7 +318,8 @@ When a task fails, the error result is written to the result store. If the task
 is retried and eventually succeeds, the success result **overwrites** the error.
 However, the :py:class:`Result` object caches the result locally after the
 first read. To see the updated result after a retry, you must call
-:py:meth:`~Result.reset`:
+:py:meth:`~Result.reset` (only with the default
+``store_intermediate_errors=True``; see :ref:`store-intermediate-errors`):
 
 .. code-block:: python
 
@@ -334,6 +338,47 @@ first read. To see the updated result after a retry, you must call
         result.reset()  # Clear cached error so we can read the new result.
         value = result.get(blocking=True, timeout=30)
         # value now contains the successful return value (or raises again).
+
+.. _store-intermediate-errors:
+
+Deferring errors until retries are exhausted
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+By default a failing task reports its error on every attempt, even those that
+still have retries remaining. The exception is written to the result store, and
+the ``on_error`` handler runs each time. This means a blocking
+:py:meth:`Result.get` raises on the first failure. To read the result of a
+later retry you have to call :py:meth:`~Result.reset` first, as shown above.
+
+Pass ``store_intermediate_errors=False`` to change this. A failing task that
+still has retries is re-enqueued, and nothing is written to the result store or
+sent to the ``on_error`` handler. The error or return value is stored once the
+task succeeds or runs out of retries.
+
+.. code-block:: python
+
+    huey = RedisHuey('my-app', store_intermediate_errors=False)
+
+    @huey.task(retries=2, retry_delay=10)
+    def flaky_download(url):
+        resp = requests.get(url)
+        resp.raise_for_status()
+        return resp.text
+
+    result = flaky_download('https://example.com/x')
+
+    # Blocks until the task finishes. Returns the value on success, or raises
+    # a TaskException after the final attempt fails. No reset() needed.
+    value = result.get(blocking=True, timeout=60)
+
+The ``SIGNAL_ERROR`` and ``SIGNAL_RETRYING`` :ref:`signals <signals>` still fire
+on every attempt, so you can still observe individual failures.
+
+.. note::
+    This defaults to ``True`` for backwards compatibility. Setting it to
+    ``False`` is recommended, and it may become the default in a future
+    release. It matches :py:class:`chord`, which already waits for retries to
+    run out before reporting an error.
 
 For more information, see:
 

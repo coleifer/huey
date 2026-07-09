@@ -212,11 +212,16 @@ Implementations of :py:class:`Huey` which handle task and result persistence.
 Huey object
 -----------
 
-.. py:class:: Huey(name='huey', results=True, store_none=False, utc=True, immediate=False, serializer=None, compression=False, use_zlib=False, immediate_use_memory=True, storage_kwargs)
+.. py:class:: Huey(name='huey', results=True, store_none=False, utc=True, immediate=False, serializer=None, compression=False, use_zlib=False, immediate_use_memory=True, store_intermediate_errors=True, storage_kwargs)
 
     :param str name: the name of the task queue, e.g. your application's name.
     :param bool results: whether to store task results.
     :param bool store_none: whether to store ``None`` in the result store.
+    :param bool store_intermediate_errors: when a task fails but has retries
+        remaining, store the intermediate exception in the result store and run
+        any ``on_error`` handler. When ``False``, the error is withheld until the
+        task's retries are exhausted. Defaults to ``True`` for backwards
+        compatibility. See :ref:`store-intermediate-errors`.
     :param bool utc: use UTC internally, convert naive datetimes from local
         time to UTC (if local time is other than UTC).
     :param bool immediate: useful for debugging; causes tasks to be executed
