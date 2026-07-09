@@ -1,6 +1,8 @@
 import asyncio
 
+from huey.api import Error
 from huey.constants import EmptyData
+from huey.exceptions import TaskException
 
 
 async def aget_result(res, backoff=1.15, max_delay=1.0, preserve=False):
@@ -44,6 +46,8 @@ async def aget_result(res, backoff=1.15, max_delay=1.0, preserve=False):
         if res._get(preserve) is EmptyData:
             await asyncio.sleep(delay)
             delay *= backoff
+    if isinstance(res._result, Error):
+        raise TaskException(res._result.metadata)
     return res._result
 
 
