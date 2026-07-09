@@ -3,6 +3,8 @@
 Flask-Peewee admin
 ------------------
 
+.. image:: flask-admin-panel.png
+
 :py:class:`HueyPanel` adds a huey monitoring dashboard to the admin site
 provided by `flask-peewee <https://github.com/coleifer/flask-peewee>`_. The
 dashboard shows live queue depths, currently-running tasks, recent events,
