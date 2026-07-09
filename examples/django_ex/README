@@ -1,13 +1,27 @@
-In one terminal, run:
+Django + huey example: tasks, periodic tasks, and the admin stats dashboard
+(huey.contrib.djhuey.stats). Requires Redis running locally.
+
+Setup:
+
+    ./manage.py migrate
+    ./manage.py createsuperuser
+
+In one terminal, run the consumer:
 
     ./manage.py run_huey
 
-In another terminal:
+In another, the web app:
 
-    ./manage.py shell
+    ./manage.py runserver
 
-Commands to try out:
+Log in at http://127.0.0.1:8000/admin/ - the "Huey" section has the stats
+dashboard and event log. The periodic tasks provide ambient activity; to
+generate more, ./manage.py shell:
 
     from djangoex.test_app.tasks import *
     res = add(1, 2)
     print(res.get(blocking=True))  # Wait for result, then print.
+
+    slow(10)       # Shows up under "currently running".
+    flaky_task()   # Errors, then succeeds on retry.
+    add.schedule((3, 4), delay=600)  # Shows up under "scheduled".
