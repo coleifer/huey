@@ -14,6 +14,7 @@ from gevent.event import Event
 from gevent.pool import Pool
 
 from huey.api import crontab
+from huey.utils import normalize_time
 
 
 logger = logging.getLogger('huey.mini')
@@ -27,8 +28,8 @@ class MiniHuey(object):
     def __init__(self, name='huey', interval=1, pool_size=None):
         self.name = name
         self._interval = interval
-        self._last_check = datetime.datetime.now()
-        self._periodic_interval = datetime.timedelta(seconds=60)
+        now = datetime.datetime.now()
+        self._last_check = now.replace(second=0, microsecond=0)
         self._periodic_tasks = []
         self._scheduled_tasks = []
         self._counter = itertools.count()
@@ -51,12 +52,7 @@ class MiniHuey(object):
                 return async_result
 
             def _schedule(args=None, kwargs=None, delay=None, eta=None):
-                if delay is not None:
-                    eta = (datetime.datetime.now() +
-                           datetime.timedelta(seconds=delay))
-                if eta is None:
-                    raise ValueError('Either a delay (in seconds) or an '
-                                     'eta (datetime) must be specified.')
+                eta = normalize_time(eta, delay, utc=False)
                 async_result = MiniHueyResult()
                 heapq.heappush(self._scheduled_tasks,
                                (eta, next(self._counter), fn, args, kwargs,
@@ -76,6 +72,7 @@ class MiniHuey(object):
     def start(self):
         if self._run_t is not None:
             raise Exception('Task runner is already running.')
+        self._shutdown.clear()
         self._run_t = gevent.spawn(self._run)
 
     def stop(self):
@@ -87,7 +84,7 @@ class MiniHuey(object):
         self._run_t = None
 
     def _enqueue(self, fn, args=None, kwargs=None, async_result=None):
-        logger.info('enqueueing %s' % fn.__name__)
+        logger.info('enqueueing %s', fn.__name__)
         self._pool.spawn(self._execute, fn, args, kwargs, async_result)
 
     def _execute(self, fn, args, kwargs, async_result):
@@ -97,13 +94,12 @@ class MiniHuey(object):
         try:
             ret = fn(*args, **kwargs)
         except Exception as exc:
-            logger.exception('task %s failed' % fn.__name__)
+            logger.exception('task %s failed', fn.__name__)
             if async_result is not None:
                 async_result.set_exception(exc)
-            raise
-        else:
-            duration = time.monotonic() - start
+            return
 
+        duration = time.monotonic() - start
         if async_result is not None:
             async_result.set(ret)
         logger.info('executed %s in %0.3fs', fn.__name__, duration)
@@ -112,27 +108,29 @@ class MiniHuey(object):
         logger.info('task runner started.')
         while not self._shutdown.is_set():
             start = time.monotonic()
-            now = datetime.datetime.now()
-            if self._last_check + self._periodic_interval <= now:
-                logger.debug('checking periodic task schedule')
-                self._last_check = now
-                for validate_func, fn in self._periodic_tasks:
-                    if validate_func(now):
-                        self._enqueue(fn)
+            try:
+                now = datetime.datetime.now()
+                minute = now.replace(second=0, microsecond=0)
+                if minute > self._last_check:
+                    logger.debug('checking periodic task schedule')
+                    self._last_check = minute
+                    for validate_func, fn in self._periodic_tasks:
+                        if validate_func(now):
+                            self._enqueue(fn)
 
-            if self._scheduled_tasks:
-                logger.debug('checking scheduled tasks')
-                # The 0-th item of a heap is always the smallest.
-                while self._scheduled_tasks and \
-                      self._scheduled_tasks[0][0] <= now:
+                if self._scheduled_tasks:
+                    logger.debug('checking scheduled tasks')
+                    # The 0-th item of a heap is always the smallest.
+                    while self._scheduled_tasks and \
+                          self._scheduled_tasks[0][0] <= now:
 
-                    eta, _, fn, args, kwargs, async_result = (
-                        heapq.heappop(self._scheduled_tasks))
-                    self._enqueue(fn, args, kwargs, async_result)
+                        eta, _, fn, args, kwargs, async_result = (
+                            heapq.heappop(self._scheduled_tasks))
+                        self._enqueue(fn, args, kwargs, async_result)
+            except Exception:
+                logger.exception('error in task scheduler.')
 
-            # Wait for most of the remained of the time remaining.
             remaining = self._interval - (time.monotonic() - start)
             if remaining > 0:
-                if not self._shutdown.wait(remaining * 0.9):
-                    gevent.sleep(self._interval - (time.monotonic() - start))
+                self._shutdown.wait(remaining)
         logger.info('exiting task runner')
