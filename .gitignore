@@ -5,3 +5,6 @@ docs/_build
 venv/
 huey.egg-info/
 huey.db
+build/
+dist/
+.mypy_cache/
