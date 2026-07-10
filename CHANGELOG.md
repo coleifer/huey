@@ -22,6 +22,10 @@ Changelog
   items.
 * Reconnect stale connections in the `SqlHuey` counter methods, which run in
   the consumer via chords and rate limits.
+* Return the lock from `TaskLock.__enter__()`, so
+  `with huey.lock_task('x') as lock:` binds the lock instead of None.
+* Defer the redis server version check to first use. Previously every storage
+  init issued an INFO round-trip.
 
 [View commits](https://github.com/coleifer/huey/compare/3.2.1...master)
 

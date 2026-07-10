@@ -13,7 +13,10 @@ sys.path.insert(0, os.path.realpath(os.path.dirname(os.path.dirname(__file__))))
 from huey import __version__
 version = release = __version__
 
-exclude_patterns = ['_build']
+# The contrib extension docs are stitched into contrib.rst via include, so
+# they must not also be built as standalone documents.
+exclude_patterns = ['_build', 'asyncio.rst', 'django.rst', 'flask_admin.rst',
+                    'mini.rst', 'stats.rst']
 pygments_style = 'sphinx'
 
 html_theme = 'sphinx_rtd_theme'

@@ -1,3 +1,4 @@
+from functools import cached_property
 import contextlib
 import hashlib
 import heapq
@@ -471,13 +472,15 @@ class RedisStorage(BaseStorage):
         self.blocking = blocking
         self.read_timeout = read_timeout
 
-        # Try to be robust against weird values in version.
+    @cached_property
+    def redis_version(self):
+        # Server version, used only to clamp BLPOP timeouts for redis < 6.
         try:
-            redis_version = str(self.conn.info()['redis_version'])
+            version = str(self.conn.info()['redis_version'])
         except Exception:
-            redis_version = '0.0.0'
-        self.redis_version = tuple(int(i) if i.isdigit() else 999
-                                   for i in redis_version.split('.'))
+            version = '0.0.0'  # Assume old, int timeouts always work.
+        return tuple(int(i) if i.isdigit() else 999
+                     for i in version.split('.'))
 
     def clean_name(self, name):
         return re.sub('[^A-Za-z0-9_]', '', name)

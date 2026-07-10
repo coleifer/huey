@@ -1095,6 +1095,7 @@ class TaskLock(object):
 
     def __enter__(self):
         self.acquire()
+        return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self._huey.delete(self._key)

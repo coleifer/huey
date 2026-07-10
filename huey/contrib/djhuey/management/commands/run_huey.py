@@ -57,9 +57,6 @@ class Command(BaseCommand):
             if value is not None:
                 consumer_options[key] = value
 
-        consumer_options.setdefault('verbose',
-                                    consumer_options.pop('huey_verbose', None))
-
         if not options.get('disable_autoload'):
             autodiscover_modules("tasks")
 

@@ -2393,7 +2393,8 @@ class TestTaskLocking(BaseTestCase):
         self.assertEqual(self.execute_next(), 4)
 
         task_a(4)
-        with self.huey.lock_task('lock_x'):
+        with self.huey.lock_task('lock_x') as lock:
+            self.assertTrue(lock.is_locked())
             self.assertFalse(self.huey.is_locked('lock_a'))
             self.assertTrue(self.huey.is_locked('lock_x'))
             self.assertEqual(self.execute_next(), 5)
