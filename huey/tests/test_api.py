@@ -969,6 +969,40 @@ class TestQueue(BaseTestCase):
         dt = datetime.datetime.now() + datetime.timedelta(seconds=61)
         self.assertTrue(self.huey.ready_to_run(task, dt))
 
+    def test_retry_backoff(self):
+        @self.huey.task(retries=3, retry_delay=2, retry_backoff=2)
+        def task_a():
+            raise ValueError('try again')
+
+        r = task_a()
+        self.assertTrue(self.execute_next() is None)
+        self.trap_exception(r)
+
+        seconds = lambda s: (datetime.datetime.now() +
+                             datetime.timedelta(seconds=s))
+
+        # The first retry is scheduled using the given retry_delay, after
+        # which the delay is multiplied by retry_backoff. The waits between
+        # attempts are 2, 4 and 8 seconds, and the grown retry_delay is
+        # serialized with the task along with the decremented retries.
+        for retries, delay, wait in ((2, 4, 2), (1, 8, 4), (0, 16, 8)):
+            task, = self.huey.scheduled()
+            self.assertEqual(task.retries, retries)
+            self.assertEqual(task.retry_delay, delay)
+            self.assertEqual(task.retry_backoff, 2)
+            self.assertTrue(seconds(wait - 2) < task.eta <= seconds(wait))
+
+            self.huey.storage.flush_schedule()
+            self.assertTrue(self.huey.execute(task, task.eta) is None)
+
+        # Retries are exhausted, nothing further is scheduled.
+        self.assertEqual(self.huey.scheduled_count(), 0)
+        self.assertEqual(len(self.huey), 0)
+
+        # The backoff multiplier can also be given when enqueueing.
+        t = task_a.s(retry_backoff=3)
+        self.assertEqual(t.retry_backoff, 3)
+
     def test_retrytask_eta_delay(self):
         @self.huey.task(retry_delay=10)
         def task_a(d=None, e=None):

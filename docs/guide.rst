@@ -240,8 +240,18 @@ between attempts:
     def flaky_task():
         # ...
 
+To grow the delay after each failed attempt, add a ``retry_backoff``
+multiplier. The task below is retried after 10 seconds, then 20, then 40:
+
+.. code-block:: python
+
+    @huey.task(retries=3, retry_delay=10, retry_backoff=2)
+    def call_external_service():
+        # ...
+
 .. note::
-    ``retries`` and ``retry_delay`` can also be specified for periodic tasks.
+    ``retries``, ``retry_delay`` and ``retry_backoff`` can also be specified
+    for periodic tasks.
 
 It is also possible to explicitly retry a task from within the task, by raising
 a :py:class:`RetryTask` exception. When this exception is used, the task will

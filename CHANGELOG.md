@@ -3,6 +3,10 @@ Changelog
 
 ## master
 
+* Add `retry_backoff` parameter to `task()` and `periodic_task()`. The first
+  retry waits `retry_delay` seconds and each subsequent delay is multiplied by
+  `retry_backoff`, giving exponentially-growing waits between retries.
+
 [View commits](https://github.com/coleifer/huey/compare/3.2.1...master)
 
 ## 3.2.1

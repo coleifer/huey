@@ -39,32 +39,17 @@ See :py:meth:`Huey.get` and :py:meth:`Huey.put` for additional details.
 Exponential Backoff Retries
 ---------------------------
 
-Huey supports ``retries`` and ``retry_delay``, but does not support exponential
-backoff out-of-the-box. Exponential backoff is important when calling external
-services. Without it, a fleet of workers retrying at the same interval can
-create a "thundering herd" that overwhelms a recovering service.
+Exponential backoff is important when calling external services. Without it, a
+fleet of workers retrying at the same interval can create a "thundering herd"
+that overwhelms a recovering service.
 
-We can implement exponential backoff with a small decorator that uses
-the ``context=True`` parameter to access and modify the task instance:
+Specify a ``retry_backoff`` multiplier along with ``retries`` and
+``retry_delay``. The first retry waits ``retry_delay`` seconds, and each
+subsequent delay is multiplied by ``retry_backoff``:
 
 .. code-block:: python
 
-    import functools
-
-    def exp_backoff_task(retries=10, retry_backoff=1.15):
-        def deco(fn):
-            @functools.wraps(fn)
-            def inner(*args, **kwargs):
-                task = kwargs.pop('task')
-                try:
-                    return fn(*args, **kwargs)
-                except Exception:
-                    task.retry_delay *= retry_backoff
-                    raise
-            return huey.task(retries=retries, retry_delay=1, context=True)(inner)
-        return deco
-
-    @exp_backoff_task(retries=5, retry_backoff=2)
+    @huey.task(retries=5, retry_delay=2, retry_backoff=2)
     def call_external_api(endpoint, payload):
         resp = requests.post(endpoint, json=payload)
         resp.raise_for_status()
@@ -74,16 +59,11 @@ If the consumer starts executing the task at ``12:00:00``, the retry schedule
 would look like:
 
 * ``12:00:00`` first call
-* ``12:00:02`` retry 1 (delay=1*2=2s)
-* ``12:00:06`` retry 2 (delay=2*2=4s)
-* ``12:00:14`` retry 3 (delay=4*2=8s)
-* ``12:00:30`` retry 4 (delay=8*2=16s)
-* ``12:01:02`` retry 5 (delay=16*2=32s)
-
-.. note::
-    The ``retry_delay`` is modified on the task instance itself, so the change
-    persists across retries. The initial ``retry_delay=1`` is set when the task
-    is registered, and gets multiplied by ``retry_backoff`` on each failure.
+* ``12:00:02`` retry 1 (delay=2s)
+* ``12:00:06`` retry 2 (delay=4s)
+* ``12:00:14`` retry 3 (delay=8s)
+* ``12:00:30`` retry 4 (delay=16s)
+* ``12:01:02`` retry 5 (delay=32s)
 
 .. _recipe-idempotent-tasks:
 
