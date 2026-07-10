@@ -10,7 +10,6 @@ except ImportError:
 
 from huey.exceptions import TaskTimeout
 from huey.utils import FileLock
-from huey.utils import UTC
 from huey.utils import normalize_expire_time
 from huey.utils import normalize_time
 from huey.utils import process_timeout
@@ -66,7 +65,8 @@ class TestNormalizeTime(unittest.TestCase):
         # TZ-aware datetime in UTC timezone.
 
         # Here we provide a tz-aware timestamp using UTC timezone.
-        ts = datetime.datetime(2000, 1, 1, 12, 0, 0, tzinfo=UTC())
+        ts = datetime.datetime(2000, 1, 1, 12, 0, 0,
+                               tzinfo=datetime.timezone.utc)
 
         # Since we're specifying utc=False, we are dealing with localtimes
         # internally. The timestamp passed in is a tz-aware timestamp in UTC.

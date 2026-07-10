@@ -1,10 +1,7 @@
-from collections import deque
-import base64
 import contextlib
 import hashlib
 import heapq
 import itertools
-import json
 import os
 import re
 import shutil
@@ -15,14 +12,10 @@ except ImportError:
 import struct
 import threading
 import time
-import warnings
 
 try:
     from redis import ConnectionPool
-    try:
-        from redis import StrictRedis as Redis
-    except ImportError:
-        from redis import Redis
+    from redis import Redis
     from redis.exceptions import ConnectionError
     from redis.exceptions import TimeoutError
 except ImportError:
@@ -467,7 +460,6 @@ class RedisStorage(BaseStorage):
         self.queue_key = 'huey.redis.%s' % self.name
         self.schedule_key = 'huey.schedule.%s' % self.name
         self.result_key = 'huey.results.%s' % self.name
-        self.error_key = 'huey.errors.%s' % self.name
         self.counter_key = 'huey.counters.%s' % self.name
         self.notify_prefix = 'huey.notify.%s.' % self.name
         self.notify_result = notify_result  # Use result notification.
@@ -547,14 +539,19 @@ class RedisStorage(BaseStorage):
     def flush_schedule(self):
         self.conn.delete(self.schedule_key)
 
+    def _notify(self, key):
+        if isinstance(key, bytes):
+            key = key.decode('utf8')
+        nkey = self.notify_prefix + key
+        pipe = self.conn.pipeline()
+        pipe.lpush(nkey, b'1')
+        pipe.expire(nkey, self.notify_result_ttl)
+        pipe.execute()
+
     def put_data(self, key, value, is_result=False):
         self.conn.hset(self.result_key, key, value)
         if is_result and self.notify_result:
-            nkey = self.notify_prefix + key
-            pipe = self.conn.pipeline()
-            pipe.lpush(nkey, b'1')
-            pipe.expire(nkey, self.notify_result_ttl)
-            pipe.execute()
+            self._notify(key)
 
     def peek_data(self, key):
         pipe = self.conn.pipeline()
@@ -639,14 +636,8 @@ class RedisExpireStorage(RedisStorage):
             # We only want to expire task result data. If we are storing an
             # important metadata like a revocation key, we need to preserve it.
             self.conn.set(self.result_key(key), value, ex=self._expire_time)
-            if isinstance(key, bytes):
-                key = key.decode('utf8')
             if self.notify_result:
-                nkey = self.notify_prefix + key
-                pipe = self.conn.pipeline()
-                pipe.lpush(nkey, b'1')
-                pipe.expire(nkey, self.notify_result_ttl)
-                pipe.execute()
+                self._notify(key)
         else:
             self.conn.set(self.result_key(key), value)
 

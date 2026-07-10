@@ -35,6 +35,6 @@ jobs:
         run: pip install setuptools gevent redis peewee psycopg ukt django
       - name: runtests
         env:
-          HUEY_TRAVIS: '1'
+          HUEY_CI: '1'
           HUEY_PG_DSN: postgresql://postgres:postgres@localhost:5432/huey_test
         run: python runtests.py -v 2 -s

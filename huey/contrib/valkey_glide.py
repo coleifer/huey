@@ -40,7 +40,6 @@ class ValkeyGlideStorage(RedisStorage):
         self.queue_key = 'huey.redis.%s' % self.name
         self.schedule_key = 'huey.schedule.%s' % self.name
         self.result_key = 'huey.results.%s' % self.name
-        self.error_key = 'huey.errors.%s' % self.name
         self.counter_key = 'huey.counters.%s' % self.name
         # Result notification uses a blocking BLPOP, which glide does not
         # support well -- fall back to polling for results.

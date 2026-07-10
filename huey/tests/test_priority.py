@@ -1,6 +1,5 @@
 import datetime
 
-from huey.api import MemoryHuey
 from huey.api import crontab
 from huey.exceptions import TaskException
 from huey.tests.base import BaseTestCase

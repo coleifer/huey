@@ -16,7 +16,7 @@ logger = logging.getLogger('huey')
 logger.addHandler(NullHandler())
 
 SLOW_TESTS = bool(os.environ.get('HUEY_SLOW_TESTS'))
-TRAVIS = bool(os.environ.get('HUEY_TRAVIS'))
+CI = bool(os.environ.get('HUEY_CI'))
 
 
 class BaseTestCase(unittest.TestCase):

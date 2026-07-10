@@ -12,7 +12,6 @@ from huey.consumer import Consumer
 from huey.consumer import Scheduler
 from huey.consumer_options import ConsumerConfig
 from huey.exceptions import TaskException
-from huey.exceptions import TaskTimeout
 from huey.tests.base import BaseTestCase
 from huey.tests.base import slow_test
 

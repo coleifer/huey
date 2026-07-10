@@ -1,4 +1,3 @@
-from functools import partial
 import time
 
 from ukt import KT_NONE
@@ -124,12 +123,6 @@ class KyotoTycoonStorage(BaseStorage):
     def flush_counters(self):
         keys = self.kt.match_prefix(self.counter_key(''), db=self._db)
         return self.kt.remove_bulk(keys, self._db)
-
-    def flush_all(self):
-        self.flush_queue()
-        self.flush_schedule()
-        self.flush_results()
-        self.flush_counters()
 
 
 class KyotoTycoonHuey(Huey):

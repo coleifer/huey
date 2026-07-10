@@ -1,5 +1,3 @@
-import pickle
-
 from huey.exceptions import HueyException
 from huey.tests.base import BaseTestCase
 

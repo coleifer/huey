@@ -14,16 +14,13 @@ from huey.api import crontab
 from huey.api import group
 from huey.constants import EmptyData
 from huey.exceptions import CancelExecution
-from huey.exceptions import ConfigurationError
 from huey.exceptions import RateLimitExceeded
 from huey.exceptions import ResultTimeout
 from huey.exceptions import RetryTask
 from huey.exceptions import TaskException
-from huey.exceptions import TaskLockedException
 from huey.exceptions import TaskTimeout
 from huey.serializer import SignedSerializer
 from huey.tests.base import BaseTestCase
-from huey.utils import Error
 
 
 class TestError(Exception):

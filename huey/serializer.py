@@ -1,26 +1,15 @@
-try:
-    import gzip
-except ImportError:
-    gzip = None
-try:
-    import zlib
-except ImportError:
-    zlib = None
+import gzip
 import hashlib
 import hmac
 import logging
 import pickle
+import zlib
 
 from huey.exceptions import ConfigurationError
 from huey.utils import encode
 
 
 logger = logging.getLogger('huey.serializer')
-
-
-if gzip is not None:
-    gzip_compress = gzip.compress
-    gzip_decompress = gzip.decompress
 
 
 def is_compressed(data):
@@ -34,13 +23,6 @@ class Serializer(object):
         self.comp_level = compression_level
         self.use_zlib = use_zlib
         self.pickle_protocol = pickle_protocol or pickle.HIGHEST_PROTOCOL
-        if self.comp:
-            if self.use_zlib and zlib is None:
-                raise ConfigurationError('use_zlib specified, but zlib module '
-                                         'not found.')
-            elif gzip is None:
-                raise ConfigurationError('gzip module required to enable '
-                                         'compression.')
 
     def _serialize(self, data):
         return pickle.dumps(data, self.pickle_protocol)
@@ -54,7 +36,7 @@ class Serializer(object):
             if self.use_zlib:
                 data = zlib.compress(data, self.comp_level)
             else:
-                data = gzip_compress(data, self.comp_level)
+                data = gzip.compress(data, self.comp_level)
         return data
 
     def deserialize(self, data):
@@ -65,7 +47,7 @@ class Serializer(object):
             elif self.use_zlib:
                 data = zlib.decompress(data)
             else:
-                data = gzip_decompress(data)
+                data = gzip.decompress(data)
         return self._deserialize(data)
 
 

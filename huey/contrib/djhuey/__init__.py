@@ -1,11 +1,12 @@
 from functools import wraps
-from importlib import import_module
 import sys
 import traceback
 
 from django.conf import settings
 from django.db import close_old_connections
 from django.db import transaction
+
+from huey.utils import load_class
 
 
 configuration_message = """
@@ -46,18 +47,13 @@ default_backend_path = 'huey.RedisHuey'
 
 def default_queue_name():
     try:
-        return settings.DATABASE_NAME
-    except AttributeError:
-        try:
-            return str(settings.DATABASES['default']['NAME'])
-        except KeyError:
-            return 'huey'
+        return str(settings.DATABASES['default']['NAME'])
+    except (AttributeError, KeyError):
+        return 'huey'
 
 
 def get_backend(import_path=default_backend_path):
-    module_path, class_name = import_path.rsplit('.', 1)
-    module = import_module(module_path)
-    return getattr(module, class_name)
+    return load_class(import_path)
 
 
 def config_error(msg):

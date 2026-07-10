@@ -1,7 +1,6 @@
 import logging
 import optparse
 from collections import namedtuple
-from logging import FileHandler
 
 from huey.constants import WORKER_THREAD
 from huey.constants import WORKER_TYPES

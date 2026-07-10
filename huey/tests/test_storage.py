@@ -3,7 +3,6 @@ import hashlib
 import itertools
 import os
 import shutil
-import sys
 import threading
 import unittest
 import uuid
@@ -24,14 +23,10 @@ from huey.api import RedisHuey
 from huey.api import SqliteHuey
 from huey.api import chord
 from huey.constants import EmptyData
-from huey.consumer import Consumer
 from huey.exceptions import ConfigurationError
-from huey.exceptions import ResultTimeout
 from huey.storage import FileStorage
-from huey.storage import MemoryStorage
-from huey.storage import RedisExpireStorage
 from huey.tests.base import BaseTestCase
-from huey.tests.base import TRAVIS
+from huey.tests.base import CI
 from huey.tests.base import slow_test
 
 
@@ -532,7 +527,7 @@ class TestFileStorageMethods(StorageTests, BaseTestCase):
         for i in range(nthreads * ntasks):
             self.assertEqual(in_q.get(), out_q.get())
 
-    @unittest.skipIf(TRAVIS, 'skipping test that is flaky on travis-ci')
+    @unittest.skipIf(CI, 'skipping test that is flaky on CI')
     def test_consumer_integration(self):
         return super(TestFileStorageMethods, self).test_consumer_integration()
 

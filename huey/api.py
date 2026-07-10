@@ -9,7 +9,6 @@ import traceback
 import uuid
 import warnings
 
-from collections import OrderedDict
 from collections import deque
 from functools import partial
 from functools import wraps
@@ -18,8 +17,6 @@ from huey import signals as S
 from huey.constants import EmptyData
 from huey.consumer import Consumer
 from huey.exceptions import CancelExecution
-from huey.exceptions import ConfigurationError
-from huey.exceptions import HueyException
 from huey.exceptions import RateLimitExceeded
 from huey.exceptions import ResultTimeout
 from huey.exceptions import RetryTask
@@ -117,10 +114,10 @@ class Huey(object):
         self.task_wrapper_class = self.get_task_wrapper_class()
 
         self._locks = set()
-        self._pre_execute = OrderedDict()
-        self._post_execute = OrderedDict()
-        self._startup = OrderedDict()
-        self._shutdown = OrderedDict()
+        self._pre_execute = {}
+        self._post_execute = {}
+        self._startup = {}
+        self._shutdown = {}
         self._registry = Registry()
         self._signal = S.Signal()
         self._tasks_in_flight = set()
@@ -293,7 +290,7 @@ class Huey(object):
     def _emit(self, signal, task, *args, **kwargs):
         try:
             self._signal.send(signal, task, *args, **kwargs)
-        except Exception as exc:
+        except Exception:
             logger.exception('Error occurred sending signal "%s"', signal)
 
     def serialize_task(self, task):
@@ -465,7 +462,7 @@ class Huey(object):
         try:
             self._tasks_in_flight.add(task)
             try:
-                with self._timeout_context(task) as check_timeout:
+                with self._timeout_context(task):
                     task_value = task.execute()
             finally:
                 self._tasks_in_flight.remove(task)
@@ -618,16 +615,12 @@ class Huey(object):
             logger.debug('Post-execute hook %s for %s.', name, task)
             try:
                 callback(task, task_value, exception)
-            except Exception as exc:
+            except Exception:
                 logger.exception('Unhandled exception calling post-execute '
                                  'hook %s for %s.', name, task)
 
     def build_error_result(self, task, exception):
-        try:
-            tb = traceback.format_exc()
-        except AttributeError:  # Seems to only happen on 3.4.
-            tb = '- unable to resolve traceback on Python 3.4 -'
-
+        tb = traceback.format_exc()
         if isinstance(exception, TaskException):
             error = exception.metadata.get('error') or repr(exception)
         else:

@@ -5,7 +5,6 @@ import os
 import sys
 
 from huey.constants import WORKER_PROCESS
-from huey.consumer import Consumer
 from huey.consumer_options import ConsumerConfig
 from huey.consumer_options import OptionParserHandler
 from huey.utils import load_class

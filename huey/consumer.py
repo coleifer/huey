@@ -1,4 +1,3 @@
-import datetime
 import logging
 import os
 import signal
@@ -102,7 +101,7 @@ class Worker(BaseProcess):
             self._logger.debug('calling startup hook "%s"', name)
             try:
                 startup_hook()
-            except Exception as exc:
+            except Exception:
                 self._logger.exception('startup hook "%s" failed', name)
 
     def shutdown(self):
@@ -110,7 +109,7 @@ class Worker(BaseProcess):
             self._logger.debug('calling shutdown hook "%s"', name)
             try:
                 shutdown_hook()
-            except Exception as exc:
+            except Exception:
                 self._logger.exception('shutdown hook "%s" failed', name)
 
     def loop(self, now=None):
@@ -125,7 +124,7 @@ class Worker(BaseProcess):
                 self.delay = self.default_delay
                 try:
                     self.huey.execute(task, now)
-                except Exception as exc:
+                except Exception:
                     self._logger.exception('Unhandled error during execution '
                                            'of task %s.', task.id)
                 finally:

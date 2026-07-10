@@ -2,7 +2,6 @@ from collections import namedtuple
 import calendar
 import contextlib
 import datetime
-import errno
 import logging
 import os
 import signal
@@ -39,20 +38,6 @@ Error = namedtuple('Error', ('metadata',))
 ChordConfig = namedtuple('ChordConfig', ('cid', 'size', 'idx', 'callback'))
 
 
-class UTC(datetime.tzinfo):
-    zero = datetime.timedelta(0)
-
-    def __repr__(self):
-        return "<UTC>"
-    def utcoffset(self, dt):
-        return self.zero
-    def tzname(self, dt):
-        return "UTC"
-    def dst(self, dt):
-        return self.zero
-_UTC = UTC()
-
-
 def load_class(s):
     path, klass = s.rsplit('.', 1)
     __import__(path)
@@ -85,7 +70,7 @@ def aware_to_utc(dt):
     """
     Converts an aware datetime.datetime in UTC time zone.
     """
-    return dt.astimezone(_UTC).replace(tzinfo=None)
+    return dt.astimezone(datetime.timezone.utc).replace(tzinfo=None)
 
 
 def local_to_utc(dt):
