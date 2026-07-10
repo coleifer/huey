@@ -119,15 +119,6 @@ def encode(s):
         return str(s).encode('utf8')
 
 
-def decode(s):
-    if isinstance(s, str):
-        return s
-    elif isinstance(s, bytes):
-        return s.decode('utf8')
-    elif s is not None:
-        return str(s)
-
-
 class FileLock(object):
     def __init__(self, filename):
         if fcntl is None:

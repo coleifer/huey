@@ -26,6 +26,8 @@ Changelog
   `with huey.lock_task('x') as lock:` binds the lock instead of None.
 * Defer the redis server version check to first use. Previously every storage
   init issued an INFO round-trip.
+* Remove the undocumented Kyoto Tycoon storage backend, its tests, and the
+  ukt CI dependency.
 
 [View commits](https://github.com/coleifer/huey/compare/3.2.1...master)
 
