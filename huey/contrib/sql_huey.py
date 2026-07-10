@@ -16,7 +16,8 @@ class BytesBlobField(BlobField):
 
 
 class SqlStorage(BaseStorage):
-    def __init__(self, name='huey', database=None, **kwargs):
+    def __init__(self, name='huey', database=None, create_tables=True,
+                 **kwargs):
         super(SqlStorage, self).__init__(name)
 
         if database is None:
@@ -31,7 +32,8 @@ class SqlStorage(BaseStorage):
             self.database = db_url_connect(database)
 
         self.KV, self.Schedule, self.Task, self.Counter = self.create_models()
-        self.create_tables()
+        if create_tables:
+            self.create_tables()
 
         # Check for FOR UPDATE SKIP LOCKED support.
         if isinstance(self.database, PostgresqlDatabase):
@@ -89,6 +91,10 @@ class SqlStorage(BaseStorage):
         with self.database:
             self.database.create_tables([self.KV, self.Schedule, self.Task,
                                          self.Counter])
+
+    def initialize_schema(self):
+        # Shared entrypoint for the create_huey_tables management command.
+        self.create_tables()
 
     def drop_tables(self):
         with self.database:
@@ -242,6 +248,7 @@ class SqlStorage(BaseStorage):
             return True
 
     def incr(self, key, amount=1):
+        self.check_conn()
         with self.database.atomic():
             if isinstance(self.database, MySQLDatabase):
                 self._incr_mysql(key, amount)
@@ -267,6 +274,7 @@ class SqlStorage(BaseStorage):
          .execute())
 
     def delete_counter(self, key):
+        self.check_conn()
         with self.database.atomic():
             self.Counter.delete().where(
                 (self.Counter.queue == self.name) &

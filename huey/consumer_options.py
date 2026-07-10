@@ -54,14 +54,14 @@ class OptionParserHandler(object):
             option('max_delay', metavar='SECONDS',
                    help='maximum time to wait when polling queue (default=10)',
                    type='float'),
-            option('backoff', metavar='SECONDS',
+            option('backoff', metavar='FACTOR',
                    help=('factor used to back-off polling interval when queue '
                          'is empty (default=1.15, must be >= 1)'),
                    type='float'),
             option(('c', 'health-check-interval'), type='float',
                    dest='health_check_interval', metavar='SECONDS',
                    help=('minimum time to wait between worker health checks '
-                         '(default=1.0)')),
+                         '(default=10)')),
             option(('C', 'disable-health-check'), action='store_false',
                    dest='check_worker_health',
                    help=('disable health check that monitors worker health, '

@@ -485,6 +485,24 @@ class TestQueue(BaseTestCase):
         self.assertEqual(self.huey.result_count(), 0)
         self.assertEqual(self.huey.scheduled_count(), 0)
 
+        # Per-call retry settings, including backoff, are preserved.
+        r2 = task_a.schedule((3,), delay=60, retries=2, retry_delay=5,
+                             retry_backoff=4)
+        rs2 = r2.reschedule(delay=120)
+        new_task = [t for t in self.huey.pending() if t.id == rs2.id][0]
+        self.assertEqual(new_task.retries, 2)
+        self.assertEqual(new_task.retry_delay, 5)
+        self.assertEqual(new_task.retry_backoff, 4)
+
+    def test_blocking_result_no_sentinel_leak(self):
+        # A wait that ends without an obtainable result, e.g. read by another
+        # caller or a dropped connection, raises rather than surfacing the
+        # internal EmptyData sentinel.
+        self.huey.storage.wait_result = lambda *a, **kw: True
+        result = Result(self.huey, Task(id='tx'))
+        self.assertRaises(ResultTimeout,
+                          lambda: result.get(blocking=True))
+
     def test_reschedule_no_delay(self):
         state = []
 

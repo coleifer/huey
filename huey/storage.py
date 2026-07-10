@@ -533,8 +533,8 @@ class RedisStorage(BaseStorage):
         return self.conn.zcard(self.schedule_key)
 
     def scheduled_items(self, limit=None):
-        limit = limit or -1
-        return self.conn.zrange(self.schedule_key, 0, limit, withscores=False)
+        stop = limit - 1 if limit else -1
+        return self.conn.zrange(self.schedule_key, 0, stop, withscores=False)
 
     def flush_schedule(self):
         self.conn.delete(self.schedule_key)
@@ -831,7 +831,7 @@ class SqliteStorage(BaseSqlStorage):
 
     def __init__(self, name='huey', filename='huey.db', cache_mb=8,
                  fsync=False, journal_mode='wal', timeout=5, strict_fifo=False,
-                 **kwargs):
+                 create_tables=True, **kwargs):
         self.filename = filename
         self._cache_mb = cache_mb
         self._fsync = fsync
@@ -854,7 +854,7 @@ class SqliteStorage(BaseSqlStorage):
 
         self.to_blob = lambda b: sqlite3.Binary(b)
 
-        super(SqliteStorage, self).__init__(name)
+        super(SqliteStorage, self).__init__(name, create_tables=create_tables)
 
     def _create_connection(self):
         conn = sqlite3.connect(self.filename, timeout=self._timeout,
@@ -1337,7 +1337,7 @@ class FileStorage(BaseStorage):
             os.makedirs(path)
 
     def enqueue(self, data, priority=None):
-        priority = priority or 0
+        priority = int(priority or 0)
         if priority < 0: raise ValueError('priority must be a positive number')
         if priority > self.MAX_PRIORITY:
             raise ValueError('priority must be <= %s' % self.MAX_PRIORITY)

@@ -516,9 +516,10 @@ class Huey(object):
             logger.info('%s executed in %0.3fs', task, duration)
 
         # Clear the flag if this instance of the task was revoked after it
-        # began executing by destructively reading it's revoke key.
+        # began executing. Delete rather than destructively read, as expiring
+        # storages implement pop_data as a non-destructive peek.
         if not isinstance(task, PeriodicTask):
-            self.get(task.revoke_id)
+            self.delete(task.revoke_id)
 
         surface_error = (exception is not None and
                          (self.store_intermediate_errors or not task.retries))
@@ -1264,14 +1265,13 @@ class Result(object):
         if self.huey.storage.wait_result(self.id, timeout, backoff, max_delay):
             res = self._get(preserve)
             if res is not EmptyData:
-                return self._result
+                return res
 
-        if timeout is not None:
-            if revoke_on_timeout:
-                self.revoke()
-            raise ResultTimeout('timed out waiting for result')
-
-        return self._result
+        # The wait timed out, hit a connection error, or the result was read
+        # by another caller. Never surface the EmptyData sentinel.
+        if revoke_on_timeout:
+            self.revoke()
+        raise ResultTimeout('timed out waiting for result')
 
     def get(self, blocking=False, timeout=None, backoff=1.15, max_delay=1.0,
             revoke_on_timeout=False, preserve=False):
@@ -1311,6 +1311,7 @@ class Result(object):
             eta=eta,
             retries=self.task.retries,
             retry_delay=self.task.retry_delay,
+            retry_backoff=self.task.retry_backoff,
             priority=priority if priority is not None else self.task.priority,
             expires=expires if expires is not None else self.task.expires,
             timeout=self.task.timeout,

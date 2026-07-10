@@ -6,6 +6,22 @@ Changelog
 * Add `retry_backoff` parameter to `task()` and `periodic_task()`. The first
   retry waits `retry_delay` seconds and each subsequent delay is multiplied by
   `retry_backoff`, giving exponentially-growing waits between retries.
+* Fix `create_tables=False`, which crashed `SqliteHuey` at connect and was
+  silently ignored by the peewee `SqlHuey`. `SqlStorage` also gains
+  `initialize_schema()` so the `create_huey_tables` command supports it.
+* Accept float priorities in `FileStorage` by truncating to int. Previously
+  they raised a TypeError.
+* Raise `ResultTimeout` from blocking `Result.get()` when the wait ends w/o an
+  obtainable result, e.g. a dropped connection. Previously the internal
+  `EmptyData` sentinel could be returned.
+* Preserve per-call `retry_backoff` when a task is rescheduled via
+  `Result.reschedule()`.
+* Clear revocations that arrive mid-execution w/ a delete, so the clear also
+  works on `RedisExpireHuey` where destructive reads do not remove data.
+* Fix an off-by-one in the redis `scheduled_items()` that returned limit+1
+  items.
+* Reconnect stale connections in the `SqlHuey` counter methods, which run in
+  the consumer via chords and rate limits.
 
 [View commits](https://github.com/coleifer/huey/compare/3.2.1...master)
 

@@ -93,6 +93,21 @@ class TestSqlStorage(StorageTests, BaseTestCase):
 
         self.assertEqual(len(self.huey), 0)
 
+    def test_create_tables(self):
+        filename = '/tmp/huey-sqlite-ct.db'
+        if os.path.exists(filename):
+            os.unlink(filename)
+        huey = SqlHuey('ct', database='sqlite:///%s' % filename,
+                       create_tables=False)
+        storage = huey.storage
+        try:
+            self.assertRaises(peewee.OperationalError, storage.queue_size)
+            storage.initialize_schema()
+            self.assertEqual(storage.queue_size(), 0)
+        finally:
+            storage.close()
+            os.unlink(filename)
+
     def test_consumer_integration(self):
         # Intentional skip.
         pass

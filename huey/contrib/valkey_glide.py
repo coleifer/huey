@@ -77,8 +77,8 @@ class ValkeyGlideStorage(RedisStorage):
         return [] if tasks is None else [base64.b64decode(t) for t in tasks]
 
     def scheduled_items(self, limit=None):
-        limit = limit or -1
-        tasks = self.conn.zrange(self.schedule_key, RangeByIndex(0, limit))
+        stop = limit - 1 if limit else -1
+        tasks = self.conn.zrange(self.schedule_key, RangeByIndex(0, stop))
         return [base64.b64decode(t) for t in tasks]
 
     def put_data(self, key, value, is_result=False):
