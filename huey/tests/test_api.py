@@ -1957,6 +1957,61 @@ class TestChordPrimitive(BaseTestCase):
         self.assertTrue(isinstance(result[0], TestError))
         self.assertTrue(isinstance(result[1], TestError))
 
+    def test_chord_pipeline_member_head_fails(self):
+        @self.huey.task()
+        def step1(n):
+            raise TestError('step1 fail')
+
+        @self.huey.task()
+        def step2(n):
+            return n * 2
+
+        @self.huey.task()
+        def combine(results):
+            return results
+
+        c = chord([step1.s(1).then(step2), step1.s(2).then(step2)],
+                  combine.s())
+        r = self.huey.enqueue(c)
+
+        # The heads fail and their step2 tails are never enqueued, but each
+        # dead head contributes its exception for the member.
+        self.execute_next()
+        self.execute_next()
+
+        self.assertEqual(len(self.huey), 1)
+        self.execute_next()
+
+        result = r()
+        self.assertTrue(isinstance(result[0], TestError))
+        self.assertTrue(isinstance(result[1], TestError))
+
+    def test_chord_pipeline_member_head_revoked(self):
+        @self.huey.task()
+        def step1(n):
+            return n
+
+        @self.huey.task()
+        def step2(n):
+            return n * 2
+
+        @self.huey.task()
+        def combine(results):
+            return results
+
+        m1 = step1.s(1).then(step2)
+        m2 = step1.s(2).then(step2)
+        r = self.huey.enqueue(chord([m1, m2], combine.s()))
+
+        self.huey.revoke(m1)  # Revoke the head of the first member.
+        self.assertTrue(self.execute_next() is None)  # Revoked, not run.
+        self.assertEqual(self.execute_next(), 2)
+        self.assertEqual(self.execute_next(), 4)
+
+        self.assertEqual(len(self.huey), 1)
+        self.assertEqual(self.execute_next(), [None, 4])
+        self.assertEqual(r(), [None, 4])
+
     def test_chord_ordering(self):
         @self.huey.task()
         def ident(s):

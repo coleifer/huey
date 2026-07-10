@@ -426,15 +426,11 @@ class Huey(object):
         elif self.is_revoked(task, timestamp, False):
             logger.warning('Task %s was revoked, not executing', task)
             self._emit(S.SIGNAL_REVOKED, task)
-            if task.chord_config is not None:
-                # Contribute a placeholder result for the skipped task so the
-                # chord callback can still fire when the rest are done.
-                self._check_chord(task, None)
+            self._abort_chord_member(task, None)
         elif task.expires_resolved and task.expires_resolved < timestamp:
             logger.info('Task %s expired, not executing.', task)
             self._emit(S.SIGNAL_EXPIRED, task)
-            if task.chord_config is not None:
-                self._check_chord(task, None)
+            self._abort_chord_member(task, None)
         else:
             logger.info('Executing %s', task)
             self._emit(S.SIGNAL_EXECUTING, task)
@@ -446,8 +442,7 @@ class Huey(object):
                 self._run_pre_execute(task)
             except CancelExecution:
                 self._emit(S.SIGNAL_CANCELED, task)
-                if task.chord_config is not None:
-                    self._check_chord(task, None)
+                self._abort_chord_member(task, None)
                 return
 
         start = time.monotonic()
@@ -550,11 +545,13 @@ class Huey(object):
             next_task.extend_data(exception)
             self.enqueue(next_task)
 
-        if task.chord_config is not None:
-            if exception is None:
-                self._check_chord(task, task_value)
-            elif not task.retries:
-                self._check_chord(task, exception)
+        if exception is None:
+            # Only the task carrying the chord_config reports its success. An
+            # intermediate pipeline stage hands off to on_complete instead.
+            if task.chord_config is not None:
+                self._check_chord(task.chord_config, task_value)
+        elif not task.retries:
+            self._abort_chord_member(task, exception)
 
         if exception is not None and task.retries:
             self._emit(S.SIGNAL_RETRYING, task)
@@ -562,8 +559,16 @@ class Huey(object):
 
         return task_value
 
-    def _check_chord(self, task, value):
-        cc = task.chord_config
+    def _abort_chord_member(self, task, value):
+        # The dead task will never run its on_complete chain, so a chord
+        # config further down the pipeline would never fire. Find it and
+        # contribute the given value for the whole member.
+        while task is not None:
+            if task.chord_config is not None:
+                return self._check_chord(task.chord_config, value)
+            task = task.on_complete
+
+    def _check_chord(self, cc, value):
         chord_key = 'chord:%s' % cc.cid
         result_key = 'chord:%s:%s' % (cc.cid, cc.idx)
         self.put_result(result_key, value)

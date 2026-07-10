@@ -28,6 +28,9 @@ Changelog
   init issued an INFO round-trip.
 * Remove the undocumented Kyoto Tycoon storage backend, its tests, and the
   ukt CI dependency.
+* Fire the chord callback when a pipelined member dies before its tail. A
+  failed, revoked, or expired stage now contributes for the member, where
+  previously the chord counter stayed short and the callback never ran.
 
 [View commits](https://github.com/coleifer/huey/compare/3.2.1...master)
 
