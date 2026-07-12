@@ -28,6 +28,8 @@ Changelog
   init issued an INFO round-trip.
 * Remove the undocumented Kyoto Tycoon storage backend, its tests, and the
   ukt CI dependency.
+* Remove the djhuey `backend_class` alias for `huey_class` (deprecated since
+  2.0) and the Django <1.2 `settings.DATABASE_NAME` queue-name fallback.
 * Fire the chord callback when a pipelined member dies before its tail. A
   failed, revoked, or expired stage now contributes for the member, where
   previously the chord counter stayed short and the callback never ran.
