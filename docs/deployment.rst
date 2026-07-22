@@ -124,9 +124,10 @@ Notes:
   start the scaled workers with ``-n`` / ``--no-periodic``. See
   :ref:`multiple-consumers`.
 * Multiple containers can only share a queue through a network-accessible
-  storage backend like Redis. ``SqliteHuey`` and ``FileHuey`` work across
-  containers only if every container mounts the same local volume, and
-  sqlite over a network filesystem is a bad idea. When in doubt, use Redis.
+  storage backend like Redis or Postgres. ``SqliteHuey`` and ``FileHuey`` work
+  across containers only if every container mounts the same local volume, and
+  sqlite over a network filesystem is a bad idea. When in doubt, use Redis or
+  Postgres.
 
 Kubernetes
 ----------

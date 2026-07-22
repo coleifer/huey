@@ -138,6 +138,22 @@ Implementations of :py:class:`Huey` which handle task and result persistence.
 
     .. seealso:: :py:class:`SqliteStorage`
 
+.. py:class:: CySqliteHuey
+
+    :py:class:`Huey` that utilizes SQLite (with `cysqlite <https://cysqlite.readthedocs.io/>`_
+    driver) for queue and result storage.
+
+    Commonly-used keyword arguments:
+
+    :param str filename: filename for database, defaults to 'huey.db'.
+    :param dict pragmas: mapping of settings for connection. If unset,
+        ``journal_mode`` will default to ``'wal'``, which enables readers to
+        coexist with a single writer.
+
+    CySqliteHuey fully supports task priorities.
+
+    .. seealso:: :py:class:`CySqliteStorage`
+
 .. py:class:: PostgresHuey
 
     :py:class:`Huey` that utilizes PostgreSQL for queue, schedule and result
@@ -2215,6 +2231,7 @@ Huey comes with several built-in storage implementations:
 
 .. py:class:: RedisStorage(name='huey', blocking=True, read_timeout=1, connection_pool=None, url=None, client_name=None, notify_result=False, notify_result_ttl=86400, **connection_params)
 
+    :param str name: namespace for storage.
     :param bool blocking: Use blocking-pop when reading from the queue (as
         opposed to polling). Default is true.
     :param read_timeout: Timeout to use when performing a blocking pop, default
@@ -2247,6 +2264,7 @@ Huey comes with several built-in storage implementations:
 
 .. py:class:: PriorityRedisStorage(name='huey', blocking=True, read_timeout=1, connection_pool=None, url=None, client_name=None, notify_result=False, notify_result_ttl=86400, **connection_params)
 
+    :param str name: namespace for storage.
     :param bool blocking: Use blocking-zpopmin when reading from the queue (as
         opposed to polling). Default is true.
     :param read_timeout: Timeout to use when performing a blocking pop, default
@@ -2279,8 +2297,9 @@ Huey comes with several built-in storage implementations:
     automatically cleaned-up.
 
 
-.. py:class:: SqliteStorage(filename='huey.db', name='huey', cache_mb=8, fsync=False, timeout=5, strict_fifo=False, **kwargs)
+.. py:class:: SqliteStorage(name='huey', filename='huey.db', cache_mb=8, fsync=False, journal_mode='wal', timeout=5, strict_fifo=False, create_tables=True, **kwargs)
 
+    :param str name: namespace for storage.
     :param str filename: sqlite database filename.
     :param int cache_mb: sqlite page-cache size in megabytes.
     :param bool fsync: if enabled, all writes to the Sqlite database will be
@@ -2295,12 +2314,33 @@ Huey comes with several built-in storage implementations:
         FIFO. By default, Sqlite may reuse rowids for deleted tasks, which can
         cause tasks to be run in a different order than the order in which they
         were enqueued.
+    :param bool create_tables: create tables if they do not exist.
     :param kwargs: Additional keyword arguments passed to the ``sqlite3``
+        connection constructor.
+
+
+.. py:class:: CySqliteStorage(name='huey', filename='huey.db', pragmas=None, strict_fifo=False, create_tables=True, **kwargs)
+
+    Extends :class:`SqliteStorage` and uses `cysqlite <https://cysqlite.readthedocs.io/>`__
+    for the driver. Prefer ``pragmas={...}`` over the hard-coded settings used
+    by ``SqliteStorage``.
+
+    :param str name: namespace for storage.
+    :param str filename: sqlite database filename.
+    :param dict pragmas: mapping of settings for connection. If unset,
+        ``journal_mode`` will default to ``'wal'``, which enables readers to
+        coexist with a single writer.
+    :param bool strict_fifo: ensure that the task queue behaves as a strict
+        FIFO. By default, Sqlite may reuse rowids for deleted tasks, which can
+        cause tasks to be run in a different order than the order in which they
+        were enqueued.
+    :param kwargs: Additional keyword arguments passed to the ``cysqlite``
         connection constructor.
 
 
 .. py:class:: PostgresStorage(name='huey', dsn=None, connection=None, blocking=True, read_timeout=1, table_prefix='huey', create_tables=True, **connection_params)
 
+    :param str name: namespace for storage.
     :param str dsn: connection string or URL for ``psycopg.connect()``.
     :param connection: zero-argument callable returning a new ``psycopg``
         connection.

@@ -26,6 +26,7 @@ from huey.exceptions import TaskTimeout
 from huey.registry import Registry
 from huey.serializer import Serializer
 from huey.storage import BlackHoleStorage
+from huey.storage import CySqliteStorage
 from huey.storage import FileStorage
 from huey.storage import MemoryStorage
 from huey.storage import PostgresStorage
@@ -1479,6 +1480,9 @@ class MemoryHuey(Huey):
 
 class SqliteHuey(Huey):
     storage_class = SqliteStorage
+
+class CySqliteHuey(Huey):
+    storage_class = CySqliteStorage
 
 class PostgresHuey(Huey):
     storage_class = PostgresStorage

@@ -572,9 +572,10 @@ Task priority
     priorities with Redis, use the :py:class:`PriorityRedisHuey` instead of
     :py:class:`RedisHuey`.
 
-    Task prioritization is fully supported by :py:class:`SqliteHuey` and the
-    file-based :py:class:`FileHuey`. The in-memory storage layer (used when
-    :ref:`immediate` is enabled) also supports task priorities.
+    Task prioritization is fully supported by :py:class:`SqliteHuey`,
+    :py:class:`PostgresHuey`,  and the file-based :py:class:`FileHuey`. The
+    in-memory storage layer (used when :ref:`immediate` is enabled) also
+    supports task priorities.
 
 Huey tasks can be given a priority, allowing you to ensure that your most
 important tasks do not get delayed when the workers are busy.
@@ -657,9 +658,9 @@ Lastly, we can specify priority on :py:class:`~Huey.periodic_task`:
 For more information:
 
 * :py:class:`PriorityRedisHuey` - Huey implementation that adds support for
-  task priorities with the Redis storage layer. *Requires Redis 5.0 or newer*.
-* :py:class:`SqliteHuey` and the in-memory storage used when immediate-mode is
-  enabled have full support for task priorities.
+  task priorities with the Redis storage layer.
+* :py:class:`PostgresHuey`, :py:class:`SqliteHuey` and the in-memory storage
+  used when immediate-mode is enabled have full support for task priorities.
 * :py:meth:`~Huey.task` and :py:meth:`~Huey.periodic_task`
 
 Canceling or pausing tasks
@@ -1766,6 +1767,12 @@ weaknesses of each storage layer.
     ``SqliteHuey`` may be a good choice for moderate workloads where the
     operational complexity of running a separate server process like Redis is
     undesirable.
+
+:py:class:`PostgresHuey`
+    Postgres support is robust and uses ``LISTEN/NOTIFY`` for low-latency
+    operation.
+
+    ``PostgresHuey`` is a good choice for all workloads.
 
 :py:class:`FileHuey`
     Stores the queue, schedule and task results in files on the filesystem.

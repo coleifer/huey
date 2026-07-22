@@ -16,8 +16,8 @@ Operational facts worth getting right:
   immediately, interrupting running tasks". Supervisors must be configured
   with `stopsignal=INT` (supervisord) / `KillSignal=SIGINT` (systemd).
 - Task priorities on redis require `PriorityRedisHuey` (redis 5.0+); plain
-  `RedisHuey` does not support priorities. `SqliteHuey` supports them
-  natively.
+  `RedisHuey` does not support priorities. `SqliteHuey` and `PostgresHuey`
+  support them natively.
 - For tests, use `immediate=True`: tasks execute synchronously through the
   real execution path against in-memory storage.
 - When running multiple consumers of one queue, pass `-n` / `--no-periodic`

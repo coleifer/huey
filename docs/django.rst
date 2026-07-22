@@ -92,6 +92,10 @@ The following ``huey_class`` implementations are provided out-of-the-box:
   keys automatically if results are not read and supports priority.
 * ``huey.SqliteHuey`` - uses Sqlite, full support for task priorities. Accepts
   a ``filename`` parameter for the path to the database file.
+* ``huey.CySqliteHuey`` - uses Sqlite with `cysqlite <https://cysqlite.readthedocs.io/>`__
+  driver, full support for task priorities. Accepts a ``filename`` parameter
+  for the path to the database file, and an optional ``pragmas={...}`` dict of
+  connection settings.
 * ``huey.PostgresHuey`` - uses Postgres, full support for task priorities. See
   :ref:`django-postgres` for connection and schema configuration.
 * ``huey.FileHuey`` - uses filesystem for storage. Accepts a ``path`` parameter
