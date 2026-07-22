@@ -9,19 +9,25 @@ huey can be installed from PyPI using ``pip``:
 
     pip install huey
 
-huey has no dependencies outside the standard library, but `redis-py <https://github.com/andymccurdy/redis-py>`_
-is required to utilize Redis for your task storage:
+huey has no dependencies outside the standard library. The sqlite, file-system
+and in-memory storage layers work out-of-the-box. The others need a client
+library, which is most easily installed using the matching extra:
 
 .. code-block:: shell
 
-    pip install redis
+    # redis-py, to use Redis (or Valkey / Redict) for task storage.
+    pip install huey[redis]
 
-Similarly, `psycopg <https://www.psycopg.org/>`_ (version 3.2 or newer) is
-required to use Postgres for your task storage:
+    # psycopg 3.2 or newer, to use Postgres for task storage.
+    pip install huey[postgres]
 
-.. code-block:: shell
+    # cysqlite, to use CySqliteHuey instead of SqliteHuey.
+    pip install huey[cysqlite]
 
-    pip install psycopg
+These pull in `redis-py <https://github.com/redis/redis-py>`_,
+`psycopg <https://www.psycopg.org/>`_ and
+`cysqlite <https://cysqlite.readthedocs.io/>`_ respectively, and may equally
+be installed by name.
 
 If your tasks are IO-bound rather than CPU-bound, you might consider using the
 ``greenlet`` worker type. To use the greenlet workers, you need to
@@ -41,12 +47,12 @@ and install the library:
 
     git clone https://github.com/coleifer/huey.git
     cd huey
-    python setup.py install
+    pip install .
 
 You can run the tests using the test-runner:
 
 .. code-block:: shell
 
-    python setup.py test
+    python runtests.py
 
 The source code is available at: https://github.com/coleifer/huey

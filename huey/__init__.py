@@ -3,6 +3,7 @@ __license__ = 'MIT'
 __version__ = '3.2.1'
 
 from huey.api import BlackHoleHuey
+from huey.api import CySqliteHuey
 from huey.api import Huey
 from huey.api import FileHuey
 from huey.api import MemoryHuey

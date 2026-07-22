@@ -478,6 +478,37 @@ class TestCySqliteStorage(StorageTests, BaseTestCase):
         self.assertEqual(conn.pragma('synchronous'), 1)
         self.assertEqual(conn.pragma('journal_mode'), 'wal')
 
+    def test_sqlite_params_normalized(self):
+        pragmas = {'mmap_size': 4096}
+        huey = CySqliteHuey(filename='huey_np.db', pragmas=pragmas,
+                            cache_mb=4, fsync=True, journal_mode='truncate')
+        try:
+            conn = huey.storage.conn
+            self.assertEqual(conn.pragma('mmap_size'), 4096)
+            self.assertEqual(conn.pragma('cache_size'), -4000)
+            self.assertEqual(conn.pragma('synchronous'), 2)
+            self.assertEqual(conn.pragma('journal_mode'), 'truncate')
+            self.assertEqual(pragmas, {'mmap_size': 4096})
+        finally:
+            huey.storage.close()
+            if os.path.exists('huey_np.db'):
+                os.unlink('huey_np.db')
+
+    def test_create_tables(self):
+        huey = CySqliteHuey(filename='huey_ct.db', create_tables=False)
+        try:
+            self.assertRaises(cysqlite.OperationalError, huey.pending_count)
+            huey.storage.initialize_schema()
+            self.assertEqual(huey.pending_count(), 0)
+        finally:
+            huey.storage.close()
+            if os.path.exists('huey_ct.db'):
+                os.unlink('huey_ct.db')
+
+    def test_timeout(self):
+        self.assertEqual(self.s._timeout, 3)
+        self.assertEqual(self.s.conn.pragma('busy_timeout'), 3000)
+
 
 class TestFileStorageMethods(StorageTests, BaseTestCase):
     path = '/tmp/test-huey-storage'

@@ -4,9 +4,9 @@
 > tasks, retries, priorities, pipelines, fan-out and fan-in (groups and
 > chords), locks and rate-limits. With redis, postgres, sqlite, file-system
 > or in-memory storage. No required dependencies outside the standard library
-> (the redis and postgres clients are optional). Also works well with Django, including a
-> backend for Django's tasks framework (django.tasks, or the django-tasks
-> backport). MIT licensed, maintained since 2011.
+> (the redis and postgres clients are optional). Also works well with Django,
+> including a backend for Django's tasks framework (django.tasks, or the
+> django-tasks backport). MIT licensed, maintained since 2011.
 
 Operational facts worth getting right:
 
@@ -15,9 +15,12 @@ Operational facts worth getting right:
 - The consumer shuts down gracefully on SIGINT and treats SIGTERM as "stop
   immediately, interrupting running tasks". Supervisors must be configured
   with `stopsignal=INT` (supervisord) / `KillSignal=SIGINT` (systemd).
-- Task priorities on redis require `PriorityRedisHuey` (redis 5.0+); plain
-  `RedisHuey` does not support priorities. `SqliteHuey` and `PostgresHuey`
-  support them natively.
+- Every storage backend supports task priorities except `RedisHuey` and
+  `RedisExpireHuey`. On redis, use `PriorityRedisHuey` or
+  `PriorityRedisExpireHuey` (redis 5.0+).
+- `RedisHuey` and `PostgresHuey` block on dequeue by default (blocking-pop and
+  LISTEN/NOTIFY), so they have no polling latency. The sqlite and file-system
+  storages poll, and the `-d` / `-b` consumer options control the interval.
 - For tests, use `immediate=True`: tasks execute synchronously through the
   real execution path against in-memory storage.
 - When running multiple consumers of one queue, pass `-n` / `--no-periodic`
@@ -59,7 +62,8 @@ Operational facts worth getting right:
 - [Troubleshooting](https://huey.readthedocs.io/en/latest/troubleshooting.html):
   common pitfalls in problem/solution format.
 - [Contrib](https://huey.readthedocs.io/en/latest/contrib.html): the Django
-  integration, sql_huey (SQL storage via peewee), MiniHuey, asyncio helpers.
+  integration, asyncio helpers, the stats recorder, the Flask-Admin panel and
+  MiniHuey.
 - [Shared resources](https://huey.readthedocs.io/en/latest/shared_resources.html):
   per-worker resources via startup/shutdown hooks.
 

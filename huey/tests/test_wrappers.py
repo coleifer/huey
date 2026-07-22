@@ -14,6 +14,8 @@ class TestWrappers(BaseTestCase):
             api.RedisHuey: storage.RedisStorage,
             api.SqliteHuey: storage.SqliteStorage,
         }
+        if storage.cysqlite is not None:
+            wrappers[api.CySqliteHuey] = storage.CySqliteStorage
         for huey_wrapper, storage_class in wrappers.items():
             h = huey_wrapper('testhuey')
             self.assertEqual(h.name, 'testhuey')

@@ -33,7 +33,9 @@ Changelog
 * Fire the chord callback when a pipelined member dies before its tail. A
   failed, revoked, or expired stage now contributes for the member, where
   previously the chord counter stayed short and the callback never ran.
-* Add `CySqliteHuey` implementation using cysqlite for the driver.
+* Add `CySqliteHuey`, which drives the sqlite storage w/ `cysqlite` instead of
+  the stdlib `sqlite3` module and takes an open-ended `pragmas` dict in place
+  of a fixed set of tuning parameters.
 
 [View commits](https://github.com/coleifer/huey/compare/3.2.1...master)
 

@@ -92,7 +92,7 @@ The following ``huey_class`` implementations are provided out-of-the-box:
   keys automatically if results are not read and supports priority.
 * ``huey.SqliteHuey`` - uses Sqlite, full support for task priorities. Accepts
   a ``filename`` parameter for the path to the database file.
-* ``huey.CySqliteHuey`` - uses Sqlite with `cysqlite <https://cysqlite.readthedocs.io/>`__
+* ``huey.CySqliteHuey`` - uses Sqlite via the `cysqlite <https://cysqlite.readthedocs.io/>`_
   driver, full support for task priorities. Accepts a ``filename`` parameter
   for the path to the database file, and an optional ``pragmas={...}`` dict of
   connection settings.
@@ -313,6 +313,22 @@ automatically close the connection for you.
     def every_five_mins():
         # This is a periodic task that executes queries.
 
+.. py:function:: db_task(*args, **kwargs)
+
+    :param args: See :py:meth:`~Huey.task` for supported parameters.
+    :param kwargs: See :py:meth:`~Huey.task` for supported parameters.
+
+    Equivalent to :py:meth:`~Huey.task`, but closes the Django database
+    connections when the task finishes.
+
+.. py:function:: db_periodic_task(validate_datetime, *args, **kwargs)
+
+    :param args: See :py:meth:`~Huey.periodic_task` for supported parameters.
+    :param kwargs: See :py:meth:`~Huey.periodic_task` for supported parameters.
+
+    Equivalent to :py:meth:`~Huey.periodic_task`, but closes the Django
+    database connections when the task finishes.
+
 .. _django-transactions:
 
 Enqueueing After Commit
@@ -496,9 +512,10 @@ django.tasks tasks and native huey tasks side-by-side.
 Supported functionality:
 
 * ``run_after`` is mapped onto huey's ``eta`` and handled by the scheduler.
-* ``priority`` is supported when the storage engine supports priorities, e.g.
-  ``SqliteHuey`` or ``PriorityRedisHuey``. With plain ``RedisHuey``, declaring
-  a task with a non-zero priority raises ``InvalidTask``.
+* ``priority`` is supported by every storage engine except ``RedisHuey`` and
+  ``RedisExpireHuey``, where declaring a task with a non-zero priority raises
+  ``InvalidTask``. Use ``PriorityRedisHuey`` or ``PriorityRedisExpireHuey``
+  with Redis.
 * Results: ``get_result()``, ``refresh()``, return values and errors (with
   tracebacks) are fully supported. Task status is tracked in the huey result
   store, so ``RedisExpireHuey`` will expire result data automatically.

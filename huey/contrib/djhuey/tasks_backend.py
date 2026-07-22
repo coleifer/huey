@@ -12,10 +12,11 @@ Usage::
 
 Notes:
 
-* ``priority`` support depends on the storage backend, e.g. ``SqliteHuey`` or
-  ``PriorityRedisHuey`` (plain ``RedisHuey`` does not support priorities, and
-  declaring a django task with a non-zero priority will raise InvalidTask).
-  ``FileHuey`` does not accept negative priorities.
+* ``priority`` is supported by every storage backend except ``RedisHuey`` and
+  ``RedisExpireHuey``, where declaring a django task with a non-zero priority
+  will raise InvalidTask. Use ``PriorityRedisHuey`` or
+  ``PriorityRedisExpireHuey`` with Redis. ``FileHuey`` does not accept
+  negative priorities.
 * ``run_after`` is mapped onto huey's ``eta``. In immediate mode the task is
   placed on the (undrained) in-memory schedule, mirroring the behavior of
   native huey tasks scheduled while in immediate mode.

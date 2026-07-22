@@ -26,8 +26,10 @@ Documentation = "https://huey.readthedocs.io/"
 Changelog = "https://github.com/coleifer/huey/blob/master/CHANGELOG.md"
 
 [project.optional-dependencies]
-backends = ["redis>=3.0.0"]
+backends = ["redis>=3.0.0"]  # Legacy alias for "redis".
+redis = ["redis>=3.0.0"]
 postgres = ["psycopg>=3.2"]
+cysqlite = ["cysqlite>=0.3.5"]
 
 [tool.setuptools.dynamic]
 version = { attr = "huey.__version__" }

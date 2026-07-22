@@ -147,9 +147,10 @@ Task function not found after renaming or moving
               ...
 
 Tasks running out of order
-    With :py:class:`SqliteHuey` and ``strict_fifo=False`` (the default), SQLite
-    may reuse rowids for deleted tasks, which can cause tasks to be dequeued in
-    a different order than the order in which they were enqueued.
+    With :py:class:`SqliteHuey` or :py:class:`CySqliteHuey` and
+    ``strict_fifo=False`` (the default), SQLite may reuse rowids for deleted
+    tasks, which can cause tasks to be dequeued in a different order than the
+    order in which they were enqueued.
 
     If strict FIFO ordering is important, initialize with ``strict_fifo=True``:
 
@@ -159,6 +160,8 @@ Tasks running out of order
 
     With Redis storage, the default ``RedisHuey`` uses a list and preserves
     insertion order. ``PriorityRedisHuey`` orders by priority score.
+    :py:class:`PostgresHuey` orders by a ``bigserial`` id, which is never
+    reused, so it is always a strict FIFO.
 
 Result store growing without bound (Redis)
     When using :py:class:`RedisHuey`, task results are stored in a Redis hash.
@@ -179,13 +182,16 @@ Consumer seems slow / tasks have high latency
 
     * **Worker count:** The default is 1 worker. Increase it with ``-w``.
       Most applications benefit from at least 2-4 workers.
-    * **Blocking vs polling:** ``RedisHuey`` defaults to ``blocking=True``,
-      which reacts instantly to new messages. ``SqliteHuey`` uses polling. If
-      you are using polling, the ``-d`` (delay) and ``-b`` (backoff) parameters
-      control how frequently Huey checks for new messages.
+    * **Blocking vs polling:** ``RedisHuey`` and ``PostgresHuey`` both default
+      to ``blocking=True`` and react instantly to new messages, using a
+      blocking-pop and ``LISTEN``/``NOTIFY`` respectively. ``SqliteHuey``,
+      ``CySqliteHuey`` and ``FileHuey`` poll. If you are using polling, the
+      ``-d`` (delay) and ``-b`` (backoff) parameters control how frequently
+      Huey checks for new messages.
     * **Scheduler interval:** The default scheduler interval is 1 second
-      (``-s 1``) (lowest possible value). If you have very few scheduled tasks
-      and want to save CPU, you can increase the interval to 10 or 30 seconds.
+      (``-s 1``), which is the lowest value accepted. If you have very few
+      scheduled tasks and want to save CPU, you can increase the interval to
+      10 or 30 seconds. It must divide evenly into 60.
     * **Worker type:** For CPU-bound tasks, use ``-k process``. For IO-bound
       tasks, consider ``-k greenlet`` with many workers.
     * **Verbose logging:** Run with ``-v`` to see exactly when tasks are
