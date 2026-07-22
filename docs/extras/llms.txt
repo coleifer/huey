@@ -21,6 +21,10 @@ Operational facts worth getting right:
 - `RedisHuey` and `PostgresHuey` block on dequeue by default (blocking-pop and
   LISTEN/NOTIFY), so they have no polling latency. The sqlite and file-system
   storages poll, and the `-d` / `-b` consumer options control the interval.
+- `retry_backoff` multiplies `retry_delay` after each failed attempt. It is
+  inert without a non-zero `retry_delay`, since a task with no delay is
+  re-enqueued immediately rather than scheduled. Growth is uncapped, so bound
+  long retry chains with `expires`.
 - For tests, use `immediate=True`: tasks execute synchronously through the
   real execution path against in-memory storage.
 - When running multiple consumers of one queue, pass `-n` / `--no-periodic`
