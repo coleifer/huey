@@ -32,7 +32,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: pip deps
-        run: pip install setuptools gevent redis peewee psycopg django
+        run: pip install setuptools gevent redis peewee psycopg django cysqlite
       - name: runtests
         env:
           HUEY_CI: '1'
