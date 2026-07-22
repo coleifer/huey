@@ -123,7 +123,9 @@ Huey types
     :param str filename: filename for database, defaults to 'huey.db'.
     :param int cache_mb: megabytes of memory to allow for sqlite page-cache.
     :param bool fsync: use durable writes. Slower but more resilient to
-        corruption in the event of sudden power loss. Defaults to false.
+        corruption in the event of sudden power loss. By default will use the
+        SQLite library's ``synchronous`` setting (typically ``1``, which
+        provides a good balance between durability and performance).
 
     SqliteHuey fully supports task priorities.
 
@@ -2346,14 +2348,15 @@ Huey comes with several built-in storage implementations:
     automatically cleaned-up.
 
 
-.. py:class:: SqliteStorage(name='huey', filename='huey.db', cache_mb=8, fsync=False, journal_mode='wal', timeout=5, strict_fifo=False, create_tables=True, **kwargs)
+.. py:class:: SqliteStorage(name='huey', filename='huey.db', cache_mb=8, fsync=None, journal_mode='wal', timeout=5, strict_fifo=False, create_tables=True, **kwargs)
 
     :param str name: namespace for storage.
     :param str filename: sqlite database filename.
     :param int cache_mb: sqlite page-cache size in megabytes.
-    :param bool fsync: if enabled, all writes to the Sqlite database will be
+    :param bool fsync: if ``True``, all writes to the Sqlite database will be
         synchronized. This provides greater safety from database corruption in
-        the event of sudden power-loss.
+        the event of sudden power-loss. If set to ``False`` then let the OS
+        handle syncing to disk. Uses the library default if unspecified.
     :param str journal_mode: sqlite journaling mode to use. Defaults to using
         write-ahead logging, which enables readers to coexist with a single
         writer.

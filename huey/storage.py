@@ -840,7 +840,7 @@ class SqliteStorage(BaseSqlStorage):
            table_counter]
 
     def __init__(self, name='huey', filename='huey.db', cache_mb=8,
-                 fsync=False, journal_mode='wal', timeout=5, strict_fifo=False,
+                 fsync=None, journal_mode='wal', timeout=5, strict_fifo=False,
                  create_tables=True, **kwargs):
         self.filename = filename
         self._cache_mb = cache_mb
@@ -874,7 +874,8 @@ class SqliteStorage(BaseSqlStorage):
         conn.execute('pragma journal_mode="%s"' % self._journal_mode)
         if self._cache_mb:
             conn.execute('pragma cache_size=%s' % (-1000 * self._cache_mb))
-        conn.execute('pragma synchronous=%s' % (2 if self._fsync else 0))
+        if self._fsync is not None:
+            conn.execute('pragma synchronous=%s' % (2 if self._fsync else 0))
         return conn
 
     def enqueue(self, data, priority=None):
