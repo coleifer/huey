@@ -355,7 +355,9 @@ Huey object
         :param int retry_delay: number of seconds to wait between retries.
         :param retry_backoff: multiplier applied to the delay after each failed
             attempt, giving exponentially-growing waits between retries. The
-            first retry waits ``retry_delay`` seconds. See
+            first retry waits ``retry_delay`` seconds. Defaults to ``0``, which
+            disables backoff. A value of ``1`` leaves the delay constant, and
+            values below ``1`` shrink it. Floats are accepted. See
             :ref:`recipe-exponential-backoff`.
         :param int priority: priority assigned to task, higher numbers are
             processed first by the consumer when there is a backlog. See
@@ -1148,7 +1150,7 @@ Huey object
         directly. The :py:meth:`Huey.task` and :py:meth:`Huey.periodic_task`
         decorators will create the appropriate TaskWrapper automatically.
 
-    .. py:method:: schedule(args=None, kwargs=None, eta=None, delay=None, priority=None, retries=None, retry_delay=None, expires=None, timeout=None, id=None)
+    .. py:method:: schedule(args=None, kwargs=None, eta=None, delay=None, priority=None, retries=None, retry_delay=None, retry_backoff=None, expires=None, timeout=None, id=None)
 
         :param tuple args: arguments for decorated function.
         :param dict kwargs: keyword arguments for decorated function.
@@ -1159,6 +1161,8 @@ Huey object
         :param int retries: number of times to retry the function if an
             unhandled exception occurs when it is executed.
         :param int retry_delay: number of seconds to wait between retries.
+        :param retry_backoff: multiplier applied to the delay after each failed
+            attempt. See :py:meth:`~Huey.task`.
         :param expires: set expiration time for task - if task is not run
             before ``expires``, it will be discarded. The ``expires`` parameter
             can be either an integer (seconds), a timedelta, or a datetime. For
@@ -1350,7 +1354,7 @@ Huey object
 
 
 
-.. py:class:: Task(args=None, kwargs=None, id=None, eta=None, retries=None, retry_delay=None, priority=None, expires=None, timeout=None, on_complete=None, on_error=None)
+.. py:class:: Task(args=None, kwargs=None, id=None, eta=None, retries=None, retry_delay=None, retry_backoff=None, priority=None, expires=None, timeout=None, on_complete=None, on_error=None)
 
     :param tuple args: arguments for the function call.
     :param dict kwargs: keyword arguments for the function call.
@@ -1358,6 +1362,8 @@ Huey object
     :param datetime eta: time at which task should be executed.
     :param int retries: automatic retry attempts.
     :param int retry_delay: seconds to wait before retrying a failed task.
+    :param retry_backoff: multiplier applied to ``retry_delay`` after each
+        failed attempt. See :py:meth:`~Huey.task`.
     :param int priority: priority assigned to task, higher numbers are
         processed first by the consumer when there is a backlog.
     :param expires: set expiration time for task - if task is not run

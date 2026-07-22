@@ -65,6 +65,17 @@ would look like:
 * ``12:00:30`` retry 4 (delay=16s)
 * ``12:01:02`` retry 5 (delay=32s)
 
+Nothing caps the growth, so a large ``retries`` count pushes the final attempts
+hours or days out. Bound the chain with ``expires``, which is resolved when the
+task is first enqueued and is not extended by the retries.
+
+.. note::
+    An explicit retry time wins and does not advance the backoff, so
+    ``RetryTask(delay=n)``, ``RetryTask(eta=...)`` and rate-limited retries use
+    their own delay. A bare ``RetryTask()`` follows the schedule above. The
+    current delay travels with the task, so a scheduled task reports the wait
+    for its next attempt rather than the declared ``retry_delay``.
+
 .. _recipe-idempotent-tasks:
 
 Idempotent Tasks Using Deterministic IDs
