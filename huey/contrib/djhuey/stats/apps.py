@@ -29,6 +29,9 @@ def stats_database():
     kwargs = {k: v for k, v in kwargs.items() if v}
     if 'port' in kwargs:
         kwargs['port'] = int(kwargs['port'])
+    opts = conn.get('OPTIONS') or {}
+    if 'ssl' in opts:
+        kwargs['ssl'] = opts['ssl']
     if engine in ('postgresql', 'postgresql_psycopg2', 'postgis'):
         return peewee.PostgresqlDatabase(conn['NAME'], **kwargs), options
     elif engine == 'mysql':

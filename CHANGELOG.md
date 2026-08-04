@@ -3,6 +3,8 @@ Changelog
 
 ## master
 
+* Forward SSL options when mapping the Django database to peewee for the stats recorder.
+
 [View commits](https://github.com/coleifer/huey/compare/3.3.2...master)
 
 ## 3.3.2
