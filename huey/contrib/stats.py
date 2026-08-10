@@ -223,10 +223,11 @@ class HueyStats(object):
 
     def window_counts(self, seconds=86400):
         rows = (self._events()
+                .where(HueyEvent.signal.is_null(False))
                 .where(HueyEvent.ts > time.time() - seconds)
                 .select(HueyEvent.signal, peewee.fn.COUNT(HueyEvent.id).alias('n'))
-                .group_by(HueyEvent.signal).tuples())
-        return {signal: n for signal, n in rows}
+                .group_by(HueyEvent.signal))
+        return dict(rows.tuples().iterator())
 
     def recent_events(self, limit=50):
         rows = (self._events().order_by(HueyEvent.id.desc()).limit(limit)
