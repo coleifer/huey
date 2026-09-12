@@ -22,7 +22,8 @@ class Serializer(object):
         self.comp = compression
         self.comp_level = compression_level
         self.use_zlib = use_zlib
-        self.pickle_protocol = pickle_protocol or pickle.HIGHEST_PROTOCOL
+        self.pickle_protocol = (pickle.HIGHEST_PROTOCOL if pickle_protocol is None
+                                else pickle_protocol)
 
     def _serialize(self, data):
         return pickle.dumps(data, self.pickle_protocol)

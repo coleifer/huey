@@ -2,6 +2,7 @@ try:
     import gzip
 except ImportError:
     gzip = None
+import pickle
 import unittest
 try:
     import zlib
@@ -26,6 +27,19 @@ class TestSerializer(BaseTestCase):
 
     def test_serializer(self):
         self._test_serializer(Serializer())
+
+    def test_pickle_protocol(self):
+        for protocol in range(pickle.HIGHEST_PROTOCOL + 1):
+            serializer = Serializer(pickle_protocol=protocol)
+            for item in self.data:
+                data = serializer.serialize(item)
+                self.assertEqual(data, pickle.dumps(item, protocol))
+                self.assertEqual(serializer.deserialize(data), item)
+
+    def test_pickle_protocol_none(self):
+        serializer = Serializer(pickle_protocol=None)
+        self.assertEqual(serializer.serialize(self.data),
+                         pickle.dumps(self.data, pickle.HIGHEST_PROTOCOL))
 
     @unittest.skipIf(gzip is None, 'gzip module not installed')
     def test_serializer_gzip(self):
