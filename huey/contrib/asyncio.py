@@ -74,6 +74,11 @@ async def aget_result_group(rg, *args, **kwargs):
         # This should take ~2 seconds.
         results = await aget_result_group(rg)
     """
-    return await asyncio.gather(*[
-        aget_result(r, *args, **kwargs)
-        for r in rg])
+    tasks = [asyncio.create_task(aget_result(r, *args, **kwargs)) for r in rg]
+    try:
+        return await asyncio.gather(*tasks)
+    except BaseException:
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        raise
