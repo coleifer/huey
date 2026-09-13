@@ -62,6 +62,9 @@ async def aget_result_group(rg, *args, **kwargs):
     """
     Await the results of a ResultGroup.
 
+    If a result raises, stop the remaining result waits without revoking
+    their tasks.
+
     Example usage:
 
         @huey.task()
@@ -74,6 +77,11 @@ async def aget_result_group(rg, *args, **kwargs):
         # This should take ~2 seconds.
         results = await aget_result_group(rg)
     """
-    return await asyncio.gather(*[
-        aget_result(r, *args, **kwargs)
-        for r in rg])
+    tasks = [asyncio.create_task(aget_result(r, *args, **kwargs)) for r in rg]
+    try:
+        return await asyncio.gather(*tasks)
+    finally:
+        for task in tasks:
+            if not task.done():
+                task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
