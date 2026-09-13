@@ -1,9 +1,30 @@
 from functools import wraps
-import time
+import threading
 import uuid
 
-from huey import RedisHuey
+from huey.exceptions import ConfigurationError
 from huey.exceptions import TaskLockedException
+
+
+ACQUIRE_LUA = """\
+local t = redis.call('time')
+local now = tonumber(t[1]) + tonumber(t[2]) / 1000000
+redis.call('zremrangebyscore', KEYS[1], '-inf', now - tonumber(ARGV[1]))
+if redis.call('zscore', KEYS[1], ARGV[3]) == false and
+        redis.call('zcard', KEYS[1]) >= tonumber(ARGV[2]) then
+    return 0
+end
+redis.call('zadd', KEYS[1], now, ARGV[3])
+return 1"""
+
+RENEW_LUA = """\
+local t = redis.call('time')
+local now = tonumber(t[1]) + tonumber(t[2]) / 1000000
+if redis.call('zscore', KEYS[1], ARGV[1]) == false then
+    return 0
+end
+redis.call('zadd', KEYS[1], now, ARGV[1])
+return 1"""
 
 
 class RedisSemaphore(object):
@@ -11,30 +32,38 @@ class RedisSemaphore(object):
     Extremely basic semaphore for use with Redis.
     """
     def __init__(self, huey, name, value=1, timeout=None):
-        if not isinstance(huey, RedisHuey):
-            raise ValueError('Semaphore is only supported for Redis.')
         self.huey = huey
         self.key = '%s.lock.%s' % (huey.name, name)
         self.value = value
-        self.timeout = timeout or 86400  # Set a max age for lock holders.
+        # Holders renew while they run, so this bounds how long a dead holder
+        # occupies a slot rather than how long a task may take.
+        self.timeout = timeout or 300
 
         self.huey._locks.add(self.key)
-        self._conn = self.huey.storage.conn
+
+    @property
+    def conn(self):
+        conn = getattr(self.huey.storage, 'conn', None)
+        if conn is None:
+            raise ConfigurationError('Semaphore requires a Redis storage.')
+        return conn
 
     def acquire(self, name=None):
         name = name or str(uuid.uuid4())
-        ts = time.time()
-        pipeline = self._conn.pipeline(True)
-        pipeline.zremrangebyscore(self.key, '-inf', ts - self.timeout)
-        pipeline.zadd(self.key, {name: ts})
-        pipeline.zrank(self.key, name)  # See whether we acquired.
-        if pipeline.execute()[-1] < self.value:
+        if self.conn.eval(ACQUIRE_LUA, 1, self.key, self.timeout, self.value,
+                          name):
             return name
-        self._conn.zrem(self.key, name)
-        return
+
+    def renew(self, name):
+        return bool(self.conn.eval(RENEW_LUA, 1, self.key, name))
 
     def release(self, name):
-        return self._conn.zrem(self.key, name)
+        return self.conn.zrem(self.key, name)
+
+    def _renew_until(self, name, stop):
+        interval = self.timeout / 3.0
+        while not stop.wait(interval):
+            self.renew(name)
 
 
 def lock_task_semaphore(huey, lock_name, value=1, timeout=None):
@@ -43,6 +72,9 @@ def lock_task_semaphore(huey, lock_name, value=1, timeout=None):
 
     NOTE: no provisions are made for blocking, waiting, or notifying. This is
     just a lock which can be acquired a configurable number of times.
+
+    The lock is renewed while the task runs, so ``timeout`` (default 300s)
+    determines how quickly a slot is reclaimed after a worker dies.
 
     Example:
 
@@ -61,9 +93,15 @@ def lock_task_semaphore(huey, lock_name, value=1, timeout=None):
             if tid is None:
                 raise TaskLockedException('unable to acquire lock %s' %
                                           lock_name)
+            stop = threading.Event()
+            renewer = threading.Thread(target=sem._renew_until,
+                                       args=(tid, stop), daemon=True)
+            renewer.start()
             try:
                 return fn(*args, **kwargs)
             finally:
+                stop.set()
+                renewer.join()
                 sem.release(tid)
         return inner
     return decorator

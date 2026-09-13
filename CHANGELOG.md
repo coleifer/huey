@@ -3,6 +3,13 @@ Changelog
 
 ## master
 
+* Fix `RedisSemaphore` admitting more than `value` holders under contention.
+  Acquisition now evicts, counts and adds in one Lua script, using the server
+  clock, so a caller whose timestamp was sampled before a slower caller's can
+  no longer sort its way in.
+* Renew the `lock_task_semaphore` slot while the task runs, and drop the
+  holder timeout from 24 hours to 5 minutes.
+
 [View commits](https://github.com/coleifer/huey/compare/3.4.0...master)
 
 ## 3.4.0
