@@ -9,6 +9,7 @@ from huey.contrib.helpers import lock_task_semaphore
 from huey.exceptions import ConfigurationError
 from huey.storage import RedisStorage
 from huey.tests.base import BaseTestCase
+from huey.tests.base import slow_test
 from huey.tests.test_storage import requires_redis
 
 
@@ -68,6 +69,7 @@ class TestLockTaskSemaphore(BaseTestCase):
         self.assertEqual(self.huey.storage.conn.zcard(s.key), 5)
         self.huey.storage.conn.delete(s.key)
 
+    @slow_test()
     def test_semaphore_expiration(self):
         s = RedisSemaphore(self.huey, 'lock_e', 1, timeout=1)
         self.huey.storage.conn.delete(s.key)
@@ -85,6 +87,7 @@ class TestLockTaskSemaphore(BaseTestCase):
         self.assertEqual(self.huey.storage.conn.zcard(s.key), 1)
         self.huey.storage.conn.delete(s.key)
 
+    @slow_test()
     def test_semaphore_renewed_while_running(self):
         @lock_task_semaphore(self.huey, 'lock_r', 1, timeout=1)
         def slow():

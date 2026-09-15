@@ -77,6 +77,7 @@ class StorageTests(object):
         self.s.put_data('k2', b'v2')
         self.assertEqual(self.s.result_items(), {'k1': b'v1', 'k2': b'v2'})
 
+    @slow_test()
     def test_put_if_empty_ttl(self):
         if not self.supports_ttl:
             self.assertRaises(NotImplementedError, self.s.put_if_empty,
