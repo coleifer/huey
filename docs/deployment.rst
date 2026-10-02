@@ -244,13 +244,14 @@ gracefully re-exec) the consumer:
 Production checklist
 --------------------
 
-* The supervisor stops huey with its graceful signal (``KillSignal=SIGINT``
-  and friends, or ``-g TERM``), and ``--shutdown-timeout`` is set a few
-  seconds under the supervisor's kill deadline (:ref:`deployment-signals`).
-* A ``SIGNAL_INTERRUPTED`` handler re-enqueues interrupted tasks, or your
-  tasks are idempotent (:ref:`recipe-interrupted-tasks`).
-* Exactly one consumer enqueues periodic tasks and all others run with ``-n``
-  (:ref:`multiple-consumers`).
+* The supervisor stops huey with its graceful signal. For historical reasons,
+  Huey uses ``SIGINT`` for graceful shutdown by default. To use ``SIGTERM`` for
+  graceful shutdown instead, specify ``-g TERM``.
+* Set ``--shutdown-timeout`` to a few seconds shorter than the process
+  supervisor's kill timeout (:ref:`deployment-signals`).
+* A ``SIGNAL_INTERRUPTED`` handler re-enqueues tasks interrupted mid-flight,
+  see :ref:`recipe-interrupted-tasks`.
+* Exactly one consumer enqueues periodic tasks and all others run with ``-n``.
 * The consumer is run directly, with no shell-script wrappers.
 * Result data is read (or expired) so the result store does not grow without
   bound. Read results, set ``expires=``, or use ``RedisExpireHuey``. See
