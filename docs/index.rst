@@ -59,17 +59,15 @@ functions into tasks executed by the consumer:
 
     @huey.task(retries=2, retry_delay=60)
     def flaky_task(url):
-        # This task might fail, in which case it will be retried up to 2 times
-        # with a delay of 60s between retries.
         return this_might_fail(url)
 
     @huey.periodic_task(crontab(minute='0', hour='3'))
     def nightly_backup():
         sync_all_data()
 
-Calling a ``task``-decorated function will enqueue the function call for
-execution by the consumer. A special result handle is returned immediately,
-which can be used to fetch the result once the task is finished:
+Calling a ``task``-decorated function will enqueue the function call. A result
+handle is returned immediately, which can be used to fetch the result once the
+task is finished:
 
 .. code-block:: pycon
 
@@ -85,11 +83,11 @@ Tasks can be scheduled to run in the future:
 
 .. code-block:: pycon
 
-    >>> res = add_numbers.schedule((2, 3), delay=10)  # Will be run in ~10s.
+    >>> res = add_numbers.schedule((2, 3), delay=10)
     >>> res(blocking=True)  # Will block until task finishes, in ~10s.
     5
 
-For much more, check out the :ref:`guide` or take a look at the `example code <https://github.com/coleifer/huey/tree/master/examples/>`_.
+For much more, check out the :ref:`guide`.
 
 Running the consumer
 ^^^^^^^^^^^^^^^^^^^^
@@ -107,8 +105,7 @@ To run the consumer with a single worker thread (default):
     huey_consumer my_app.huey
 
 If your work-loads are mostly IO-bound, you can run the consumer with threads
-or greenlets instead. Because greenlets are so lightweight, you can run quite a
-few of them efficiently:
+or greenlets instead:
 
 .. code-block:: shell
 

@@ -145,7 +145,7 @@ class ConsumerConfig(namedtuple('_ConsumerConfig', config_keys)):
 
     def validate(self):
         if self.backoff < 1:
-            raise ValueError('The backoff must be greater than 1.')
+            raise ValueError('The backoff must be at least 1.')
         if not (0 < self.scheduler_interval <= 60):
             raise ValueError('The scheduler must run at least once per '
                              'minute, and at most once per second (1-60).')

@@ -4,7 +4,7 @@ Changes in 3.0
 ==============
 
 The 3.0 release of Huey is API-compatible with the previous versions. The main
-change is the addition of a number of new features:
+change is the addition of new features:
 
 * :py:class:`chord` and :py:class:`group` - :ref:`description <groups-and-chords>`
 * :ref:`task timeouts <task-timeouts>`
@@ -15,9 +15,7 @@ change is the addition of a number of new features:
 Changes in 2.0
 ==============
 
-The 2.0 release of Huey is mostly API-compatible with previous versions, but
-there are a number of things that have been altered or improved in this
-release.
+The 2.0 release of Huey is mostly API-compatible with previous versions.
 
 .. warning::
     The serialization format for tasks has changed. An attempt has been made to
@@ -55,8 +53,8 @@ be introspected using the task's :py:class:`Result` handle.
 Huey now supports :ref:`priority`. To use priorities with Redis, you need to be
 running Redis 5.0 or newer, and should use :py:class:`PriorityRedisHuey`. The
 original :py:class:`RedisHuey` continues to support older versions of Redis.
-:py:class:`SqliteHuey` and the in-memory storage used for dev/testing provide
-full support for task priorities.
+:py:class:`SqliteHuey` and the in-memory storage provide full support for task
+priorities.
 
 Details
 -------
@@ -64,11 +62,9 @@ Details
 Changes when initializing :py:class:`Huey`:
 
 * ``result_store`` parameter has been renamed to ``results``.
-* ``events`` parameter is removed. Events have been replaced by :ref:`signals`.
-* ``store_errors`` parameter is removed. Huey no longer maintains a separate
-  list of recent errors. Unhandled errors that occur when running a task are
-  stored in the result store. Also the ``max_errors`` parameter of the Redis
-  storage engine is removed.
+* ``events`` parameter is removed.
+* ``store_errors`` parameter is removed. Also the ``max_errors`` parameter of
+  the Redis storage engine is removed.
 * ``global_registry`` parameter is removed. Tasks are registered to the Huey
   instance with which they are decorated, rather than to a global registry.
 * ``always_eager`` has been renamed ``immediate``.
@@ -86,12 +82,9 @@ Other changes to :py:class:`Huey`:
 
 * Immediate mode can be enabled or disabled at runtime by setting the
   :py:attr:`~Huey.immediate` property.
-* Event emitter has been replaced by :ref:`signals`, so all event-related APIs
-  have been removed.
 * Special classes of exceptions for the various storage operations have been
   removed. For more information see :ref:`exceptions`.
-* The ``Huey.errors()`` method is gone. Errors are no longer tracked
-  separately.
+* The ``Huey.errors()`` method is gone.
 
 Changes to the :py:meth:`~Huey.task` and :py:meth:`~Huey.periodic_task`
 decorators:
@@ -120,8 +113,6 @@ Changes to :py:func:`crontab`:
 
 Miscellaneous:
 
-* Huey no longer uses a global registry for task functions. Task functions are
-  only visible to the huey instance they are decorated by.
 * ``RedisHuey`` defaults to using a blocking pop on the queue, which should
   improve latency and reduce chatter. To go back to the old polling default,
   specify ``blocking=False`` when creating your huey instance.

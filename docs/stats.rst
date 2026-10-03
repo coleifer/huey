@@ -3,17 +3,13 @@
 Task statistics
 ---------------
 
-:py:func:`enable_stats` attaches a lightweight recorder to a :py:class:`Huey`
-instance that persists task signals (enqueued, executing, complete, error,
-retrying, and so on) into a pair of `peewee <https://docs.peewee-orm.com/>`_
-tables. From those tables you can compute throughput, error-rates, per-task
-timing and a live view of what is currently running.
+:py:func:`enable_stats` attaches a recorder to a :py:class:`Huey` instance that
+persists task signals into a pair of `peewee <https://docs.peewee-orm.com/>`_
+tables.
 
-The recorder depends only on peewee (``pip install huey[stats]``) and writes
-to any peewee ``Database`` you give it (SQLite, Postgres, MySQL). It is the engine behind the
-:ref:`Flask-Peewee admin panel <flask-admin>` and the
-:ref:`Django admin dashboard <django-admin-stats>`, but it stands on its own:
-use it to feed a custom dashboard, a metrics exporter or a CLI report.
+The recorder depends only on peewee (``pip install huey[stats]``). It is the
+engine behind the :ref:`Flask-Peewee admin panel <flask-admin>` and the
+:ref:`Django admin dashboard <django-admin-stats>`.
 
 Enabling
 ^^^^^^^^
@@ -39,11 +35,9 @@ once, in a module the consumer imports:
 
     stats = enable_stats(huey, stats_db)
 
-:py:func:`enable_stats` is idempotent per huey instance and returns a
-:py:class:`HueyStats` object. Enabling it in additional processes (for example
-a web app that enqueues tasks) is harmless and captures the signals that occur
-there. Statistics are scoped by ``huey.name``, so several huey instances may
-share one database without their data mixing.
+Enabling it in additional processes (for example a web app that enqueues
+tasks) is harmless and captures the signals that occur there. Statistics are
+scoped by ``huey.name``, so several huey instances may share one database.
 
 Querying
 ^^^^^^^^
@@ -55,17 +49,17 @@ available afterwards as ``huey._stats``) exposes read helpers:
 
     stats = enable_stats(huey, stats_db)
 
-    stats.window_counts()          # {'complete': 1200, 'error': 3, ...} last 24h
-    stats.task_breakdown()         # per-task executed/completed/errors/avg
-    stats.throughput(minutes=60)   # {'complete': [...], 'error': [...]} per minute
-    stats.recent_events(limit=50)  # most recent events, newest first
-    stats.inflight()               # tasks currently executing
+    stats.window_counts()
+    stats.task_breakdown()
+    stats.throughput(minutes=60)
+    stats.recent_events(limit=50)
+    stats.inflight()
 
 Two tables are created when the recorder starts (unless
 ``create_tables=False``): ``huey_event``, an append-only event log trimmed to
 the retention settings, and ``huey_inflight``, one row per currently-executing
-task. Writes are buffered and flushed by a background thread, so recording adds
-negligible overhead to task execution.
+task. Writes are buffered and flushed by a background thread, so recording
+adds negligible overhead to task execution.
 
 API
 ^^^

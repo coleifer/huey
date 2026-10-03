@@ -3,8 +3,7 @@
 Huey Extensions
 ===============
 
-The ``huey.contrib`` package contains modules that provide extra functionality
-beyond the core APIs.
+The ``huey.contrib`` package contains modules that provide extra functionality.
 
 .. include:: django.rst
 

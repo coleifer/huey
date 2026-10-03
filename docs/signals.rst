@@ -3,15 +3,14 @@
 Signals
 =======
 
-The consumer will send various signals as it processes tasks. Callbacks can be
-registered as signal handlers, and will be called synchronously by the consumer
-process.
+The consumer will send signals as it processes tasks. Callbacks can be
+registered as signal handlers.
 
 Signal Reference
 ----------------
 
-The following table lists all signals, when they are emitted, and any extra
-arguments passed to the handler beyond the standard ``(signal, task)`` pair.
+The following table lists all signals and any extra arguments passed to the
+handler beyond the standard ``(signal, task)`` pair.
 
 .. list-table::
    :header-rows: 1
@@ -45,8 +44,8 @@ arguments passed to the handler beyond the standard ``(signal, task)`` pair.
        :py:class:`RetryTask` was raised).
      - None
    * - ``SIGNAL_SCHEDULED``
-     - Task is not yet ready to run and has been added to the schedule for
-       future execution (e.g., has an ``eta`` or ``retry_delay``).
+     - Task is not yet ready to run and has been added to the schedule
+       (e.g., has an ``eta`` or ``retry_delay``).
      - None
    * - ``SIGNAL_REVOKED``
      - Task was revoked and will not be executed. No further signals are
@@ -73,15 +72,13 @@ arguments passed to the handler beyond the standard ``(signal, task)`` pair.
 Signal Ordering
 ---------------
 
-Signals are emitted in a deterministic order. Understanding this order is
-important when writing signal handlers that depend on the state of the task or
-the result store.
+Signals are emitted in a deterministic order.
 
 **Successful task execution:**
 
-1. ``SIGNAL_ENQUEUED``: task placed on the queue (in the **application** process).
-2. ``SIGNAL_EXECUTING``: worker picks up the task.
-3. ``SIGNAL_COMPLETE``: task finished. The result is in the result store.
+1. ``SIGNAL_ENQUEUED`` (in the **application** process).
+2. ``SIGNAL_EXECUTING``
+3. ``SIGNAL_COMPLETE``
 4. If the task has an ``on_complete`` pipeline, the next task is enqueued
    (emitting another ``SIGNAL_ENQUEUED``).
 
@@ -90,11 +87,10 @@ the result store.
 1. ``SIGNAL_ENQUEUED``
 2. ``SIGNAL_EXECUTING``
 3. ``SIGNAL_ERROR``: exception is passed as ``exc``. The error result is
-   stored at this point.
-4. ``SIGNAL_RETRYING``: task will be retried.
-5. If ``retry_delay`` is set: ``SIGNAL_SCHEDULED`` (task added to the schedule
-   for later). Otherwise: ``SIGNAL_ENQUEUED`` (task re-added to the queue
-   immediately).
+   stored after this signal, unless ``store_intermediate_errors`` is false.
+4. ``SIGNAL_RETRYING``
+5. If ``retry_delay`` is set: ``SIGNAL_SCHEDULED``. Otherwise:
+   ``SIGNAL_ENQUEUED``.
 
 **Task failure without retry (retries exhausted or not configured):**
 
@@ -104,7 +100,7 @@ the result store.
 
 **Scheduled task:**
 
-1. ``SIGNAL_ENQUEUED``: task placed on the queue (application process).
+1. ``SIGNAL_ENQUEUED`` (application process).
 2. ``SIGNAL_SCHEDULED``: worker sees the task is not ready to run, adds it
    to the schedule.
 3. When the scheduler determines the task is ready: ``SIGNAL_ENQUEUED``
@@ -115,7 +111,7 @@ the result store.
 **Revoked task:**
 
 1. ``SIGNAL_ENQUEUED``
-2. ``SIGNAL_REVOKED``: no further signals are emitted.
+2. ``SIGNAL_REVOKED``
 
 **Rate-limited task (with automatic retry):**
 
@@ -124,7 +120,7 @@ the result store.
 3. ``SIGNAL_RATE_LIMITED``
 4. ``SIGNAL_RETRYING``
 5. ``SIGNAL_SCHEDULED``: task is scheduled for the start of the next
-   rate-limit window.
+   rate-limit window, or after ``retry_delay`` if the task sets one.
 
 **Chord signals:**
 
@@ -142,7 +138,6 @@ To register a signal handler, use the :py:meth:`Huey.signal` method:
 
     @huey.signal()
     def all_signal_handler(signal, task, exc=None):
-        # This handler will be called for every signal.
         print('%s - %s' % (signal, task.id))
 
     @huey.signal(SIGNAL_ERROR, SIGNAL_LOCKED, SIGNAL_CANCELED, SIGNAL_REVOKED)
@@ -173,8 +168,6 @@ Signal handlers can be unregistered using :py:meth:`Huey.disconnect_signal`.
 Examples
 ^^^^^^^^
 
-We'll use the following tasks to illustrate how signals may be sent:
-
 .. code-block:: python
 
     @huey.task()
@@ -187,7 +180,7 @@ We'll use the following tasks to illustrate how signals may be sent:
             raise ValueError('uh-oh')
         return 'OK'
 
-Here is a simple example of a task execution we would expect to succeed:
+Here is an example of a task execution we would expect to succeed:
 
 .. code-block:: pycon
 
@@ -196,10 +189,9 @@ Here is a simple example of a task execution we would expect to succeed:
 
 The following signals would be fired:
 
-* ``SIGNAL_ENQUEUED`` - the task has been enqueued (happens in the application
-  process).
-* ``SIGNAL_EXECUTING`` - the task has been dequeued and will be executed.
-* ``SIGNAL_COMPLETE`` - the task has finished successfully.
+* ``SIGNAL_ENQUEUED``
+* ``SIGNAL_EXECUTING``
+* ``SIGNAL_COMPLETE``
 
 Here is an example of scheduling a task for execution after a short delay:
 
@@ -210,17 +202,14 @@ Here is an example of scheduling a task for execution after a short delay:
 
 The following signals would be sent:
 
-* ``SIGNAL_ENQUEUED`` - the task has been enqueued (happens in the **application**
-  process).
-* ``SIGNAL_SCHEDULED`` - the task is not yet ready to run, so it has been added
-  to the schedule.
-* After 10 seconds, the consumer will re-enqueue the task as it is now ready to
-  run, sending the ``SIGNAL_ENQUEUED`` (in the **consumer** process!).
-* Then the consumer will run the task and send the ``SIGNAL_EXECUTING`` signal.
-* ``SIGNAL_COMPLETE``.
+* ``SIGNAL_ENQUEUED`` (in the **application** process).
+* ``SIGNAL_SCHEDULED``
+* After 10 seconds, the consumer will re-enqueue the task, sending
+  ``SIGNAL_ENQUEUED``.
+* ``SIGNAL_EXECUTING``
+* ``SIGNAL_COMPLETE``
 
-Here is an example that may fail, in which case it will be retried
-automatically with a delay of 10 seconds.
+Here is an example that may fail:
 
 .. code-block:: pycon
 
@@ -233,18 +222,16 @@ automatically with a delay of 10 seconds.
     ...
 
 Assuming the task failed the first time and succeeded the second time, we would
-see the following signals being sent:
+see the following signals:
 
-* ``SIGNAL_ENQUEUED`` - task has been enqueued.
-* ``SIGNAL_EXECUTING`` - the task is being executed.
-* ``SIGNAL_ERROR`` - the task raised an unhandled exception.
-* ``SIGNAL_RETRYING`` - the task will be retried.
-* ``SIGNAL_SCHEDULED`` - the task has been added to the schedule for execution
-  in ~10 seconds.
-* ``SIGNAL_ENQUEUED`` - 10s have elapsed and the task is ready to run and has
-  been re-enqueued.
-* ``SIGNAL_EXECUTING`` - second try running task.
-* ``SIGNAL_COMPLETE`` - task succeeded.
+* ``SIGNAL_ENQUEUED``
+* ``SIGNAL_EXECUTING``
+* ``SIGNAL_ERROR``
+* ``SIGNAL_RETRYING``
+* ``SIGNAL_SCHEDULED``
+* ``SIGNAL_ENQUEUED``
+* ``SIGNAL_EXECUTING``
+* ``SIGNAL_COMPLETE``
 
 What happens if we revoke the ``add()`` task and then attempt to execute it:
 
@@ -255,19 +242,15 @@ What happens if we revoke the ``add()`` task and then attempt to execute it:
 
 The following signal will be sent:
 
-* ``SIGNAL_ENQUEUED`` - the task has been enqueued for execution.
-* ``SIGNAL_REVOKED`` - this is sent before the task enters the "executing"
-  state. When a task is revoked, no other signals will be sent.
+* ``SIGNAL_ENQUEUED``
+* ``SIGNAL_REVOKED``
 
 Using SIGNAL_INTERRUPTED
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
-The correct way to shut-down the Huey consumer is to send a ``SIGINT`` signal
-to the worker process (e.g. Ctrl+C), which initiates a graceful shutdown.
-Sometimes, however, you may need to shut the consumer down using ``SIGTERM``,
-which stops it immediately (unless the consumer runs with
-``--graceful-signal=TERM``). Any tasks that are currently being
-executed are then "lost" and will not be retried by default (see also:
+Shutting the consumer down using ``SIGTERM`` stops it immediately (unless the
+consumer runs with ``--graceful-signal=TERM``). Any tasks that are currently
+being executed are then "lost" and will not be retried by default (see
 :ref:`consumer-shutdown`).
 
 To avoid losing these tasks, you can use a ``SIGNAL_INTERRUPTED`` handler to
@@ -277,8 +260,6 @@ re-enqueue them:
 
     @huey.signal(SIGNAL_INTERRUPTED)
     def on_interrupted(signal, task, *args, **kwargs):
-        # The consumer was shutdown before `task` finished executing.
-        # Re-enqueue it.
         huey.enqueue(task)
 
 Signal Handler Error Resilience
@@ -297,7 +278,6 @@ its result from being stored.
 
     @huey.signal(SIGNAL_COMPLETE)
     def working_handler(signal, task):
-        # This will still be called, even if broken_handler raised.
         record_completion(task.id)
 
 Signals and Immediate Mode
@@ -316,7 +296,7 @@ consumer. This makes it easy to test signal handlers:
     def on_complete(signal, task):
         state.append(task.id)
 
-    result = add(1, 2)  # Executes immediately, fires signals.
+    result = add(1, 2)
     assert len(state) == 1
     assert state[0] == result.id
 
@@ -338,11 +318,4 @@ Another consideration is the :ref:`management of shared resources <shared_resour
 that may be used by signal handlers, such as database connections or open file
 handles. Signal handlers are called by the consumer workers, which (depending
 on how you are running the consumer) may be separate processes, threads or
-greenlets. As a result, care should be taken to ensure proper initialization
-and cleanup of any resources you plan to use in signal handlers.
-
-Lastly, take care when implementing ``SIGNAL_ENQUEUED`` handlers, as these may
-run in your application-code (e.g. whenever your application enqueues a task),
-**or** by the consumer process (e.g. when re-enqueueing a task for retry, or
-when enqueueing periodic tasks, when moving a task from the schedule to the
-queue, etc).
+greenlets.

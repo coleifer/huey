@@ -171,6 +171,25 @@ class TestConsumerIntegration(BaseTestCase):
         scheduler.loop(datetime.datetime(2000, 1, 1, 0, 0))
         self.assertEqual(len(self.huey), 1)
 
+    def test_scheduler_periodic_enqueue_error(self):
+        @self.huey.periodic_task(crontab(minute='*'))
+        def task_p():
+            pass
+
+        consumer = self.consumer(workers=1)
+        scheduler = consumer._create_scheduler()
+        scheduler._next_loop = time.monotonic() + 60
+        scheduler._next_periodic = time.monotonic() - 1
+
+        def broken_enqueue(task):
+            raise ValueError('storage down')
+        scheduler.huey.enqueue = broken_enqueue
+
+        # The error is logged and the scheduler keeps running.
+        scheduler.loop(datetime.datetime(2000, 1, 1, 0, 0))
+        self.assertEqual(len(self.huey), 0)
+        self.assertTrue(scheduler._next_periodic > time.monotonic())
+
 
 class TestConsumerConfig(BaseTestCase):
     def test_default_config(self):

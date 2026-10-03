@@ -4,17 +4,15 @@ Monitoring
 ==========
 
 Huey emits :ref:`signals` as it operates, and also can return counts for key
-metrics. The monitoring described below builds on these two interfaces.
+metrics.
 
 Measurements
 ------------
 
-The following shows the queue depth, schedule backlog, and count of unread
-results:
-
 * :py:meth:`Huey.pending_count`, tasks ready to run and waiting for a worker.
 * :py:meth:`Huey.scheduled_count`, tasks scheduled with a future ``eta``.
-* :py:meth:`Huey.result_count`, unread results.
+* :py:meth:`Huey.result_count`, key/value pairs in the result store (results,
+  plus revoke flags and locks).
 
 From signals, recorded in the consumer:
 
@@ -30,7 +28,6 @@ registered in a module the consumer imports.
 Counters from signals
 ---------------------
 
-Handlers receive ``(signal, task)``, plus ``exc`` for ``SIGNAL_ERROR``.
 Task stats can be aggregated by ``task.name``:
 
 .. code-block:: python
@@ -64,10 +61,9 @@ What to alert on
 Logging
 -------
 
-The consumer logs to the ``huey`` logger, with per-component records under
-``huey.consumer``. The ``-l`` / ``--logfile``, ``-v`` / ``--verbose``,
-``-q`` / ``--quiet`` and ``-S`` / ``--simple`` options and attaching your own
-handler are described in :ref:`logging`.
+The ``-l`` / ``--logfile``, ``-v`` / ``--verbose``, ``-q`` / ``--quiet`` and
+``-S`` / ``--simple`` options and attaching your own handler are described in
+:ref:`logging`.
 
 The default format is ``[time] LEVEL:logger:worker:message``. For structured
 output, attach a JSON formatter to the ``huey`` logger before the consumer
@@ -77,7 +73,13 @@ starts:
 
     handler = logging.StreamHandler()
     handler.setFormatter(JsonFormatter())
-    logging.getLogger('huey').addHandler(handler)
+    logger = logging.getLogger('huey')
+    logger.addHandler(handler)
+    logger.setLevel(logging.INFO)
+
+``run_huey`` then skips its default handler. ``huey_consumer`` always adds
+its own, so every record prints twice. Start the consumer from your own script
+with ``huey.create_consumer(...).run()`` instead.
 
 Sentry
 ------
@@ -96,7 +98,7 @@ Report unhandled task exceptions from ``SIGNAL_ERROR``:
 Tracing
 -------
 
-Pass trace contexts as an ordinary task argument, and open a span in a the
+Pass trace contexts as an ordinary task argument, and open a span in the
 :py:meth:`~Huey.pre_execute` hook:
 
 .. code-block:: python

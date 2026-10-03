@@ -3,12 +3,11 @@
 Mini-Huey
 ---------
 
-:py:class:`MiniHuey` provides a lightweight huey-like API that may be useful
-for certain applications. The ``MiniHuey`` consumer runs inside a greenlet in
-your main application process. This means there is no separate consumer process
-to manage, and no persistence for the enqueued or scheduled tasks. Whenever a
-task is enqueued or is scheduled to run, a new greenlet is spawned to execute
-it.
+:py:class:`MiniHuey` provides a lightweight huey-like API. The ``MiniHuey``
+consumer runs inside a greenlet in your main application process. This means
+there is no separate consumer process to manage, and no persistence for the
+enqueued or scheduled tasks. Whenever a task is enqueued or is scheduled to
+run, a new greenlet is spawned to execute it.
 
 *MiniHuey* may be useful if:
 
@@ -17,21 +16,14 @@ it.
   web-based APIs, query a database server.
 * You do not need automatic retries, persistence for your message queue,
   dynamic task revocation.
-* You wish to keep things nice and simple and don't want the overhead of
-  additional process(es) to manage.
 
 *MiniHuey* may be a bad choice if:
 
 * Your application is incompatible with gevent (e.g. uses asyncio).
 * Your tasks do stuff like process large files, crunch numbers, parse large XML
   or JSON documents, or other CPU or disk-intensive work.
-* You need a persistent store for messages and results, so the consumer can be
-  restarted without losing any unprocessed messages.
 
-If you are not sure, then you should probably not use *MiniHuey*. Use the
-regular :py:class:`Huey` instead.
-
-Usage and task declaration:
+If you are not sure, use the regular :py:class:`Huey` instead.
 
 .. py:class:: MiniHuey([name='huey'[, interval=1[, pool_size=None]]])
 
@@ -48,7 +40,7 @@ Usage and task declaration:
         The decorated task will gain a ``schedule()`` method which can be used
         like the :py:meth:`TaskWrapper.schedule` method.
 
-        Examples task declarations:
+        Example task declarations:
 
         .. code-block:: python
 
@@ -70,12 +62,10 @@ Usage and task declaration:
                 pass
 
 
-        Example usage. Running tasks and getting results work about the same as
-        regular Huey:
+        Running tasks and getting results work about the same as regular Huey:
 
         .. code-block:: python
 
-            # Executes the task asynchronously in a new greenlet.
             result = fetch_url('https://google.com/')
 
             # Wait for the task to finish.
@@ -118,7 +108,3 @@ Usage and task declaration:
     .. py:method:: stop()
 
         Stop the scheduler.
-
-Tasks enqueued for immediate execution will be run regardless of whether the
-scheduler is running. You only need to start the scheduler if you plan to
-schedule tasks in the future or run periodic tasks.

@@ -33,7 +33,7 @@ def consumer_main():
 
     if len(args) == 0:
         err('Error:   missing import path to `Huey` instance')
-        err('Example: huey_consumer.py app.queue.huey_instance')
+        err('Example: huey_consumer app.queue.huey_instance')
         sys.exit(1)
 
     options = {k: v for k, v in options.__dict__.items()

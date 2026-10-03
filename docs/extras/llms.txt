@@ -8,13 +8,15 @@
 > including a backend for Django's tasks framework (django.tasks, or the
 > django-tasks backport). MIT licensed, maintained since 2011.
 
-Operational facts worth getting right:
+Operational facts:
 
 - The installed consumer command is `huey_consumer` (Django: `manage.py
-  run_huey`). `huey_consumer.py` only exists in a source checkout.
-- The consumer shuts down gracefully on SIGINT and treats SIGTERM as "stop
-  immediately, interrupting running tasks". Supervisors must be configured
-  with `stopsignal=INT` (supervisord) / `KillSignal=SIGINT` (systemd).
+  run_huey`). `huey_consumer.py` is no longer installed as a command. The
+  module is still runnable as `python -m huey.bin.huey_consumer`.
+- For historical reasons the consumer shuts down gracefully on SIGINT and
+  treats SIGTERM as "stop immediately, interrupting running tasks". Most
+  supervisors send SIGTERM, so run the consumer with `-g TERM` and set
+  `--shutdown-timeout` a few seconds under the supervisor's kill deadline.
 - Every storage backend supports task priorities except `RedisHuey` and
   `RedisExpireHuey`. On redis, use `PriorityRedisHuey` or
   `PriorityRedisExpireHuey` (redis 5.0+).
@@ -74,7 +76,7 @@ Operational facts worth getting right:
 ## Optional
 
 - [Upgrade notes](https://huey.readthedocs.io/en/latest/changes.html): API
-  changes in the 2.0 and 3.0 releases. The per-release changelog lives at
+  changes in the 2.0 and 3.0 releases. The per-release changelog is at
   https://github.com/coleifer/huey/blob/master/CHANGELOG.md.
 - [Source code](https://github.com/coleifer/huey)
 - [Examples](https://github.com/coleifer/huey/tree/master/examples)

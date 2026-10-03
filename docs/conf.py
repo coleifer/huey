@@ -19,6 +19,9 @@ exclude_patterns = ['_build', 'asyncio.rst', 'django.rst', 'flask_admin.rst',
                     'mini.rst', 'stats.rst']
 pygments_style = 'sphinx'
 
+# Type names in :param: fields that have no documented target.
+nitpick_ignore = [('py:class', 'datetime'), ('py:class', 'function')]
+
 html_theme = 'sphinx_rtd_theme'
 html_static_path = ['_static']
 

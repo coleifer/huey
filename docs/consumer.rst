@@ -4,7 +4,7 @@ Consuming Tasks
 ===============
 
 To run the consumer, point it at the "import path" to your application's
-:py:class:`Huey` instance. For example, here is how I run it on my blog:
+:py:class:`Huey` instance. For example:
 
 .. code-block:: shell
 
@@ -38,26 +38,23 @@ work around this:
 Options for the consumer
 ------------------------
 
-The following table lists the options available for the consumer as well as
-their default values.
-
 ``-l``, ``--logfile``
-    Path to file used for logging. The logfile grows indefinitely, so you may
-    wish to configure a tool like ``logrotate``.
+    Path to file used for logging. Without it, the consumer logs to stderr.
+    The logfile grows indefinitely, so you may wish to configure a tool like
+    ``logrotate``.
 
-    Alternatively, you can attach your own handler to ``huey.consumer``.
+    Alternatively, you can attach your own handler to the ``huey`` logger.
 
     The default loglevel is ``INFO``.
 
 ``-v``, ``--verbose``
-    Verbose logging (loglevel=DEBUG). If no logfile is specified and
-    verbose is set, then the consumer will log to the console.
+    Verbose logging (loglevel=DEBUG).
 
     **Note:** due to conflicts, when using Django this option is renamed to
     use ``-V``, ``--huey-verbose``.
 
 ``-q``, ``--quiet``
-    Minimal logging, only errors and their tracebacks will be logged.
+    Minimal logging (loglevel=WARNING).
 
 ``-S``, ``--simple``
     Use a simple log format consisting only of the time H:M:S and log message.
@@ -84,8 +81,8 @@ their default values.
       which spend a lot of time waiting to read/write to a socket, will get a
       huge boost from using the greenlet worker model. Because greenlets are so
       cheap in terms of memory, you can easily run a large number of workers.
-      Note that all code that does **not** consist in waiting for a socket will
-      be blocking and cannot be pre-empted. Understand the tradeoffs before
+      All code that does **not** consist in waiting for a socket will be
+      blocking and cannot be pre-empted. Understand the tradeoffs before
       jumping to use greenlets. When using with Redis, ensure that your
       connection pool is large enough to provide connections for each greenlet.
     * Anything else: use "thread". You get the benefits of pre-emptive
@@ -101,11 +98,10 @@ their default values.
 
 ``-d``, ``--delay``
     When using a "polling"-type queue backend, this is the number of seconds to
-    wait when polling the backend. Default is 0.1 seconds. For example, when
-    the consumer starts up it will begin polling every 0.1 seconds. If no tasks
-    are found in the queue, it will multiply the current delay (0.1) by the
-    backoff parameter. When a task is received, the polling interval will reset
-    back to this value.
+    wait when polling the backend. Default is 0.1 seconds. If no tasks are
+    found in the queue, it will multiply the current delay by the backoff
+    parameter. When a task is received, the polling interval will reset back to
+    this value.
 
 ``-m``, ``--max-delay``
     The maximum amount of time to wait between polling, if using weighted
@@ -113,10 +109,9 @@ their default values.
     action, you can increase this number to reduce CPU usage.
 
 ``-b``, ``--backoff``
-    The amount to back-off when polling for results. Must be greater than
-    one. Default is 1.15. This parameter controls the rate at which the
-    interval increases after successive attempts return no tasks. Here is how
-    the defaults, 0.1 initial and 1.15 backoff, look:
+    The amount to back-off when polling for tasks. Must be at least one.
+    Default is 1.15. Here is how the defaults, 0.1 initial and 1.15
+    backoff, look:
 
     .. image:: https://media.charlesleifer.com/blog/photos/p1472257818.22.png
 
@@ -125,9 +120,8 @@ their default values.
     Default is 10 seconds.
 
 ``-C``, ``--disable-health-check``
-    Disable the worker health checks. Leaving them enabled is cheap and lets
-    the consumer restart workers that die, so most deployments should keep the
-    default.
+    Disable the worker health checks. Leaving them enabled is cheap, so most
+    deployments should keep the default.
 
 ``-f``, ``--flush-locks``
     Flush all locks when starting the consumer. This may be useful if the
@@ -136,8 +130,7 @@ their default values.
 ``-L``, ``--extra-locks``
     Additional lock-names to flush when starting the consumer, separated by
     comma. This is useful if you have locks within context-managers that may
-    not be discovered during consumer startup, but you wish to ensure they are
-    cleared. Implies ``--flush-locks``.
+    not be discovered during consumer startup. Implies ``--flush-locks``.
 
 ``-M``, ``--max-tasks``
     Restart a worker after it has executed the given number of tasks. This
@@ -152,9 +145,10 @@ their default values.
 
 ``-g``, ``--graceful-signal``
     By default huey uses ``INT`` to trigger graceful shutdown, and ``TERM`` to
-    interrupt running tasks and shutdown immediately. If your process
-    supervisor does not send ``SIGINT``, specify ``-g TERM``, which will use
-    ``TERM`` for graceful and ``INT`` to shutdown immediately.
+    interrupt running tasks and shutdown immediately. Most process
+    supervisors send ``TERM``, so specify ``-g TERM`` in production, which will
+    use ``TERM`` for graceful and ``INT`` to shutdown immediately. See
+    :ref:`deployment-signals`.
 
 ``-s``, ``--scheduler-interval``
     The frequency with which the scheduler should run. By default this will run
@@ -177,7 +171,7 @@ Using multi-processing to run 4 worker processes.
     huey_consumer my.app.huey -w 4 -k process
 
 Running single-threaded with periodic task support disabled. Additionally,
-logging records are written to stdout.
+verbose logging is written to stderr.
 
 .. code-block:: shell
 
@@ -196,33 +190,29 @@ Worker types
 ------------
 
 The consumer consists of a main process, a scheduler, and one or more workers.
-These individual components all run concurrently, and Huey supports three
-different mechanisms to achieve this concurrency.
+These components run concurrently, and Huey supports three mechanisms to
+achieve this concurrency.
 
 * *thread*, the default, uses OS threads. Due to Python's global interpreter
-  lock, only one thread can be running at a time, but this is actually less of
-  a limitation than it might sound. The Python runtime can intelligently switch
+  lock, only one thread can be running at a time. The Python runtime can switch
   the running thread when an I/O occurs or when a thread is idle. If the worker
-  is CPU-bound, the runtime will pre-emptively switch threads after a given
-  number of operations, ensuring each thread gets a chance to make progress.
-  Threads provide a good balance of performance and memory efficiency.
+  is CPU-bound, the runtime will pre-emptively switch threads after a short
+  interval (5ms by default). Threads provide a good balance of performance and
+  memory efficiency.
 * *process* runs the scheduler and worker(s) in their own process. The main
   benefit over threads is the absence of the global interpreter lock, which
   allows CPU-bound workers to execute in parallel. Since each process maintains
   its own copy of the code in memory, it is likely that processes will require
   more memory than threads or greenlets. Processes are a good choice for tasks
   that perform CPU-intensive work.
-* *greenlet* runs the scheduler and worker(s) in greenlets. Requires `gevent <https://gevent.org/>`_,
-  a cooperative multi-tasking library. When a task performs an operation that
-  would be blocking (read or write on a socket), the file descriptor is added
-  to an event loop managed by gevent, and the scheduler will switch tasks.
-  Since gevent uses cooperative multi-tasking, a task that is CPU-bound will
-  not yield control to the gevent scheduler, limiting concurrency. For this
-  reason, gevent is a good choice for tasks that perform lots of socket I/O,
-  but may give worse performance for tasks that are CPU-bound (e.g., parsing
-  large files, manipulating images, generating reports, etc). Understand the
-  tradeoff thoroughly before using this worker type. When using Redis, ensure
-  that your connection pool is large enough for each greenlet to have its own
+* *greenlet* runs the scheduler and worker(s) in greenlets. Requires `gevent <https://gevent.org/>`_.
+  When a task performs an operation that would be blocking (read or write on a
+  socket), the file descriptor is added to an event loop managed by gevent,
+  and the scheduler will switch tasks. Since gevent uses cooperative
+  multi-tasking, a task that is CPU-bound will not yield control to the gevent
+  scheduler, limiting concurrency. For this reason, gevent is a good choice for
+  tasks that perform lots of socket I/O. When using Redis, ensure that your
+  connection pool is large enough for each greenlet to have its own
   connection.
 
 When in doubt, the default setting (``thread``) is a safe choice.
@@ -239,20 +229,12 @@ Using gevent
 Gevent works by monkey-patching various Python modules, such as ``socket``,
 ``ssl``, ``time``, etc. In order for your application to be able to switch
 tasks reliably, you should apply the monkey-patch at the very beginning of
-your code, before anything else gets loaded.
-
-Suppose we have defined an entrypoint for our application named
-``main.py``, which imports our :py:class:`Huey` instance, our tasks, and
-the other essential parts of our application (the WSGI app, database
-connection, etc).
-
-We would place the monkey-patch at the top of ``main.py``, before all the
-other imports:
+your code, before anything else gets loaded:
 
 .. code-block:: python
 
     # main.py
-    from gevent import monkey; monkey.patch_all()  # Apply monkey-patch.
+    from gevent import monkey; monkey.patch_all()
 
     from .app import wsgi_app  # Import our WSGI app.
     from .db import database  # Database connection.
@@ -265,32 +247,26 @@ To run the consumer:
 
     huey_consumer main.huey -k greenlet -w 16
 
-You should have a good understanding of how gevent works, its strengths and
-limitations, before using the greenlet worker type.
-
 .. _consumer-shutdown:
 
 Consumer shutdown
 -----------------
 
-The huey consumer supports graceful shutdown via ``SIGINT``. When the consumer
-process receives ``SIGINT``, workers are allowed to finish up whatever task
-they are currently executing before the process exits.
+The huey consumer supports graceful shutdown via ``SIGINT``. Workers are
+allowed to finish up whatever task they are currently executing before the
+process exits.
 
 Alternatively, you can shutdown the consumer using ``SIGTERM`` and any running
-tasks will be interrupted, ensuring the process exits quickly.
+tasks will be interrupted.
 
-To swap the two signals, so ``SIGTERM`` is graceful and ``SIGINT`` interrupts,
-run the consumer with ``--graceful-signal=TERM``. To put an upper bound on a
-graceful shutdown, use ``--shutdown-timeout``. Once the timeout elapses, any
-tasks still running are interrupted.
+To swap the two signals, run the consumer with ``--graceful-signal=TERM``. To
+put an upper bound on a graceful shutdown, use ``--shutdown-timeout``.
 
 Huey does not guarantee at-least-once delivery of messages, and does not do
 acknowledgement of completed tasks. This means that if you terminate the
 consumer **without** letting it finish any currently-executing tasks, those
 tasks will be lost. To be alerted when this occurs, you can use Huey's
-:ref:`signals` (specifically ``signals.SIGNAL_INTERRUPTED``). The consumer
-will emit this for tasks that are interrupted during execution.
+:ref:`signals` (specifically ``signals.SIGNAL_INTERRUPTED``).
 
 .. _consumer-deployments:
 
@@ -298,19 +274,15 @@ Deployments
 ^^^^^^^^^^^
 
 When deploying new code, your best bet is to gracefully shutdown the Huey
-consumer using ``SIGINT``, letting all running tasks finish, before starting a
-new consumer process using the new code.
+consumer, letting all running tasks finish, before starting a new consumer
+process using the new code.
 
-If you have long-running tasks, an alternative option is to configure
-your new code to use a separate storage namespace. On Redis this is as simple
-as specifying a new ``name`` for your ``RedisHuey()`` instance. Then you can
-start the new code and new consumer, and they will operate independently of the
+If you have long-running tasks, an alternative option is to configure your new
+code to use a separate storage namespace. On Redis this is as simple as
+specifying a new ``name`` for your ``RedisHuey()`` instance. Then you can start
+the new code and new consumer, and they will operate independently of the
 previously-running consumer. When all tasks are done, you can gracefully
 shutdown the old consumer.
-
-It is always a good idea to implement a Huey ``signals.SIGNAL_INTERRUPTED``
-handler (:ref:`signals`), even if all it does is log an exception about the
-interrupted task.
 
 .. _consumer-restart:
 
@@ -318,79 +290,22 @@ Consumer restart
 ----------------
 
 To cleanly restart the consumer, including all workers, send the ``SIGHUP``
-signal. When the consumer receives the hang-up signal, any tasks being executed
-will be allowed to finish before the restart occurs.
+signal. Any tasks being executed will be allowed to finish before the restart
+occurs.
 
 .. _process-supervisors:
 
 supervisord and systemd
 -----------------------
 
-Huey plays nicely with both `supervisord <https://supervisord.org/>`_,
+Huey works with `supervisord <https://supervisord.org/>`_,
 `systemd <https://systemd.io/>`_ and presumably any other process supervisor.
 For complete deployment examples (Docker, Docker Compose, PaaS
 configurations) and a production checklist, see :ref:`deployment`.
 
-.. warning::
-    Both supervisord and systemd stop processes with ``SIGTERM`` by default,
-    which huey treats as "stop immediately, interrupting any running tasks".
-    Huey's graceful-shutdown signal is ``SIGINT``, so be sure to configure
-    the stop signal as shown below, or run the consumer with
-    ``--graceful-signal=TERM``. Otherwise tasks will be interrupted on
-    every deploy, regardless of how long the supervisor is told to wait.
-
-Barebones supervisor config using 4 worker threads:
-
-.. code-block:: ini
-
-    [program:my_huey]
-    directory=/path/to/project/
-    command=/path/to/venv/bin/huey_consumer my_app.huey -w 4
-    user=someuser
-    autostart=true
-    autorestart=true
-    stdout_logfile=/var/log/huey.log
-    stderr_logfile=/var/log/huey.err
-    ; Note: supervisor does not perform shell expansion, so a literal
-    ; "$PYTHONPATH" cannot be used here.
-    environment=PYTHONPATH="/path/to/project"
-    ; Huey shuts down gracefully on SIGINT, allowing workers to finish their
-    ; current task. Supervisor's default stopsignal is TERM, which huey
-    ; treats as "stop immediately", so be sure to specify INT here.
-    stopsignal=INT
-    ; How long to wait for in-flight tasks to finish before escalating to
-    ; SIGKILL. Increase this if you have long-running tasks.
-    stopwaitsecs=30
-
-Barebones systemd config using 4 worker threads:
-
-.. code-block:: ini
-
-    [Unit]
-    Description=My Huey
-    After=network.target
-
-    [Service]
-    User=someuser
-    Group=somegroup
-    WorkingDirectory=/path/to/project/
-    ExecStart=/path/to/venv/bin/huey_consumer my_app.huey -w 4
-    Restart=always
-    # Huey shuts down gracefully on SIGINT, allowing workers to finish their
-    # current task. systemd's default KillSignal is SIGTERM, which huey
-    # treats as "stop immediately", so override it here.
-    KillSignal=SIGINT
-    # How long to wait for in-flight tasks to finish before escalating to
-    # SIGKILL. Increase this if you have long-running tasks.
-    TimeoutStopSec=60
-
-    [Install]
-    WantedBy=multi-user.target
-
 .. note::
     Django users may replace ``huey_consumer`` with the appropriate path to
     ``manage.py run_huey``.
-
 
 .. _multiple-consumers:
 
@@ -419,25 +334,15 @@ result-store, Redis or another network-accessible storage backend must be used.
 
 .. note::
     This section covers running multiple consumers against a *single* queue.
-    To run multiple *queues* (for example, to give different classes of
-    task their own worker pools), see :ref:`recipe-multiple-queues`.
+    To run multiple *queues*, see :ref:`recipe-multiple-queues`.
 
 .. _consumer-internals:
 
 Consumer Internals
 ------------------
 
-This section explains what happens when you call a ``task``-decorated function
-in your application, by walking through the implementation of the consumer. The
-`code for the consumer <https://github.com/coleifer/huey/blob/master/huey/consumer.py>`_
-is short (a couple hundred lines), and worth reading alongside this section.
-
-The consumer is composed of three components: a master process, the scheduler,
-and the worker(s). Depending on the worker type chosen, the scheduler and
-workers will be run in their threads, processes or greenlets.
-
-These three components coordinate the receipt, scheduling, and execution of
-your tasks, respectively.
+The `code for the consumer <https://github.com/coleifer/huey/blob/master/huey/consumer.py>`_
+is worth reading alongside this section.
 
 1. You call a function that huey has decorated, which triggers a message being
    put into the queue (e.g a Redis list). At this point your application
@@ -445,38 +350,24 @@ your tasks, respectively.
 2. In the consumer process, the worker(s) will be listening for new messages
    and one of the workers will receive your message indicating which task to
    run, when to run it, and with what parameters.
-3. The worker looks at the message and checks to see if it can be run (i.e.,
-   was this message "revoked"? Is it scheduled to actually run later?). If it
-   is revoked, the message is thrown out. If it is scheduled to run later, it
-   gets added to the schedule. Otherwise, it is executed.
+3. The worker looks at the message and checks to see if it can be run. If it
+   is scheduled to run later, it gets added to the schedule. If it is revoked
+   or has expired, the message is thrown out. Otherwise, it is executed.
 4. The worker executes the task. If the task finishes, any results are stored
    in the result store. If the task fails, the consumer checks to see if the
-   task can be retried. Then, if the task is to be retried, the consumer checks
-   to see if the task is configured to wait a number of seconds between
-   retries. Depending on the configuration, huey will either re-enqueue the
-   task for execution, or tell the scheduler when to re-enqueue it based on the
-   delay. If the consumer is killed abruptly or the machine powers off
-   unexpectedly, any tasks that are currently being run by a worker will be
-   "lost".
+   task can be retried. Depending on the task's ``retry_delay``, huey will
+   either re-enqueue the task for execution, or tell the scheduler when to
+   re-enqueue it.
 
 While all the above is going on with the Worker(s), the Scheduler is looking at
 its schedule to see if any tasks are ready to be executed. If a task is ready
 to run, it is enqueued and will be processed by the next available worker.
 
 If you are using the Periodic Task feature (cron), then every minute, the
-scheduler will check through the various periodic tasks to see if any should
-be run. If so, these tasks are enqueued.
-
-.. warning::
-    SIGINT is used to perform a graceful shutdown.
-
-    When the consumer is shutdown using SIGTERM, any workers still
-    involved in the execution of a task will be interrupted mid-task.
-    See ``--graceful-signal`` to swap the two.
+scheduler will check through the periodic tasks to see if any should be run.
+If so, these tasks are enqueued.
 
 Signals
 -------
 
-The consumer will emit certain :ref:`signals` as it executes tasks. User code
-can register signal handlers to respond to these events. For more information,
-see the :ref:`signals` document.
+The consumer will emit certain :ref:`signals` as it executes tasks.

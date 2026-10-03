@@ -5,25 +5,23 @@ Django
 
 .. image:: django-admin.png
 
-Huey comes with special integration for use with the Django framework. The
-integration provides:
+Huey comes with integration for the Django framework. The integration
+provides:
 
 1. Configuration of huey via the Django settings module.
 2. Running the consumer as a Django management command.
-3. Auto-discovery of ``tasks.py`` modules to simplify task importing.
+3. Auto-discovery of ``tasks.py`` modules.
 4. Properly manage database connections.
 5. A :ref:`backend <django-task>` for the ``django.tasks`` framework (Django
    6.0 and newer, or older Djangos using the django-tasks backport).
-6. Optional :ref:`Admin integration <django-admin-stats>` for visibility and
-   managing your Huey queue.
+6. Optional :ref:`Admin integration <django-admin-stats>`.
 
 Supported Django versions are those officially supported at https://www.djangoproject.com/download/#supported-versions
 
 Setting things up
 ^^^^^^^^^^^^^^^^^
 
-To use huey with Django, the first step is to add an entry to your project's
-``settings.INSTALLED_APPS``:
+Add an entry to your project's ``settings.INSTALLED_APPS``:
 
 .. code-block:: python
 
@@ -31,20 +29,15 @@ To use huey with Django, the first step is to add an entry to your project's
     # ...
     INSTALLED_APPS = (
         # ...
-        'huey.contrib.djhuey',  # Add this to the list.
+        'huey.contrib.djhuey',
         # ...
     )
 
-The above is the bare minimum needed to start using huey's Django integration.
-If you like, though, you can also configure both Huey and the *consumer* using
-the settings module.
-
 Huey settings are optional. If not provided, Huey will default to using Redis
-running on localhost:6379 (standard setup).
+running on localhost:6379.
 
 Configuration is kept in ``settings.HUEY``, which can be either a dictionary or
-a :py:class:`Huey` instance. Here is an example that shows all of the supported
-options with their default values:
+a :py:class:`Huey` instance. Here is an example with the default values:
 
 .. code-block:: python
 
@@ -77,7 +70,7 @@ options with their default values:
             'scheduler_interval': 1,  # Check schedule every second, -s.
             'periodic': True,  # Enable crontab feature.
             'check_worker_health': True,  # Enable worker health checks.
-            'health_check_interval': 1,  # Check worker health every second.
+            'health_check_interval': 10,  # Check worker health every 10 seconds.
         },
     }
 
@@ -102,8 +95,7 @@ The following ``huey_class`` implementations are provided out-of-the-box:
   for the base storage directory.
 
 Alternatively, you can set ``settings.HUEY`` to a :py:class:`Huey`
-instance and do your configuration directly. In the example below, I've also
-shown how you can create a connection pool:
+instance:
 
 .. code-block:: python
 
@@ -133,7 +125,7 @@ your web workers) will connect and attempt to create the tables, which
 requires the ``CREATE`` privilege and clashes with a migrations-managed schema.
 
 Pass ``create_tables=False`` to disable the automatic DDL and create the tables
-once, explicitly, using the ``create_huey_tables`` management command:
+once using the ``create_huey_tables`` management command:
 
 .. code-block:: python
 
@@ -151,12 +143,12 @@ once, explicitly, using the ``create_huey_tables`` management command:
 Reusing the Django database configuration
 """""""""""""""""""""""""""""""""""""""""
 
-Rather than duplicating your credentials in ``settings.HUEY``, you can point the
-storage at the same database Django uses by passing a ``connection`` callable.
-The callable must return a **new**, dedicated ``psycopg`` connection. Do not
-hand back ``django.db.connection``. Huey enables autocommit on the connection
-and holds a long-lived one open for ``LISTEN``, neither of which is compatible
-with Django's per-request connection or its transaction handling.
+You can point the storage at the same database Django uses by passing a
+``connection`` callable. The callable must return a **new**, dedicated
+``psycopg`` connection. Do not hand back ``django.db.connection``. Huey
+enables autocommit on the connection and holds a long-lived one open for
+``LISTEN``, neither of which is compatible with Django's per-request
+connection or its transaction handling.
 
 .. code-block:: python
 
@@ -179,54 +171,31 @@ with Django's per-request connection or its transaction handling.
         'connection': {'connection': huey_connection},
     }
 
-To ensure a task is not enqueued until the surrounding transaction commits (for
-example, when it references a row created in the same view), use
+To ensure a task is not enqueued until the surrounding transaction commits, use
 :py:func:`on_commit_task` as described in :ref:`django-transactions`.
 
 Running the Consumer
 ^^^^^^^^^^^^^^^^^^^^
 
-To run the consumer, use the ``run_huey`` management command. This command
-will automatically import any modules in your ``INSTALLED_APPS`` named
-*tasks.py*. The consumer can be configured using both the django settings
-module and/or by specifying options from the command-line.
-
-Options specified on the command line take precedence over those specified in
-the settings module.
-
-To start the consumer, run:
+To run the consumer, use the ``run_huey`` management command:
 
 .. code-block:: shell
 
     ./manage.py run_huey
 
-In addition to the ``HUEY.consumer`` setting dictionary, the management command
-supports all the same options as the standalone consumer. These options are
-listed and described in the :ref:`Options for the consumer <consumer-options>`
-section.
+This command will automatically import any modules in your ``INSTALLED_APPS``
+named *tasks.py*. Options specified on the command line take precedence over
+those specified in the settings module.
 
-For quick reference, the most important command-line options are briefly
-listed here.
-
-``-w``, ``--workers``
-    Number of worker threads/processes/greenlets. Default is 1, but most
-    applications should use at least 2.
-
-``-k``, ``--worker-type``
-    Worker type, must be "thread", "process" or "greenlet". The default is
-    *thread*, which provides good all-around performance. For CPU-intensive
-    workloads, *process* is likely to be more performant. The *greenlet* worker
-    type is suited for IO-heavy workloads. When using *greenlet* you can
-    specify tens or hundreds of workers since they are extremely lightweight
-    compared to threads/processes. *See note below on using gevent/greenlet*.
+The management command supports all the same options as the standalone
+consumer, listed in :ref:`Options for the consumer <consumer-options>`, and
+adds:
 
 ``-A``, ``--disable-autoload``
     Disable automatic loading of tasks modules.
 
 Due to a conflict with Django's base option list, the "verbose" option is set
-using ``-V`` or ``--huey-verbose``. When enabled, huey logs at the DEBUG level.
-
-For more information, read the :ref:`Options for the consumer <consumer-options>` section.
+using ``-V`` or ``--huey-verbose``.
 
 Using gevent
 ^^^^^^^^^^^^
@@ -261,8 +230,7 @@ How to create tasks
 ^^^^^^^^^^^^^^^^^^^
 
 The :py:meth:`~Huey.task` and :py:meth:`~Huey.periodic_task` decorators can be
-imported from the ``huey.contrib.djhuey`` module. Here is how you might define
-two tasks:
+imported from the ``huey.contrib.djhuey`` module:
 
 .. code-block:: python
 
@@ -289,15 +257,17 @@ The ``huey.contrib.djhuey`` module exposes a number of additional helpers:
 * :py:meth:`~Huey.pre_execute`
 * :py:meth:`~Huey.post_execute`
 * :py:meth:`~Huey.signal` and :py:meth:`~Huey.disconnect_signal`
-* :py:func:`on_commit_task`, for enqueueing tasks after transaction commits.
+* :py:func:`on_commit_task`
 
 Tasks that execute queries
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 If you plan on executing queries inside your task, it is a good idea to close
 the connection once your task finishes. To make this easier, huey provides a
-special decorator to use in place of ``task`` and ``periodic_task`` which will
-automatically close the connection for you.
+decorator to use in place of ``task`` and ``periodic_task`` which calls
+Django's ``close_old_connections()`` before and after the task, so connections
+are closed or recycled as they are at the end of a request (``CONN_MAX_AGE``
+applies). Nothing is closed in immediate mode.
 
 .. code-block:: python
 
@@ -308,26 +278,28 @@ automatically close the connection for you.
     def do_some_queries():
         # This task executes queries. Once the task finishes, the connection
         # will be closed.
+        ...
 
     @db_periodic_task(crontab(minute='*/5'))
     def every_five_mins():
         # This is a periodic task that executes queries.
+        ...
 
 .. py:function:: db_task(*args, **kwargs)
 
     :param args: See :py:meth:`~Huey.task` for supported parameters.
     :param kwargs: See :py:meth:`~Huey.task` for supported parameters.
 
-    Equivalent to :py:meth:`~Huey.task`, but closes the Django database
-    connections when the task finishes.
+    Equivalent to :py:meth:`~Huey.task`, but calls Django's
+    ``close_old_connections()`` before and after the task.
 
 .. py:function:: db_periodic_task(validate_datetime, *args, **kwargs)
 
     :param args: See :py:meth:`~Huey.periodic_task` for supported parameters.
     :param kwargs: See :py:meth:`~Huey.periodic_task` for supported parameters.
 
-    Equivalent to :py:meth:`~Huey.periodic_task`, but closes the Django
-    database connections when the task finishes.
+    Equivalent to :py:meth:`~Huey.periodic_task`, but calls Django's
+    ``close_old_connections()`` before and after the task.
 
 .. _django-transactions:
 
@@ -379,7 +351,7 @@ Here is the safe version:
 Because we have to setup a callback to run after commit, the full functionality
 of the :py:class:`TaskWrapper` is not available with tasks decorated with
 :py:func:`on_commit_task`. If you anticipate needing all the TaskWrapper
-methods, you can decorate the same function twice by given them two different
+methods, you can decorate the same function twice by giving them two different
 identifier names:
 
 .. code-block:: python
@@ -417,22 +389,20 @@ the Django admin. Enable it by adding the stats app to ``INSTALLED_APPS``:
         'huey.contrib.djhuey.stats',
     ]
 
-That is the whole setup. The app starts the stats recorder in every process
-at start-up, including the consumer (``run_huey`` is a management command),
-so both enqueue and execution events are captured with no further
-configuration. The recorder uses `peewee <https://docs.peewee-orm.com/>`_ for
-storage (``pip install huey[stats]``), creating its tables automatically
-and pruning old rows as new events are written.
+The app starts the stats recorder in every process at start-up, including the
+consumer, so both enqueue and execution events are captured. The recorder uses
+`peewee <https://docs.peewee-orm.com/>`_ for storage
+(``pip install huey[stats]``), creating its tables automatically and pruning
+old rows as new events are written.
 
 Stats are recorded to huey's own sqlite database, ``huey-stats.db``, written
-next to ``settings.BASE_DIR`` if you have defined one. Huey does not touch
-``DATABASES``.
+in ``settings.BASE_DIR`` if you have defined one, otherwise in the current
+directory. Huey does not touch ``DATABASES``. The file is created by the first
+management command you run and each process holds a connection to it.
 
-The recorder starts in every process that loads your settings, so the file is
-created by the first management command you run and each process holds a
-connection to it. If you point ``HUEY_STATS['database']`` at a server-based
-database, pass ``create_tables=False`` and create the two tables yourself
-rather than have every web worker issue DDL at start-up.
+If you point ``HUEY_STATS['database']`` at a server-based database, pass
+``create_tables=False`` and create the two tables yourself rather than have
+every web worker issue DDL at start-up.
 
 The admin index gets a *Huey* section:
 
@@ -503,18 +473,22 @@ the same settings Django uses:
             port=int(_db['PORT']) if _db['PORT'] else None,
             sslmode=_db.get('OPTIONS', {}).get('sslmode'))}
 
-Pass whatever connection parameters your driver needs. ``PostgresqlDatabase``
-uses ``psycopg2`` if it is installed, and ``psycopg`` (3) otherwise. Pass
-``prefer_psycopg3=True`` to choose 3 when both are present.
+``PostgresqlDatabase`` uses ``psycopg2`` if it is installed, and ``psycopg``
+(3) otherwise. Pass ``prefer_psycopg3=True`` to choose 3 when both are
+present.
 
-The stats recorder manages its own connection, separate from Django's. On
-Postgres or MySQL that is one extra connection per process.
+The stats recorder manages its own connections, separate from Django's. On
+Postgres or MySQL that is one connection for the writer thread, plus one per
+web thread that has rendered the dashboard.
 
 .. note::
-    The dashboard's *Registered tasks* table lists the tasks known to the
-    **web** process. ``run_huey`` autodiscovers each app's ``tasks`` module
-    but the web server does not, so import your tasks from your app's
-    ``AppConfig.ready()`` to make them visible (see ``examples/django_ex``).
+    The dashboard's *Registered tasks* table lists the tasks registered in
+    the **web** process, plus any task that appears in the event log. Tasks
+    the web process has not imported cannot be revoked or restored from the
+    dashboard, and their revoked state is not shown. ``run_huey``
+    autodiscovers each app's ``tasks`` module but the web server does not, so
+    import your tasks from your app's ``AppConfig.ready()`` (see
+    ``examples/django_ex``).
 
 .. _django-task:
 
@@ -531,7 +505,7 @@ Django versions, the backend works identically with the `django-tasks
 <https://github.com/RealOrangeOne/django-tasks>`_ backport package.
 
 To use it, declare the backend in ``settings.TASKS``. The backend uses the
-shared huey instance configured by ``settings.HUEY``, as described above:
+shared huey instance configured by ``settings.HUEY``:
 
 .. code-block:: python
 
@@ -542,8 +516,7 @@ shared huey instance configured by ``settings.HUEY``, as described above:
         },
     }
 
-Tasks are declared and enqueued using the standard django.tasks APIs - no
-huey imports are necessary:
+Tasks are declared and enqueued using the standard django.tasks APIs:
 
 .. code-block:: python
 
@@ -563,26 +536,24 @@ huey imports are necessary:
     if result.is_finished:
         print(result.return_value)
 
-The consumer is run exactly as before - ``manage.py run_huey`` - and executes
-django.tasks tasks and native huey tasks side-by-side.
-
 Supported functionality:
 
 * ``run_after`` is mapped onto huey's ``eta`` and handled by the scheduler.
 * ``priority`` is supported by every storage engine except ``RedisHuey`` and
   ``RedisExpireHuey``, where declaring a task with a non-zero priority raises
   ``InvalidTask``. Use ``PriorityRedisHuey`` or ``PriorityRedisExpireHuey``
-  with Redis.
+  with Redis. ``FileHuey`` accepts only non-negative priorities and raises
+  ``ValueError`` at enqueue otherwise.
 * Results: ``get_result()``, ``refresh()``, return values and errors (with
-  tracebacks) are fully supported. Task status is tracked in the huey result
+  tracebacks) are supported. Task status is tracked in the huey result
   store, so ``RedisExpireHuey`` will expire result data automatically.
 * Database connections are closed after each task, equivalent to
   :py:func:`db_task`.
 * Transactional enqueueing: add ``'ENQUEUE_ON_COMMIT': True`` to the backend
   declaration to defer enqueueing until the active transaction commits
   (equivalent to :py:func:`on_commit_task`).
-* Immediate mode applies as usual: when ``DEBUG=True``, tasks execute
-  synchronously, through the same code-path the consumer uses.
+* Immediate mode applies as usual: tasks execute synchronously, through the
+  same code-path the consumer uses.
 
 .. note::
     The django.tasks framework requires task functions to be defined at the
@@ -596,13 +567,8 @@ DEBUG and Synchronous Execution
 
 When ``settings.DEBUG = True``, and ``settings.HUEY`` is a ``dict`` that does
 not explicitly specify a value for ``immediate``, tasks will be executed
-**synchronously** just like regular function calls. The purpose of this is to
-avoid running both Redis and an additional consumer process while developing or
-running tests. If you prefer to use a live storage engine when ``DEBUG`` is
-enabled, you can specify ``immediate_use_memory=False`` - which still runs Huey
-in immediate mode, but using a live storage API. To completely disable
-immediate mode when ``DEBUG`` is set, you can specify ``immediate=False`` in
-your settings.
+**synchronously** (see :ref:`immediate`). To completely disable immediate mode
+when ``DEBUG`` is set, you can specify ``immediate=False`` in your settings.
 
 .. code-block:: python
 
@@ -615,16 +581,14 @@ your settings.
         'immediate_use_memory': False,
 
         # OR:
-        # To run Huey in "live" mode regardless of whether DEBUG is enabled,
-        # specify immediate=False.
         'immediate': False,
     }
 
 Getting the Huey Instance
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
-If you want to interact with Huey APIs that are not exposed through ``djhuey``
-explicitly, you can get the actual ``Huey`` instance in the following way:
+If you want to interact with Huey APIs that are not exposed through
+``djhuey``, you can get the ``Huey`` instance:
 
 .. code-block:: python
 
@@ -635,9 +599,6 @@ explicitly, you can get the actual ``Huey`` instance in the following way:
 
 Configuration Examples
 ^^^^^^^^^^^^^^^^^^^^^^
-
-This section contains example ``HUEY`` configurations.
-
 
 .. code-block:: python
 
@@ -665,8 +626,7 @@ This section contains example ``HUEY`` configurations.
         'consumer': {'workers': 64, 'worker_type': 'greenlet'},
     }
 
-It is also possible to specify the connection using a Redis URL, making it easy
-to configure this setting using a single environment variable:
+It is also possible to specify the connection using a Redis URL:
 
 .. code-block:: python
 
@@ -674,11 +634,3 @@ to configure this setting using a single environment variable:
         'name': 'my-app',
         'url': os.environ.get('REDIS_URL', 'redis://localhost:6379/?db=1')
     }
-
-Alternatively, you can just assign a :py:class:`Huey` instance to the ``HUEY`` setting:
-
-.. code-block:: python
-
-    from huey import RedisHuey
-
-    HUEY = RedisHuey('my-app')

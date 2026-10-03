@@ -25,15 +25,12 @@ some queries inside a task, we might write:
                 comment.is_spam = True
                 comment.save()
 
-Another option would be to write a decorator that acquires the shared resource
-before calling the task function, and then closes it after the task has
-finished. To make this a little simpler, Huey provides a special helper
-:py:meth:`Huey.context_task` decorator that accepts an object implementing the
-context-manager API, and automatically wraps the task within the given context:
+Huey provides a :py:meth:`Huey.context_task` decorator that accepts an object
+implementing the context-manager API, and automatically wraps the task within
+the given context:
 
 .. code-block:: python
 
-    # Same as previous example, except we can omit the "with db" block.
     @huey.context_task(database)
     def check_comment_spam(comment_id):
         comment = Comment.get(Comment.id == comment_id)
@@ -59,12 +56,10 @@ then be used by any tasks that are executed by that consumer:
 
     import peewee
 
-    db = PostgresqlDatabase('my_app')
+    db = peewee.PostgresqlDatabase('my_app')
 
     @huey.on_startup()
     def open_db_connection():
-        # If for some reason the db connection appears to already be open,
-        # close it first.
         if not db.is_closed():
             db.close()
         db.connect()
@@ -76,26 +71,18 @@ then be used by any tasks that are executed by that consumer:
 
 The above code works correctly because `peewee <https://github.com/coleifer/peewee>`_
 stores connection state in a threadlocal. This is important if we are running
-the workers in threads (huey's default). Every thread will be sharing the same
-``PostgresqlDatabase`` instance, but since the connection state is
-thread-local, each worker thread will see only its own connection.
+the workers in threads (huey's default).
 
 Pre and post execute hooks
 --------------------------
 
-In addition to the :py:meth:`~Huey.on_startup` hook, Huey also provides
-decorators for registering pre- and post-execute hooks:
-
 * :py:meth:`Huey.pre_execute` - called right before a task is executed. The
   handler function should accept one argument: the task that will be executed.
-  Pre-execute hooks have an additional feature: they can raise a special
-  :py:class:`CancelExecution` exception to instruct the consumer that the task
-  should not be run.
+  Pre-execute hooks can raise a :py:class:`CancelExecution` exception to
+  instruct the consumer that the task should not be run.
 * :py:meth:`Huey.post_execute` - called after task has finished. The handler
   function should accept three arguments: the task that was executed, the
   return value, and the exception (if one occurred, otherwise is ``None``).
-
-Example:
 
 .. code-block:: python
 
@@ -103,21 +90,14 @@ Example:
 
     @huey.pre_execute()
     def pre_execute_hook(task):
-        # Pre-execute hooks are passed the task that is about to be run.
-
-        # This pre-execute task will cancel the execution of every task if the
-        # current day is Sunday.
         if datetime.datetime.now().weekday() == 6:
             raise CancelExecution('No tasks on sunday!')
 
     @huey.post_execute()
     def post_execute_hook(task, task_value, exc):
-        # Post-execute hooks are passed the task, the return value (if the task
-        # succeeded), and the exception (if one occurred).
         if exc is not None:
             print('Task "%s" failed with error: %s!' % (task.id, exc))
 
 .. note::
     Printing the error message is redundant, as the huey logger already logs
-    any unhandled exceptions raised by a task, along with a traceback. These
-    are just examples.
+    any unhandled exceptions raised by a task, along with a traceback.

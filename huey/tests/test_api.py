@@ -1,6 +1,7 @@
 import asyncio
 import datetime
 import inspect
+import pickle
 import time
 
 from huey.api import ChordResult
@@ -1070,7 +1071,7 @@ class TestQueue(BaseTestCase):
         def run_iteration(d, e):
             r = task_a(d=d, e=e)
             self.assertTrue(self.execute_next() is None)
-            self.assertRaises(TaskException, r.get)
+            self.assertTrue(r.get() is None)  # Not an error, nothing stored.
             self.assertEqual(len(self.huey), 0)
             self.assertEqual(len(self.huey.scheduled()), 1)
 
@@ -1103,7 +1104,7 @@ class TestQueue(BaseTestCase):
 
         r = task_a(1)
         self.assertTrue(self.execute_next() is None)
-        self.assertRaises(TaskException, r.get)
+        self.assertTrue(r.get() is None)  # Not an error, nothing stored.
         self.assertEqual(state, [1])
         self.assertEqual(len(self.huey), 1)
 
@@ -1121,7 +1122,7 @@ class TestQueue(BaseTestCase):
         t.retries = 2
         r = self.huey.enqueue(t)
         self.assertTrue(self.execute_next() is None)
-        self.assertRaises(TaskException, r.get)
+        self.assertTrue(r.get() is None)
         self.assertEqual(state, [1])
         self.assertEqual(len(self.huey), 1)
 
@@ -1133,6 +1134,52 @@ class TestQueue(BaseTestCase):
         self.assertEqual(state, [2])
         self.assertEqual(len(self.huey), 0)
         self.assertEqual(self.huey.result_count(), 0)
+
+    def test_retrying_exceptions_not_surfaced(self):
+        # RetryTask, rate-limit and lock rejections are not failures while the
+        # task will run again: no error result, no on_error. A final rejection
+        # is surfaced like any other error.
+        state = []
+
+        @self.huey.task()
+        def on_err(exc):
+            state.append(type(exc).__name__)
+
+        @self.huey.task(retries=1)
+        def locked():
+            with self.huey.lock_task('lk'):
+                return 'ran'
+
+        @self.huey.task()
+        @self.huey.rate_limit('rl', limit=0, per=60, retry=False)
+        def limited():
+            return 'ran'
+
+        r = self.huey.enqueue(locked.s().error(on_err))
+        with self.huey.lock_task('lk'):
+            self.assertTrue(self.execute_next() is None)
+        self.assertTrue(r.get() is None)
+        self.assertEqual(state, [])
+        self.assertEqual(self.execute_next(), 'ran')
+
+        # retry=False and no task retries: final rejection, surfaced.
+        r = self.huey.enqueue(limited.s().error(on_err))
+        self.assertTrue(self.execute_next() is None)
+        self.assertRaises(TaskException, r.get)
+        self.assertTrue(self.execute_next() is None)  # on_err runs.
+        self.assertEqual(state, ['RateLimitExceeded'])
+
+    def test_rate_limit_exceeded_pickles(self):
+        exc = pickle.loads(pickle.dumps(RateLimitExceeded('k', 12.5, False)))
+        self.assertEqual((exc.key, exc.delay, exc.retry), ('k', 12.5, False))
+        self.assertEqual(str(exc), 'Rate limit exceeded on "k"')
+
+    def test_cancel_execution_message(self):
+        exc = CancelExecution('nope')
+        self.assertEqual(str(exc), 'nope')
+        self.assertTrue(exc.retry is None)
+        self.assertTrue(CancelExecution(retry=True).retry)
+        self.assertEqual(repr(CancelExecution()), 'CancelExecution()')
 
     def test_cancel_execution(self):
         @self.huey.task()
@@ -1661,6 +1708,22 @@ class TestGroupPrimitive(BaseTestCase):
         self.assertEqual(len(self.huey), 1)
         self.assertEqual(self.execute_next(), ['a', 'b', 'c'])
         self.assertEqual(r(), ['a', 'b', 'c'])
+
+    def test_group_callback_task_args(self):
+        @self.huey.task()
+        def ident(v):
+            return v
+
+        @self.huey.task()
+        def cb(prefix, results, suffix=None):
+            return (prefix, results, suffix)
+
+        g = group([ident.s('a'), ident.s('b')]).then(cb.s(), 'p', suffix='s')
+        r = self.huey.enqueue(g)
+        self.execute_next()
+        self.execute_next()
+        self.assertEqual(self.execute_next(), ('p', ['a', 'b'], 's'))
+        self.assertEqual(r(), ('p', ['a', 'b'], 's'))
 
     def test_group_error_handler(self):
         error_state = []
@@ -2647,8 +2710,8 @@ class TestTaskLocking(BaseTestCase):
             self.assertTrue(self.huey.is_locked('lock_a'))
             self.assertTrue(self.execute_next() is None)
 
-        exc = self.trap_exception(r)
-        self.assertTrue('unable to acquire' in str(exc))
+        # Blocked by the lock but a retry is pending, so no error is stored.
+        self.assertTrue(r.get() is None)
 
         # Task failed due to lock, will be retried, which succeeds now that the
         # lock is released.
@@ -2736,9 +2799,7 @@ class TestRateLimit(BaseTestCase):
         self.assertTrue(self.execute_next() is None)
         self.assertEqual(self.huey.scheduled_count(), 1)
 
-        err = self.trap_exception(r3)
-        self.assertTrue('RateLimitExceeded' in err.metadata['error'])
-        self.assertEqual(err.metadata['retries'], 1)
+        self.assertTrue(r3.get() is None)  # Will be retried, nothing stored.
 
         task, = self.huey.scheduled()
         self.assertEqual(task.retries, 0)  # No additional retries.
@@ -2746,8 +2807,7 @@ class TestRateLimit(BaseTestCase):
 
         r4 = test(4, retries=2)
         self.assertTrue(self.execute_next() is None)
-        err = self.trap_exception(r4)
-        self.assertTrue('RateLimitExceeded' in err.metadata['error'])
+        self.assertTrue(r4.get() is None)
 
         task, = self.huey.scheduled()
         self.assertEqual(task.retries, 2)  # Retries preserved, no decremented.
@@ -2768,8 +2828,7 @@ class TestRateLimit(BaseTestCase):
         # Task may specify retries, though they will be decremented.
         r6 = test2(6, retries=2, retry_delay=600)
         self.assertTrue(self.execute_next() is None)
-        err = self.trap_exception(r6)
-        self.assertTrue('RateLimitExceeded' in err.metadata['error'])
+        self.assertTrue(r6.get() is None)  # Retry pending, nothing stored.
         self.assertEqual(self.huey.scheduled_count(), 1)
 
         task, = self.huey.scheduled()

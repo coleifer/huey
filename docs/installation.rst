@@ -58,5 +58,3 @@ You can run the tests using the test-runner:
 .. code-block:: shell
 
     python runtests.py
-
-The source code is available at: https://github.com/coleifer/huey

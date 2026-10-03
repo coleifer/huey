@@ -9,12 +9,9 @@ Group=appuser
 WorkingDirectory=/srv/my_app
 # Run the consumer directly (no shell-script wrappers) so that signals
 # are delivered to the Python process. See github issue #88.
-ExecStart=/srv/my_app/venv/bin/huey_consumer my_app.huey -w 4 -k thread -t 55
+# -g TERM makes systemd's stop signal, SIGTERM, a graceful shutdown.
+ExecStart=/srv/my_app/venv/bin/huey_consumer my_app.huey -w 4 -k thread -g TERM -t 55
 
-# Huey shuts down gracefully on SIGINT. systemd's default KillSignal is
-# SIGTERM, which huey treats as "stop immediately", so override it (or run
-# the consumer with -g TERM instead and drop this line).
-KillSignal=SIGINT
 # SIGKILL deadline. The consumer's -t 55 interrupts any still-running tasks
 # just before this, emitting SIGNAL_INTERRUPTED, so nothing is lost to
 # SIGKILL.

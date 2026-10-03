@@ -3,9 +3,7 @@
 Guide
 =====
 
-This document presents Huey using simple examples that cover the most common
-usage of the library. Detailed documentation can be found in the
-:ref:`API documentation <api>`.
+Detailed documentation can be found in the :ref:`API documentation <api>`.
 
 Example :py:meth:`~Huey.task` that adds two numbers:
 
@@ -20,7 +18,7 @@ Example :py:meth:`~Huey.task` that adds two numbers:
     def add(a, b):
         return a + b
 
-To test, run the consumer, specifying the import path to the ``huey`` object:
+Run the consumer, specifying the import path to the ``huey`` object:
 
 .. code-block:: shell
 
@@ -45,7 +43,7 @@ result to block until the task has finished and a result is ready:
     >>> r(blocking=True, timeout=5)  # Wait up to 5 seconds for result.
     3
 
-You can also check to see if a result is ready using :py:meth:`Result.is_ready`:
+You can also check if a result is ready using :py:meth:`Result.is_ready`:
 
 .. code-block:: pycon
 
@@ -77,9 +75,6 @@ Scheduling tasks
 
 Tasks can be scheduled to execute at a certain time, or after a delay.
 
-In the following example, we will schedule a call to ``add()`` to run in 10
-seconds, and then will block until the result becomes available:
-
 .. code-block:: pycon
 
     >>> r = add.schedule((3, 4), delay=10)
@@ -87,8 +82,7 @@ seconds, and then will block until the result becomes available:
     7
 
 If we wished to schedule the task to run at a particular time, we can use the
-``eta`` parameter instead. The following example will run after a 10 second
-delay:
+``eta`` parameter instead:
 
 .. code-block:: pycon
 
@@ -120,9 +114,6 @@ Periodic tasks
 Huey provides crontab-like functionality that enables functions to be executed
 automatically on a given schedule.
 
-In the following example, we will declare a :py:meth:`~Huey.periodic_task` that
-executes every 3 minutes and prints a message on consumer process stdout:
-
 .. code-block:: python
 
     from huey import SqliteHuey
@@ -138,16 +129,11 @@ executes every 3 minutes and prints a message on consumer process stdout:
     def every_three_minutes():
         print('This task runs every three minutes')
 
-Once a minute, the scheduler will check to see if any of the periodic tasks
-should be called. If so, the task will be enqueued for execution.
+Once a minute, the scheduler will check if any of the periodic tasks should be
+called. If so, the task will be enqueued for execution.
 
-Because periodic tasks are called independent of any user interaction, they
-do not accept any arguments.
-
-Similarly, the return-value for periodic tasks is discarded, rather than
-being put into the result store. This is because there is not an obvious
-way for an application to obtain a :py:class:`Result` handle to access the
-result of a given periodic task execution.
+Periodic tasks do not accept any arguments, and their return-value is
+discarded.
 
 The :py:func:`crontab` function accepts the following arguments, in the same
 order as the standard Linux crontab format:
@@ -191,12 +177,7 @@ For more information see the following API documentation:
 Retrying tasks that fail
 ------------------------
 
-Sometimes we may have a task that we anticipate might fail from time to time,
-in which case we should retry it. Huey supports automatically retrying tasks a
-given number of times, optionally with a delay between attempts.
-
-Here we'll declare a task that fails approximately half of the time. To
-configure this task to be automatically retried, use the ``retries`` parameter
+To configure a task to be automatically retried, use the ``retries`` parameter
 of the :py:meth:`~Huey.task` decorator:
 
 .. code-block:: python
@@ -209,30 +190,10 @@ of the :py:meth:`~Huey.task` decorator:
             raise Exception('failing!')
         return 'OK'
 
-What happens when we call this task?
-
-1. Message is placed on the queue and a :py:class:`Result` handle is returned
-   to the caller.
-2. Consumer picks up the message and attempts to run the task, but the call to
-   ``random.randint()`` happens to return ``0``, raising an ``Exception``.
-3. The consumer puts the error into the result store and the exception is
-   logged. If the caller resolves the :py:class:`Result` now, a
-   :py:class:`TaskException` will be raised which contains information about
-   the exception that occurred in our task.
-4. The consumer notices that the task can be retried 2 times, so it decrements
-   the retry count and re-enqueues it for execution.
-5. The consumer picks up the message again and runs the task. This time, the
-   task succeeds! The new return value is placed into the result store ("OK").
-6. We can reset our :py:class:`Result` handle by calling
-   :py:meth:`~Result.reset` and then re-resolve it. The result handle will now
-   give us the new value, "OK".
-
-Should the task fail on the first invocation, it will be retried up-to two
-times. Note that it will be retried *immediately* after it returns.
+Should the task fail, it will be retried *immediately*.
 
 To specify a delay between retry attempts, we can add a ``retry_delay``
-argument. The task will be retried up-to two times, with a delay of 10 seconds
-between attempts:
+argument:
 
 .. code-block:: python
 
@@ -255,9 +216,8 @@ multiplier. The task below is retried after 10 seconds, then 20, then 40:
 
 It is also possible to explicitly retry a task from within the task, by raising
 a :py:class:`RetryTask` exception. When this exception is used, the task will
-be retried regardless of whether it was declared with ``retries``. Similarly,
-the task's remaining retries (if they were declared) will not be affected by
-raising :py:class:`RetryTask`. Example:
+be retried regardless of whether it was declared with ``retries``. The task's
+remaining retries will not be affected.
 
 .. code-block:: python
 
@@ -283,15 +243,15 @@ Error handling
 When a task raises an unhandled exception, Huey performs several actions:
 
 1. The exception and traceback are logged.
-2. An error result is stored in the result store (a dict containing the
+2. The ``SIGNAL_ERROR`` :ref:`signal <signals>` is emitted.
+3. An error result is stored in the result store (a dict containing the
    exception representation, traceback, task ID, and remaining retries).
-3. The ``SIGNAL_ERROR`` :ref:`signal <signals>` is emitted.
-4. If the task has retries remaining, it is re-enqueued (and
-   ``SIGNAL_RETRYING`` is emitted).
-5. If the task has an ``on_error`` handler, the error handler task is enqueued
+4. If the task has an ``on_error`` handler, the error handler task is enqueued
    with the exception as an argument.
+5. If the task has retries remaining, it is re-enqueued (and
+   ``SIGNAL_RETRYING`` is emitted).
 
-Steps 2 and 5 run on every failed attempt by default. To defer them until a
+Steps 3 and 4 run on every failed attempt by default. To defer them until a
 task's retries are exhausted, see :ref:`store-intermediate-errors`.
 
 Reading error results
@@ -324,11 +284,10 @@ about the failure:
 Result handle after a retry
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-When a task fails, the error result is written to the result store. If the task
-is retried and eventually succeeds, the success result **overwrites** the error.
-However, the :py:class:`Result` object caches the result locally after the
-first read. To see the updated result after a retry, you must call
-:py:meth:`~Result.reset` (only with the default
+If the task is retried and eventually succeeds, the success result
+**overwrites** the error. However, the :py:class:`Result` object caches the
+result locally after the first read. To see the updated result after a retry,
+you must call :py:meth:`~Result.reset` (only with the default
 ``store_intermediate_errors=True``, see :ref:`store-intermediate-errors`):
 
 .. code-block:: python
@@ -345,7 +304,7 @@ first read. To see the updated result after a retry, you must call
         result.get(blocking=True, timeout=5)
     except TaskException:
         # First attempt failed. Wait for the retry to finish.
-        result.reset()  # Clear cached error so we can read the new result.
+        result.reset()
         value = result.get(blocking=True, timeout=30)
         # value now contains the successful return value (or raises again).
 
@@ -356,9 +315,9 @@ Deferring errors until retries are exhausted
 
 By default a failing task reports its error on every attempt, even those that
 still have retries remaining. The exception is written to the result store, and
-the ``on_error`` handler runs each time. This means a blocking
-:py:meth:`Result.get` raises on the first failure. To read the result of a
-later retry you have to call :py:meth:`~Result.reset` first, as shown above.
+the ``on_error`` handler runs each time. Raising :py:class:`RetryTask`, or
+being rate-limited or blocked by a lock, is not a failure while a retry is
+pending: nothing is stored and ``on_error`` does not run.
 
 Pass ``store_intermediate_errors=False`` to change this. A failing task that
 still has retries is re-enqueued, and nothing is written to the result store or
@@ -377,12 +336,10 @@ task succeeds or runs out of retries.
 
     result = flaky_download('https://example.com/x')
 
-    # Blocks until the task finishes. Returns the value on success, or raises
-    # a TaskException after the final attempt fails. No reset() needed.
     value = result.get(blocking=True, timeout=60)
 
 The ``SIGNAL_ERROR`` and ``SIGNAL_RETRYING`` :ref:`signals <signals>` still fire
-on every attempt, so you can still observe individual failures.
+on every attempt.
 
 .. note::
     This defaults to ``True`` for backwards compatibility. Setting it to
@@ -431,10 +388,7 @@ your :py:class:`Huey` instance:
 
     huey = RedisHuey('my-app', immediate_use_memory=False)
 
-You can try immediate mode in the Python shell. In the following example,
-everything happens within the interpreter with no separate consumer process.
-Because immediate mode switches to in-memory storage when enabled, no Redis
-server is needed either:
+You can try immediate mode in the Python shell:
 
 .. code-block:: pycon
 
@@ -484,9 +438,6 @@ not be enqueued.
 
 Testing Guidelines
 ------------------
-
-When testing Huey task-decorated functions, a couple guidelines will make your
-life easier.
 
 1. Set your :py:class:`Huey` instance to :ref:`immediate`. Any code that calls
    a task will run it synchronously, so it is safe to block on results as well.
@@ -550,14 +501,14 @@ Examples:
             # necessary to use `.call_local()` if we want to check the return
             # value.
             self.assertEqual(run_reports.call_local(), 42)
-            self.assertTrue(len(database), 1)
+            self.assertEqual(len(database), 1)
 
             # If our periodic task has a side-effect, however, we can call it
             # normally and check the side-effect happened. For example, if the
             # run_reports() periodic task wrote a row to a database, we could
             # do something like:
             run_reports()
-            self.assertTrue(len(database), 2)
+            self.assertEqual(len(database), 2)
 
 
 .. _priority:
@@ -567,24 +518,21 @@ Task priority
 
 .. note::
     Priority support for Redis requires Redis 5.0 or newer. To use task
-    priorities with Redis, use the :py:class:`PriorityRedisHuey` instead of
-    :py:class:`RedisHuey`.
+    priorities with Redis, use :py:class:`PriorityRedisHuey` instead of
+    :py:class:`RedisHuey`, or :py:class:`PriorityRedisExpireHuey` instead of
+    :py:class:`RedisExpireHuey`.
 
     Every other storage layer supports task priorities natively:
     :py:class:`SqliteHuey`, :py:class:`CySqliteHuey`,
-    :py:class:`PostgresHuey`, the file-based :py:class:`FileHuey`, and the
-    in-memory storage layer used when :ref:`immediate` is enabled.
+    :py:class:`PostgresHuey`, :py:class:`FileHuey`, and the in-memory storage
+    layer used when :ref:`immediate` is enabled.
 
 Huey tasks can be given a priority, allowing you to ensure that your most
 important tasks do not get delayed when the workers are busy.
 
 Priorities can be assigned to a task function, in which case all invocations of
-the task will default to the given priority. Additionally, individual task
-invocations can be assigned a priority on a one-off basis.
-
-When no priority is given, the task will default to a priority of ``0``.
-
-To see how this works, lets define a task that has a priority (``10``):
+the task will default to the given priority. When no priority is given, the
+task will default to a priority of ``0``.
 
 .. code-block:: python
 
@@ -655,18 +603,11 @@ Lastly, we can specify priority on :py:class:`~Huey.periodic_task`:
 
 For more information:
 
-* :py:class:`PriorityRedisHuey` - Huey implementation that adds support for
-  task priorities with the Redis storage layer.
-* :py:class:`PostgresHuey`, :py:class:`SqliteHuey`, :py:class:`CySqliteHuey`,
-  :py:class:`FileHuey` and the in-memory storage used when immediate-mode is
-  enabled have full support for task priorities.
+* :py:class:`PriorityRedisHuey`
 * :py:meth:`~Huey.task` and :py:meth:`~Huey.periodic_task`
 
 Canceling or pausing tasks
 --------------------------
-
-Huey tasks can be cancelled dynamically at runtime. This applies to regular
-tasks, tasks scheduled to execute in the future, and periodic tasks.
 
 Any task can be canceled ("revoked"), provided the task has not started
 executing yet. Similarly, a revoked task can be restored, provided it has not
@@ -679,16 +620,11 @@ Using the :py:meth:`Result.revoke` and :py:meth:`Result.restore` methods:
     # Schedule a task to execute in 60 seconds.
     res = add.schedule((1, 2), delay=60)
 
-    # Provided the 60s has not elapsed, the task can be canceled
-    # by calling the `revoke()` method on the result object.
     res.revoke()
 
     # We can check to see if the task is revoked.
     res.is_revoked()  # -> True
 
-    # Similarly, we can restore the task, provided the 60s has
-    # not elapsed (at which point it would have been read and
-    # discarded by the consumer).
     res.restore()
 
 To revoke *all* instances of a given task, use the
@@ -697,7 +633,6 @@ the task function itself:
 
 .. code-block:: python
 
-    # Prevent all instances of the add() task from running.
     add.revoke()
 
     # We can check to see that all instances of the add() task
@@ -716,9 +651,7 @@ the task function itself:
     # Is the add() task enabled again?
     add.is_revoked()  # -> False
 
-Huey provides APIs to revoke / restore on both individual instances of a task,
-as well as all instances of the task. For more information, see the following
-API docs:
+For more information, see the following API docs:
 
 * :py:meth:`Result.revoke` and :py:meth:`Result.restore` for revoking
   individual instances of a task.
@@ -731,14 +664,9 @@ API docs:
 Canceling from within a Task
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Huey provides a special :py:class:`CancelExecution` exception which can be
-raised, either within a :py:meth:`~Huey.pre_execute` hook or within the body of
-a :py:meth:`~Huey.task`-decorated function, to cancel the execution of the
-task. Additionally, when raised from within a task, the ``CancelExecution``
-exception can override the task's default retry policy, by specifying either
-``retry=True/False``.
-
-Example:
+Huey provides a :py:class:`CancelExecution` exception which can be raised,
+either within a :py:meth:`~Huey.pre_execute` hook or within the body of a
+:py:meth:`~Huey.task`-decorated function, to cancel the execution of the task.
 
 .. code-block:: python
 
@@ -764,9 +692,6 @@ For more information, see: :py:class:`CancelExecution`.
 Canceling or pausing periodic tasks
 -----------------------------------
 
-The ``revoke()`` and ``restore()`` methods support some additional options
-which may be especially useful for :py:meth:`~Huey.periodic_task`.
-
 The :py:meth:`~TaskWrapper.revoke` method accepts two optional parameters:
 
 * ``revoke_once`` - boolean flag, if set then only the next occurrence of the
@@ -775,8 +700,7 @@ The :py:meth:`~TaskWrapper.revoke` method accepts two optional parameters:
   should be automatically restored.
 
 For example, suppose we have a task that sends email notifications, but our
-mail server goes down and won't be fixed for a while. We can revoke the task
-for a couple of hours, after which time it will start executing again:
+mail server goes down and won't be fixed for a while:
 
 .. code-block:: python
 
@@ -798,10 +722,6 @@ execution of the task:
 .. code-block:: pycon
 
     >>> send_notification_emails.revoke(revoke_once=True)
-
-At any time, the task can be restored using the usual
-:py:meth:`~TaskWrapper.restore` method, and it's status can be checked using
-the :py:meth:`~TaskWrapper.is_revoked` method.
 
 Task expiration
 ---------------
@@ -857,8 +777,8 @@ Task timeouts
 -------------
 
 Huey tasks can be interrupted by setting a ``timeout`` on the task, in seconds.
-The actual implementation of the timeout mechanism depends on which worker type
-you are using in the consumer, and is selected automatically by Huey:
+The implementation of the timeout mechanism depends on which worker type you
+are using in the consumer, and is selected automatically by Huey:
 
 * Process: uses ``SIGALRM``, most robust.
 * Thread: threads do **NOT** support a hard timeout. To use timeouts with
@@ -889,6 +809,7 @@ Timeouts can also be specified when scheduling tasks:
 
     maybe_slow.schedule(
         args=(report_file,),
+        delay=60,
         timeout=120)
 
 When a task times-out, the ``SIGNAL_TIMEOUT`` :ref:`signal <signals>` will be
@@ -899,9 +820,8 @@ fired.
 Cooperative Timeout
 ^^^^^^^^^^^^^^^^^^^
 
-Threads do not support a hard timeout. To implement timeouts with threaded
-workers, or if you prefer more control within your task function, use the
-cooperative timeout APIs:
+To implement timeouts with threaded workers, or if you prefer more control
+within your task function, use the cooperative timeout APIs:
 
 * :py:meth:`Task.check_timeout`
 * :py:attr:`Task.is_timed_out`
@@ -914,7 +834,7 @@ Example:
 
 .. code-block:: python
 
-   @huey.task(timeout=60, context=True)  # 60s deadline, takes Task as context.
+   @huey.task(timeout=60, context=True)
    def process_report(data, task=None):
        for batch in chunk(data, 100):
            task.check_timeout()  # Will trigger a TaskTimeout if exceeds 60s.
@@ -924,7 +844,7 @@ For budget-aware scheduling you can use the more granular ``time_remaining``:
 
 .. code-block:: python
 
-   @huey.task(timeout=60, context=True)  # 60s deadline, takes Task as context.
+   @huey.task(timeout=60, context=True)
    def process_accounts(accounts, task=None):
        for i, account in enumerate(accounts):
            # If it looks like we might run out of time, schedule the remaining
@@ -945,7 +865,7 @@ which can be used as a context-manager or decorator.
 
 This lock prevents multiple invocations of a task from running concurrently.
 
-If a second invocation occurs and the lock cannot be acquired, then a special
+If a second invocation occurs and the lock cannot be acquired, then a
 :py:class:`TaskLockedException` is raised and the task will not be executed.
 If the task is configured to be retried, then it will be retried normally.
 
@@ -987,9 +907,6 @@ Rate-Limiting
 Huey provides simple fixed-window rate-limiting for tasks. Rate-limiting
 behaves much like locking and can be used as a context-manager or a decorator.
 
-Rate-limiting allows for granular specification of when and how a rate-limited
-task should be retried.
-
 Example:
 
 .. code-block:: python
@@ -1023,8 +940,6 @@ continually exceed the rate-limits, that they "outpace" the rate-limiting and
 pile up. This can be mitigated by specifying a limited number of retries on the
 task itself:
 
-Example:
-
 .. code-block:: python
 
     @huey.task(retries=2)
@@ -1052,28 +967,7 @@ Task pipelines
 Huey supports pipelines (or chains) of one or more tasks that should be
 executed sequentially.
 
-To get started, let's review the usual way we execute tasks:
-
-.. code-block:: python
-
-    @huey.task()
-    def add(a, b):
-        return a + b
-
-    result = add(1, 2)
-
-An equivalent, but more verbose, way is to use the :py:meth:`~TaskWrapper.s`
-method to create a :py:class:`Task` instance and then enqueue it explicitly:
-
-.. code-block:: python
-
-    # Create a task representing the execution of add(1, 2).
-    task = add.s(1, 2)
-
-    # Enqueue the task instance, which returns a Result handle.
-    result = huey.enqueue(task)
-
-So the following are equivalent:
+The following are equivalent:
 
 .. code-block:: python
 
@@ -1086,22 +980,18 @@ The :py:meth:`TaskWrapper.s` method is used to create a :py:class:`Task`
 instance (which represents the execution of the given function). The
 ``Task`` is what gets serialized and sent to the consumer.
 
-To create a pipeline, we will use the :py:meth:`TaskWrapper.s` method to create
-a :py:class:`Task` instance. We can then chain additional tasks using the
-:py:meth:`Task.then` method:
+To create a pipeline, chain additional tasks using the :py:meth:`Task.then`
+method:
 
 .. code-block:: python
 
     add_task = add.s(1, 2)  # Create Task to represent add(1, 2) invocation.
 
-    # Add additional tasks to pipeline by calling add_task.then().
     pipeline = (add_task
                 .then(add, 3)  # Call add() with previous result (1+2) and 3.
                 .then(add, 4)  # Previous result ((1+2)+3) and 4.
                 .then(add, 5)) # Etc.
 
-    # When a pipeline is enqueued, a ResultGroup is returned (which is
-    # comprised of individual Result instances).
     result_group = huey.enqueue(pipeline)
 
     # Print results of above pipeline.
@@ -1122,13 +1012,13 @@ the individual tasks. :py:class:`ResultGroup` can be iterated over or you can
 use the :py:meth:`ResultGroup.get` method to get all the task return values as
 a list.
 
-Note that the return value from the parent task is passed to the next task in
-the pipeline, and so on.
+The return value from the parent task is passed to the next task in the
+pipeline, and so on.
 
 If the value returned by the parent function is a ``tuple``, then the tuple
 will be used to extend the ``*args`` for the next task. Likewise, if the
-parent function returns a ``dict``, then the dict will be used to update the
-``**kwargs`` for the next task.
+parent function returns a ``dict``, then the dict will be used to fill in any
+``**kwargs`` not already given to the next task.
 
 Example of chaining fibonacci calculations:
 
@@ -1137,7 +1027,7 @@ Example of chaining fibonacci calculations:
     @huey.task()
     def fib(a, b=1):
         a, b = a + b, a
-        return (a, b)  # returns tuple, which is passed as *args
+        return (a, b)
 
     pipe = (fib.s(1)
             .then(fib)
@@ -1157,13 +1047,13 @@ For more information, see the following API docs:
 .. warning::
     If a pipeline step returns ``None`` and :py:class:`Huey` was initialized
     with ``store_none=False`` (the default), the result for that step will
-    not be written to the result store. When you read the :py:class:`ResultGroup`,
-    that step's value will appear as ``None`` and be indistinguishable from
-    "result not ready yet."
+    not be written to the result store. When you read the :py:class:`ResultGroup`
+    without blocking, that step's value will appear as ``None`` and be
+    indistinguishable from "result not ready yet." A blocking read never
+    returns for that step.
 
     Pipeline *execution* is unaffected: the next task in the chain still runs,
-    but it receives no additional arguments from the ``None``-returning step
-    (since ``None`` is treated as "no data to pass").
+    but it receives no additional arguments from the ``None``-returning step.
 
     If your pipeline steps may legitimately return ``None`` and you need to
     read results from the :py:class:`ResultGroup`, initialize Huey with
@@ -1173,8 +1063,7 @@ For more information, see the following API docs:
 Error pipelines
 ^^^^^^^^^^^^^^^
 
-Just as :py:meth:`Task.then` chains a follow-up task on success, the
-:py:meth:`Task.error` method chains a task that runs when the parent fails.
+The :py:meth:`Task.error` method chains a task that runs when the parent fails.
 The exception is passed as the first argument to the error handler:
 
 .. code-block:: python
@@ -1206,14 +1095,12 @@ Error handlers can also be combined with success pipelines:
     result = huey.enqueue(task)
 
 If ``download`` raises an exception, ``on_download_error`` is called and the
-success pipeline (``parse_response``, ``store_result``) is skipped. If
-``download`` succeeds, ``parse_response`` runs and ``on_download_error`` is
-never called.
+success pipeline (``parse_response``, ``store_result``) is skipped.
 
 When a stage fails with no retries remaining, its error is also written as the
 result of every skipped downstream stage, so their :py:class:`Result` handles
-raise :py:class:`TaskException` instead of blocking. The exception metadata
-names the stage that failed in ``task_id``.
+raise :py:class:`TaskException` instead of blocking. The ``task_id`` in the
+exception metadata is the id of the stage that failed.
 
 .. note::
     The error handler is attached to the first task in the pipeline. If a
@@ -1231,18 +1118,16 @@ For more information, see:
 Groups and Chords
 -----------------
 
-Pipelines execute tasks sequentially, while groups and chords allow you to run
-tasks in parallel, optionally collecting their results and passing them to a
-final callback.
+Groups and chords allow you to run tasks in parallel, optionally collecting
+their results and passing them to a final callback.
 
 group - parallel execution
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 :py:class:`group` allows you to enqueue one or more tasks in parallel and
-gather the results. All tasks are enqueued immediately and may execute
-concurrently across workers. A :py:class:`ResultGroup` is returned to enable
-fetching the results of the tasks individually, as they become available, or
-after they are all completed.
+gather the results. All tasks are enqueued immediately. A
+:py:class:`ResultGroup` is returned to enable fetching the results of the tasks
+individually, as they become available, or after they are all completed.
 
 .. code-block:: python
 
@@ -1314,8 +1199,6 @@ the callback task in order.
 
         return len(results)
 
-    # Huey will run all the fetch_url() tasks, then when they are all finished
-    # the `index_pages()` task will be enqueued with the task results.
     urls = ['https://a.com', 'https://b.com', ...]
 
     c = chord(
@@ -1345,9 +1228,7 @@ What happens when a :py:class:`chord` is enqueued?
     (tasks are delivered at-most-once), in which case the callback will not
     fire.
 
-Enqueueing a :py:class:`chord` returns a :py:class:`ChordResult`, which
-provides access to the final callback result, the sub-task results, and any
-tasks chained to the final callback.
+Enqueueing a :py:class:`chord` returns a :py:class:`ChordResult`:
 
 .. code-block:: python
 
@@ -1402,15 +1283,7 @@ will attach an additional callback to the chord's callback:
     # Results of chord pipeline are 6, 7.
     print(result.pipeline_results(blocking=True))  # [6, 7]
 
-In this example, ``total`` receives the results from the ``incr`` subtasks.
-Then the result of ``total`` is passed to ``incr`` again. If ``total``
-raises an exception, ``alert_admin`` is executed instead.
-
-Execution flow:
-
-1. ``incr(0)``, ``incr(1)`` and ``incr(2)`` are enqueued.
-2. All three eventually finish and ``total([1, 2, 3])`` is enqueued.
-3. ``incr(6)`` is then enqueued and executed, returning ``7``.
+If ``total`` raises an exception, ``alert_admin`` is executed instead.
 
 Pipelines inside chords
 ^^^^^^^^^^^^^^^^^^^^^^^
@@ -1468,9 +1341,8 @@ chords can also contain chords:
     result = huey.enqueue(
         chord([inner1, inner2], publish.s()))
 
-In this example, two inner chords run in parallel. Each inner chord fans out
-to its own set of URLs, then merges the results. When **both** inner merge
-tasks complete, their results are collected and passed to ``publish``.
+When **both** inner merge tasks complete, their results are collected and
+passed to ``publish``.
 
 Error handling in chords
 ^^^^^^^^^^^^^^^^^^^^^^^^
@@ -1479,7 +1351,7 @@ chords are designed to **always complete**. Each entry in the results list
 passed to the callback is one of:
 
 * the sub-task's return value.
-* :py:class:`huey.utils.Error` if the sub-task failed with no retries
+* :py:class:`huey.Error <Error>` if the sub-task failed with no retries
   remaining. Its ``metadata`` dict holds the ``error`` repr, ``traceback``,
   ``retries`` and ``task_id``.
 * ``huey.SKIPPED`` if the sub-task never ran (revoked, expired, or cancelled
@@ -1496,9 +1368,8 @@ passed to the callback is one of:
         return process([r for r in results
                         if r is not SKIPPED and not isinstance(r, Error)])
 
-If a sub-task fails but has retries remaining, it will retry normally. The
-chord will not receive an :py:class:`~huey.utils.Error` unless the sub-task
-has exhausted available retries.
+The chord will not receive an :py:class:`Error` unless the sub-task has
+exhausted available retries.
 
 .. code-block:: python
 
@@ -1558,16 +1429,15 @@ In this example, ``alert_admin`` runs if ``aggregate`` raises an exception,
 
 .. note::
     Revoking a chord member will prevent it from running, but the chord will
-    still complete: the revoked member contributes ``huey.SKIPPED`` to the
-    results and the callback fires normally. If you need to cancel a chord,
-    revoke the callback task instead.
+    still complete. If you need to cancel a chord, revoke the callback task
+    instead.
 
 .. note::
-    Unlike regular tasks, chord sub-task results are stored unconditionally
-    by the chord's internal bookkeeping. If a sub-task returns ``None``, the
-    callback will correctly receive ``None`` in the results list regardless
-    of the ``store_none`` setting. You do not need ``store_none=True`` for
-    chords to work with ``None`` return values.
+    Unlike regular tasks, the value a chord member hands to its callback is
+    recorded even when it is ``None``, so the callback receives ``None``
+    regardless of the ``store_none`` setting. The member's own
+    :py:class:`Result`, reached through ``ChordResult.results``, still obeys
+    ``store_none``.
 
 
 Dynamic fan-out
@@ -1599,11 +1469,7 @@ Signals
 
 The :py:class:`Consumer` sends :ref:`signals <signals>` as it processes tasks.
 The :py:meth:`Huey.signal` method can be used to attach a callback to one or
-more signals, which will be invoked synchronously by the consumer when the
-signal is sent.
-
-As an example, we can add a signal handler that prints the signal name and the
-ID of the related task.
+more signals.
 
 .. code-block:: python
 
@@ -1614,15 +1480,13 @@ ID of the related task.
         else:
             print('%s - %s' % (signal, task.id))
 
-The :py:meth:`~Huey.signal` method is used to decorate the signal-handling
-function. It accepts an optional list of signals. If none are provided, as in
-our example, then the handler will be called for any signal.
+The :py:meth:`~Huey.signal` method accepts zero or more signals as positional
+arguments. If none are provided, the handler will be called for any signal.
 
 The callback function (``print_signal_args``) accepts two required arguments,
 which are present on every signal: ``signal`` and ``task``. Additionally, our
 handler accepts an optional third argument ``exc`` which is only included with
-``SIGNAL_ERROR``. ``SIGNAL_ERROR`` is only sent when a task raises an uncaught
-exception during execution.
+``SIGNAL_ERROR``.
 
 .. warning::
     Signal handlers are executed *synchronously* by the consumer, so it is
@@ -1634,8 +1498,7 @@ Huey emits the following signals:
 * ``SIGNAL_ENQUEUED`` - task has been placed on the queue.
 * ``SIGNAL_EXECUTING`` - task is about to be executed by a worker.
 * ``SIGNAL_COMPLETE`` - task finished successfully.
-* ``SIGNAL_ERROR`` - task raised an unhandled exception. Handler receives an
-  extra ``exc`` argument containing the exception instance.
+* ``SIGNAL_ERROR`` - task raised an unhandled exception.
 * ``SIGNAL_CANCELED`` - task was canceled via :py:class:`CancelExecution`.
 * ``SIGNAL_RETRYING`` - task failed but will be retried.
 * ``SIGNAL_SCHEDULED`` - task was added to the schedule for future execution.
@@ -1647,9 +1510,8 @@ Huey emits the following signals:
 * ``SIGNAL_INTERRUPTED`` - consumer was shut down while the task was still
   executing.
 
-All signals are available in the ``huey.signals`` module. For signal ordering,
-registration details, and examples, see the :ref:`signals` document and the
-:py:meth:`Huey.signal` API documentation.
+All signals are available in the ``huey.signals`` module. See the
+:ref:`signals` document and the :py:meth:`Huey.signal` API documentation.
 
 Consumer shutdown and interrupted tasks
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -1659,7 +1521,7 @@ executing any in-progress tasks before exiting. However, if the consumer is
 killed with ``SIGTERM`` or crashes, tasks that are mid-execution are lost and
 will not be retried automatically.
 
-Huey tracks in-flight tasks internally. When the consumer shuts down, it calls
+When the consumer shuts down, it calls
 :py:meth:`Huey.notify_interrupted_tasks`, which emits ``SIGNAL_INTERRUPTED``
 for each task that was still executing. You can use this signal to re-enqueue
 interrupted tasks:
@@ -1683,9 +1545,9 @@ interrupted tasks:
 Logging
 -------
 
-Huey uses the standard library ``logging`` module to log information about task
-execution and consumer activity. Messages are logged to the ``huey`` namespace,
-with consumer-specific messages being logged to ``huey.consumer``.
+Huey uses the standard library ``logging`` module. Messages are logged to the
+``huey`` namespace, with consumer-specific messages being logged to
+``huey.consumer``.
 
 When the consumer is run, it binds a default ``StreamHandler()`` to the huey
 namespace so that all messages are logged to the console. The consumer logging
@@ -1719,10 +1581,6 @@ If you would like to get email alerts when an error occurs, you can attach a
 Storage Options
 ---------------
 
-Huey provides a number of different storage layers suitable to different types
-of workloads. Below I will try to sketch the differences, strengths, and
-weaknesses of each storage layer.
-
 :py:class:`RedisHuey`
     Huey's capabilities are, to a large extent, informed by the functionality
     available in Redis. This is the most robust option available and can handle
@@ -1730,9 +1588,9 @@ weaknesses of each storage layer.
     even possible to run Huey consumers on multiple machines to facilitate
     "scale-out" operation.
 
-    Operations are guaranteed to be atomic, following the guarantees provided
-    by Redis. The queue is stored in a Redis list, scheduled tasks use a sorted
-    set, and the task result-store is kept in a hash.
+    Operations are guaranteed to be atomic. The queue is stored in a Redis
+    list, scheduled tasks use a sorted set, and the task result-store is kept
+    in a hash.
 
     Tasks that return a meaningful value rely on the caller "resolving" those
     return values at some point, so the result store does not fill up with
@@ -1752,10 +1610,10 @@ weaknesses of each storage layer.
     Task priorities are not supported by :py:class:`RedisHuey`.
 
 :py:class:`PriorityRedisHuey`
-    Redis storage layer that supports task priorities. To make this efficient,
-    ``PriorityRedisHuey`` stores the queue in a sorted set. Since sorted sets
-    require unique keys, Huey uses the timestamp in microseconds to
-    differentiate tasks enqueued with the same priority.
+    Redis storage layer that supports task priorities. ``PriorityRedisHuey``
+    stores the queue in a sorted set. Since sorted sets require unique keys,
+    Huey uses the timestamp in microseconds to differentiate tasks enqueued
+    with the same priority.
 
 :py:class:`RedisExpireHuey`
     Redis storage layer that stores each task result in its own top-level key
@@ -1771,8 +1629,7 @@ weaknesses of each storage layer.
 :py:class:`SqliteHuey`
     Sqlite works well for many workloads (see `Appropriate uses for Sqlite <https://www.sqlite.org/whentouse.html>`_),
     and Huey's Sqlite storage layer works well regardless of the worker-type
-    chosen. Sqlite locks the database during writes, ensuring only a single
-    writer can write to the database at any given time. Writes generally happen
+    chosen. Sqlite locks the database during writes. Writes generally happen
     very quickly, however, so in practice this is rarely an issue. Because the
     database is stored in a single file, taking backups is simple.
 
@@ -1795,7 +1652,8 @@ weaknesses of each storage layer.
     backed up and restored along with everything else.
 
     Each worker holds one additional connection for ``LISTEN``, so a consumer
-    with N workers uses N+1 connections. Connection poolers that multiplex
+    with N worker threads uses N+1 connections, and one with N worker
+    processes uses 2N+1. Connection poolers that multiplex
     (PgBouncer in transaction-pooling mode) break ``LISTEN``. Initialize with
     ``blocking=False`` to fall back to polling in that case.
 
@@ -1828,13 +1686,9 @@ To call a task-decorated function in its original form, you can use
     def add(a, b):
         return a + b
 
-    # Call the add() function in "un-decorated" form, skipping all
-    # the huey stuff:
     add.call_local(3, 4)  # Returns 7.
 
-It's also worth mentioning that python decorators are just syntactical sugar
-for wrapping a function with another function. Thus, the following two examples
-are equivalent:
+The following two examples are equivalent:
 
 .. code-block:: python
 
@@ -1866,9 +1720,8 @@ parameters using the :py:meth:`~TaskWrapper.map` method:
 Retrieving Results by Task ID
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-If you have a task ID but not the original :py:class:`Result` handle (e.g.,
-because you stored the ID in a database or session), you can retrieve the
-result using :py:meth:`Huey.result`:
+If you have a task ID but not the original :py:class:`Result` handle, you can
+retrieve the result using :py:meth:`Huey.result`:
 
 .. code-block:: python
 
@@ -1913,8 +1766,6 @@ using :py:meth:`~ResultGroup.as_completed`:
         fetch.s(url) for url in urls]))
 
     for value in result_group.as_completed():
-        # Process each result as soon as it's ready, rather than waiting
-        # for all tasks to finish.
         process(value)
 
 Reserved Keyword Arguments
@@ -1924,16 +1775,15 @@ When calling a task-decorated function or using :py:meth:`~TaskWrapper.s`, the
 following keyword arguments are intercepted by Huey and will **not** be passed
 to your task function:
 
+* ``id``
 * ``eta``
 * ``delay``
 * ``retries``
-* ``retry_delay``,
+* ``retry_delay``
+* ``retry_backoff``
 * ``priority``
 * ``expires``
 * ``timeout``
-
-This means you cannot use these names as keyword arguments to your task
-function:
 
 .. code-block:: python
 
@@ -1951,8 +1801,7 @@ positionally.
 Reading more
 ------------
 
-That sums up the basic usage patterns of huey. Below are links for details on
-other aspects of the APIs:
+Below are links for details on other aspects of the APIs:
 
 * :py:class:`Huey` - responsible for coordinating executable tasks and queue
   backends

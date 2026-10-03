@@ -19,6 +19,7 @@ from huey.consumer import Consumer
 from huey.exceptions import CancelExecution
 from huey.exceptions import ConfigurationError
 from huey.exceptions import RateLimitExceeded
+from huey.exceptions import RETRYING_EXCEPTIONS
 from huey.exceptions import ResultTimeout
 from huey.exceptions import RetryTask
 from huey.exceptions import TaskException
@@ -522,8 +523,13 @@ class Huey(object):
         if not isinstance(task, PeriodicTask):
             self.delete(task.revoke_id)
 
-        surface_error = (exception is not None and
-                         (self.store_intermediate_errors or not task.retries))
+        if exception is None:
+            surface_error = False
+        elif not task.retries:
+            surface_error = True
+        else:
+            surface_error = (self.store_intermediate_errors and
+                             not isinstance(exception, RETRYING_EXCEPTIONS))
 
         if self.results and not isinstance(task, PeriodicTask):
             if surface_error:
@@ -1211,7 +1217,10 @@ class group(object):
         self.tasks = tasks
 
     def then(self, task, *args, **kwargs):
-        if not isinstance(task, Task):
+        if isinstance(task, Task):
+            if args: task.extend_data(args)
+            if kwargs: task.extend_data(kwargs)
+        else:
             task = task.s(*args, **kwargs)
         return chord(self.tasks, task)
 

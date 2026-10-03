@@ -3,23 +3,16 @@
 AsyncIO
 -------
 
-While Huey does not provide first-class support for a full asyncio pipeline, in
-practice one of the most useful locations to be "async"-friendly is when
-blocking while waiting for a task result to be ready. When waiting for a task
-result, Huey must poll the storage backend to determine if the result is ready
-which means lots of opportunity for an asynchronous solution.
+Huey does not support a full asyncio pipeline. It provides two helpers for
+``await``-ing task results, which poll the storage backend until the result is
+ready. For a complete example of using Huey in an async web application, see
+:ref:`recipe-fastapi`.
 
-To simplify this, Huey provides two helpers for ``await``-ing task
-results. For a complete example of wiring Huey into an async web application,
-see :ref:`recipe-fastapi`.
+.. py:function:: aget_result(res, backoff=1.15, max_delay=1.0, preserve=False, timeout=None)
 
-.. py:function:: aget_result(result, backoff=1.15, max_delay=1.0, preserve=False, timeout=None)
-
-    :param Result result: a result handle returned when calling a task.
+    :param Result res: a result handle returned when calling a task.
     :param timeout: seconds to wait before raising :py:class:`ResultTimeout`.
     :return: task return value.
-
-    AsyncIO helper for awaiting the result of a task execution.
 
     Example:
 
@@ -56,8 +49,6 @@ see :ref:`recipe-fastapi`.
 
     :param ResultGroup rg: a result-group handle for multiple tasks.
     :return: return values for all tasks in the result group.
-
-    AsyncIO helper for awaiting the result of multiple task executions.
 
     Example:
 

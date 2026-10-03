@@ -34,10 +34,12 @@ Huey types
     :param int db: Redis database to use (typically 0-15, default is 0).
     :param bool notify_result: use a blocking-pop on a result-ready key to
         enable low-latency result reading.
-    :param int notify_result_ttl: TTL for result-ready key to automatically
-        expire un-awaited results.
-    :param bool clean_name: strip non-alphanumeric characters from the name
-        when building Redis keys. Default is true, so ``app-v1`` and ``appv1``
+    :param int notify_result_ttl: TTL on the result-ready notification key, so
+        un-awaited notifications are cleaned up. The result itself is not
+        expired.
+    :param bool clean_name: strip characters other than letters, digits and
+        underscore from the name when building Redis keys. Default is true, so
+        ``app-v1`` and ``appv1``
         share keys. Pass false to use the name verbatim (this will become the
         default in a future release).
 
@@ -109,8 +111,9 @@ Huey types
     :param int db: Redis database to use (typically 0-15, default is 0).
     :param bool notify_result: use a blocking-pop on a result-ready key to
         enable low-latency result reading.
-    :param int notify_result_ttl: TTL for result-ready key to automatically
-        expire un-awaited results.
+    :param int notify_result_ttl: TTL on the result-ready notification key, so
+        un-awaited notifications are cleaned up. The result itself is not
+        expired.
 
 .. py:class:: PriorityRedisExpireHuey
 
@@ -184,7 +187,9 @@ Huey types
         automatically if they do not exist.
 
     Each worker thread or process maintains one additional connection used
-    for LISTEN, so a consumer with N workers holds N+1 connections.
+    for LISTEN, so a consumer with N worker threads holds N+1 connections.
+    With N worker processes it holds 2N+1, as each process also has its own
+    connection.
 
     PostgresHuey fully supports task priorities.
 
@@ -212,7 +217,7 @@ Huey types
         instead of a lockfile for file-system operations. This should only be
         enabled when using the greenlet or thread consumer worker models.
 
-    FileHuey fully supports task priorities.
+    FileHuey supports task priorities, limited to integers from 0 to 65535.
 
 .. py:class:: BlackHoleHuey
 
@@ -226,7 +231,7 @@ Huey types
 Huey object
 -----------
 
-.. py:class:: Huey(name='huey', results=True, store_none=False, utc=True, immediate=False, serializer=None, compression=False, use_zlib=False, immediate_use_memory=True, store_intermediate_errors=True, storage_kwargs)
+.. py:class:: Huey(name='huey', results=True, store_none=False, utc=True, immediate=False, serializer=None, compression=False, use_zlib=False, immediate_use_memory=True, storage_class=None, store_intermediate_errors=True, **storage_kwargs)
 
     :param str name: the name of the task queue, e.g. your application's name.
     :param bool results: whether to store task results.
@@ -234,7 +239,9 @@ Huey object
     :param bool store_intermediate_errors: when a task fails but has retries
         remaining, store the intermediate exception in the result store and run
         any ``on_error`` handler. When ``False``, the error is withheld until the
-        task's retries are exhausted. Defaults to ``True`` for backwards
+        task's retries are exhausted. A :py:class:`RetryTask`, rate-limit or
+        lock rejection with a retry pending is not a failure and is never
+        stored. Defaults to ``True`` for backwards
         compatibility. See :ref:`store-intermediate-errors`.
     :param bool utc: use UTC internally, convert naive datetimes from local
         time to UTC (if local time is other than UTC).
@@ -246,6 +253,8 @@ Huey object
     :param bool use_zlib: use zlib for compression instead of gzip.
     :param bool immediate_use_memory: automatically switch to a local in-memory
         storage backend whenever immediate-mode is enabled.
+    :param storage_class: storage implementation to use, e.g.
+        :py:class:`SqliteStorage`. Overrides the class's default.
     :param storage_kwargs: arbitrary keyword arguments that will be passed to
         the storage backend for additional configuration.
 
@@ -261,7 +270,7 @@ Huey object
     .. code-block:: python
 
         # demo.py
-        from huey import RedisHuey
+        from huey import RedisHuey, crontab
 
         # Create a huey instance.
         huey = RedisHuey('my-app')
@@ -435,9 +444,9 @@ Huey object
         task-decorated function returns ``None`` instead of a
         :py:class:`Result` handle.
 
-        If you stack additional decorators on a task function, note that
-        decorators **above** ``@huey.task()`` run in the calling process,
-        while decorators **below** it run in the consumer worker.
+        If you stack additional decorators on a task function, decorators
+        **above** ``@huey.task()`` run in the calling process, while
+        decorators **below** it run in the consumer worker.
 
         For a thorough walkthrough with examples, see the :ref:`guide`. For
         the full :py:class:`TaskWrapper` API (scheduling, pipelines,
@@ -593,9 +602,9 @@ Huey object
                 if datetime.datetime.now().weekday() == 6:
                     raise CancelExecution('Sunday, no work will be done.')
 
-    .. py:method:: unregister_pre_execute(name_or_fn)
+    .. py:method:: unregister_pre_execute(name)
 
-        :param name_or_fn: the name given to the pre-execute hook, or the
+        :param name: the name given to the pre-execute hook, or the
             function object itself.
         :returns: boolean
 
@@ -629,9 +638,9 @@ Huey object
             def my_post_execute_hook(task, task_value, exc):
                 do_something()
 
-    .. py:method:: unregister_post_execute(name_or_fn)
+    .. py:method:: unregister_post_execute(name)
 
-        :param name_or_fn: the name given to the post-execute hook, or the
+        :param name: the name given to the post-execute hook, or the
             function object itself.
         :returns: boolean
 
@@ -673,9 +682,9 @@ Huey object
                 cursor = db_connection.cursor()
                 # ...
 
-    .. py:method:: unregister_on_startup(name_or_fn)
+    .. py:method:: unregister_on_startup(name)
 
-        :param name_or_fn: the name given to the on-startup hook, or the
+        :param name: the name given to the on-startup hook, or the
             function object itself.
         :returns: boolean
 
@@ -694,9 +703,9 @@ Huey object
 
         This API is provided to simplify cleaning-up shared resources.
 
-    .. py:method:: unregister_on_shutdown(name_or_fn)
+    .. py:method:: unregister_on_shutdown(name)
 
-        :param name_or_fn: the name given to the on-shutdown hook, or the
+        :param name: the name given to the on-shutdown hook, or the
             function object itself.
         :returns: boolean
 
@@ -722,8 +731,8 @@ Huey object
             @huey.signal(SIGNAL_ERROR, SIGNAL_LOCKED)
             def task_not_run_handler(signal, task, exc=None):
                 # Do something in response to the "ERROR" or "LOCKED" signals.
-                # Note that the "ERROR" signal includes a third parameter,
-                # which is the unhandled exception that was raised by the task.
+                # The "ERROR" signal includes a third parameter, which is the
+                # unhandled exception that was raised by the task.
                 # Since this parameter is not sent with the "LOCKED" signal, we
                 # provide a default of ``exc=None``.
                 pass
@@ -792,9 +801,9 @@ Huey object
 
         .. seealso:: Use :py:meth:`Result.revoke` instead.
 
-    .. py:method:: revoke_by_id(task_id, revoke_until=None, revoke_once=False)
+    .. py:method:: revoke_by_id(id, revoke_until=None, revoke_once=False)
 
-        :param str task_id: task instance id.
+        :param str id: task instance id.
         :param datetime revoke_until: optional expiration date for revocation.
         :param bool revoke_once: revoke once and then re-enable.
 
@@ -808,9 +817,9 @@ Huey object
 
         .. seealso:: Use :py:meth:`Result.restore` instead.
 
-    .. py:method:: restore_by_id(task_id)
+    .. py:method:: restore_by_id(id)
 
-        :param str task_id: task instance id.
+        :param str id: task instance id.
         :returns: boolean indicating success.
 
         Restore a :py:class:`Task` instance using the task id. Returns boolean
@@ -820,11 +829,17 @@ Huey object
 
         .. seealso:: Use :py:meth:`TaskWrapper.restore` instead.
 
-    .. py:method:: is_revoked(task, timestamp=None)
+    .. py:method:: is_revoked(task, timestamp=None, peek=True)
 
         :param task: either a task instance, a task ID, a Result, or a Task class.
+        :param datetime timestamp: check revocation with respect to the given
+            time, defaulting to now.
+        :param bool peek: when ``False``, a ``revoke_once`` or expired
+            ``revoke_until`` revocation is cleared by the check. The consumer
+            uses this before executing a task.
 
-        A task ID only reflects revocation via :py:meth:`~Huey.revoke_by_id`.
+        A task ID only reflects instance-level revocation
+        (:py:meth:`Result.revoke` or :py:meth:`~Huey.revoke_by_id`).
         Class-level revocation requires a task instance, Result or task class.
 
         This method should rarely need to be called directly. Typically you
@@ -849,9 +864,9 @@ Huey object
 
             For task functions, use :py:meth:`TaskWrapper.is_revoked`.
 
-    .. py:method:: result(task_id, blocking=False, timeout=None, backoff=1.15, max_delay=1.0, revoke_on_timeout=False, preserve=False)
+    .. py:method:: result(id, blocking=False, timeout=None, backoff=1.15, max_delay=1.0, revoke_on_timeout=False, preserve=False)
 
-        :param task_id: the task's unique identifier.
+        :param id: the task's unique identifier.
         :param bool blocking: whether to block while waiting for task result
         :param timeout: number of seconds to block (if ``blocking=True``)
         :param backoff: amount to backoff delay each iteration of loop
@@ -1024,7 +1039,7 @@ Huey object
         .. code-block:: python
 
             @huey.task(retries=2)
-            @huey.rate_limit('data_sync', limit=10, per=60)
+            @huey.rate_limit('data_sync', limit=10, per=60, retry=False)
             def data_sync(data):
                 service.apply_updates(data)
 
@@ -1037,7 +1052,8 @@ Huey object
 
             @huey.task(retries=2)
             def data_sync(data):
-                with huey.rate_limit('data_sync', limit=10, per=60):
+                with huey.rate_limit('data_sync', limit=10, per=60,
+                                     retry=False):
                     service.apply_updates(data)
 
         By default, rate-limited tasks are scheduled to be retried at the
@@ -1047,17 +1063,17 @@ Huey object
         .. code-block:: python
 
             @huey.task(retries=2, retry_delay=120)
-            @huey.rate_limit('data_sync', limit=10, per=60)
+            @huey.rate_limit('data_sync', limit=10, per=60, retry=False)
             def data_sync(data):
                 service.apply_updates(data)
 
         In the above code, if the task fails due to being rate-limited, it will
         be retried up to 2 times after a delay of 120s between retries.
 
-    .. py:method:: put(key, value)
+    .. py:method:: put(key, data)
 
         :param key: key for data
-        :param value: arbitrary data to store in result store.
+        :param data: arbitrary data to store in result store.
 
         Store a value in the result-store under the given key.
 
@@ -1078,10 +1094,10 @@ Huey object
         Remove a value from the result-store at the given key. Useful for
         cleaning up manually-stored data created with :py:meth:`~Huey.put`.
 
-    .. py:method:: put_if_empty(key, value, ttl=None)
+    .. py:method:: put_if_empty(key, data, ttl=None)
 
         :param key: key to store data under.
-        :param value: arbitrary data to store.
+        :param data: arbitrary data to store.
         :param int ttl: seconds until the key expires. Supported by the memory
             and redis storages, others raise ``NotImplementedError``. With
             :py:class:`RedisStorage` the server must support hash-field TTL
@@ -1238,10 +1254,12 @@ Huey object
             tomorrow = datetime.datetime.now() + datetime.timedelta(days=1)
             send_emails.revoke(revoke_until=tomorrow)
 
-    .. py:method:: is_revoked(timestamp=None)
+    .. py:method:: is_revoked(timestamp=None, peek=True)
 
         :param datetime timestamp: If provided, checks whether task is revoked
             with respect to the given timestamp.
+        :param bool peek: when ``False``, a ``revoke_once`` or expired
+            ``revoke_until`` revocation is cleared by the check.
         :returns: bool indicating whether task is revoked.
 
         Check whether the given task is revoked.
@@ -1253,11 +1271,10 @@ Huey object
 
         Removes a previous task revocation, if one was configured.
 
-    .. py:method:: call_local()
+    .. py:method:: call_local(*args, **kwargs)
 
         Call the ``@task``-decorated function, bypassing all Huey-specific
-        logic. In other words, ``call_local()`` provides access to the
-        underlying user-defined function.
+        logic.
 
         .. code-block:: pycon
 
@@ -1374,7 +1391,7 @@ Huey object
 
 
 
-.. py:class:: Task(args=None, kwargs=None, id=None, eta=None, retries=None, retry_delay=None, retry_backoff=None, priority=None, expires=None, timeout=None, on_complete=None, on_error=None)
+.. py:class:: Task(args=None, kwargs=None, id=None, eta=None, retries=None, retry_delay=None, priority=None, expires=None, on_complete=None, on_error=None, expires_resolved=None, timeout=None, chord_config=None, retry_backoff=None)
 
     :param tuple args: arguments for the function call.
     :param dict kwargs: keyword arguments for the function call.
@@ -1399,6 +1416,9 @@ Huey object
         example.
     :param Task on_complete: Task to execute upon completion of this task.
     :param Task on_error: Task to execute upon failure / error.
+    :param datetime expires_resolved: absolute expiration time, set by huey
+        from ``expires`` when the task is enqueued.
+    :param chord_config: set by huey on members of a :py:class:`chord`.
 
     The ``Task`` class represents the execution of a function. Instances of the
     task are serialized and enqueued for execution by the consumer, which
@@ -1483,8 +1503,9 @@ Huey object
 
         If the value returned by the parent function is a ``tuple``, then the
         tuple will be used to update the ``*args`` for the child function.
-        Likewise, if the parent function returns a ``dict``, then the dict will
-        be used to update the ``**kwargs`` for the child function.
+        Likewise, if the parent function returns a ``dict``, then the dict is
+        merged into the ``**kwargs`` for the child function, without overriding
+        keyword arguments given to ``then()``.
 
         Example of chaining fibonacci calculations:
 
@@ -1513,7 +1534,10 @@ Huey object
         The :py:meth:`~Task.error` method is similar to the
         :py:meth:`~Task.then` method, which is used to construct a task
         pipeline, except the ``error()`` task will only be called in the event
-        of an unhandled exception in the parent task.
+        of an unhandled exception in the parent task. With the default
+        ``store_intermediate_errors=True`` it also runs for failed attempts that
+        will be retried. A :py:class:`RetryTask`, rate-limit or lock rejection
+        with a retry pending does not count as a failure.
 
 
 .. py:function:: crontab(minute='*', hour='*', day='*', month='*', day_of_week='*'[, strict=False])
@@ -1530,7 +1554,7 @@ Huey object
     Acceptable inputs:
 
     - `*` = every distinct value
-    - `*/n` = run every "n" times, i.e. hours=`*/4` == 0, 4, 8, 12, 16, 20
+    - `*/n` = run every "n" times, i.e. hour=`*/4` == 0, 4, 8, 12, 16, 20
     - `m-n` = run every time m..n
     - `m,n` = run on m and n
 
@@ -1561,8 +1585,8 @@ Huey object
     is executed at a given time.
 
     If the consumer executes a task and encounters the
-    :py:class:`TaskLockedException`, then the task will not be executed, an
-    error will be logged by the consumer, and a ``SIGNAL_LOCKED`` signal will
+    :py:class:`TaskLockedException`, then the task will not be executed, a
+    warning will be logged by the consumer, and a ``SIGNAL_LOCKED`` signal will
     be emitted. If the task is configured with retries, it will be retried
     normally (the lock is released, so the retry has a chance to acquire it).
 
@@ -1611,7 +1635,8 @@ Huey object
     * ``retry=False``, task has no retries: error is the final state, task is
       not rescheduled.
     * ``retry=False``, task has 1 or more retries: task retries decrement
-      normally and the task's ``retry_delay`` is honored.
+      normally. Each retry runs at the start of the next window (or
+      ``task.retry_delay`` if specified).
 
     Rate-limited tasks emit a ``SIGNAL_RATE_LIMITED``.
 
@@ -1635,10 +1660,10 @@ Huey object
 
     .. py:method:: acquire()
 
-        Check whether the rate-limit has been exceeded. If so, raises
-        :py:class:`RateLimitExceeded`. Otherwise, increments the counter and
-        returns normally. This is called automatically when the rate-limiter
-        is used as a decorator or context-manager.
+        Increments the counter and raises :py:class:`RateLimitExceeded` if it
+        now exceeds ``limit``. Rejected attempts are counted by
+        :py:meth:`~RateLimit.current_usage`. This is called automatically when
+        the rate-limiter is used as a decorator or context-manager.
 
 
 
@@ -1689,8 +1714,9 @@ Huey object
 
     .. py:method:: error(task, *args, **kwargs)
 
-        :param task: A ``task()``-decorated function (:py:class:`TaskWrapper`),
-            or a :py:class:`Task` instance to run with the group results.
+        :param task: A ``task()``-decorated function (:py:class:`TaskWrapper`).
+            A :py:class:`Task` instance is accepted but is shared by every
+            member, so its result is overwritten by each failure.
         :param args: Arguments to pass to the error handler.
         :param kwargs: Keyword arguments to pass to the error handler.
         :returns: the group instance.
@@ -1748,17 +1774,19 @@ Huey object
     **Sub-task errors:**
 
     Chords are designed to always complete. If a sub-task fails and exhausts
-    all its retries, the exception is used as the task result. Tasks with
-    retries will retry normally, only after retries are exhausted is the
-    exception used.
+    all its retries, an :py:class:`Error` is used as the task result. Tasks
+    with retries will retry normally, only after retries are exhausted is the
+    :py:class:`Error` used. A sub-task that never ran (revoked, expired, or
+    cancelled by a pre-execute hook) contributes ``huey.SKIPPED``.
 
-    The callback may therefore receive a mix of normal return values and
-    ``Exception`` objects. See :ref:`groups-and-chords` in the guide for
-    patterns on handling mixed results.
+    The callback may therefore receive a mix of normal return values,
+    :py:class:`Error` objects and ``SKIPPED``. See :ref:`groups-and-chords` in
+    the guide for patterns on handling mixed results.
 
     .. note::
-        Revoking a chord member prevents it from running and will stall the
-        chord. If you need to cancel a chord, revoke the callback task instead.
+        Revoking a chord member prevents it from running, but the chord still
+        completes. If you need to cancel a chord, revoke the callback task
+        instead.
 
     **Pipeline members:**
 
@@ -1877,14 +1905,14 @@ Huey object
                 .then(report)
                 .then(archive))
 
-            result.pipeline_results[0]()  # combine result
-            result.pipeline_results[1]()  # report result
-            result.pipeline_results[2]()  # archive result
+            result.pipeline_results[0]  # combine result
+            result.pipeline_results[1]  # report result
+            result.pipeline_results[2]  # archive result
 
     .. py:method:: get(*args, **kwargs)
 
-        Shortcut for ``self.callback.get(*args, **kwargs)``. Blocks until the
-        callback finishes and returns its result.
+        Shortcut for ``self.callback.get(*args, **kwargs)``. Returns the
+        callback's result. Pass ``blocking=True`` to wait for it.
 
     .. py:method:: __call__(*args, **kwargs)
 
@@ -1936,9 +1964,9 @@ Result
         >>> res(blocking=True, timeout=5)  # Block for up to 5 seconds
         Traceback (most recent call last):
           File "<stdin>", line 1, in <module>
-          File "/home/charles/tmp/huey/src/huey/huey/queue.py", line 46, in get
-            raise ResultTimeout
-        huey.exceptions.ResultTimeout
+          File ".../huey/api.py", line 1313, in get_raw_result
+            raise ResultTimeout('timed out waiting for result')
+        huey.exceptions.ResultTimeout: timed out waiting for result
 
         >>> res(blocking=True)  # No timeout, will block until it gets data.
         300
@@ -1954,9 +1982,9 @@ Result
         >>> res()  # raises a TaskException!
         Traceback (most recent call last):
           File "<stdin>", line 1, in <module>
-          File "/home/charles/tmp/huey/src/huey/huey/api.py", line 684, in get
+          File ".../huey/api.py", line 1320, in get
             raise TaskException(result.metadata)
-        huey.exceptions.TaskException: Exception('I failed',)
+        huey.exceptions.TaskException: Exception('I failed')
 
     .. py:attribute:: id
 
@@ -1970,7 +1998,8 @@ Result
         Reads the result into this handle, so a ready result is always
         readable by the caller. Results are read-once, so another
         :py:class:`Result` for the same task will not see it, even with
-        ``get(preserve=True)``.
+        ``get(preserve=True)``. The expire storages are the exception and keep
+        results until their TTL.
 
     .. py:method:: get(blocking=False, timeout=None, backoff=1.15, max_delay=1.0, revoke_on_timeout=False, preserve=False)
 
@@ -2000,7 +2029,7 @@ Result
             :py:class:`Result` object directly. Both methods accept the same
             arguments.
 
-    .. py:method:: __call__(**kwargs)
+    .. py:method:: __call__(*args, **kwargs)
 
         Identical to the :py:meth:`~Result.get` method, provided as a shortcut.
 
@@ -2084,7 +2113,7 @@ Result
     around a number of individual :py:meth:`Result` instances, and provides a
     convenience API for fetching the results in bulk.
 
-    .. py:method:: get(**kwargs)
+    .. py:method:: get(*args, **kwargs)
 
         Call :py:meth:`~Result.get` on each individual :py:meth:`Result`
         instance in the group and returns a list of return values. Any keyword
@@ -2125,10 +2154,21 @@ Result
 
         Return the number of results in the group.
 
+
+.. py:class:: Error(metadata)
+
+    :param dict metadata: the dict returned by
+        :py:meth:`Huey.build_error_result`.
+
+    Stored in the result store when a task fails. Reading it through a
+    :py:class:`Result` raises :py:class:`TaskException`. A chord callback
+    receives it in place of the failed sub-task's return value. Import it
+    from ``huey``.
+
 Consumer
 --------
 
-.. py:class:: Consumer(huey, workers=1, periodic=True, initial_delay=0.1, backoff=1.15, max_delay=10.0, scheduler_interval=1, worker_type='thread', check_worker_health=True, health_check_interval=10, flush_locks=False, extra_locks=None, max_tasks=None)
+.. py:class:: Consumer(huey, workers=1, periodic=True, initial_delay=0.1, backoff=1.15, max_delay=10.0, scheduler_interval=1, worker_type='thread', check_worker_health=True, health_check_interval=10, flush_locks=False, extra_locks=None, max_tasks=None, shutdown_timeout=None, graceful_signal='INT')
 
     :param huey: the :py:class:`Huey` instance whose queue will be consumed.
 
@@ -2156,21 +2196,25 @@ Consumer
 
     .. py:method:: stop(graceful=False)
 
-        :param bool graceful: block until in-flight tasks finish.
+        :param bool graceful: block until in-flight tasks finish or
+            ``shutdown_timeout`` elapses.
 
         Set the stop flag. With ``graceful=False`` (default) the method returns
-        as soon as the flag is set, interrupting any running tasks. With
+        as soon as the flag is set, interrupting any tasks running in process
+        or greenlet workers. Thread workers cannot be interrupted. Their
+        running tasks continue until they finish or the process exits. With
         ``graceful=True`` it blocks until every worker has finished the task it
-        is currently executing.
+        is currently executing, or until ``shutdown_timeout`` elapses.
 
 Serializer
 ----------
 
-.. py:class:: Serializer(compression=False, compression_level=6, use_zlib=False)
+.. py:class:: Serializer(compression=False, compression_level=6, use_zlib=False, pickle_protocol=pickle.HIGHEST_PROTOCOL)
 
     :param bool compression: use gzip compression
     :param int compression_level: 0 for least, 9 for most.
     :param bool use_zlib: use zlib for compression instead of gzip.
+    :param int pickle_protocol: pickle protocol version.
 
     The Serializer class implements a simple interface that can be extended to
     provide your own serialization format. The default implementation uses
@@ -2182,7 +2226,7 @@ Serializer
     .. py:method:: _serialize(data)
 
         :param data: arbitrary Python object to serialize.
-        :rtype bytes:
+        :rtype: bytes
 
     .. py:method:: _deserialize(data)
 
@@ -2251,7 +2295,9 @@ Exceptions
 
     Raised when a rate-limit has been exceeded.
 
-.. py:class:: CancelExecution(retry=None)
+.. py:class:: CancelExecution(msg=None, retry=None)
+
+    :param str msg: optional message.
 
     Cancel the execution of a task. Can be raised either within a
     :py:meth:`~Huey.pre_execute` hook, or within a
@@ -2303,7 +2349,7 @@ Storage
 
 Huey comes with several built-in storage implementations:
 
-.. py:class:: RedisStorage(name='huey', blocking=True, read_timeout=1, connection_pool=None, url=None, client_name=None, notify_result=False, notify_result_ttl=60, **connection_params)
+.. py:class:: RedisStorage(name='huey', blocking=True, read_timeout=1, connection_pool=None, url=None, client_name=None, notify_result=False, notify_result_ttl=60, clean_name=True, **connection_params)
 
     :param str name: namespace for storage.
     :param bool blocking: Use blocking-pop when reading from the queue (as
@@ -2315,12 +2361,17 @@ Huey comes with several built-in storage implementations:
     :param client_name: name used to identify Redis clients used by Huey.
     :param bool notify_result: use a blocking-pop on a result-ready key to
         enable low-latency result reading.
-    :param int notify_result_ttl: TTL for result-ready key to automatically
-        expire un-awaited results.
+    :param int notify_result_ttl: TTL on the result-ready notification key, so
+        un-awaited notifications are cleaned up. The result itself is not
+        expired.
+    :param bool clean_name: strip characters other than letters, digits and
+        underscore from the name when building Redis keys. Default is true.
 
-    Additional keyword arguments will be passed directly to the Redis client
-    constructor. See the `redis-py documentation <https://redis-py.readthedocs.io/en/latest/>`_
-    for the complete list of arguments supported by the Redis client.
+    Additional keyword arguments are passed to redis-py's ``ConnectionPool``
+    (``host``, ``port``, ``db``, ``password``, ``socket_timeout`` and so on).
+    For TLS, use a ``rediss://`` url or pass a ``connection_pool``. See the
+    `redis-py documentation <https://redis-py.readthedocs.io/en/latest/>`_ for
+    the complete list.
 
 
 .. py:class:: RedisExpireStorage(name='huey', expire_time=86400, blocking=True, read_timeout=1, connection_pool=None, url=None, client_name=None, notify_result=False, notify_result_ttl=60, **connection_params)
@@ -2332,11 +2383,10 @@ Huey comes with several built-in storage implementations:
     automatically be cleaned-up. :py:class:`RedisStorage` uses a *HASH* for the
     result store, which has the benefit of keeping the Redis keyspace orderly,
     but which comes with the downside that unread task results can build up
-    over time. This storage implementation trades keyspace sprawl for automatic
-    clean-up.
+    over time.
 
 
-.. py:class:: PriorityRedisStorage(name='huey', blocking=True, read_timeout=1, connection_pool=None, url=None, client_name=None, notify_result=False, notify_result_ttl=60, **connection_params)
+.. py:class:: PriorityRedisStorage(name='huey', blocking=True, read_timeout=1, connection_pool=None, url=None, client_name=None, notify_result=False, notify_result_ttl=60, clean_name=True, **connection_params)
 
     :param str name: namespace for storage.
     :param bool blocking: Use blocking-zpopmin when reading from the queue (as
@@ -2348,15 +2398,20 @@ Huey comes with several built-in storage implementations:
     :param client_name: name used to identify Redis clients used by Huey.
     :param bool notify_result: use a blocking-pop on a result-ready key to
         enable low-latency result reading.
-    :param int notify_result_ttl: TTL for result-ready key to automatically
-        expire un-awaited results.
+    :param int notify_result_ttl: TTL on the result-ready notification key, so
+        un-awaited notifications are cleaned up. The result itself is not
+        expired.
+    :param bool clean_name: strip characters other than letters, digits and
+        underscore from the name when building Redis keys. Default is true.
 
     Redis storage that uses a different data-structure for the task queue in
     order to support task priorities.
 
-    Additional keyword arguments will be passed directly to the Redis client
-    constructor. See the `redis-py documentation <https://redis-py.readthedocs.io/en/latest/>`_
-    for the complete list of arguments supported by the Redis client.
+    Additional keyword arguments are passed to redis-py's ``ConnectionPool``
+    (``host``, ``port``, ``db``, ``password``, ``socket_timeout`` and so on).
+    For TLS, use a ``rediss://`` url or pass a ``connection_pool``. See the
+    `redis-py documentation <https://redis-py.readthedocs.io/en/latest/>`_ for
+    the complete list.
 
     .. warning:: This storage engine requires Redis 5.0 or newer.
 

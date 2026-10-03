@@ -5,9 +5,7 @@ Deploying to Production
 
 The huey consumer is a normal, foreground Python process. It does not
 daemonize, write pid-files, or manage its own lifecycle. That is the job of
-a process supervisor like systemd, supervisord, Docker, or your PaaS. This
-document provides correct, copy-paste configurations for the common
-supervisors, along with a production checklist.
+a process supervisor.
 
 The configuration files shown below are also available in the `examples/deploy
 <https://github.com/coleifer/huey/tree/master/examples/deploy>`_ directory of
@@ -18,7 +16,7 @@ the huey source tree.
 Shutdown Signals
 ----------------
 
-The consumer responds to the following signals:
+The consumer responds to the following signals by default:
 
 ============  ==============================================================
 Signal        Consumer behavior
@@ -31,19 +29,35 @@ Signal        Consumer behavior
               consumer re-executes itself in-place.
 ============  ==============================================================
 
-Nearly every process supervisor stops processes with ``SIGTERM`` by default,
-which huey treats as *stop immediately*. For historical reasons, Huey will
-continue to use the above signals by default. Either configure your
-supervisor to stop huey with ``SIGINT``, or flip the graceful/immediate
-signals with ``--graceful-signal=TERM`` (``-g TERM``).
+For historical reasons ``SIGINT`` is used for graceful shutdown, but most
+process managers stop processes with ``SIGTERM``. Run the consumer with
+``--graceful-signal=TERM`` (``-g TERM``) to swap the two, so that ``SIGTERM``
+is graceful and ``SIGINT`` stops immediately. The configurations below all do
+this. Alternatively, configure your supervisor to stop huey with ``SIGINT``
+(``KillSignal=SIGINT`` for systemd, ``stopsignal=INT`` for supervisord,
+``STOPSIGNAL SIGINT`` in a Dockerfile, which Kubernetes also honors).
 
-Additionally, to prevent a graceful shutdown from running indefinitely on a
-stuck task, it is a good idea to specify ``--shutdown-timeout`` (``-t``). Any
-tasks still running when the timeout elapses are interrupted, with
-``SIGNAL_INTERRUPTED`` emitted for each. Set it a few seconds under the
-supervisor's own kill deadline, so huey interrupts stragglers cleanly.
+Also specify ``--shutdown-timeout`` (``-t``), so a graceful shutdown cannot
+run indefinitely on a stuck task. Any tasks still running when the timeout
+elapses are interrupted, with ``SIGNAL_INTERRUPTED`` emitted for each. With
+process or greenlet workers the interrupted task receives a
+``KeyboardInterrupt``. Thread workers cannot be interrupted, so their tasks are
+cut off when the process exits.
 
-Two related points:
+Set the timeout a few seconds under the supervisor's own kill deadline, so
+huey interrupts stragglers before the supervisor sends ``SIGKILL``. The default
+deadlines are:
+
+===========  =======  =========================================
+Supervisor   Default  Setting
+===========  =======  =========================================
+systemd      90s      ``TimeoutStopSec``
+supervisord  10s      ``stopwaitsecs``
+Docker       10s      ``docker stop -t``, ``stop_grace_period``
+Kubernetes   30s      ``terminationGracePeriodSeconds``
+===========  =======  =========================================
+
+Increase the deadline, and the timeout with it, if you have long-running tasks.
 
 * A graceful shutdown protects *running* tasks. A task interrupted by ``SIGKILL``
   (or a power loss) is lost. Register a ``SIGNAL_INTERRUPTED`` handler to
@@ -73,10 +87,10 @@ Notes:
   logfile option and read logs with ``journalctl -u huey``.
 * ``systemctl reload huey`` triggers huey's graceful restart (``SIGHUP``):
   the consumer re-executes itself in-place, keeping the same PID. Avoid
-  ``Type=forking``. The unit's ``Type=exec`` is correct, and also surfaces
+  ``Type=forking``. The unit's ``Type=exec`` is correct, and also reports
   launch errors at startup.
 * ``Restart=on-failure`` restarts the consumer after a crash, but leaves it
-  stopped after a clean exit (e.g. a graceful ``kill -INT``). Use
+  stopped after a clean exit (e.g. a graceful ``kill -TERM``). Use
   ``Restart=always`` to bring it back regardless. ``systemctl stop`` never
   triggers an automatic restart with either setting.
 
@@ -90,7 +104,8 @@ Notes:
 
 * If your application module is not on the python-path, add e.g.
   ``environment=PYTHONPATH="/srv/my_app"`` or set ``directory`` to the
-  project root (the consumer is run from ``directory``).
+  project root (the consumer is run from ``directory``). Supervisor does not
+  perform shell expansion, so a literal ``$PYTHONPATH`` cannot be used here.
 * After editing the config, ``supervisorctl reread && supervisorctl update``.
 
 Docker
@@ -101,14 +116,12 @@ Docker
 
 Notes:
 
-* ``STOPSIGNAL SIGINT`` makes ``docker stop`` request a graceful shutdown.
+* ``-g TERM`` makes ``docker stop`` request a graceful shutdown.
   The default grace period is only 10 seconds, however, so stop with
   ``docker stop -t 60 <container>`` (or set ``stop_grace_period`` in
   compose) to match the consumer's ``-t 55``.
 * Always use the exec form of ``CMD`` (the JSON-array form, with no shell),
   so the consumer runs as PID 1 and receives signals directly.
-* Log to stdout (no ``-l``) and let the logging driver handle collection and
-  rotation.
 * The ``process`` worker type works fine in containers. For ``greenlet``
   workers, remember the monkey-patch must be applied at the top of your
   entry module. See :ref:`consuming-tasks`.
@@ -131,8 +144,7 @@ Notes:
 * Multiple containers can only share a queue through a network-accessible
   storage backend like Redis or Postgres. ``SqliteHuey`` and ``FileHuey`` work
   across containers only if every container mounts the same local volume, and
-  sqlite over a network filesystem is a bad idea. When in doubt, use Redis or
-  Postgres.
+  sqlite over a network filesystem is a bad idea.
 
 Kubernetes
 ----------
@@ -146,21 +158,16 @@ A minimal worker ``Deployment`` fragment:
       - name: huey-worker
         image: my-app:latest
         command: ["huey_consumer", "my_app.huey", "-w", "4", "-n",
-                  "-t", "55"]
+                  "-g", "TERM", "-t", "55"]
       terminationGracePeriodSeconds: 60
 
-The things that matter:
-
-* Kubernetes honors the image's ``STOPSIGNAL``, so the Dockerfile above gets
-  graceful shutdown for free. Without it, the kubelet sends ``SIGTERM`` and
-  running tasks are interrupted. Adding ``-g TERM`` to the command works with
-  any image and needs no custom Dockerfile.
-* ``terminationGracePeriodSeconds`` is the SIGKILL deadline: keep it above
+* The kubelet sends ``SIGTERM``, which ``-g TERM`` makes a graceful shutdown.
+* ``terminationGracePeriodSeconds`` is the SIGKILL deadline. Keep it above
   ``--shutdown-timeout`` so lagging tasks are interrupted cleanly first.
 * With ``replicas > 1``, periodic tasks must only be enqueued by one
-  consumer. The simple pattern: a scalable worker Deployment started with
-  ``-n`` / ``--no-periodic`` (as above), plus a single-replica "scheduler"
-  Deployment running without ``-n``.
+  consumer. Use a scalable worker Deployment started with ``-n`` /
+  ``--no-periodic`` (as above), plus a single-replica "scheduler" Deployment
+  running without ``-n``.
 
 PaaS (Heroku-style)
 -------------------
@@ -175,9 +182,7 @@ Dyno-style process managers send ``SIGTERM`` with a short grace period
 (typically ~30 seconds) and offer no way to customize the signal. Run the
 consumer with ``--graceful-signal=TERM`` so the deploy signal triggers a
 graceful shutdown, and set ``--shutdown-timeout`` a few seconds under the
-grace period so tasks that cannot finish in time are interrupted (and
-``SIGNAL_INTERRUPTED`` emitted) before the platform sends ``SIGKILL``.
-Registering the ``SIGNAL_INTERRUPTED`` re-enqueue handler
+grace period. Registering the ``SIGNAL_INTERRUPTED`` re-enqueue handler
 (:ref:`recipe-interrupted-tasks`) is essential on these platforms. Read the
 storage location from the environment:
 
@@ -191,7 +196,7 @@ storage location from the environment:
 Logging
 -------
 
-Under systemd, Docker, or a PaaS, log to stdout (the default when no ``-l``
+Under systemd, Docker, or a PaaS, log to stderr (the default when no ``-l``
 option is given) and let the platform capture it.
 
 When supervising the consumer some other way, use ``-l /var/log/huey.log``
@@ -235,7 +240,7 @@ gracefully re-exec) the consumer:
 * ``systemctl reload huey`` / ``kill -HUP <pid>`` performs a graceful
   in-place restart. Workers finish their current task, then the consumer
   re-executes itself, picking up the new code.
-* Or stop gracefully (``SIGINT``) and start a new consumer. This is what
+* Or stop gracefully and start a new consumer. This is what
   the supervisor configs above do on ``restart``.
 * For very long-running tasks, you can run old and new code side-by-side by
   giving the new release a fresh storage ``name``. See
@@ -244,9 +249,8 @@ gracefully re-exec) the consumer:
 Production checklist
 --------------------
 
-* The supervisor stops huey with its graceful signal. For historical reasons,
-  Huey uses ``SIGINT`` for graceful shutdown by default. To use ``SIGTERM`` for
-  graceful shutdown instead, specify ``-g TERM``.
+* The consumer runs with ``-g TERM``, or the supervisor stops huey with
+  ``SIGINT``.
 * Set ``--shutdown-timeout`` to a few seconds shorter than the process
   supervisor's kill timeout (:ref:`deployment-signals`).
 * A ``SIGNAL_INTERRUPTED`` handler re-enqueues tasks interrupted mid-flight,
@@ -254,7 +258,7 @@ Production checklist
 * Exactly one consumer enqueues periodic tasks and all others run with ``-n``.
 * The consumer is run directly, with no shell-script wrappers.
 * Result data is read (or expired) so the result store does not grow without
-  bound. Read results, set ``expires=``, or use ``RedisExpireHuey``. See
+  bound. Read results, return ``None``, or use ``RedisExpireHuey``. See
   :ref:`troubleshooting`.
 * If you use :py:meth:`~Huey.lock_task`, start the consumer with
   ``-f`` / ``--flush-locks`` so locks orphaned by a crash are cleared.
@@ -264,5 +268,5 @@ Production checklist
   ``DEBUG=True``).
 * If the storage backend is shared or network-exposed, messages are signed
   with :py:class:`SignedSerializer` (:ref:`recipe-signed-serializer`).
-* Logs go to stdout under systemd/Docker/PaaS, or are rotated with
+* Logs go to stderr under systemd/Docker/PaaS, or are rotated with
   ``copytruncate`` when using ``-l``.

@@ -199,7 +199,11 @@ class Scheduler(BaseProcess):
         self._logger.debug('Checking periodic tasks')
         for task in self.huey.read_periodic(now):
             self._logger.info('Enqueueing periodic task %s.', task)
-            self.huey.enqueue(task)
+            try:
+                self.huey.enqueue(task)
+            except Exception:
+                self._logger.exception('Error enqueueing periodic task %s.',
+                                       task)
 
 
 class Environment(object):

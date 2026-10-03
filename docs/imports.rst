@@ -28,7 +28,6 @@ circular imports.
 
   .. code-block:: python
 
-      # config.py
       from huey import RedisHuey
 
       huey = RedisHuey('testing')
@@ -38,7 +37,6 @@ circular imports.
 
   .. code-block:: python
 
-      # tasks.py
       from config import huey
 
       @huey.task()
@@ -50,17 +48,15 @@ circular imports.
 
   .. code-block:: python
 
-      # main.py
-      from config import huey  # import the "huey" object.
-      from tasks import add  # import any tasks / decorated functions
+      from config import huey
+      from tasks import add
 
 
       if __name__ == '__main__':
           result = add(1, 2)
           print('1 + 2 = %s' % result.get(blocking=True))
 
-To run the consumer, point it at ``main.huey``, in this way, both the ``huey``
-instance **and** the task functions are imported in a centralized location.
+To run the consumer, point it at ``main.huey``:
 
 .. code-block:: shell
 

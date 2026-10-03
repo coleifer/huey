@@ -15,8 +15,7 @@ The panel is a front-end for the :ref:`task statistics engine <task-stats>`,
 so its data comes from two places:
 
 * :py:func:`enable_stats` runs in the **consumer** and records task signals
-  (executing, complete, error, ...) into the stats database. See
-  :ref:`task-stats` for details.
+  into the stats database.
 * :py:class:`HueyPanel` runs in your **web** application and renders that
   recorded history alongside live queue introspection.
 
@@ -46,18 +45,11 @@ Registering the panel also calls :py:func:`enable_stats`, so the stats tables
 are created when the admin site starts up and the web process records any
 signals it sees (such as tasks enqueued from a request).
 
-To capture task **execution**, which feeds the throughput, per-task and event
-views, enable the recorder in the consumer as well (:ref:`task-stats`).
+To capture task **execution**, which the throughput, per-task and event views
+depend on, enable the recorder in the consumer as well (:ref:`task-stats`).
 Without it, the panel still shows the live queue counts (pending, scheduled,
 results), but the history tables remain empty.
 
 .. py:class:: HueyPanel
 
-    A flask-peewee ``AdminPanel`` subclass. Register it with
-    ``Admin.register_panel()``, passing the huey instance and, optionally,
-    the stats database:
-
-    .. code-block:: python
-
-        admin.register_panel('Huey', HueyPanel, huey)            # db = admin.auth.db
-        admin.register_panel('Huey', HueyPanel, huey, stats_db)
+    A flask-peewee ``AdminPanel`` subclass.

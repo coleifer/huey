@@ -3,9 +3,6 @@
 Troubleshooting and Common Pitfalls
 ===================================
 
-This document outlines some of the common pitfalls you may encounter when
-getting set up with huey. It is arranged in a problem/solution format.
-
 Tasks not running
     First step is to increase logging verbosity by running the consumer with
     ``--verbose``. You can also specify a logfile using the ``--logfile``
@@ -18,7 +15,7 @@ Tasks not running
 "HueyException: XXX not found in TaskRegistry" in log file
     Exception occurs when a task is called by a task producer, but is not
     imported by the consumer. To fix this, ensure that by loading the
-    :py:class:`Huey` object, you also import any decorated functions as well.
+    :py:class:`Huey` object, you also import any decorated functions.
 
     For more information on how tasks are imported, see the :ref:`import documentation <imports>`.
 
@@ -34,8 +31,7 @@ Tasks not returning results
     Ensure that you have not accidentally specified ``results=False`` when
     instantiating your :py:class:`Huey` object.
 
-    Additionally note that, by default, Huey does not store ``None`` in the
-    result-store. So if your task returns ``None``, Huey will discard the
+    By default, Huey does not store ``None`` in the result-store. So if your task returns ``None``, Huey will discard the
     result. If you need to block or detect whether a task has finished, it is
     recommended that you return a non-``None`` value or in extreme
     circumstances you can initialize Huey with ``store_none=True`` (though this
@@ -48,15 +44,16 @@ Task result is always None even though the task returns a value
     ``None``. Use ``result.get(blocking=True, timeout=5)`` to block until the
     result is ready.
 
-    Another subtle cause: Huey's result store is destructive by default. Once
-    you call ``result.get()`` or ``result()``, the value is removed from the
-    store. Calling it a second time will return ``None``. If you need to read
-    a result multiple times, pass ``preserve=True``:
+    Huey's result store is destructive by default. Once you call
+    ``result.get()`` or ``result()``, the value is removed from the store.
+    The :py:class:`Result` object caches it, but ``huey.result(id)`` or a new
+    :py:class:`Result` for the task will return ``None``. To keep the value in
+    the store, pass ``preserve=True``:
 
     .. code-block:: python
 
-        val = result.get(preserve=True)  # Value is retained in the store.
-        val = result.get(preserve=True)  # Same value returned again.
+        val = result.get(preserve=True)
+        val = huey.result(result.id)
 
 Task result is stale after a retry
     When a task fails and is retried, Huey stores the error from the first
@@ -94,9 +91,9 @@ Periodic tasks running twice (or more)
     See :ref:`multiple-consumers` for details.
 
 Greenlet workers seem stuck
-    If you wish to use the Greenlet worker type, you need to be sure to
-    monkeypatch in your application's entrypoint. At the top of your ``main``
-    module, you can add the following code: ``from gevent import monkey; monkey.patch_all()``.
+    If you wish to use the Greenlet worker type, you need to monkeypatch in
+    your application's entrypoint. At the top of your ``main`` module, you can
+    add the following code: ``from gevent import monkey; monkey.patch_all()``.
     Furthermore, if your tasks are CPU-bound, ``gevent`` can appear to lock up
     because it only supports cooperative multi-tasking (as opposed to
     pre-emptive multi-tasking when using threads). For Django, it is necessary
@@ -131,18 +128,20 @@ Task function not found after renaming or moving
     Huey registers tasks by their module path and function name (e.g.,
     ``myapp.tasks.process_order``). If you rename a function or move it to
     another module while tasks are still queued, the consumer will fail to
-    deserialize those tasks and raise a ``HueyException``.
+    deserialize those tasks and raise a ``HueyException``. The ``name``
+    parameter replaces the function name but the module prefix stays, so a
+    moved task changes its key even when named.
 
     Solutions:
 
     * Drain the queue before deploying (let the old consumer process all
       remaining tasks before starting the new code).
     * Use the ``name`` parameter on the :py:meth:`~Huey.task` decorator to
-      give the task a stable name that survives refactoring:
+      give the task a stable name that survives renaming the function:
 
       .. code-block:: python
 
-          @huey.task(name='myapp.tasks.process_order')
+          @huey.task(name='process_order')
           def handle_order(order_id):
               ...
 
@@ -160,8 +159,8 @@ Tasks running out of order
 
     With Redis storage, the default ``RedisHuey`` uses a list and preserves
     insertion order. ``PriorityRedisHuey`` orders by priority score.
-    :py:class:`PostgresHuey` orders by a ``bigserial`` id, which is never
-    reused, so it is always a strict FIFO.
+    :py:class:`PostgresHuey` orders by priority, then by a ``bigserial`` id,
+    which is never reused, so tasks of equal priority are strict FIFO.
 
 Result store growing without bound (Redis)
     When using :py:class:`RedisHuey`, task results are stored in a Redis hash.
@@ -178,8 +177,6 @@ Result store growing without bound (Redis)
     * Periodically read and discard results from the application side.
 
 Consumer seems slow / tasks have high latency
-    Several things to check:
-
     * **Worker count:** The default is 1 worker. Increase it with ``-w``.
       Most applications benefit from at least 2-4 workers.
     * **Blocking vs polling:** ``RedisHuey`` and ``PostgresHuey`` both default
@@ -194,9 +191,11 @@ Consumer seems slow / tasks have high latency
       10 or 30 seconds. It must divide evenly into 60.
     * **Worker type:** For CPU-bound tasks, use ``-k process``. For IO-bound
       tasks, consider ``-k greenlet`` with many workers.
-    * **Verbose logging:** Run with ``-v`` to see exactly when tasks are
-      dequeued, executed, and completed. Large gaps between "dequeued" and
-      "executing" indicate worker saturation.
+    * **Verbose logging:** The consumer logs when a worker starts
+      ("Executing") and finishes ("executed in") a task. Run with ``-v`` to
+      also see when the scheduler enqueues a scheduled task ("Enqueueing").
+      Large gaps between "Enqueueing" and "Executing" indicate worker
+      saturation.
 
 Memory growing in consumer process
     When using process workers (``-k process``), child processes are not
@@ -228,7 +227,7 @@ Memory growing in consumer process
       :py:meth:`~Huey.context_task` to initialize it inside the worker.
     * For custom classes, implement ``__getstate__`` and ``__setstate__``, or
       convert to a plain ``dict`` before returning.
-    * If you need a different serialization format entirely, subclass
+    * If you need a different serialization format, subclass
       :py:class:`Serializer` and override ``_serialize`` / ``_deserialize``.
 
 Testing projects using Huey
@@ -263,12 +262,10 @@ ReadOnlyError after a Redis failover
     Sentinel-managed connection pool so the client re-discovers the current
     master automatically: see :ref:`recipe-redis-sentinel`.
 
-Task latency increased after switching to Sentinel
-    When connecting through ``redis.sentinel.Sentinel``, the ``socket_timeout``
-    must comfortably exceed the consumer's blocking read timeout (default 1
-    second). If the socket timeout is shorter, every blocking dequeue times out
-    at the socket level and is indistinguishable from an empty queue: the
-    consumer silently degrades to polling with backoff. No errors are logged,
-    but an idle consumer may take up to ``--max-delay`` seconds (default 10) to
-    notice new tasks. See :ref:`recipe-redis-sentinel` for a working
-    configuration.
+Redis socket timeout shorter than the blocking read timeout
+    When connecting through ``redis.sentinel.Sentinel`` or your own connection
+    pool, the ``socket_timeout`` must exceed the consumer's blocking read
+    timeout (default 1 second). If it is shorter, every blocking dequeue times
+    out client-side and reconnects, with nothing logged, and an item the
+    server pops at that moment is written to the closed connection and lost.
+    See :ref:`recipe-redis-sentinel` for a working configuration.

@@ -18,14 +18,13 @@ services:
     build: .
     # NOTE: if you scale this service, add "-n" here and run a single
     # separate service (without "-n") to enqueue periodic tasks.
-    command: ["huey_consumer", "my_app.huey", "-w", "4", "-t", "55"]
+    command: ["huey_consumer", "my_app.huey", "-w", "4", "-g", "TERM", "-t", "55"]
     environment:
       REDIS_HOST: redis
     depends_on:
       - redis
-    # SIGKILL deadline for a graceful shutdown (SIGINT, via the image's
-    # STOPSIGNAL). The consumer's -t 55 interrupts still-running tasks just
-    # before this.
+    # SIGKILL deadline for a graceful shutdown (default 10s). The consumer's
+    # -t 55 interrupts still-running tasks just before this.
     stop_grace_period: 60s
 
 volumes:
