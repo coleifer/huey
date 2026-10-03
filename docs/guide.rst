@@ -217,7 +217,8 @@ multiplier. The task below is retried after 10 seconds, then 20, then 40:
 It is also possible to explicitly retry a task from within the task, by raising
 a :py:class:`RetryTask` exception. When this exception is used, the task will
 be retried regardless of whether it was declared with ``retries``. The task's
-remaining retries will not be affected.
+remaining retries will not be affected, and the attempt is not recorded as an
+error. The :py:class:`Result` stays unready until the retry finishes.
 
 .. code-block:: python
 
