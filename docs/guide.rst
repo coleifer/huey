@@ -1221,6 +1221,21 @@ What happens when a :py:class:`chord` is enqueued?
    order. The final callback is then enqueued with the sub-task results.
 4. The callback is executed by a worker and the final result is made available.
 
+The order of results does not depend on which member finishes first. For
+example, with three members submitted in the order ``url_a``, ``url_b``,
+``url_c``, the tasks might finish in the order B, C, A. The callback is still
+enqueued only after all three finish, and receives their results in the order
+A, B, C. The letters below stand for the return values of the corresponding
+``fetch`` calls, not the URLs themselves.
+
+.. figure:: diagrams/chord-flow.png
+   :alt: Three parallel fetch tasks finish B, C, A. After all finish, the index_pages callback receives results A, B, C.
+   :width: 100%
+
+   Chord result ordering (one possible completion order).
+   :download:`Editable SVG <diagrams/chord-flow.svg>`.
+   Diagram created with `svgdiagram.ai <https://svgdiagram.ai>`_.
+
 .. note::
     A sub-task that is skipped without executing (because it was revoked,
     expired, or cancelled by a pre-execute hook) still counts towards chord
