@@ -267,6 +267,21 @@ class TestMemoryStorage(StorageTests, BaseTestCase):
     def get_huey(self):
         return MemoryHuey(utc=False)
 
+    def test_pop_data_clears_expiration(self):
+        for i in range(20):
+            key = 'temporary-%d' % i
+            self.assertTrue(self.s.put_if_empty(key, b'value', ttl=3600))
+            self.assertEqual(self.s.pop_data(key), b'value')
+        self.assertEqual(self.s.result_store_size(), 0)
+        self.assertEqual(self.s._expires, {})
+
+    def test_flush_results_clears_expiration(self):
+        self.s.put_if_empty('expiring', b'value', ttl=3600)
+        self.s.put_data('persistent', b'value')
+        self.s.flush_results()
+        self.assertEqual(self.s.result_store_size(), 0)
+        self.assertEqual(self.s._expires, {})
+
     def test_put_if_empty_concurrent(self):
         nthreads, nkeys = 8, 20
         barrier = threading.Barrier(nthreads)

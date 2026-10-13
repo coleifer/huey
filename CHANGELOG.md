@@ -3,6 +3,7 @@ Changelog
 
 ## master
 
+* Clear memory storage expiration records when consuming or flushing results.
 * **Backwards-incompatible.** Stop storing an error or running `on_error` when
   a task raises `RetryTask`, or is rate-limited or locked, with a retry
   pending. The `Result` stays unready until the retry finishes.
