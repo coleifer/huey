@@ -1549,7 +1549,7 @@ Huey object
     The argument order matches the standard Linux crontab format: minute, hour,
     day, month, day-of-week.
 
-    Day-of-week uses 0=Sunday and 6=Saturday.
+    Day-of-week uses 0 (or 7) for Sunday and 6 for Saturday.
 
     Acceptable inputs:
 

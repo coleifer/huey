@@ -1471,16 +1471,16 @@ def crontab(minute='*', hour='*', day='*', month='*', day_of_week='*', strict=Fa
                 lhs, rhs, step = int(lhs), int(rhs), int(step or 1)
                 if lhs not in acceptable or rhs not in acceptable:
                     raise ValueError('%s is not a valid input' % piece)
-                elif date_str == 'w':
-                    lhs %= 7
-                    rhs %= 7
                 if lhs <= rhs:
                     values = list(range(lhs, rhs + 1))
                 else:
                     hi = 6 if date_str == 'w' else acceptable[-1]
                     values = (list(range(lhs, hi + 1)) +
                               list(range(acceptable[0], rhs + 1)))
-                settings.update(values[::step])
+                values = values[::step]
+                if date_str == 'w':
+                    values = [v % 7 for v in values]
+                settings.update(values)
                 continue
 
             # Handle stuff like */3, */6.
