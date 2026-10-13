@@ -730,6 +730,23 @@ class TestFileStorageMethods(StorageTests, BaseTestCase):
 
         self.assertEqual(s.result_items(), {'k1': b'v1'})
 
+    def test_filesystem_short_result_headers(self):
+        self.s.put_data('healthy', b'value')
+        for size in range(4):
+            for method in ('peek_data', 'pop_data', 'result_items'):
+                with self.subTest(size=size, method=method):
+                    self.s.put_data('truncated', b'value')
+                    filename = self.s.path_for_key('truncated')
+                    with open(filename, 'wb') as fh:
+                        fh.write(b'\x00' * size)
+
+                    if method == 'result_items':
+                        self.assertEqual(self.s.result_items(), {'healthy': b'value'})
+                    else:
+                        self.assertIs(getattr(self.s, method)('truncated'), EmptyData)
+                        self.assertEqual(os.path.exists(filename), method == 'peek_data')
+                    self.assertEqual(self.s.peek_data('healthy'), b'value')
+
     def test_fs_multithreaded(self):
         l = threading.Lock()
 

@@ -3,6 +3,8 @@ Changelog
 
 ## master
 
+* Treat truncated file-storage result headers as empty results instead of
+  raising an unpacking error.
 * **Backwards-incompatible.** Stop storing an error or running `on_error` when
   a task raises `RetryTask`, or is rate-limited or locked, with a retry
   pending. The `Result` stays unready until the retry finishes.

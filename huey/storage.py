@@ -1624,6 +1624,8 @@ class FileStorage(BaseStorage):
             return True
 
     def _unpack_result(self, data):
+        if len(data) < 4:
+            return None, None
         key_len, = struct.unpack('>I', data[:4])
         key = data[4:4 + key_len]
         if len(key) != key_len:
