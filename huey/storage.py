@@ -1610,11 +1610,13 @@ class FileStorage(BaseStorage):
         if not os.path.exists(dirname):
             os.makedirs(dirname)
 
-        with open(filename, 'wb') as fh:
+        tmp = filename + '.tmp'
+        with open(tmp, 'wb') as fh:
             key_len = len(key)
             fh.write(struct.pack('>I', key_len))
             fh.write(key)
             fh.write(value)
+        os.replace(tmp, filename)
 
     def put_if_empty(self, key, value, ttl=None):
         if ttl is not None:
@@ -1687,19 +1689,22 @@ class FileStorage(BaseStorage):
             if os.path.exists(filename):
                 os.unlink(filename)
 
+    def _result_files(self):
+        for root, _, filenames in os.walk(self.result_path):
+            for filename in filenames:
+                if not filename.endswith('.tmp'):
+                    yield os.path.join(root, filename)
+
     def result_store_size(self):
-        return sum(len(filenames) for _, _, filenames
-                   in os.walk(self.result_path))
+        return sum(1 for _ in self._result_files())
 
     def result_items(self):
         accum = {}
-        for root, _, filenames in os.walk(self.result_path):
-            for filename in filenames:
-                path = os.path.join(root, filename)
-                with open(path, 'rb') as fh:
-                    key, value = self._unpack_result(fh.read())
-                if key is not None:
-                    accum[key.decode('utf8')] = value
+        for path in self._result_files():
+            with open(path, 'rb') as fh:
+                key, value = self._unpack_result(fh.read())
+            if key is not None:
+                accum[key.decode('utf8')] = value
         return accum
 
     def flush_results(self):

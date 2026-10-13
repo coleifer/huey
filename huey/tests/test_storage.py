@@ -730,6 +730,14 @@ class TestFileStorageMethods(StorageTests, BaseTestCase):
 
         self.assertEqual(s.result_items(), {'k1': b'v1'})
 
+    def test_filesystem_put_data_atomic(self):
+        s = self.huey.storage
+        s.put_data(b'k1', b'v1')
+        self.assertRaises(TypeError, s.put_data, b'k1', object())
+        self.assertEqual(s.peek_data(b'k1'), b'v1')
+        self.assertEqual(s.result_items(), {'k1': b'v1'})
+        self.assertEqual(s.result_store_size(), 1)
+
     def test_fs_multithreaded(self):
         l = threading.Lock()
 
