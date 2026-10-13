@@ -413,6 +413,7 @@ class MemoryStorage(BaseStorage):
 
     def pop_data(self, key):
         self._expire(key)
+        self._expires.pop(key, None)
         return self._results.pop(key, EmptyData)
 
     def has_data_for_key(self, key):
@@ -446,6 +447,7 @@ class MemoryStorage(BaseStorage):
 
     def flush_results(self):
         self._results = {}
+        self._expires = {}
 
     def flush_counters(self):
         self._counters = {}
