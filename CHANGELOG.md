@@ -3,6 +3,8 @@ Changelog
 
 ## master
 
+* Fix crontab weekday ranges ending in Sunday (`7`), including `0-7`
+  and stepped ranges such as `0-7/2`.
 * **Backwards-incompatible.** Stop storing an error or running `on_error` when
   a task raises `RetryTask`, or is rate-limited or locked, with a retry
   pending. The `Result` stays unready until the retry finishes.

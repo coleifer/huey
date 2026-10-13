@@ -83,6 +83,27 @@ class TestCrontab(unittest.TestCase):
                 else:
                     self.assertFalse(validate(datetime.datetime(2011, 1, x)))
 
+    def test_crontab_sunday_ranges(self):
+        cases = (
+            ('0-7', set(range(7))),
+            ('0-7/2', {0, 2, 4, 6}),
+            ('0-7/3', {0, 3, 6}),
+            ('1-7/2', {0, 1, 3, 5}),
+            ('6-7', {0, 6}),
+            ('7-2', {0, 1, 2}),
+            ('7-2/2', {0, 2}),
+            ('7-7', {0}),
+        )
+        for strict in (False, True):
+            for expression, weekdays in cases:
+                validate = crontab(day_of_week=expression, strict=strict)
+                for weekday in range(7):
+                    with self.subTest(expression=expression, weekday=weekday,
+                                      strict=strict):
+                        timestamp = (datetime.datetime(2011, 1, 2) +
+                                     datetime.timedelta(days=weekday))
+                        self.assertEqual(validate(timestamp), weekday in weekdays)
+
     def test_crontab_all_together(self):
         # jan 1, 2011 is a saturday
         # may 1, 2011 is a sunday
