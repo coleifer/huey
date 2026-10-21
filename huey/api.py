@@ -1484,7 +1484,7 @@ def crontab(minute='*', hour='*', day='*', month='*', day_of_week='*', strict=Fa
                 continue
 
             # Handle stuff like */3, */6.
-            every_match = every_re.match(piece)
+            every_match = every_re.fullmatch(piece)
             if every_match:
                 if date_str == 'w':
                     raise ValueError('Cannot perform this kind of matching'

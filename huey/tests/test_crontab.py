@@ -135,6 +135,36 @@ class TestCrontab(unittest.TestCase):
             self.assertRaises(ValueError, crontab, minute=i)
             self.assertRaises(ValueError, crontab, minute=i, strict=True)
 
+    def test_crontab_every_step(self):
+        for field, limit, valids in (
+                ('minute', 60, (0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55)),
+                ('hour', 24, (0, 5, 10, 15, 20))):
+            for strict in (False, True):
+                for value in ('*/5', '0,*/5'):
+                    validate = crontab(strict=strict, **{field: value})
+                    for x in range(limit):
+                        dt = datetime.datetime(2011, 1, 1).replace(**{field: x})
+                        self.assertEqual(validate(dt), x in valids)
+
+    def test_crontab_every_step_strict_invalid(self):
+        for field in ('minute', 'hour'):
+            for value in ('*/5oops', '0,*/5oops', '*/5oops,0'):
+                with self.subTest(field=field, value=value):
+                    self.assertRaises(ValueError, crontab, strict=True,
+                                      **{field: value})
+
+    def test_crontab_every_step_non_strict_invalid(self):
+        for field, limit in (('minute', 60), ('hour', 24)):
+            with self.subTest(field=field, value='*/5oops'):
+                self.assertRaises(ValueError, crontab, strict=False,
+                                  **{field: '*/5oops'})
+            for value in ('0,*/5oops', '*/5oops,0'):
+                validate = crontab(strict=False, **{field: value})
+                for x in range(limit):
+                    with self.subTest(field=field, value=value, x=x):
+                        dt = datetime.datetime(2011, 1, 1).replace(**{field: x})
+                        self.assertEqual(validate(dt), x == 0)
+
     def test_crontab_range_step(self):
         validate = crontab(minute='0-30/5')
         for x in range(60):
