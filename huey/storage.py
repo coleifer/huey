@@ -830,17 +830,15 @@ class BaseSqlStorage(BaseStorage):
     def __init__(self, *args, **kwargs):
         create_tables = kwargs.pop('create_tables', True)
         super(BaseSqlStorage, self).__init__(*args, **kwargs)
-        self.lock = threading.Lock()
+        self.lock = threading.RLock()
         self._conn = None
         if hasattr(os, 'register_at_fork'):
-            os.register_at_fork(before=lambda: self.lock.acquire(),
-                                after_in_parent=lambda: self.lock.release(),
-                                after_in_child=self._after_fork)
+            os.register_at_fork(after_in_child=self._after_fork)
         if create_tables:
             self.initialize_schema()
 
     def _after_fork(self):
-        self.lock, self._conn = threading.Lock(), None
+        self.lock, self._conn = threading.RLock(), None
 
     def close(self):
         if self._conn is None:
@@ -941,6 +939,12 @@ class SqliteStorage(BaseSqlStorage):
         self.to_blob = memoryview
 
         super(SqliteStorage, self).__init__(name, create_tables=create_tables)
+        if hasattr(os, 'register_at_fork'):
+            # Hold the lock across fork, so the conn the child closes is idle.
+            # An RLock, so if a signal aborts the acquire, the release fails
+            # rather than freeing another thread's lock.
+            os.register_at_fork(before=lambda: self.lock.acquire(),
+                                after_in_parent=lambda: self.lock.release())
 
     def _create_connection(self):
         conn = sqlite3.connect(self.filename, timeout=self._timeout,

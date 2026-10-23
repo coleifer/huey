@@ -558,21 +558,26 @@ class Consumer(object):
             self._logger.info('Consumer exiting.')
 
     def loop(self, health_check_ts=None):
+        # Do not touch the stop-flag after stop(). An interrupted worker may
+        # have exited holding its shared lock.
         try:
-            self.stop_flag.wait(timeout=self._stop_flag_timeout)
+            stopped = self.stop_flag.wait(timeout=self._stop_flag_timeout)
         except KeyboardInterrupt:
             self._logger.info('Received SIGINT')
             self.stop(graceful=True)
+            stopped = True
         except:
             self._logger.exception('Error in consumer.')
             self.stop()
+            stopped = True
         else:
             if self._received_signal:
                 self._logger.info('Received %s',
                                   signal.Signals(self._signum).name)
                 self.stop(graceful=self._graceful)
+                stopped = True
 
-        if self.stop_flag.is_set():
+        if stopped:
             # Flag to caller that the main consumer loop should shut down.
             raise ConsumerStopped
 

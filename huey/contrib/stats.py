@@ -83,6 +83,7 @@ class HueyStats(object):
         self._buf = []
         self._start = {}
         self._lock = threading.Lock()
+        self._flush_lock = threading.Lock()
         self._writer = None
         self._connected = False
         self._stop = threading.Event()
@@ -125,6 +126,7 @@ class HueyStats(object):
         if self._stop.is_set():
             return
         self._lock = threading.Lock()
+        self._flush_lock = threading.Lock()
         self._stop = threading.Event()
         self._wake = threading.Event()
         self._buf = []
@@ -175,36 +177,40 @@ class HueyStats(object):
             self.db.close()
 
     def _flush(self):
-        with self._lock:
-            batch = self._buf
-            self._buf = []
-        if not batch:
-            return
-        # One inflight op per task, applied in task_id order, so concurrent
-        # writers acquire row locks identically and cannot deadlock.
-        inflight = {}
-        for row in batch:
-            if row['signal'] == S.SIGNAL_EXECUTING:
-                inflight[row['task_id']] = row
-            elif row['signal'] in TERMINAL:
-                inflight[row['task_id']] = None
-        try:
-            with self.db.atomic():
-                for chunk in peewee.chunked(batch, 100):
-                    HueyEvent.insert_many(chunk).execute()
-                for task_id in sorted(inflight):
-                    row = inflight[task_id]
-                    HueyInflight.delete().where(
-                        HueyInflight.task_id == task_id).execute()
-                    if row is not None:
-                        HueyInflight.insert(
-                            task_id=task_id, queue=row['queue'],
-                            task=row['task'], started=row['ts']).execute()
-        except Exception:
-            logger.exception('stats flush failed, dropping %s events.',
-                             len(batch))
-            return
-        self._maybe_prune()
+        # Held for the whole write, so the shutdown hook cannot return while
+        # the writer is mid-flush and lose that batch to os._exit.
+        with self._flush_lock:
+            with self._lock:
+                batch = self._buf
+                self._buf = []
+            if not batch:
+                return
+            # One inflight op per task, applied in task_id order, so
+            # concurrent writers acquire row locks identically and cannot
+            # deadlock.
+            inflight = {}
+            for row in batch:
+                if row['signal'] == S.SIGNAL_EXECUTING:
+                    inflight[row['task_id']] = row
+                elif row['signal'] in TERMINAL:
+                    inflight[row['task_id']] = None
+            try:
+                with self.db.atomic():
+                    for chunk in peewee.chunked(batch, 100):
+                        HueyEvent.insert_many(chunk).execute()
+                    for task_id in sorted(inflight):
+                        row = inflight[task_id]
+                        HueyInflight.delete().where(
+                            HueyInflight.task_id == task_id).execute()
+                        if row is not None:
+                            HueyInflight.insert(
+                                task_id=task_id, queue=row['queue'],
+                                task=row['task'], started=row['ts']).execute()
+            except Exception:
+                logger.exception('stats flush failed, dropping %s events.',
+                                 len(batch))
+                return
+            self._maybe_prune()
 
     def _maybe_prune(self):
         now = time.time()

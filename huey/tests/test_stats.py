@@ -99,6 +99,19 @@ class TestStatsShutdown(StatsTestCase):
         self.assertEqual(stats._buf, [])
         self.assertEqual(HueyEvent.select().count(), 3)
 
+    def test_shutdown_hook_waits_for_writer(self):
+        # A worker calls os._exit right after its shutdown hooks, so the hook
+        # must not return while the writer is mid-flush.
+        stats = self.get_stats(flush_interval=60)
+        self.huey._emit(S.SIGNAL_ENQUEUED, self.task_a.s())
+        hook = threading.Thread(target=self.huey._shutdown['huey_stats_flush'])
+        with stats._flush_lock:  # Writer is mid-flush.
+            hook.start()
+            hook.join(0.1)
+            self.assertTrue(hook.is_alive())
+        hook.join()
+        self.assertEqual(HueyEvent.select().count(), 1)
+
 
 class TestStatsFlush(StatsTestCase):
     def test_inflight_collapse(self):

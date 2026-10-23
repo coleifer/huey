@@ -11,6 +11,7 @@ import unittest
 from huey import SqliteHuey
 from huey.api import crontab
 from huey.consumer import Consumer
+from huey.consumer import ConsumerStopped
 from huey.consumer import Scheduler
 from huey.consumer import WORKER_TO_ENVIRONMENT
 from huey.consumer_options import ConsumerConfig
@@ -414,6 +415,16 @@ class TestConsumerShutdown(BaseTestCase):
 
         consumer._handle_stop_signal(signal.SIGINT, None)
         self.assertFalse(consumer._graceful)
+
+    def test_immediate_stop_ignores_stop_flag(self):
+        # A worker interrupted inside stop_flag.wait() can exit holding the
+        # flag's shared lock, so loop() must not touch the flag after stop().
+        consumer = self.huey.create_consumer()
+        def interrupt_workers():
+            consumer.stop_flag = None
+        consumer._interrupt_workers = interrupt_workers
+        consumer._handle_stop_signal(signal.SIGTERM, None)
+        self.assertRaises(ConsumerStopped, consumer.loop)
 
 
 class TestProcessWorkers(unittest.TestCase):
