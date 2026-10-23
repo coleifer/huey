@@ -810,10 +810,6 @@ class TestFileStorageMethods(StorageTests, BaseTestCase):
         for t in threads: t.join(timeout=15.)
         self.assertEqual(done, [100, 100, 100, 100])
 
-    @unittest.skipIf(CI, 'skipping test that is flaky on CI')
-    def test_consumer_integration(self):
-        return super(TestFileStorageMethods, self).test_consumer_integration()
-
 
 try:
     from huey.contrib.valkey_glide import ValkeyGlideHuey
