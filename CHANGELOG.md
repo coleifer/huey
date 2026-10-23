@@ -9,16 +9,13 @@ Changelog
 
 * **Backwards-incompatible.** Stop storing an error or running `on_error` when
   a task raises `RetryTask`, or is rate-limited or locked, with a retry
-  pending. The `Result` stays unready until the retry finishes.
+  pending.
 * **Backwards-incompatible.** `CancelExecution` now takes an optional message
   as its first argument, so `CancelExecution(True)` no longer means
   `retry=True`. Pass `retry` by keyword.
-* Fix `RedisSemaphore` admitting more than `value` holders under contention.
-  Acquisition now evicts, counts and adds in one Lua script, using the server
-  clock, so a caller whose timestamp was sampled before a slower caller's can
-  no longer sort its way in.
+* Fix `RedisSemaphore` allowing more than `value` holders under contention.
 * Renew the `lock_task_semaphore` slot while the task runs, and drop the
-  holder timeout from 24 hours to 5 minutes.
+  timeout from 24 hours to 5 minutes.
 * Ensure `FileStorage` readers never see a partially-written result.
 * Prevent forked workers deadlocking w/sqlite or PG storage when another thread
   was using the storage at fork time, see #924.
