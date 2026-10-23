@@ -3,6 +3,9 @@ Changelog
 
 ## Master
 
+* Ensure forked workers never inherit a SQLite connection mid-transaction,
+  see #924.
+
 [View commits](https://github.com/coleifer/huey/compare/3.5.0...master)
 
 ## 3.5.0

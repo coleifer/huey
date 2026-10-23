@@ -832,15 +832,14 @@ class BaseSqlStorage(BaseStorage):
         super(BaseSqlStorage, self).__init__(*args, **kwargs)
         self.lock = threading.Lock()
         self._conn = None
-        self._inherited = []
         if hasattr(os, 'register_at_fork'):
-            os.register_at_fork(after_in_child=self._after_fork)
+            os.register_at_fork(before=lambda: self.lock.acquire(),
+                                after_in_parent=lambda: self.lock.release(),
+                                after_in_child=self._after_fork)
         if create_tables:
             self.initialize_schema()
 
     def _after_fork(self):
-        # Do not reuse or close conns across fork!
-        self._inherited.append(self._conn)
         self.lock, self._conn = threading.Lock(), None
 
     def close(self):
@@ -954,6 +953,11 @@ class SqliteStorage(BaseSqlStorage):
         if self._fsync is not None:
             conn.execute('pragma synchronous=%s' % (2 if self._fsync else 0))
         return conn
+
+    def _after_fork(self):
+        if self._conn is not None:
+            self._conn.close()
+        super(SqliteStorage, self)._after_fork()
 
     def enqueue(self, data, priority=None):
         self.sql('insert into task (queue, data, priority) values (?, ?, ?)',

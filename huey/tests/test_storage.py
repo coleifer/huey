@@ -4,6 +4,7 @@ import itertools
 import os
 import random
 import shutil
+import signal
 import sqlite3
 import struct
 import threading
@@ -268,22 +269,53 @@ class SqlStorageTests(StorageTests):
     def test_fork_with_lock_held(self):
         self.assertEqual(self.s.queue_size(), 0)  # Open parent connection.
 
-        with self.s.lock:
-            pid = os.fork()
-            if pid == 0:
-                try:
-                    self.s.enqueue(b'from-child')
-                    ok = self.s.queue_size() == 1
-                except Exception:
-                    ok = False
-                os._exit(0 if ok else 1)
+        held = threading.Event()
+        def hold():
+            with self.s.db(commit=True) as curs:
+                held.set()
+                time.sleep(0.1)
+        t = threading.Thread(target=hold)
+        t.start()
+        held.wait()
 
+        pid = os.fork()
+        if pid == 0:
+            try:
+                self.s.enqueue(b'from-child')
+                ok = self.s.queue_size() == 1
+            except Exception:
+                ok = False
+            os._exit(0 if ok else 1)
+
+        t.join()
         _, status = os.waitpid(pid, 0)
         self.assertEqual(status, 0)
 
         # Parent connection is intact and sees the child's task.
         self.assertEqual(self.s.dequeue(), b'from-child')
         self.assertEqual(self.s.queue_size(), 0)
+
+    @unittest.skipIf(not hasattr(os, 'fork'), 'requires os.fork()')
+    def test_fork_parent_close(self):
+        self.s.enqueue(b'parent')  # Open parent connection.
+
+        pid = os.fork()
+        if pid == 0:
+            try:
+                self.s.enqueue(b'child-1')
+                os.kill(os.getpid(), signal.SIGSTOP)
+                self.s.enqueue(b'child-2')
+                ok = True
+            except Exception:
+                ok = False
+            os._exit(0 if ok else 1)
+
+        os.waitpid(pid, os.WUNTRACED)
+        self.s.close()
+        os.kill(pid, signal.SIGCONT)
+        _, status = os.waitpid(pid, 0)
+        self.assertEqual(status, 0)
+        self.assertEqual(self.s.queue_size(), 3)
 
 
 class TestMemoryStorage(StorageTests, BaseTestCase):
