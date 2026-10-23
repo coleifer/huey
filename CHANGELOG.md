@@ -1,7 +1,11 @@
 Changelog
 =========
 
-## master
+## Master
+
+[View commits](https://github.com/coleifer/huey/compare/3.5.0...master)
+
+## 3.5.0
 
 * **Backwards-incompatible.** Stop storing an error or running `on_error` when
   a task raises `RetryTask`, or is rate-limited or locked, with a retry
@@ -19,7 +23,7 @@ Changelog
 * Prevent forked workers deadlocking w/sqlite or PG storage when another thread
   was using the storage at fork time, see #924.
 
-[View commits](https://github.com/coleifer/huey/compare/3.4.0...master)
+[View commits](https://github.com/coleifer/huey/compare/3.4.0...3.5.0)
 
 ## 3.4.0
 
