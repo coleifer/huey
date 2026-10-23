@@ -891,6 +891,7 @@ class BaseSqlStorage(BaseStorage):
 class SqliteStorage(BaseSqlStorage):
     begin_sql = 'begin exclusive'
     integrity_error = getattr(sqlite3, 'IntegrityError', None)
+    operational_error = getattr(sqlite3, 'OperationalError', None)
     sqlite_version_info = getattr(sqlite3, 'sqlite_version_info', None)
     table_kv = ('create table if not exists kv ('
                 'queue text not null, key text not null, value blob not null, '
@@ -951,12 +952,29 @@ class SqliteStorage(BaseSqlStorage):
                                check_same_thread=False,
                                **self._conn_kwargs)
         conn.isolation_level = None  # Autocommit mode.
-        conn.execute('pragma journal_mode="%s"' % self._journal_mode)
+        self._set_journal_mode(conn)
         if self._cache_mb:
             conn.execute('pragma cache_size=%s' % (-1000 * self._cache_mb))
         if self._fsync is not None:
             conn.execute('pragma synchronous=%s' % (2 if self._fsync else 0))
         return conn
+
+    def _set_journal_mode(self, conn):
+        if self._journal_mode is None:
+            return
+        # Switching a new database to WAL upgrades a read lock to a write
+        # lock, which can fail under concurrency.
+        deadline = time.monotonic() + self._timeout
+        while True:
+            try:
+                conn.execute('pragma journal_mode="%s"' % self._journal_mode)
+                return
+            except self.operational_error as exc:
+                if 'database is locked' not in str(exc):
+                    raise
+                elif time.monotonic() >= deadline:
+                    raise
+                time.sleep(0.01)
 
     def _after_fork(self):
         if self._conn is not None:
@@ -1142,17 +1160,18 @@ class CySqliteStorage(SqliteStorage):
             raise ConfigurationError('"cysqlite" not found. Run "pip install '
                                      'cysqlite" to install.')
         self.integrity_error = cysqlite.IntegrityError
+        self.operational_error = cysqlite.OperationalError
         self.sqlite_version_info = cysqlite.sqlite_version_info
 
         # Normalize hard-coded params to generic pragmas.
         pragmas = dict(pragmas or {})
-        pragmas.setdefault('journal_mode', 'wal')
-        if 'journal_mode' in kwargs:
-            pragmas['journal_mode'] = kwargs.pop('journal_mode') or 'wal'
         if 'cache_mb' in kwargs:
             pragmas['cache_size'] = kwargs.pop('cache_mb') * -1000
         if 'fsync' in kwargs:
             pragmas['synchronous'] = 2 if kwargs.pop('fsync') else 0
+
+        # Handle journal_mode through the normal path.
+        kwargs.setdefault('journal_mode', pragmas.pop('journal_mode', 'wal'))
 
         super(CySqliteStorage, self).__init__(
             name,
@@ -1164,8 +1183,12 @@ class CySqliteStorage(SqliteStorage):
             **kwargs)
 
     def _create_connection(self):
-        return cysqlite.connect(self.filename, timeout=self._timeout,
-                                **self._conn_kwargs)
+        conn = cysqlite.connect(
+            self.filename,
+            timeout=self._timeout,
+            **self._conn_kwargs)
+        self._set_journal_mode(conn)
+        return conn
 
 
 class PostgresStorage(BaseSqlStorage):

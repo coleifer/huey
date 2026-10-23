@@ -572,6 +572,25 @@ class TestSqliteStorage(SqlStorageTests, BaseTestCase):
             if os.path.exists('huey_ct.db'):
                 os.unlink('huey_ct.db')
 
+    def test_first_open_waits_for_write_lock(self):
+        # Switching a new database to WAL must wait out another connection's
+        # write lock rather than fail.
+        conn = sqlite3.connect('huey_first.db', isolation_level=None,
+                               check_same_thread=False)
+        conn.execute('begin immediate')
+        t = threading.Timer(0.1, conn.execute, ('commit',))
+        t.start()
+        try:
+            huey = SqliteHuey(filename='huey_first.db')
+            self.assertEqual(huey.pending_count(), 0)
+            huey.storage.close()
+        finally:
+            t.join()
+            conn.close()
+            for suffix in ('', '-wal', '-shm'):
+                if os.path.exists('huey_first.db' + suffix):
+                    os.unlink('huey_first.db' + suffix)
+
     @unittest.skipIf(not hasattr(os, 'fork'), 'requires os.fork()')
     def test_fork_closes_inherited_conn(self):
         conn = self.s.conn
