@@ -1,5 +1,6 @@
 from functools import partial
 import operator
+import os
 
 from peewee import *
 from playhouse.db_url import connect as db_url_connect
@@ -31,6 +32,9 @@ class SqlStorage(BaseStorage):
             # Treat database argument as a URL connection string.
             self.database = db_url_connect(database)
 
+        if hasattr(os, 'register_at_fork'):
+            os.register_at_fork(after_in_child=self._after_fork)
+
         self.KV, self.Schedule, self.Task, self.Counter = self.create_models()
         if create_tables:
             self.create_tables()
@@ -51,6 +55,13 @@ class SqlStorage(BaseStorage):
                 self.for_update = 'FOR UPDATE'
         else:
             self.for_update = None
+
+    def _after_fork(self):
+        # Discard the parent's connection(s) without closing them.
+        if hasattr(self.database, 'dispose'):
+            self.database.dispose()
+        else:
+            self.database._state.reset()  # peewee < 4.5, no pool support.
 
     def create_models(self):
         class Base(Model):
