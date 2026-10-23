@@ -3,10 +3,14 @@ Changelog
 
 ## Master
 
+[View commits](https://github.com/coleifer/huey/compare/3.5.2...master)
+
+## 3.5.2
+
 * Fix "database is locked" when several processes open a new sqlite database
   at once, see #925.
 
-[View commits](https://github.com/coleifer/huey/compare/3.5.1...master)
+[View commits](https://github.com/coleifer/huey/compare/3.5.1...3.5.2)
 
 ## 3.5.1
 
