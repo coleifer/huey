@@ -16,6 +16,8 @@ Changelog
 * Renew the `lock_task_semaphore` slot while the task runs, and drop the
   holder timeout from 24 hours to 5 minutes.
 * Ensure `FileStorage` readers never see a partially-written result.
+* Prevent forked workers deadlocking w/sqlite or PG storage when another thread
+  was using the storage at fork time, see #924.
 
 [View commits](https://github.com/coleifer/huey/compare/3.4.0...master)
 

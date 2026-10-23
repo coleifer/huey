@@ -263,6 +263,29 @@ class StorageTests(object):
             self.assertTrue(task_a.restore())
 
 
+class SqlStorageTests(StorageTests):
+    @unittest.skipIf(not hasattr(os, 'fork'), 'requires os.fork()')
+    def test_fork_with_lock_held(self):
+        self.assertEqual(self.s.queue_size(), 0)  # Open parent connection.
+
+        with self.s.lock:
+            pid = os.fork()
+            if pid == 0:
+                try:
+                    self.s.enqueue(b'from-child')
+                    ok = self.s.queue_size() == 1
+                except Exception:
+                    ok = False
+                os._exit(0 if ok else 1)
+
+        _, status = os.waitpid(pid, 0)
+        self.assertEqual(status, 0)
+
+        # Parent connection is intact and sees the child's task.
+        self.assertEqual(self.s.dequeue(), b'from-child')
+        self.assertEqual(self.s.queue_size(), 0)
+
+
 class TestMemoryStorage(StorageTests, BaseTestCase):
     def get_huey(self):
         return MemoryHuey(utc=False)
@@ -522,7 +545,7 @@ class TestRedisStorageOffline(BaseTestCase):
         self.assertEqual(calls, [(0, -1), (-3, -1)])
 
 
-class TestSqliteStorage(StorageTests, BaseTestCase):
+class TestSqliteStorage(SqlStorageTests, BaseTestCase):
     supports_ttl = False
 
     def tearDown(self):
@@ -616,7 +639,7 @@ class TestSqliteStorage(StorageTests, BaseTestCase):
 
 
 @unittest.skipIf(cysqlite is None, 'requires cysqlite')
-class TestCySqliteStorage(StorageTests, BaseTestCase):
+class TestCySqliteStorage(SqlStorageTests, BaseTestCase):
     supports_ttl = False
 
     def tearDown(self):

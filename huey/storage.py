@@ -832,8 +832,16 @@ class BaseSqlStorage(BaseStorage):
         super(BaseSqlStorage, self).__init__(*args, **kwargs)
         self.lock = threading.Lock()
         self._conn = None
+        self._inherited = []
+        if hasattr(os, 'register_at_fork'):
+            os.register_at_fork(after_in_child=self._after_fork)
         if create_tables:
             self.initialize_schema()
+
+    def _after_fork(self):
+        # Do not reuse or close conns across fork!
+        self._inherited.append(self._conn)
+        self.lock, self._conn = threading.Lock(), None
 
     def close(self):
         if self._conn is None:
@@ -1205,10 +1213,6 @@ class PostgresStorage(BaseSqlStorage):
             'queue text not null, key text not null, '
             'value bigint not null default 0, primary key(queue, key))')]
 
-        # Do not reuse conns across fork!
-        self._inherited = []
-        self._conn_pid = None
-
         # Each worker thread gets its own LISTEN connection on first
         # dequeue. A dead thread's connection is released by GC: psycopg
         # only sends the protocol Terminate from the creating process, so
@@ -1226,19 +1230,16 @@ class PostgresStorage(BaseSqlStorage):
         return conn
     _create_connection = _connect
 
+    def _after_fork(self):
+        super(PostgresStorage, self)._after_fork()
+        self._listen_local = threading.local()
+
     @property
     def conn(self):
-        if self._conn is not None:
-            if self._conn_pid != os.getpid():
-                self._inherited.append(self._conn)
-                self._conn = None
-            elif self._conn.closed or self._conn.broken:
-                self._close_quiet(self._conn)
-                self._conn = None
-        if self._conn is None:
-            self._conn = self._connect()
-            self._conn_pid = os.getpid()
-        return self._conn
+        if self._conn is not None and (self._conn.closed or self._conn.broken):
+            self._close_quiet(self._conn)
+            self._conn = None
+        return super(PostgresStorage, self).conn
 
     def _close_quiet(self, conn):
         try:
@@ -1250,27 +1251,20 @@ class PostgresStorage(BaseSqlStorage):
         local = self._listen_local
         conn = getattr(local, 'conn', None)
         if conn is not None:
-            if local.pid == os.getpid():
-                self._close_quiet(conn)
-            else:
-                self._inherited.append(conn)
+            self._close_quiet(conn)
             local.conn = None
         return super(PostgresStorage, self).close()
 
     def _listen_conn(self):
         local = self._listen_local
         conn = getattr(local, 'conn', None)
-        if conn is not None and (local.pid != os.getpid() or conn.closed or
-                                 conn.broken):
-            if local.pid != os.getpid():
-                self._inherited.append(conn)
-            else:
-                self._close_quiet(conn)
-            conn = local.conn = None
+        if conn is not None and (conn.closed or conn.broken):
+            self._close_quiet(conn)
+            conn = None
         if conn is None:
             conn = self._connect()
             conn.execute('listen "%s"' % self.channel.replace('"', '""'))
-            local.conn, local.pid = conn, os.getpid()
+            local.conn = conn
         return conn
 
     def enqueue(self, data, priority=None):

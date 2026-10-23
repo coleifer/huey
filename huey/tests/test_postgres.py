@@ -12,7 +12,7 @@ except ImportError:
 
 from huey.api import PostgresHuey
 from huey.tests.base import BaseTestCase
-from huey.tests.test_storage import StorageTests
+from huey.tests.test_storage import SqlStorageTests
 
 
 PG_DSN = os.environ.get('HUEY_PG_DSN') or 'postgresql:///huey_test'
@@ -33,7 +33,7 @@ requires_postgres = unittest.skipIf(not pg_available(),
 
 
 @requires_postgres
-class TestPostgresStorage(StorageTests, BaseTestCase):
+class TestPostgresStorage(SqlStorageTests, BaseTestCase):
     supports_ttl = False
 
     def get_huey(self, **kwargs):
@@ -150,23 +150,3 @@ class TestPostgresStorage(StorageTests, BaseTestCase):
         gc.collect()
         self.assertEqual(len(refs), 3)
         self.assertTrue(all(r() is None for r in refs))
-
-    @unittest.skipIf(not hasattr(os, 'fork'), 'requires os.fork()')
-    def test_fork_reconnect(self):
-        self.assertEqual(self.s.queue_size(), 0)  # Open parent connection.
-
-        pid = os.fork()
-        if pid == 0:
-            try:
-                self.s.enqueue(b'from-child')
-                ok = self.s.queue_size() == 1
-            except Exception:
-                ok = False
-            os._exit(0 if ok else 1)
-
-        _, status = os.waitpid(pid, 0)
-        self.assertEqual(os.WEXITSTATUS(status), 0)
-
-        # Parent connection is intact and sees the child's task.
-        self.assertEqual(self.s.dequeue(), b'from-child')
-        self.assertEqual(self.s.queue_size(), 0)
