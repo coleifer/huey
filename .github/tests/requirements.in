@@ -1,0 +1,7 @@
+setuptools
+gevent
+redis
+peewee
+psycopg
+django
+cysqlite
