@@ -830,24 +830,38 @@ class BaseSqlStorage(BaseStorage):
     def __init__(self, *args, **kwargs):
         create_tables = kwargs.pop('create_tables', True)
         super(BaseSqlStorage, self).__init__(*args, **kwargs)
-        self.lock = threading.Lock()
-        self._conn = None
+        self._ensure_local()
         if create_tables:
             self.initialize_schema()
 
+    def _ensure_local(self):
+        if not hasattr(self, '_local'):
+            self._local = threading.local()
+        for attr in ('conn', 'lock', 'pid'):
+            if not hasattr(self._local, attr):
+                setattr(self._local, attr, None)
+        if self._local.pid is None:
+            self._local.pid = os.getpid()
+        if self._local.pid != os.getpid():
+            for attr in tuple(self._local.__dict__.keys()):
+                delattr(self._local, attr)
+            self._ensure_local()
+
     def close(self):
-        if self._conn is None:
+        self._ensure_local()
+        if self._local.conn is None:
             return False
         with self.lock:
-            self._conn.close()
-            self._conn = None
+            self._local.conn.close()
+            self._local.conn = None
         return True
 
     @property
     def conn(self):
-        if self._conn is None:
-            self._conn = self._create_connection()
-        return self._conn
+        self._ensure_local()
+        if self._local.conn is None:
+            self._local.conn = self._create_connection()
+        return self._local.conn
 
     def _create_connection(self):
         raise NotImplementedError
@@ -868,13 +882,19 @@ class BaseSqlStorage(BaseStorage):
             finally:
                 cursor.close()
                 if close:
-                    conn.close()
-                    self._conn = None
+                    self.close()
 
     def initialize_schema(self):
         with self.db(commit=True, close=True) as curs:
             for sql in self.ddl:
                 curs.execute(sql)
+
+    @property
+    def lock(self):
+        self._ensure_local()
+        if self._local.lock is None:
+            self._local.lock = threading.RLock()
+        return self._local.lock
 
     def sql(self, query, params=None, commit=False, results=False):
         with self.db(commit=commit) as curs:
@@ -1206,39 +1226,54 @@ class PostgresStorage(BaseSqlStorage):
             'value bigint not null default 0, primary key(queue, key))')]
 
         # Do not reuse conns across fork!
-        self._inherited = []
-        self._conn_pid = None
+        self._inherited = set()
 
         # Each worker thread gets its own LISTEN connection on first
         # dequeue. A dead thread's connection is released by GC: psycopg
         # only sends the protocol Terminate from the creating process, so
         # this is safe on both sides of a fork.
-        self._listen_local = threading.local()
+        self._local = threading.local()
 
         super(PostgresStorage, self).__init__(name, create_tables=create_tables)
 
-    def _connect(self):
+    def _create_connection(self):
         if self.connection is not None:
             conn = self.connection()
         else:
             conn = psycopg.connect(self.dsn or '', **self.connection_params)
         conn.autocommit = True
         return conn
-    _create_connection = _connect
+    _connect = _create_connection
+
+    def _save_inherited(self):
+        local = getattr(self, '_local', threading.local())
+        conn = getattr(local, 'conn', None)
+
+        if conn is not None:
+            pid = getattr(local, 'pid', None)
+            if pid != os.getpid():
+                self._inherited.add(conn)
+                conn = None
+            elif conn.closed or conn.broken:
+                self._close_quiet(conn)
+                conn = None
+
+        self._ensure_local()
+        local = self._local
+
+        if conn is None:
+            with self.lock:
+                local.conn = None
 
     @property
     def conn(self):
-        if self._conn is not None:
-            if self._conn_pid != os.getpid():
-                self._inherited.append(self._conn)
-                self._conn = None
-            elif self._conn.closed or self._conn.broken:
-                self._close_quiet(self._conn)
-                self._conn = None
-        if self._conn is None:
-            self._conn = self._connect()
-            self._conn_pid = os.getpid()
-        return self._conn
+        self._save_inherited()
+        local = self._local
+        
+        if local.conn is None:
+            with self.lock:
+                local.conn = self._create_connection()
+        return local.conn
 
     def _close_quiet(self, conn):
         try:
@@ -1247,31 +1282,11 @@ class PostgresStorage(BaseSqlStorage):
             pass
 
     def close(self):
-        local = self._listen_local
-        conn = getattr(local, 'conn', None)
-        if conn is not None:
-            if local.pid == os.getpid():
-                self._close_quiet(conn)
-            else:
-                self._inherited.append(conn)
-            local.conn = None
-        return super(PostgresStorage, self).close()
-
-    def _listen_conn(self):
-        local = self._listen_local
-        conn = getattr(local, 'conn', None)
-        if conn is not None and (local.pid != os.getpid() or conn.closed or
-                                 conn.broken):
-            if local.pid != os.getpid():
-                self._inherited.append(conn)
-            else:
-                self._close_quiet(conn)
-            conn = local.conn = None
-        if conn is None:
-            conn = self._connect()
-            conn.execute('listen "%s"' % self.channel.replace('"', '""'))
-            local.conn, local.pid = conn, os.getpid()
-        return conn
+        self._save_inherited()
+        local = self._local
+ 
+        with self.lock:
+            return super(PostgresStorage, self).close()
 
     def enqueue(self, data, priority=None):
         with self.db(commit=True) as curs:
@@ -1292,22 +1307,53 @@ class PostgresStorage(BaseSqlStorage):
         if row is not None:
             return bytes(row[0])
 
+    def _listen_conn(self):
+        self._save_inherited()
+        local = self._local
+
+        # create a listen connection
+        listen_conn = getattr(local, 'listen_conn', None)
+        if listen_conn is None or listen_conn.closed or listen_conn.broken:
+            if listen_conn:
+                self._close_quiet(listen_conn)
+            listen_conn = None
+        if listen_conn is None:
+            with self.lock:
+                local.listen_conn = listen_conn = self._create_connection()
+                listen_conn.execute('listen "%s"' % self.channel.replace('"', '""'))
+
+        return listen_conn
+
     def dequeue(self):
         data = self._dequeue()
         if data is not None or not self.blocking:
             return data
 
-        conn = self._listen_conn()
-        deadline = time.monotonic() + self.read_timeout
-        while True:
-            timeout = deadline - time.monotonic()
-            if timeout <= 0:
-                return None
-            if not list(conn.notifies(timeout=timeout, stop_after=1)):
-                return None
-            data = self._dequeue()
-            if data is not None:
-                return data  # Otherwise another worker won, keep waiting.
+        # Use the listen connection to eventually gather some data
+        data = None
+        with contextlib.closing(self._listen_conn()) as conn:
+            deadline = time.monotonic() + self.read_timeout
+            while data is None:
+                timeout = deadline - time.monotonic()
+                abort_loop = (
+                    timeout <= 0
+                    or not tuple(
+                        conn.notifies(timeout=timeout, stop_after=1),
+                    )
+                )
+                if abort_loop:
+                    return data
+
+                with self.lock:
+                    local = self._local
+                    saved = local.conn
+                    try:
+                        local.conn = conn
+                        data = self._dequeue()
+                    finally:
+                        local.conn = saved
+
+        return data
 
     def queue_size(self):
         return self.sql('select count(*) from {} where queue = %s'.format(

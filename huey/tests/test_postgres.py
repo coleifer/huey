@@ -140,7 +140,7 @@ class TestPostgresStorage(StorageTests, BaseTestCase):
 
         def dq():
             self.s.dequeue()
-            refs.append(weakref.ref(self.s._listen_local.conn))
+            refs.append(weakref.ref(self.s._local.listen_conn))
 
         for _ in range(3):
             t = threading.Thread(target=dq)
