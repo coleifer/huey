@@ -35,6 +35,12 @@ class SqlStorage(BaseStorage):
         if hasattr(os, 'register_at_fork'):
             os.register_at_fork(after_in_child=self._after_fork)
 
+        # Use BEGIN IMMEDIATE w/ SQLite.
+        if isinstance(self.database, SqliteDatabase):
+            self.atomic = partial(self.database.atomic, 'IMMEDIATE')
+        else:
+            self.atomic = self.database.atomic
+
         self.KV, self.Schedule, self.Task, self.Counter = self.create_models()
         if create_tables:
             self.create_tables()
@@ -142,7 +148,7 @@ class SqlStorage(BaseStorage):
         if self.for_update:
             query = query.for_update(self.for_update)
 
-        with self.database.atomic():
+        with self.atomic():
             try:
                 task = query.get()
             except self.Task.DoesNotExist:
@@ -178,7 +184,7 @@ class SqlStorage(BaseStorage):
         if self.for_update:
             query = query.for_update(self.for_update)
 
-        with self.database.atomic():
+        with self.atomic():
             results = list(query)
             if not results:
                 return []
@@ -245,7 +251,7 @@ class SqlStorage(BaseStorage):
         if self.for_update:
             query = query.for_update(self.for_update)
 
-        with self.database.atomic():
+        with self.atomic():
             try:
                 kv = query.get()
             except self.KV.DoesNotExist:
@@ -265,7 +271,7 @@ class SqlStorage(BaseStorage):
             raise NotImplementedError('ttl is not supported by this storage.')
         self.check_conn()
         try:
-            with self.database.atomic():
+            with self.atomic():
                 self.KV.insert(queue=self.name, key=key, value=value).execute()
         except IntegrityError:
             return False
@@ -274,7 +280,7 @@ class SqlStorage(BaseStorage):
 
     def incr(self, key, amount=1):
         self.check_conn()
-        with self.database.atomic():
+        with self.atomic():
             if isinstance(self.database, MySQLDatabase):
                 self._incr_mysql(key, amount)
             else:
@@ -300,7 +306,7 @@ class SqlStorage(BaseStorage):
 
     def delete_counter(self, key):
         self.check_conn()
-        with self.database.atomic():
+        with self.atomic():
             self.Counter.delete().where(
                 (self.Counter.queue == self.name) &
                 (self.Counter.key == key)).execute()

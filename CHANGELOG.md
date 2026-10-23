@@ -11,6 +11,8 @@ Changelog
   default). Regression in 3.4.0.
 * Ensure `SqlHuey` forked workers open their own db connection instead of
   sharing the parent's.
+* Fix "database is locked" errors in `SqlHuey` w/sqlite by using IMMEDIATE
+  lock.
 
 [View commits](https://github.com/coleifer/huey/compare/3.5.0...master)
 
