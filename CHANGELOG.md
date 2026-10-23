@@ -3,18 +3,16 @@ Changelog
 
 ## Master
 
+[View commits](https://github.com/coleifer/huey/compare/3.5.1...master)
+
+## 3.5.1
+
 * Ensure forked workers never inherit a SQLite connection mid-transaction,
   see #924.
-* Ensure a worker's shutdown flush waits for the stats writer, so events are
-  not lost when the worker exits.
 * Fix process consumer occasionally hanging on immediate shutdown (SIGTERM by
   default). Regression in 3.4.0.
-* Ensure `SqlHuey` forked workers open their own db connection instead of
-  sharing the parent's.
-* Fix "database is locked" errors in `SqlHuey` w/sqlite by using IMMEDIATE
-  lock.
 
-[View commits](https://github.com/coleifer/huey/compare/3.5.0...master)
+[View commits](https://github.com/coleifer/huey/compare/3.5.0...3.5.1)
 
 ## 3.5.0
 
