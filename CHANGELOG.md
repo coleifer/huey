@@ -3,12 +3,16 @@ Changelog
 
 ## Master
 
+[View commits](https://github.com/coleifer/huey/compare/3.5.3...master)
+
+## 3.5.3
+
 * Close the storage connection before forking process workers, this just
   simplifies things. Refs #924 sorta.
 * Run the callback of an empty chord with an empty results list. Previously
   it was never enqueued, fixes #926.
 
-[View commits](https://github.com/coleifer/huey/compare/3.5.2...master)
+[View commits](https://github.com/coleifer/huey/compare/3.5.2...3.5.3)
 
 ## 3.5.2
 
