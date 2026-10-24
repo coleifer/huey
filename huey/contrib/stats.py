@@ -121,8 +121,8 @@ class HueyStats(object):
         # Runs in the forked child while it is still single-threaded. The
         # writer thread exists only in the parent, along with any locks it
         # held at fork time. Rows buffered before the fork are the parent's
-        # to write. The inherited db connection shares a socket with the
-        # parent, so discard its state rather than close it.
+        # to write. Inherited connections, pooled ones included, share a
+        # socket with the parent, so discard them rather than close them.
         if self._stop.is_set():
             return
         self._lock = threading.Lock()
@@ -131,7 +131,10 @@ class HueyStats(object):
         self._wake = threading.Event()
         self._buf = []
         self._start = {}
-        self.db._state.reset()
+        if hasattr(self.db, 'dispose'):
+            self.db.dispose()
+        else:
+            self.db._state.reset()  # peewee < 4.5, no pool support.
         self._start_writer()
 
     def _on_signal(self, signal, task, exc=None):

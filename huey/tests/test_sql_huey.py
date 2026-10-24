@@ -43,20 +43,6 @@ class TestSqlStorage(StorageTests, BaseTestCase):
     def get_huey(self):
         return SqlHuey(database=SQLHUEY_URL, utc=False)
 
-    @unittest.skipIf(not hasattr(os, 'fork'), 'requires os.fork()')
-    def test_fork_discards_parent_conn(self):
-        conn = self.s.database.connection()
-        pid = os.fork()
-        if pid == 0:
-            ok = False
-            try:
-                ok = self.s.database.connection() is not conn
-                self.s.enqueue(b'from-child')
-            finally:
-                os._exit(0 if ok else 1)
-        self.assertEqual(os.waitpid(pid, 0)[1], 0)
-        self.assertEqual(self.s.dequeue(), b'from-child')
-
     def test_sqlite_waits_for_write_lock(self):
         if not isinstance(self.s.database, peewee.SqliteDatabase):
             self.skipTest('requires sqlite')

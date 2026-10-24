@@ -465,6 +465,10 @@ class Consumer(object):
 
         self._logger.info('\n'.join(msg))
 
+        # Forked children must not share the parent's storage connection.
+        if self.worker_type == WORKER_PROCESS:
+            self.huey.storage.close()
+
         # Start the scheduler and workers.
         self.scheduler.start()
         for _, worker_process in self.worker_threads:

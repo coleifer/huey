@@ -442,9 +442,11 @@ class TestProcessWorkers(unittest.TestCase):
         def add_pid(a, b):
             return (a + b, os.getpid())
 
+        huey.pending_count()  # Parent opens a connection before forking.
         consumer = huey.create_consumer(workers=2, worker_type='process')
         consumer.start()
         try:
+            self.assertIsNone(huey.storage._conn)  # Closed before forking.
             r1, r2 = add_pid(1, 2), add_pid(3, 4)
             val1, pid1 = r1.get(blocking=True, timeout=10)
             val2, pid2 = r2.get(blocking=True, timeout=10)

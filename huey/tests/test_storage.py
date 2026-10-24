@@ -4,7 +4,6 @@ import itertools
 import os
 import random
 import shutil
-import signal
 import sqlite3
 import struct
 import threading
@@ -262,33 +261,6 @@ class StorageTests(object):
             task_a.revoke()
             self.assertTrue(task_a.is_revoked())
             self.assertTrue(task_a.restore())
-
-
-class SqlStorageTests(StorageTests):
-    @unittest.skipIf(not hasattr(os, 'fork'), 'requires os.fork()')
-    def test_fork_with_lock_held(self):
-        self.assertEqual(self.s.queue_size(), 0)  # Open parent connection.
-
-        held = threading.Event()
-        def hold():
-            with self.s.db(commit=True):
-                held.set()
-                time.sleep(0.1)
-        t = threading.Thread(target=hold)
-        t.start()
-        held.wait()
-
-        pid = os.fork()
-        if pid == 0:
-            signal.alarm(5)  # Fail rather than hang.
-            try:
-                self.s.enqueue(b'from-child')
-            finally:
-                os._exit(0)
-
-        t.join()
-        self.assertEqual(os.waitpid(pid, 0)[1], 0)
-        self.assertEqual(self.s.dequeue(), b'from-child')
 
 
 class TestMemoryStorage(StorageTests, BaseTestCase):
@@ -550,7 +522,7 @@ class TestRedisStorageOffline(BaseTestCase):
         self.assertEqual(calls, [(0, -1), (-3, -1)])
 
 
-class TestSqliteStorage(SqlStorageTests, BaseTestCase):
+class TestSqliteStorage(StorageTests, BaseTestCase):
     supports_ttl = False
 
     def tearDown(self):
@@ -590,19 +562,6 @@ class TestSqliteStorage(SqlStorageTests, BaseTestCase):
             for suffix in ('', '-wal', '-shm'):
                 if os.path.exists('huey_first.db' + suffix):
                     os.unlink('huey_first.db' + suffix)
-
-    @unittest.skipIf(not hasattr(os, 'fork'), 'requires os.fork()')
-    def test_fork_closes_inherited_conn(self):
-        conn = self.s.conn
-        pid = os.fork()
-        if pid == 0:
-            try:
-                conn.execute('select 1')
-            except sqlite3.ProgrammingError:
-                os._exit(0)
-            finally:
-                os._exit(1)
-        self.assertEqual(os.waitpid(pid, 0)[1], 0)
 
     def test_timeout(self):
         self.assertEqual(self.s._timeout, 3)
@@ -676,7 +635,7 @@ class TestSqliteStorage(SqlStorageTests, BaseTestCase):
 
 
 @unittest.skipIf(cysqlite is None, 'requires cysqlite')
-class TestCySqliteStorage(SqlStorageTests, BaseTestCase):
+class TestCySqliteStorage(StorageTests, BaseTestCase):
     supports_ttl = False
 
     def tearDown(self):

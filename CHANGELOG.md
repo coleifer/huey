@@ -3,6 +3,9 @@ Changelog
 
 ## Master
 
+* Close the storage connection before forking process workers, this just
+  simplifies things.
+
 [View commits](https://github.com/coleifer/huey/compare/3.5.2...master)
 
 ## 3.5.2

@@ -12,7 +12,7 @@ except ImportError:
 
 from huey.api import PostgresHuey
 from huey.tests.base import BaseTestCase
-from huey.tests.test_storage import SqlStorageTests
+from huey.tests.test_storage import StorageTests
 
 
 PG_DSN = os.environ.get('HUEY_PG_DSN') or 'postgresql:///huey_test'
@@ -33,7 +33,7 @@ requires_postgres = unittest.skipIf(not pg_available(),
 
 
 @requires_postgres
-class TestPostgresStorage(SqlStorageTests, BaseTestCase):
+class TestPostgresStorage(StorageTests, BaseTestCase):
     supports_ttl = False
 
     def get_huey(self, **kwargs):
