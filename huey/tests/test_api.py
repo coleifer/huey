@@ -1791,6 +1791,43 @@ class TestChordPrimitive(BaseTestCase):
 
         return prod, agg
 
+    def test_empty_chord(self):
+        prod, agg = self.funcs()
+
+        for callback in (agg, agg.s()):
+            with self.subTest(callback=callback):
+                result = self.huey.enqueue(chord([], callback))
+                self.assertEqual(len(result.results), 0)
+                self.assertEqual(len(self.huey), 1)
+                self.assertEqual(self.execute_next(), 0)
+                self.assertEqual(result(), 0)
+                self.assertEqual(result.results(), [])
+                self.assertEqual(len(self.huey), 0)
+
+    def test_empty_group_callback_pipeline(self):
+        prod, agg = self.funcs()
+
+        result = self.huey.enqueue(group([]).then(agg).then(prod))
+        self.assertEqual(len(self.huey), 1)
+        self.assertEqual(self.execute_next(), 0)
+        self.assertEqual(self.execute_next(), 1)
+        self.assertEqual(result(), 0)
+        self.assertEqual(result.pipeline_results(), [0, 1])
+        self.assertEqual(len(self.huey), 0)
+
+    def test_nested_empty_chord(self):
+        prod, agg = self.funcs()
+
+        result = self.huey.enqueue(chord([
+            chord([], agg).then(prod),
+            prod.s(1),
+        ], agg))
+        self.assertEqual([self.execute_next() for _ in range(4)],
+                         [0, 2, 1, 3])
+        self.assertEqual(result(), 3)
+        self.assertEqual(result.results(), [1, 2])
+        self.assertEqual(len(self.huey), 0)
+
     def test_chord(self):
         prod, agg = self.funcs()
 

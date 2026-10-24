@@ -347,6 +347,10 @@ class Huey(object):
             config = ChordConfig(cid, size, i, chord_obj.callback)
             results.append(self._enqueue_chord_member(task, config))
 
+        if not size:
+            chord_obj.callback.extend_data(([],))
+            self.enqueue(chord_obj.callback)
+
         cb_result = Result(self, chord_obj.callback)
         pipeline = self._build_pipeline_results(chord_obj.callback, cb_result)
         return ChordResult(results, cb_result, pipeline)

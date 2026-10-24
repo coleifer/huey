@@ -13,6 +13,16 @@ class TestImmediate(BaseTestCase):
     def get_huey(self):
         return MemoryHuey(immediate=True, utc=False)
 
+    def test_empty_chord(self):
+        @self.huey.task()
+        def aggregate(values):
+            return sum(values)
+
+        result = self.huey.enqueue(chord([], aggregate))
+        self.assertEqual(result(), 0)
+        self.assertEqual(result.results(), [])
+        self.assertEqual(len(self.huey), 0)
+
     def test_immediate(self):
         @self.huey.task()
         def task_a(n):

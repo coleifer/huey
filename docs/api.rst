@@ -1771,6 +1771,9 @@ Huey object
         member in the original list, not by the order in which members
         finished executing.
 
+        If the member list is empty, the callback is enqueued with an empty
+        results list.
+
     **Sub-task errors:**
 
     Chords are designed to always complete. If a sub-task fails and exhausts

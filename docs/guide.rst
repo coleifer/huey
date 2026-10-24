@@ -1185,6 +1185,9 @@ chord - map / reduce
 run in parallel and when all tasks are finished, their results are passed to
 the callback task in order.
 
+An empty member list enqueues the callback with an empty results list, so a
+map / reduce workflow still completes when there is nothing to process.
+
 .. code-block:: python
 
     from huey import chord

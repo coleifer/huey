@@ -3,6 +3,8 @@ Changelog
 
 ## Master
 
+* Enqueue the callback for an empty chord instead of leaving its result pending.
+
 [View commits](https://github.com/coleifer/huey/compare/3.5.2...master)
 
 ## 3.5.2
