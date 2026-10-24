@@ -4,7 +4,9 @@ Changelog
 ## Master
 
 * Close the storage connection before forking process workers, this just
-  simplifies things.
+  simplifies things. Refs #924 sorta.
+* Run the callback of an empty chord with an empty results list. Previously
+  it was never enqueued, fixes #926.
 
 [View commits](https://github.com/coleifer/huey/compare/3.5.2...master)
 

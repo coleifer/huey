@@ -1791,6 +1791,14 @@ class TestChordPrimitive(BaseTestCase):
 
         return prod, agg
 
+    def test_empty_chord(self):
+        prod, agg = self.funcs()
+        ch = chord([], agg)
+        for _ in range(2):  # Re-enqueueing must not accumulate args.
+            result = self.huey.enqueue(ch)
+            self.assertEqual(self.execute_next(), 0)
+            self.assertEqual(result(), 0)
+
     def test_chord(self):
         prod, agg = self.funcs()
 
