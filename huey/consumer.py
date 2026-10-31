@@ -547,11 +547,7 @@ class Consumer(object):
         if self._restart:
             self._logger.info('Consumer will restart.')
             python = sys.executable
-            if not python:
-                self._logger.error('Could not determine Python executable, '
-                                   'unable to restart.')
-            else:
-                os.execl(python, python, *sys.argv)
+            os.execl(python, python, *sys.argv)
         else:
             self._logger.info('Consumer exiting.')
 

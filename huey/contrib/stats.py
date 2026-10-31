@@ -239,8 +239,6 @@ class HueyStats(object):
                  .execute())
         except Exception:
             logger.exception('stats prune failed.')
-        if len(self._start) > 10000:
-            self._start.clear()
 
     def close(self):
         if self._stop.is_set():
@@ -366,7 +364,8 @@ class HueyStats(object):
         return {'completed': completed, 'errors': errors,
                 'retries': window.get(S.SIGNAL_RETRYING, 0),
                 'error_rate': (errors / total) if total else 0,
-                'inflight': len(self.inflight())}
+                'inflight': HueyInflight.select().where(
+                    HueyInflight.queue == self.name).count()}
 
 
 def live_counts(huey):
