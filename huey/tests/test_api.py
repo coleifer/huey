@@ -2725,17 +2725,6 @@ class TestTaskLocking(BaseTestCase):
         # lock is released.
         self.assertEqual(self.execute_next(), 6)
 
-    def test_task_locking_ttl(self):
-        with self.huey.lock_task('lock_t', ttl=1):
-            self.assertTrue(self.huey.is_locked('lock_t'))
-            self.assertRaises(TaskLockedException,
-                              self.huey.lock_task('lock_t').acquire)
-            time.sleep(1.1)
-            self.assertFalse(self.huey.is_locked('lock_t'))
-            with self.huey.lock_task('lock_t'):
-                self.assertTrue(self.huey.is_locked('lock_t'))
-        self.assertFalse(self.huey.is_locked('lock_t'))
-
 
 class TestRateLimit(BaseTestCase):
     def test_rate_limit(self):

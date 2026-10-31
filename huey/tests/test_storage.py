@@ -267,6 +267,10 @@ class TestMemoryStorage(StorageTests, BaseTestCase):
     def get_huey(self):
         return MemoryHuey(utc=False)
 
+    def test_put_if_empty_ttl(self):
+        self.assertTrue(self.s.put_if_empty(b'k1', b'v1', ttl=1))
+        self.assertFalse(self.s.put_if_empty(b'k1', b'v2', ttl=1))
+
     def test_put_if_empty_concurrent(self):
         nthreads, nkeys = 8, 20
         barrier = threading.Barrier(nthreads)

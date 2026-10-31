@@ -238,10 +238,11 @@ class BaseStorage(object):
 
         :param bytes key: Key to check/set.
         :param bytes value: Arbitrary data.
-        :param int ttl: Seconds until the key expires. Supported by the memory
-            and redis storages, others raise ``NotImplementedError``. With
-            ``RedisStorage`` the server must support hash-field TTL (redis
-            7.4+ or valkey 9+). ``RedisExpireStorage`` works on any version.
+        :param int ttl: Seconds until the key expires. Supported by the redis
+            storages and ignored by memory storage. Others raise
+            ``NotImplementedError``. With ``RedisStorage`` the server must
+            support hash-field TTL (redis 7.4+ or valkey 9+).
+            ``RedisExpireStorage`` works on any version.
         :return: Boolean whether key/value was set.
         """
         if ttl is not None:
@@ -337,7 +338,6 @@ class MemoryStorage(BaseStorage):
         self._c = 0  # Counter to ensure FIFO behavior for queue.
         self._queue = []
         self._results = {}
-        self._expires = {}
         self._schedule = []
         self._counters = {}
         self._lock = threading.RLock()
@@ -398,36 +398,23 @@ class MemoryStorage(BaseStorage):
     def flush_schedule(self):
         self._schedule = []
 
-    def _expire(self, key):
-        if self._expires.get(key, float('inf')) <= time.monotonic():
-            del self._expires[key]
-            self._results.pop(key, None)
-
     def put_data(self, key, value, is_result=False):
         self._results[key] = value
-        self._expires.pop(key, None)
 
     def peek_data(self, key):
-        self._expire(key)
         return self._results.get(key, EmptyData)
 
     def pop_data(self, key):
-        self._expire(key)
-        self._expires.pop(key, None)
         return self._results.pop(key, EmptyData)
 
     def has_data_for_key(self, key):
-        self._expire(key)
         return key in self._results
 
     def put_if_empty(self, key, value, ttl=None):
         with self._lock:
-            self._expire(key)
             if key in self._results:
                 return False
-            self.put_data(key, value)
-            if ttl is not None:
-                self._expires[key] = time.monotonic() + ttl
+            self._results[key] = value
             return True
 
     def incr(self, key, amount=1):
@@ -447,7 +434,6 @@ class MemoryStorage(BaseStorage):
 
     def flush_results(self):
         self._results = {}
-        self._expires = {}
 
     def flush_counters(self):
         self._counters = {}
