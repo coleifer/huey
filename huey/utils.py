@@ -2,7 +2,6 @@ from collections import namedtuple
 import calendar
 import contextlib
 import datetime
-import logging
 import os
 import signal
 import sys
@@ -20,9 +19,6 @@ except ImportError:
     gevent = None
 
 from huey.exceptions import TaskTimeout
-
-
-logger = logging.getLogger(__name__)
 
 
 if sys.version_info < (3, 12):
@@ -183,16 +179,7 @@ def process_timeout(seconds):
         signal.signal(signal.SIGALRM, orig)
 
 @contextlib.contextmanager
-def thread_timeout(seconds):
-    yield
-
-@contextlib.contextmanager
 def greenlet_timeout(seconds):
-    if gevent is None:
-        logger.warning('gevent is required for greenlet-worker timeout')
-        yield
-        return
-
     timer = gevent.Timeout(seconds, TaskTimeout('timeout (%ss)' % seconds))
     timer.start()
     try:

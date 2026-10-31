@@ -22,7 +22,6 @@ from huey.constants import WORKER_TYPES
 from huey.exceptions import ConfigurationError
 from huey.utils import greenlet_timeout
 from huey.utils import process_timeout
-from huey.utils import thread_timeout
 
 
 class ConsumerStopped(Exception): pass
@@ -210,6 +209,8 @@ class Environment(object):
     """
     Provide a common interface to the supported concurrent environments.
     """
+    timeout_handler = None
+
     def get_stop_flag(self):
         raise NotImplementedError
 
@@ -232,11 +233,10 @@ class ThreadEnvironment(Environment):
     def is_alive(self, proc):
         return proc.is_alive()
 
-    def set_timeout_handler(self, huey):
-        huey.set_timeout_handler(thread_timeout)
-
 
 class GreenletEnvironment(Environment):
+    timeout_handler = staticmethod(greenlet_timeout)
+
     def get_stop_flag(self):
         return GreenEvent()
 
@@ -250,11 +250,10 @@ class GreenletEnvironment(Environment):
     def is_alive(self, proc):
         return not proc.dead
 
-    def set_timeout_handler(self, huey):
-        huey.set_timeout_handler(greenlet_timeout)
-
 
 class ProcessEnvironment(Environment):
+    timeout_handler = staticmethod(process_timeout)
+
     def __init__(self):
         # Huey's worker/scheduler runnables are closures over live objects
         # (sockets, locks, the Huey instance itself) and cannot be pickled,
@@ -276,9 +275,6 @@ class ProcessEnvironment(Environment):
 
     def is_alive(self, proc):
         return proc.is_alive()
-
-    def set_timeout_handler(self, huey):
-        huey.set_timeout_handler(process_timeout)
 
 
 WORKER_TO_ENVIRONMENT = {
@@ -343,9 +339,7 @@ class Consumer(object):
 
         # Create the execution environment helper.
         self.environment = self.get_environment(self.worker_type)
-
-        # Install environment-specific timeout handler.
-        self.environment.set_timeout_handler(self.huey)
+        self.huey._timeout_handler = self.environment.timeout_handler
 
         # Create the event used to signal the process should terminate. We'll
         # also store a boolean flag to indicate whether we should restart after

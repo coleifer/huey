@@ -127,10 +127,6 @@ class Huey(object):
         self._tasks_in_flight = set()
         self._timeout_handler = None  # This is consumer-specific.
 
-    def set_timeout_handler(self, handler=None):
-        # Context-manager using appropriate primivites/signals for worker type.
-        self._timeout_handler = handler
-
     def get_task_wrapper_class(self):
         return TaskWrapper
 
@@ -417,8 +413,7 @@ class Huey(object):
         return self.storage.delete_data(key)
 
     def _timeout_context(self, task):
-        if task.timeout is None or task.timeout <= 0 or \
-           self._timeout_handler is None:
+        if not task.timeout or self._timeout_handler is None:
             return noop_context()
 
         return self._timeout_handler(task.timeout)
