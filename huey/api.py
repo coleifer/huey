@@ -443,7 +443,6 @@ class Huey(object):
         retry_eta = None
         task_value = None
 
-        # Set deadline for cooperative timeout.
         if task.timeout:
             task._deadline = start + task.timeout
 
@@ -453,8 +452,7 @@ class Huey(object):
                 with self._timeout_context(task):
                     task_value = task.execute()
             finally:
-                # discard(), as notify_interrupted_tasks() in the main thread
-                # may have popped the task during a non-graceful shutdown.
+                # notify_interrupted_tasks() may have already popped it.
                 self._tasks_in_flight.discard(task)
                 duration = time.monotonic() - start
         except TaskTimeout as exc:
@@ -506,8 +504,7 @@ class Huey(object):
             logger.info('%s executed in %0.3fs', task, duration)
 
         # Clear the flag if this instance of the task was revoked after it
-        # began executing. Delete rather than destructively read, as expiring
-        # storages implement pop_data as a non-destructive peek.
+        # began executing. Expiring storages implement pop_data as a peek.
         if not isinstance(task, PeriodicTask):
             self.delete(task.revoke_id)
 
@@ -547,9 +544,7 @@ class Huey(object):
         return task_value
 
     def _abort_chord_member(self, task, value):
-        # The dead task will never run its on_complete chain, so a chord
-        # config further down the pipeline would never fire. Find it and
-        # contribute the given value for the whole member.
+        # The rest of the pipeline won't run, so report to its chord here.
         while task is not None:
             if task.chord_config is not None:
                 return self._check_chord(task.chord_config, value)
@@ -563,8 +558,7 @@ class Huey(object):
         if self.storage.incr(chord_key) == cc.size:
             self.storage.delete_counter(chord_key)
 
-            # Read raw results w/o raising for errors, then delete explicitly
-            # as expiring storages implement pop_data as a peek.
+            # Expiring storages implement pop_data as a peek.
             results = []
             for idx in range(cc.size):
                 key = 'chord:%s:%s' % (cc.cid, idx)
@@ -585,8 +579,6 @@ class Huey(object):
             delay = datetime.timedelta(seconds=task.retry_delay)
             task.eta = timestamp + delay
             if task.retry_backoff:
-                # Grow the delay for the next attempt. The task is serialized
-                # with the updated value, so it persists across retries.
                 task.retry_delay *= task.retry_backoff
             self.add_schedule(task)
         else:
@@ -991,9 +983,7 @@ class TaskWrapper(object):
         def execute(self):
             args, kwargs = self.data
             if self.context:
-                # Inject the task instance into a copy of the kwargs so the
-                # original data is not polluted (e.g. when the task is
-                # re-serialized for retry).
+                # Copy, so a retry doesn't serialize the task into its kwargs.
                 kwargs = dict(kwargs, task=self)
             return func(*args, **kwargs)
 
@@ -1152,9 +1142,6 @@ class RateLimit(object):
 
         stored = self._huey.get(self._window_key, peek=True)
         if stored != window:
-            # Window rollover, reset counter and store the new window. If two
-            # workers concurrently hit this, both delete the counter and put
-            # the same window value.
             self._huey.storage.delete_counter(self._counter_key)
             self._huey.put(self._window_key, window)
 
@@ -1188,7 +1175,6 @@ class group(object):
         return chord(self.tasks, _signature(task, args, kwargs))
 
     def error(self, *args, **kwargs):
-        # Apply error handler to all tasks.
         for task in self.tasks:
             task.error(*args, **kwargs)
         return self
@@ -1276,8 +1262,6 @@ class Result(object):
             if res is not EmptyData:
                 return res
 
-        # The wait timed out, hit a connection error, or the result was read
-        # by another caller. Never surface the EmptyData sentinel.
         if revoke_on_timeout:
             self.revoke()
         raise ResultTimeout('timed out waiting for result')

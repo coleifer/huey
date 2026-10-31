@@ -1,35 +1,3 @@
-"""
-Backend for the django.tasks framework (Django 6.0+, or older Djangos using
-the django-tasks backport package) which enqueues tasks into huey. Tasks
-declared with the ``django.tasks.task`` decorator are executed by the regular
-huey consumer (``manage.py run_huey``), side-by-side with any native huey
-tasks, using the shared huey instance configured by ``settings.HUEY``.
-
-Usage::
-
-    TASKS = {'default': {
-        'BACKEND': 'huey.contrib.djhuey.tasks_backend.HueyBackend'}}
-
-Notes:
-
-* ``priority`` is supported by every storage backend except ``RedisHuey`` and
-  ``RedisExpireHuey``, where declaring a django task with a non-zero priority
-  will raise InvalidTask. Use ``PriorityRedisHuey`` or
-  ``PriorityRedisExpireHuey`` with Redis. ``FileHuey`` does not accept
-  negative priorities.
-* ``run_after`` is mapped onto huey's ``eta``. In immediate mode the task is
-  placed on the (undrained) in-memory schedule, mirroring the behavior of
-  native huey tasks scheduled while in immediate mode.
-* Add ``'ENQUEUE_ON_COMMIT': True`` to the backend declaration to defer
-  enqueueing until the current transaction commits. The returned result will
-  have ``enqueued_at=None`` and cannot be refreshed until the commit fires.
-* Task status is tracked in the huey result store under ``djt.<id>``, so
-  expiring-result storages like ``RedisExpireHuey`` apply their TTL to it.
-  A failed task additionally stores a regular huey error result under the
-  bare task id, making failures visible to huey's own tooling and signals.
-* ``get_result()`` re-imports the task function; it may raise ImportError if
-  the function has since been moved or renamed.
-"""
 import os
 import socket
 from datetime import datetime
@@ -77,9 +45,7 @@ def _parse(value):
 
 
 class _RestoredTask(DjangoTask):
-    # A Task reconstructed from a stored record. Skips validation, which
-    # would otherwise re-run at construction and could fail on environment
-    # drift (e.g. priority support or QUEUES changed since enqueue).
+    # Skip validation, which fails if settings changed since enqueue.
     def __post_init__(self):
         pass
 
@@ -106,9 +72,6 @@ def _initial_record(alias, dj_task, id, args, kwargs):
 
 
 def _resolve_func(task_path):
-    # The module path of a decorated task resolves to the django Task
-    # instance (the decorator re-binds the name), but a function wrapped
-    # separately resolves to the plain function. Handle both.
     obj = import_string(task_path)
     return obj.func if isinstance(obj, DjangoTask) else obj
 

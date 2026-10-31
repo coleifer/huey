@@ -491,7 +491,7 @@ class RedisStorage(BaseStorage):
         self.result_key = 'huey.results.%s' % self.name
         self.counter_key = 'huey.counters.%s' % self.name
         self.notify_prefix = 'huey.notify.%s.' % self.name
-        self.notify_result = notify_result  # Use result notification.
+        self.notify_result = notify_result
         self.notify_result_ttl = notify_result_ttl
 
         if client_name is not None:
@@ -502,8 +502,7 @@ class RedisStorage(BaseStorage):
 
     @cached_property
     def supports_hash_ttl(self):
-        # HEXPIRE needs redis 7.4+ or valkey 9+. Valkey reports redis_version
-        # 7.2, so its own version field is checked separately.
+        # HEXPIRE needs redis 7.4+ or valkey 9+ (which reports redis 7.2).
         if not hasattr(self.conn, 'hexpire'):
             return False
         info = self.conn.info('server')
@@ -536,10 +535,7 @@ class RedisStorage(BaseStorage):
                     self.queue_key,
                     timeout=self.read_timeout)[1]
             except (TimeoutError, TypeError, IndexError):
-                # Unfortunately, there is no way to differentiate a socket
-                # timing out and a host being unreachable. ConnectionError is
-                # allowed to propagate, however, so the worker logs the error
-                # and applies backoff, rather than busy-looping silently.
+                # Empty or timed out. ConnectionError propagates for backoff.
                 return None
         else:
             return self.conn.rpop(self.queue_key)
@@ -549,8 +545,7 @@ class RedisStorage(BaseStorage):
 
     def enqueued_items(self, limit=None):
         if limit:
-            # Take items from the consumption end of the list, e.g. the next
-            # `limit` tasks to be dequeued.
+            # The next `limit` tasks to be dequeued.
             return self.conn.lrange(self.queue_key, -limit, -1)[::-1]
         return self.conn.lrange(self.queue_key, 0, -1)[::-1]
 
@@ -769,10 +764,7 @@ class RedisPriorityQueue(object):
                     self.queue_key,
                     timeout=self.read_timeout)
             except (TimeoutError, TypeError, IndexError):
-                # Unfortunately, there is no way to differentiate a socket
-                # timing out and a host being unreachable. ConnectionError is
-                # allowed to propagate, however, so the worker logs the error
-                # and applies backoff, rather than busy-looping silently.
+                # Empty or timed out. ConnectionError propagates for backoff.
                 return
             else:
                 return res[8:]
@@ -1094,14 +1086,11 @@ class CySqliteStorage(SqliteStorage):
         self.integrity_error = cysqlite.IntegrityError
         self.operational_error = cysqlite.OperationalError
 
-        # Normalize hard-coded params to generic pragmas.
         pragmas = dict(pragmas or {})
         if 'cache_mb' in kwargs:
             pragmas['cache_size'] = kwargs.pop('cache_mb') * -1000
         if 'fsync' in kwargs:
             pragmas['synchronous'] = 2 if kwargs.pop('fsync') else 0
-
-        # Handle journal_mode through the normal path.
         kwargs.setdefault('journal_mode', pragmas.pop('journal_mode', 'wal'))
 
         super(CySqliteStorage, self).__init__(
@@ -1175,10 +1164,8 @@ class PostgresStorage(BaseSqlStorage):
             'queue text not null, key text not null, '
             'value bigint not null default 0, primary key(queue, key))')]
 
-        # Each worker thread gets its own LISTEN connection on first
-        # dequeue. A dead thread's connection is released by GC: psycopg
-        # only sends the protocol Terminate from the creating process, so
-        # this is safe on both sides of a fork.
+        # Per-thread LISTEN conns, left to GC. Fork-safe, as psycopg only
+        # sends Terminate from the process that created the conn.
         self._listen_local = threading.local()
 
         super(PostgresStorage, self).__init__(name, create_tables=create_tables)
@@ -1552,7 +1539,7 @@ class FileStorage(BaseStorage):
             self._put_data(key, value)
 
     def _put_data(self, key, value):
-        # Write a key/value pair. The lock must already be held.
+        # Caller holds the lock.
         if isinstance(key, str):
             key = key.encode('utf8')
 

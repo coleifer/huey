@@ -41,8 +41,7 @@ class ValkeyGlideStorage(RedisStorage):
         self.schedule_key = 'huey.schedule.%s' % self.name
         self.result_key = 'huey.results.%s' % self.name
         self.counter_key = 'huey.counters.%s' % self.name
-        # Result notification uses a blocking BLPOP, which glide does not
-        # support well -- fall back to polling for results.
+        # Glide can't block, so results are polled.
         self.notify_prefix = 'huey.notify.%s.' % self.name
         self.notify_result = False
         self.notify_result_ttl = None
@@ -70,8 +69,6 @@ class ValkeyGlideStorage(RedisStorage):
 
     def read_schedule(self, ts):
         unix_ts = self.convert_ts(ts)
-        # invoke the redis lua script that will atomically pop off
-        # all the tasks older than the given timestamp
         tasks = self.conn.invoke_script(self._pop, keys=[self.schedule_key],
                                         args=[str(unix_ts)])
         return [] if tasks is None else [base64.b64decode(t) for t in tasks]

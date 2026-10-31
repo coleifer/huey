@@ -35,8 +35,6 @@ class RedisSemaphore(object):
         self.huey = huey
         self.key = '%s.lock.%s' % (huey.name, name)
         self.value = value
-        # Holders renew while they run, so this bounds how long a dead holder
-        # occupies a slot rather than how long a task may take.
         self.timeout = timeout or 300
 
         self.huey._locks.add(self.key)

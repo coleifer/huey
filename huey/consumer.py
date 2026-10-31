@@ -185,9 +185,7 @@ class Scheduler(BaseProcess):
                     self._logger.exception('Error enqueueing %s.', task)
 
         if self.periodic and self._next_periodic <= time.monotonic():
-            # If the scheduler stalled (e.g. suspend/resume), skip past any
-            # missed checks rather than running them all back-to-back, which
-            # would enqueue duplicates for the current minute.
+            # Skip checks missed during a stall (e.g. suspend) to avoid dupes.
             while self._next_periodic <= time.monotonic():
                 self._next_periodic += self.periodic_task_seconds
             self.enqueue_periodic_tasks(now)
@@ -255,9 +253,7 @@ class ProcessEnvironment(Environment):
     timeout_handler = staticmethod(process_timeout)
 
     def __init__(self):
-        # Huey's worker/scheduler runnables are closures over live objects
-        # (sockets, locks, the Huey instance itself) and cannot be pickled,
-        # so the spawn/forkserver start methods cannot work.
+        # Runnables are closures over live objects and can't be pickled.
         try:
             self.mp = multiprocessing.get_context('fork')
         except ValueError:
@@ -621,18 +617,12 @@ class Consumer(object):
         if graceful == signal.SIGINT and self.worker_type == WORKER_PROCESS:
             signal.signal(signal.SIGINT, signal.default_int_handler)
         else:
-            # Add a special handler for the graceful signal. For gevent, if
-            # the running greenlet is not the main hub, then Gevent will raise
-            # a KeyboardInterrupt in the running greenlet by default on INT.
-            # This ensures that when the signal is received we properly flag
-            # the main loop for graceful shutdown and do NOT propagate the
-            # exception. This is also added for threads to ensure that, in the
-            # event of a SIGHUP followed by a SIGINT, we respect the SIGINT.
+            # Flag the main loop rather than letting gevent raise INT in the
+            # running greenlet. Threads too, so INT after HUP is respected.
             signal.signal(graceful, self._handle_graceful_signal)
         if hasattr(signal, 'SIGHUP'):
             signal.signal(signal.SIGHUP, self._handle_restart_signal)
 
-    # Note: the signal handlers below only set simple flags.
     def _handle_graceful_signal(self, sig_num, frame):
         self._received_signal = True
         self._signum = sig_num

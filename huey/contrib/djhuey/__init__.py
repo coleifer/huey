@@ -151,9 +151,7 @@ def db_periodic_task(*args, **kwargs):
 
 
 def _register_tasks_backend():
-    # When the django.tasks framework is available (Django 6.0+, or via the
-    # django-tasks backport package), import the backend module so its shim
-    # task is registered with the consumer.
+    # Import so the consumer registers the django.tasks shim task.
     try:
         import django.tasks
     except ImportError:

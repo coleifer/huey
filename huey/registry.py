@@ -56,8 +56,7 @@ class Registry(object):
         if task_str not in self._registry:
             raise HueyException('%s not found in TaskRegistry' % task_str)
 
-        # Remove an injected context-task instance from the arguments before
-        # serializing. User-provided "task" values are preserved.
+        # Remove an injected context-task instance before serializing.
         if task.kwargs and task.kwargs.get('task') is task:
             task.kwargs.pop('task')
 
