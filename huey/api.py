@@ -528,56 +528,38 @@ class Huey(object):
         if not isinstance(task, PeriodicTask):
             self.delete(task.revoke_id)
 
+        store = self.results and not isinstance(task, PeriodicTask)
         if exception is None:
-            surface_error = False
-        elif not task.retries:
-            surface_error = True
-        else:
-            surface_error = (self.store_intermediate_errors and
-                             not isinstance(exception, RETRYING_EXCEPTIONS))
-
-        if self.results and not isinstance(task, PeriodicTask):
-            if surface_error:
-                error_data = self.build_error_result(task, exception)
-                self.put_result(task.id, Error(error_data))
-                next_task = task.on_complete if not task.retries else None
-                while next_task is not None:
-                    self.put_result(next_task.id, Error(error_data))
-                    next_task = next_task.on_complete
-            elif exception is None and (task_value is not None or
-                                        self.store_none):
+            if store and (task_value is not None or self.store_none):
                 self.put_result(task.id, task_value)
-
-        if self._post_execute:
             self._run_post_execute(task, task_value, exception)
-
-        if exception is None:
-            # Task executed successfully, send the COMPLETE signal.
             self._emit(S.SIGNAL_COMPLETE, task)
-
-        if task.on_complete and exception is None:
-            next_task = task.on_complete
-            next_task.extend_data(task_value)
-            self.enqueue(next_task)
-        elif task.on_error and surface_error:
-            # Fire with only this attempt's exception; copy so the append does
-            # not accumulate on the shared handler when the task is retried.
-            next_task = copy.copy(task.on_error)
-            next_task.extend_data(exception)
-            self.enqueue(next_task)
-
-        if exception is None:
-            # Only the task carrying the chord_config reports its success. An
-            # intermediate pipeline stage hands off to on_complete instead.
+            if task.on_complete:
+                task.on_complete.extend_data(task_value)
+                self.enqueue(task.on_complete)
             if task.chord_config is not None:
                 self._check_chord(task.chord_config, task_value)
-        elif not task.retries:
-            error = Error(self.build_error_result(task, exception))
-            self._abort_chord_member(task, error)
-
-        if exception is not None and task.retries:
-            self._emit(S.SIGNAL_RETRYING, task)
-            self._requeue_task(task, self._get_timestamp(), retry_eta)
+        else:
+            final = not task.retries
+            surface = final or (self.store_intermediate_errors and
+                                not isinstance(exception, RETRYING_EXCEPTIONS))
+            if surface:
+                error = Error(self.build_error_result(task, exception))
+                next_task = task if store else None
+                while next_task is not None:
+                    self.put_result(next_task.id, error)
+                    next_task = next_task.on_complete if final else None
+            self._run_post_execute(task, task_value, exception)
+            if surface and task.on_error:
+                # Copy, as on_error is shared across retries.
+                handler = copy.copy(task.on_error)
+                handler.extend_data(exception)
+                self.enqueue(handler)
+            if final:
+                self._abort_chord_member(task, error)
+            else:
+                self._emit(S.SIGNAL_RETRYING, task)
+                self._requeue_task(task, self._get_timestamp(), retry_eta)
 
         return task_value
 
