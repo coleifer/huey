@@ -230,13 +230,8 @@ class SqlStorage(BaseStorage):
 
     def peek_many(self, keys):
         self.check_conn()
-        accum = {}
-        for i in range(0, len(keys), 500):
-            query = (self.kv(self.KV.key, self.KV.value)
-                     .where(self.KV.key.in_(keys[i:i + 500]))
-                     .tuples())
-            accum.update(query)
-        return accum
+        return dict(self.kv(self.KV.key, self.KV.value)
+                    .where(self.KV.key.in_(keys)).tuples())
 
     def pop_data(self, key):
         self.check_conn()

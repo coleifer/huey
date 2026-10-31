@@ -515,16 +515,6 @@ class RedisStorage(BaseStorage):
         self.read_timeout = read_timeout
 
     @cached_property
-    def redis_version(self):
-        # Server version, used only to clamp BLPOP timeouts for redis < 6.
-        try:
-            version = str(self.conn.info()['redis_version'])
-        except Exception:
-            version = '0.0.0'  # Assume old, int timeouts always work.
-        return tuple(int(i) if i.isdigit() else 999
-                     for i in version.split('.'))
-
-    @cached_property
     def supports_hash_ttl(self):
         # HEXPIRE needs redis 7.4+ or valkey 9+. Valkey reports redis_version
         # 7.2, so its own version field is checked separately.
@@ -641,11 +631,8 @@ class RedisStorage(BaseStorage):
         if self.has_data_for_key(key):
             return True
         nkey = self.notify_prefix + key
-        timeout = timeout or 0
-        if timeout > 0 and self.redis_version[0] < 6:
-            timeout = max(1, int(timeout))  # Timeout must be int for R < 6.
         try:
-            result = self.conn.blpop(nkey, timeout=timeout)
+            result = self.conn.blpop(nkey, timeout=timeout or 0)
         except (ConnectionError, TimeoutError):
             return False
 
@@ -887,7 +874,6 @@ class SqliteStorage(BaseSqlStorage):
     begin_sql = 'begin exclusive'
     integrity_error = getattr(sqlite3, 'IntegrityError', None)
     operational_error = getattr(sqlite3, 'OperationalError', None)
-    sqlite_version_info = getattr(sqlite3, 'sqlite_version_info', None)
     table_kv = ('create table if not exists kv ('
                 'queue text not null, key text not null, value blob not null, '
                 'primary key(queue, key))')
@@ -1049,32 +1035,21 @@ class SqliteStorage(BaseSqlStorage):
         return res[0][0] if res else EmptyData
 
     def peek_many(self, keys):
-        accum = {}
-        for i in range(0, len(keys), 500):
-            chunk = keys[i:i + 500]
-            accum.update(self.sql(
-                'select key, value from kv where queue = ? and key in (%s)' %
-                ','.join('?' * len(chunk)), (self.name,) + tuple(chunk),
-                results=True))
-        return accum
+        return dict(self.sql(
+            'select key, value from kv where queue = ? and key in (%s)' %
+            ','.join('?' * len(keys)), (self.name,) + tuple(keys),
+            results=True))
 
     def pop_data(self, key):
         with self.db(commit=True) as curs:
-            if self.sqlite_version_info >= (3, 35, 0):
-                curs.execute('delete from kv where queue = ? and key = ? '
-                             'returning value', (self.name, key))
-                result = curs.fetchone()
-                if result is not None:
-                    return result[0]
-            else:
-                curs.execute('select value from kv where queue = ? and key = ?',
+            curs.execute('select value from kv where queue = ? and key = ?',
+                         (self.name, key))
+            result = curs.fetchone()
+            if result is not None:
+                curs.execute('delete from kv where queue=? and key=?',
                              (self.name, key))
-                result = curs.fetchone()
-                if result is not None:
-                    curs.execute('delete from kv where queue=? and key=?',
-                                 (self.name, key))
-                    if curs.rowcount == 1:
-                        return result[0]
+                if curs.rowcount == 1:
+                    return result[0]
             return EmptyData
 
     def has_data_for_key(self, key):
@@ -1096,26 +1071,13 @@ class SqliteStorage(BaseSqlStorage):
 
     def incr(self, key, amount=1):
         with self.db(commit=True) as curs:
-            if self.sqlite_version_info >= (3, 35, 0):
-                curs.execute('insert into counter (queue, key, value) '
-                             'values (?, ?, ?) on conflict (queue, key) '
-                             'do update set value = value + ? '
-                             'returning value',
-                             (self.name, key, amount, amount))
-                value, = curs.fetchone()
-            elif self.sqlite_version_info >= (3, 24, 0):
-                curs.execute('insert into counter (queue, key, value) '
-                             'values (?, ?, ?) on conflict (queue, key) '
-                             'do update set value = value + ?',
-                             (self.name, key, amount, amount))
-                curs.execute('select value from counter '
-                             'where queue = ? and key = ?',
-                             (self.name, key))
-                value, = curs.fetchone()
-            else:
-                raise NotImplementedError('SQLite 3.24 or newer is required.')
-
-        return value
+            curs.execute('insert into counter (queue, key, value) '
+                         'values (?, ?, ?) on conflict (queue, key) '
+                         'do update set value = value + ?',
+                         (self.name, key, amount, amount))
+            curs.execute('select value from counter '
+                         'where queue = ? and key = ?', (self.name, key))
+            return curs.fetchone()[0]
 
     def delete_counter(self, key):
         self.sql('delete from counter where queue = ? and key = ?',
@@ -1145,7 +1107,6 @@ class CySqliteStorage(SqliteStorage):
                                      'cysqlite" to install.')
         self.integrity_error = cysqlite.IntegrityError
         self.operational_error = cysqlite.OperationalError
-        self.sqlite_version_info = cysqlite.sqlite_version_info
 
         # Normalize hard-coded params to generic pragmas.
         pragmas = dict(pragmas or {})
