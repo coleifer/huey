@@ -108,7 +108,11 @@ class SqlStorage(BaseStorage):
                                        self.Counter])
 
     def close(self):
-        return self.database.close()
+        closed = self.database.close()
+        # A pool keeps the conn idle, and forked workers would share it.
+        if hasattr(self.database, 'close_idle'):
+            self.database.close_idle()
+        return closed
 
     def tasks(self, *columns):
         return self.Task.select(*columns).where(self.Task.queue == self.name)
