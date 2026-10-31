@@ -321,15 +321,8 @@ class Huey(object):
         if not self.results:
             return
 
-        if task.on_complete:
-            current = task
-            results = []
-            while current is not None:
-                results.append(Result(self, current))
-                current = current.on_complete
-            return ResultGroup(results)
-        else:
-            return Result(self, task)
+        results = self._pipeline_results(task)
+        return ResultGroup(results) if len(results) > 1 else results[0]
 
     def _enqueue_chord(self, chord_obj):
         cid = str(uuid.uuid4())
@@ -348,9 +341,9 @@ class Huey(object):
             callback.extend_data(([],))
             self.enqueue(callback)
 
-        cb_result = Result(self, chord_obj.callback)
-        pipeline = self._build_pipeline_results(chord_obj.callback, cb_result)
-        return ChordResult(results, cb_result, pipeline)
+        pipeline = self._pipeline_results(chord_obj.callback)
+        return ChordResult(results, pipeline[0],
+                           ResultGroup(pipeline) if len(pipeline) > 1 else None)
 
     def _enqueue_chord_member(self, task, config):
         if isinstance(task, chord):
@@ -370,17 +363,12 @@ class Huey(object):
 
         return Result(self, tail)
 
-    def _build_pipeline_results(self, callback, callback_result):
-        if not callback.on_complete:
-            return
-
-        pipeline = [callback_result]
-        current = callback.on_complete
-        while current is not None:
-            pipeline.append(Result(self, current))
-            current = current.on_complete
-
-        return ResultGroup(pipeline)
+    def _pipeline_results(self, task):
+        results = []
+        while task is not None:
+            results.append(Result(self, task))
+            task = task.on_complete
+        return results
 
     def dequeue(self):
         data = self.storage.dequeue()
@@ -928,24 +916,14 @@ class Task(object):
         if self.on_complete:
             self.on_complete.then(task, *args, **kwargs)
         else:
-            if isinstance(task, Task):
-                if args: task.extend_data(args)
-                if kwargs: task.extend_data(kwargs)
-            else:
-                task = task.s(*args, **kwargs)
-            self.on_complete = task
+            self.on_complete = _signature(task, args, kwargs)
         return self
 
     def error(self, task, *args, **kwargs):
         if self.on_error:
             self.on_error.error(task, *args, **kwargs)
         else:
-            if isinstance(task, Task):
-                if args: task.extend_data(args)
-                if kwargs: task.extend_data(kwargs)
-            else:
-                task = task.s(*args, **kwargs)
-            self.on_error = task
+            self.on_error = _signature(task, args, kwargs)
         return self
 
     def execute(self):
@@ -960,6 +938,14 @@ class Task(object):
             self.id == rhs.id and
             self.eta == rhs.eta and
             type(self) == type(rhs))
+
+
+def _signature(task, args=(), kwargs=None):
+    if not isinstance(task, Task):
+        return task.s(*args, **(kwargs or {}))
+    if args: task.extend_data(args)
+    if kwargs: task.extend_data(kwargs)
+    return task
 
 
 class PeriodicTask(Task):
@@ -1199,12 +1185,7 @@ class group(object):
         self.tasks = tasks
 
     def then(self, task, *args, **kwargs):
-        if isinstance(task, Task):
-            if args: task.extend_data(args)
-            if kwargs: task.extend_data(kwargs)
-        else:
-            task = task.s(*args, **kwargs)
-        return chord(self.tasks, task)
+        return chord(self.tasks, _signature(task, args, kwargs))
 
     def error(self, *args, **kwargs):
         # Apply error handler to all tasks.
@@ -1215,10 +1196,8 @@ class group(object):
 
 class chord(object):
     def __init__(self, tasks, callback):
-        if isinstance(callback, TaskWrapper):
-            callback = callback.s()
         self.tasks = tasks
-        self.callback = callback
+        self.callback = _signature(callback)
 
     def then(self, task, *args, **kwargs):
         self.callback.then(task, *args, **kwargs)
