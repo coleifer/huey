@@ -433,6 +433,25 @@ def dashboard_context(huey, stats, list_limit=50, event_limit=50,
             'throughput': stats.throughput(throughput_minutes)}
 
 
+def run_action(huey, op, form):
+    if op == 'revoke_task':
+        huey.revoke_all(huey._registry.string_to_task(form['task']))
+    elif op == 'restore_task':
+        huey.restore_all(huey._registry.string_to_task(form['task']))
+    elif op == 'revoke_id':
+        huey.revoke_by_id(form['id'])
+    elif op == 'restore_id':
+        huey.restore_by_id(form['id'])
+    elif op == 'flush_queue':
+        huey.storage.flush_queue()
+    elif op == 'flush_results':
+        huey.storage.flush_results()
+    elif op == 'flush_schedule':
+        huey.storage.flush_schedule()
+    elif op == 'flush_locks':
+        huey.flush_locks()
+
+
 def enable_stats(huey, db, **kwargs):
     stats = getattr(huey, '_stats', None)
     if stats is None:

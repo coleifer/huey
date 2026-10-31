@@ -129,28 +129,7 @@ class HueyDashboardAdmin(admin.ModelAdmin):
     def action_view(self, request):
         if not self.has_action_permission(request) or request.method != 'POST':
             raise PermissionDenied
-        huey = get_huey()
-        op = request.POST.get('op')
-        try:
-            if op == 'revoke_task':
-                huey.revoke_all(huey._registry.string_to_task(
-                    request.POST['task']))
-            elif op == 'restore_task':
-                huey.restore_all(huey._registry.string_to_task(
-                    request.POST['task']))
-            elif op == 'revoke_id':
-                huey.revoke_by_id(request.POST['id'])
-            elif op == 'restore_id':
-                huey.restore_by_id(request.POST['id'])
-            elif op == 'flush_queue':
-                huey.storage.flush_queue()
-            elif op == 'flush_results':
-                huey.storage.flush_results()
-            elif op == 'flush_schedule':
-                huey.storage.flush_schedule()
-            elif op == 'flush_locks':
-                huey.flush_locks()
-        except Exception:
-            pass
+        from huey.contrib.stats import run_action
+        run_action(get_huey(), request.POST.get('op'), request.POST)
         return HttpResponseRedirect(
             reverse('admin:hueystats_hueydashboard_changelist'))

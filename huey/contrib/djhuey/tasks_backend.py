@@ -141,49 +141,43 @@ def _record_to_result(rec):
     return result
 
 
+def _finish(key, rec, status, **fields):
+    rec.update(status=status.value, finished_at=_iso(timezone.now()), **fields)
+    HUEY.put_result(key, rec)
+    task_finished.send(sender=HueyBackend, task_result=_record_to_result(rec))
+
+
 def _execute_django_task(task_path, args, kwargs, task=None):
     key = KEY % task.id
     rec = HUEY.get(key, peek=True)
-    takes_context = rec['takes_context'] if rec is not None else False
+    if rec is None:
+        _resolve_func(task_path)(*args, **kwargs)
+        return
 
-    if rec is not None:
-        now = _iso(timezone.now())
-        rec['status'] = TaskResultStatus.RUNNING.value
-        rec['started_at'] = rec['last_attempted_at'] = now
-        rec['worker_ids'].append('%s.%s' % (socket.gethostname(), os.getpid()))
-        HUEY.put_result(key, rec)
+    now = _iso(timezone.now())
+    rec['status'] = TaskResultStatus.RUNNING.value
+    rec['started_at'] = rec['last_attempted_at'] = now
+    rec['worker_ids'].append('%s.%s' % (socket.gethostname(), os.getpid()))
+    HUEY.put_result(key, rec)
 
     try:
         func = _resolve_func(task_path)
-        if rec is not None:
-            task_started.send(sender=HueyBackend,
-                              task_result=_record_to_result(rec))
-        if takes_context:
+        task_started.send(sender=HueyBackend,
+                          task_result=_record_to_result(rec))
+        if rec['takes_context']:
             ret = func(TaskContext(task_result=_record_to_result(rec)),
                        *args, **kwargs)
         else:
             ret = func(*args, **kwargs)
         ret = normalize_json(ret)
     except Exception as exc:
-        if rec is not None:
-            exc_type = type(exc)
-            rec['status'] = TaskResultStatus.FAILED.value
-            rec['finished_at'] = _iso(timezone.now())
-            rec['errors'].append([
-                '%s.%s' % (exc_type.__module__, exc_type.__qualname__),
-                ''.join(format_exception(exc))])
-            HUEY.put_result(key, rec)
-            task_finished.send(sender=HueyBackend,
-                               task_result=_record_to_result(rec))
+        exc_type = type(exc)
+        rec['errors'].append([
+            '%s.%s' % (exc_type.__module__, exc_type.__qualname__),
+            ''.join(format_exception(exc))])
+        _finish(key, rec, TaskResultStatus.FAILED)
         raise
-    else:
-        if rec is not None:
-            rec['status'] = TaskResultStatus.SUCCESSFUL.value
-            rec['finished_at'] = _iso(timezone.now())
-            rec['return_value'] = ret
-            HUEY.put_result(key, rec)
-            task_finished.send(sender=HueyBackend,
-                               task_result=_record_to_result(rec))
+    _finish(key, rec, TaskResultStatus.SUCCESSFUL, return_value=ret)
 
 
 _shim = HUEY.task(name='djtasks.run', context=True)(

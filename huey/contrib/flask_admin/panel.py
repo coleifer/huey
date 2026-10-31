@@ -8,6 +8,7 @@ from flask_peewee.admin import AdminPanel
 from huey.contrib.stats import dashboard_context
 from huey.contrib.stats import enable_stats
 from huey.contrib.stats import live_counts
+from huey.contrib.stats import run_action
 
 
 TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), 'templates')
@@ -72,27 +73,5 @@ class HueyPanel(AdminPanel):
         return render_template('admin/huey/_content.html', **self._context())
 
     def action(self):
-        op = request.form.get('op')
-        huey = self.huey
-        try:
-            if op == 'revoke_task':
-                huey.revoke_all(huey._registry.string_to_task(
-                    request.form['task']))
-            elif op == 'restore_task':
-                huey.restore_all(huey._registry.string_to_task(
-                    request.form['task']))
-            elif op == 'revoke_id':
-                huey.revoke_by_id(request.form['id'])
-            elif op == 'restore_id':
-                huey.restore_by_id(request.form['id'])
-            elif op == 'flush_queue':
-                huey.storage.flush_queue()
-            elif op == 'flush_results':
-                huey.storage.flush_results()
-            elif op == 'flush_schedule':
-                huey.storage.flush_schedule()
-            elif op == 'flush_locks':
-                huey.flush_locks()
-        except Exception:
-            pass
+        run_action(self.huey, request.form.get('op'), request.form)
         return redirect(self.detail_url())
