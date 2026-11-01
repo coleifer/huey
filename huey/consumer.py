@@ -206,10 +206,6 @@ class Scheduler(BaseProcess):
                                        task)
 
 
-def raise_interrupt(signum, frame):
-    raise KeyboardInterrupt
-
-
 class Environment(object):
     """
     Provide a common interface to the supported concurrent environments.
@@ -225,6 +221,9 @@ class Environment(object):
 
     def create_process(self, runnable, name):
         raise NotImplementedError
+
+    def init_child(self, process):
+        pass
 
     def is_alive(self, proc):
         raise NotImplementedError
@@ -264,9 +263,11 @@ class GreenletEnvironment(Environment):
 
     def create_process(self, runnable, name):
         def run_wrapper():
-            gevent.sleep()
-            runnable()
-            gevent.sleep()
+            try:
+                gevent.sleep()
+                runnable()
+            except KeyboardInterrupt:
+                pass
         return Greenlet(run=run_wrapper)
 
     def is_alive(self, proc):
@@ -303,16 +304,20 @@ class ProcessEnvironment(Environment):
         return self.mp.Event()
 
     def create_process(self, runnable, name):
-        def run():
-            # The parent handles the graceful and restart signals.
-            signal.signal(self.graceful, signal.SIG_IGN)
-            signal.signal(self.interrupt, raise_interrupt)
-            if hasattr(signal, 'SIGHUP'):
-                signal.signal(signal.SIGHUP, signal.SIG_IGN)
-            runnable()
-        p = self.mp.Process(target=run, name=name)
+        p = self.mp.Process(target=runnable, name=name)
         p.daemon = True
         return p
+
+    def init_child(self, process):
+        def interrupt(signum, frame):
+            if process.huey._tasks_in_flight:
+                # Interrupt if the task is currently running. Otherwise it
+                # should exit through the stop flag.
+                raise KeyboardInterrupt
+        signal.signal(self.graceful, signal.SIG_IGN)
+        signal.signal(self.interrupt, interrupt)
+        if hasattr(signal, 'SIGHUP'):
+            signal.signal(signal.SIGHUP, signal.SIG_IGN)
 
     def is_alive(self, proc):
         return proc.is_alive()
@@ -479,8 +484,9 @@ class Consumer(object):
         exceptions in the `loop()` method will cause the process to terminate.
         """
         def _run():
-            process.initialize()
+            self.environment.init_child(process)
             try:
+                process.initialize()
                 while not self.stop_flag.is_set():
                     process.loop()
             except KeyboardInterrupt:
@@ -490,7 +496,10 @@ class Consumer(object):
             except:
                 self._logger.exception('Process %s died!', name)
             finally:
-                process.shutdown()
+                try:
+                    process.shutdown()
+                except KeyboardInterrupt:
+                    pass
         return self.environment.create_process(_run, name)
 
     def start(self):
@@ -595,8 +604,6 @@ class Consumer(object):
             self._logger.info('Consumer exiting.')
 
     def loop(self, health_check_ts=None):
-        # Do not touch the stop-flag after stop(). An interrupted worker may
-        # have exited holding its shared lock.
         try:
             stopped = self.stop_flag.wait(timeout=self._stop_flag_timeout)
         except KeyboardInterrupt:
