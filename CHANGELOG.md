@@ -3,7 +3,15 @@ Changelog
 
 ## Master
 
-[View commits](https://github.com/coleifer/huey/compare/3.5.3...master)
+[View commits](https://github.com/coleifer/huey/compare/3.5.4...master)
+
+## 3.5.4
+
+* Fix possible hang if worker holding the stop flag was killed while holding
+  it.
+* Lots of refactoring / cleanup.
+
+[View commits](https://github.com/coleifer/huey/compare/3.5.3...3.5.4)
 
 ## 3.5.3
 
