@@ -1,6 +1,7 @@
 import contextlib
 import logging
 import os
+import select
 import signal
 import sys
 import threading
@@ -206,6 +207,26 @@ class Scheduler(BaseProcess):
                                        task)
 
 
+class ForkSafeFlag(object):
+    # Flag for forked worker processes. The problem w/mp.Event is that the
+    # process holding it can be killed while it's held, which causes the
+    # shutdown to hang.
+    def __init__(self):
+        self._r, self._w = os.pipe()
+
+    def set(self):
+        if not self.is_set():
+            os.write(self._w, b'x')
+
+    def is_set(self):
+        return self.wait(0)
+
+    def wait(self, timeout=None):
+        poller = select.poll()
+        poller.register(self._r, select.POLLIN)
+        return bool(poller.poll(None if timeout is None else timeout * 1000))
+
+
 class Environment(object):
     """
     Provide a common interface to the supported concurrent environments.
@@ -301,7 +322,7 @@ class ProcessEnvironment(Environment):
                 'and cannot be used on this platform.')
 
     def get_stop_flag(self):
-        return self.mp.Event()
+        return ForkSafeFlag()
 
     def create_process(self, runnable, name):
         p = self.mp.Process(target=runnable, name=name)

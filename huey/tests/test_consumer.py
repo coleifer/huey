@@ -12,6 +12,7 @@ from huey import SqliteHuey
 from huey.api import crontab
 from huey.consumer import Consumer
 from huey.consumer import ConsumerStopped
+from huey.consumer import ForkSafeFlag
 from huey.consumer import ProcessEnvironment
 from huey.consumer import Scheduler
 from huey.consumer import WORKER_TO_ENVIRONMENT
@@ -434,6 +435,32 @@ class TestConsumerShutdown(BaseTestCase):
         consumer._interrupt_workers = interrupt_workers
         consumer._handle_signal(signal.SIGTERM, None)
         self.assertRaises(ConsumerStopped, consumer.loop)
+
+
+class TestForkSafeFlag(unittest.TestCase):
+    def test_set_wait(self):
+        flag = ForkSafeFlag()
+        self.assertFalse(flag.is_set())
+        start = time.monotonic()
+        self.assertFalse(flag.wait(0.05))
+        self.assertGreaterEqual(time.monotonic() - start, 0.04)
+        flag.set()
+        flag.set()
+        self.assertTrue(flag.is_set())
+        self.assertTrue(flag.wait(0))
+        self.assertTrue(flag.wait(1))
+
+    @unittest.skipIf(sys.platform == 'win32', 'requires fork()')
+    def test_killed_waiter(self):
+        # A multiprocessing.Event would block set() forever here.
+        flag = ForkSafeFlag()
+        waiter = ProcessEnvironment().create_process(flag.wait, 'waiter')
+        waiter.start()
+        time.sleep(0.1)
+        os.kill(waiter.pid, signal.SIGKILL)
+        waiter.join()
+        flag.set()
+        self.assertTrue(flag.wait(0))
 
 
 class TestProcessTimeout(unittest.TestCase):
