@@ -12,11 +12,13 @@ from huey import SqliteHuey
 from huey.api import crontab
 from huey.consumer import Consumer
 from huey.consumer import ConsumerStopped
+from huey.consumer import ProcessEnvironment
 from huey.consumer import Scheduler
 from huey.consumer import WORKER_TO_ENVIRONMENT
 from huey.consumer_options import ConsumerConfig
 from huey.consumer_options import OptionParserHandler
 from huey.exceptions import TaskException
+from huey.exceptions import TaskTimeout
 from huey.signals import SIGNAL_COMPLETE
 from huey.signals import SIGNAL_ERROR
 from huey.signals import SIGNAL_INTERRUPTED
@@ -395,26 +397,33 @@ class TestConsumerShutdown(BaseTestCase):
     def test_signal_handlers(self):
         consumer = self.huey.create_consumer()
         consumer._set_signal_handlers()
-        self.assertEqual(signal.getsignal(signal.SIGINT),
-                         consumer._handle_graceful_signal)
-        self.assertEqual(signal.getsignal(signal.SIGTERM),
-                         consumer._handle_stop_signal)
+        for signum in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
+            self.assertEqual(signal.getsignal(signum), consumer._handle_signal)
+        self.assertEqual(consumer._signal_actions, {
+            signal.SIGINT: (False, True),
+            signal.SIGTERM: (False, False),
+            signal.SIGHUP: (True, True)})
 
         consumer = self.huey.create_consumer(graceful_signal='TERM')
-        consumer._set_signal_handlers()
-        self.assertEqual(signal.getsignal(signal.SIGTERM),
-                         consumer._handle_graceful_signal)
-        self.assertEqual(signal.getsignal(signal.SIGINT),
-                         consumer._handle_stop_signal)
+        self.assertEqual(consumer._signal_actions[signal.SIGTERM],
+                         (False, True))
+        self.assertEqual(consumer._signal_actions[signal.SIGINT],
+                         (False, False))
 
-        consumer._handle_graceful_signal(signal.SIGTERM, None)
+        consumer._handle_signal(signal.SIGTERM, None)
         self.assertTrue(consumer._graceful)
+        self.assertFalse(consumer._restart)
         self.assertEqual(consumer._signum, signal.SIGTERM)
         self.assertEqual(signal.getsignal(signal.SIGTERM),
                          signal.default_int_handler)
 
-        consumer._handle_stop_signal(signal.SIGINT, None)
+        consumer._handle_signal(signal.SIGHUP, None)
+        self.assertTrue(consumer._graceful)
+        self.assertTrue(consumer._restart)
+
+        consumer._handle_signal(signal.SIGINT, None)
         self.assertFalse(consumer._graceful)
+        self.assertFalse(consumer._restart)
 
     def test_immediate_stop_ignores_stop_flag(self):
         # A worker interrupted inside stop_flag.wait() can exit holding the
@@ -423,8 +432,22 @@ class TestConsumerShutdown(BaseTestCase):
         def interrupt_workers():
             consumer.stop_flag = None
         consumer._interrupt_workers = interrupt_workers
-        consumer._handle_stop_signal(signal.SIGTERM, None)
+        consumer._handle_signal(signal.SIGTERM, None)
         self.assertRaises(ConsumerStopped, consumer.loop)
+
+
+class TestProcessTimeout(unittest.TestCase):
+    def test_subsecond_timeout(self):
+        # Sub-second timeouts fire. Previously alarm(int(0.15)) == alarm(0),
+        # which cancelled the timer, silently disabling the timeout.
+        with self.assertRaises(TaskTimeout):
+            with ProcessEnvironment().timeout(0.15):
+                time.sleep(2)
+
+    def test_timeout_cancel(self):
+        with ProcessEnvironment().timeout(0.15):
+            pass
+        time.sleep(0.2)  # No stray alarm fires after the context exits.
 
 
 class TestProcessWorkers(unittest.TestCase):

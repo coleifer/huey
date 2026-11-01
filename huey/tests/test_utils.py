@@ -8,11 +8,9 @@ try:
 except ImportError:
     fcntl = None
 
-from huey.exceptions import TaskTimeout
 from huey.utils import FileLock
 from huey.utils import normalize_expire_time
 from huey.utils import normalize_time
-from huey.utils import process_timeout
 from huey.utils import utcnow
 
 
@@ -118,17 +116,3 @@ class TestFileLock(unittest.TestCase):
             self.assertEqual(os.stat(self.lock_file).st_ino, inode)
         finally:
             lock1.release()
-
-
-class TestProcessTimeout(unittest.TestCase):
-    def test_subsecond_timeout(self):
-        # Sub-second timeouts fire. Previously alarm(int(0.15)) == alarm(0),
-        # which cancelled the timer, silently disabling the timeout.
-        with self.assertRaises(TaskTimeout):
-            with process_timeout(0.15):
-                time.sleep(2)
-
-    def test_timeout_cancel(self):
-        with process_timeout(0.15):
-            pass
-        time.sleep(0.2)  # No stray alarm fires after the context exits.
