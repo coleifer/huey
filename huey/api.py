@@ -622,18 +622,16 @@ class Huey(object):
         }
 
     def _task_key(self, task_class, key):
+        if isinstance(task_class, TaskWrapper):
+            task_class = task_class.task_class
         return ':'.join((key, self._registry.task_to_string(task_class)))
 
     def revoke_all(self, task_class, revoke_until=None, revoke_once=False):
-        if isinstance(task_class, TaskWrapper):
-            task_class = task_class.task_class
         if revoke_until is not None:
             revoke_until = normalize_time(revoke_until, utc=self.utc)
         self.put(self._task_key(task_class, 'rt'), (revoke_until, revoke_once))
 
     def restore_all(self, task_class):
-        if isinstance(task_class, TaskWrapper):
-            task_class = task_class.task_class
         return self.delete(self._task_key(task_class, 'rt'))
 
     def revoke(self, task, revoke_until=None, revoke_once=False):
@@ -676,36 +674,26 @@ class Huey(object):
             # Task is still revoked. Do not restore.
             return True, False
 
-    def is_revoked(self, task, timestamp=None, peek=True):
-        if isinstance(task, TaskWrapper):
-            task = task.task_class
-        if inspect.isclass(task) and issubclass(task, Task):
-            data = self.storage.peek_data(self._task_key(task, 'rt'))
-            is_revoked, can_restore = self._check_revoked(data, timestamp, peek)
-            if can_restore:
-                self.restore_all(task)
-            return is_revoked
-
+    def _revoke_keys(self, task):
+        if isinstance(task, TaskWrapper) or inspect.isclass(task):
+            return [self._task_key(task, 'rt')]
         if isinstance(task, Result):
             task = task.task
-        by_id = not isinstance(task, Task)
-        if by_id:
-            task = Task(id=task)
+        if isinstance(task, Task):
+            return [task.revoke_id, self._task_key(type(task), 'rt')]
+        return [Task(id=task).revoke_id]
 
-        rt_key = self._task_key(type(task), 'rt')
-        keys = [task.revoke_id] if by_id else [task.revoke_id, rt_key]
+    def is_revoked(self, task, timestamp=None, peek=True):
+        keys = self._revoke_keys(task)
         data = self.storage.peek_many(keys)
-        is_revoked, can_restore = self._check_revoked(
-            data.get(task.revoke_id, EmptyData), timestamp, peek)
-        if can_restore:
-            self.restore(task)
-        if not is_revoked and not by_id:
-            is_revoked, can_restore = self._check_revoked(
-                data.get(rt_key, EmptyData), timestamp, peek)
-            if can_restore:
-                self.restore_all(type(task))
-
-        return is_revoked
+        for key in keys:
+            revoked, restore = self._check_revoked(
+                data.get(key, EmptyData), timestamp, peek)
+            if restore:
+                self.delete(key)
+            if revoked:
+                return True
+        return False
 
     def add_schedule(self, task):
         data = self.serialize_task(task)
