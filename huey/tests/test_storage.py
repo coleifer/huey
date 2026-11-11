@@ -290,6 +290,79 @@ class TestMemoryStorage(StorageTests, BaseTestCase):
         # Each key was acquired by exactly one thread.
         self.assertEqual(sorted(winners), list(range(nkeys)))
 
+    def run_across_unlock(self, operation, intervening_operation):
+        # Let another operation run after the worker releases the real lock,
+        # but before its context manager returns. This is a valid thread
+        # interleaving even when the context manager exits very quickly.
+        released = threading.Event()
+        resume = threading.Event()
+        lock = self.s._lock
+        results, errors = [], []
+
+        class PausingLock:
+            paused = False
+
+            def __enter__(inner):
+                lock.acquire()
+
+            def __exit__(inner, *exc):
+                lock.release()
+                if threading.current_thread() is worker and not inner.paused:
+                    inner.paused = True
+                    released.set()
+                    if not resume.wait(5):
+                        raise RuntimeError('worker was not resumed')
+
+        def run():
+            try:
+                results.append(operation())
+            except BaseException as exc:
+                errors.append(exc)
+
+        worker = threading.Thread(target=run)
+        self.s._lock = PausingLock()
+        worker.start()
+        try:
+            self.assertTrue(released.wait(5))
+            intervening_operation()
+        finally:
+            resume.set()
+            worker.join(5)
+            self.s._lock = lock
+        self.assertFalse(worker.is_alive())
+        self.assertEqual(errors, [])
+        return results
+
+    def test_incr_returns_own_atomic_value(self):
+        for amount in (1, -3, 7):
+            self.s.delete_counter('counter')
+            values = self.run_across_unlock(
+                lambda: self.s.incr('counter', amount),
+                lambda: self.assertEqual(self.s.incr('counter', 5), amount + 5))
+            self.assertEqual(values, [amount])
+            self.assertEqual(self.s.incr('counter', 0), amount + 5)
+
+    def test_chord_counter_cleanup_during_member_completion(self):
+        @self.huey.task()
+        def identity(value):
+            return value
+
+        @self.huey.task()
+        def combine(values):
+            return values
+
+        result = self.huey.enqueue(chord(
+            [identity.s('first'), identity.s('second')], combine.s()))
+        first, second = self.huey.dequeue(), self.huey.dequeue()
+        values = self.run_across_unlock(
+            lambda: self.huey.execute(first),
+            lambda: self.assertEqual(self.huey.execute(second), 'second'))
+        self.assertEqual(values, ['first'])
+        self.assertEqual(self.huey.pending_count(), 1)
+        self.assertEqual(self.execute_next(), ['first', 'second'])
+        self.assertEqual(result(), ['first', 'second'])
+        self.assertEqual(self.huey.pending_count(), 0)
+
 
 @requires_redis
 class TestRedisStorage(StorageTests, BaseTestCase):

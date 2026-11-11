@@ -3,6 +3,9 @@ Changelog
 
 ## Master
 
+* Return each in-memory counter increment's value while still holding its lock,
+  avoiding races with other increments and chord counter cleanup.
+
 [View commits](https://github.com/coleifer/huey/compare/3.5.4...master)
 
 ## 3.5.4

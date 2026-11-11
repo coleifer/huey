@@ -420,7 +420,7 @@ class MemoryStorage(BaseStorage):
     def incr(self, key, amount=1):
         with self._lock:
             self._counters[key] = self._counters.get(key, 0) + amount
-        return self._counters[key]
+            return self._counters[key]
 
     def delete_counter(self, key):
         with self._lock:
