@@ -8,6 +8,7 @@ try:
 except ImportError:
     fcntl = None
 
+from huey.api import MemoryHuey
 from huey.utils import FileLock
 from huey.utils import normalize_expire_time
 from huey.utils import normalize_time
@@ -91,6 +92,105 @@ class TestNormalizeTime(unittest.TestCase):
 
         # Omitting both eta and delay is still an error.
         self.assertRaises(ValueError, normalize_time)
+
+    def test_subsecond_task_boundaries(self):
+        for utc in (False, True):
+            for aware in (False, True):
+                with self.subTest(utc=utc, aware=aware):
+                    huey = MemoryHuey(utc=utc)
+                    calls = []
+
+                    @huey.task()
+                    def task():
+                        calls.append(True)
+                        return 'done'
+
+                    eta = datetime.datetime(2000, 1, 1, 12, 0, 0, 750000)
+                    if aware:
+                        eta = eta.replace(tzinfo=FakePacific())
+                    expected = eta.replace(tzinfo=None)
+                    if utc:
+                        expected += datetime.timedelta(hours=8)
+                    before = expected - datetime.timedelta(microseconds=1)
+
+                    for signature in (False, True):
+                        calls.clear()
+                        if signature:
+                            result = huey.enqueue(task.s(eta=eta))
+                        else:
+                            result = task.schedule(eta=eta)
+                        huey.execute(huey.dequeue(), timestamp=before)
+                        self.assertEqual(calls, [])
+                        self.assertEqual(huey.read_schedule(before), [])
+                        scheduled = huey.read_schedule(expected)
+                        self.assertEqual(len(scheduled), 1)
+                        huey.execute(scheduled[0], timestamp=expected)
+                        self.assertEqual(calls, [True])
+                        self.assertEqual(result.get(), 'done')
+
+    def test_normalize_time_microseconds(self):
+        for month, offset in ((1, 8), (7, 7)):
+            for microsecond in (0, 1, 750000, 999999):
+                local = datetime.datetime(2000, month, 1, 12, 0, 0,
+                                          microsecond)
+                expected_utc = local + datetime.timedelta(hours=offset)
+                aware = expected_utc.replace(tzinfo=datetime.timezone.utc)
+                for utc in (False, True):
+                    expected = expected_utc if utc else local
+                    for eta in (local, aware):
+                        with self.subTest(eta=eta, utc=utc):
+                            self.assertEqual(normalize_time(eta, utc=utc),
+                                             expected)
+
+    def test_subsecond_expiration(self):
+        for utc in (False, True):
+            for aware in (False, True):
+                with self.subTest(utc=utc, aware=aware):
+                    huey = MemoryHuey(utc=utc)
+
+                    @huey.task()
+                    def task():
+                        return 'done'
+
+                    expires = datetime.datetime(2000, 1, 1, 12, 0, 0, 750000)
+                    if aware:
+                        expires = expires.replace(tzinfo=FakePacific())
+                    expected = expires.replace(tzinfo=None)
+                    if utc:
+                        expected += datetime.timedelta(hours=8)
+                    for delta, value in ((-1, 'done'), (1, None)):
+                        result = huey.enqueue(task.s(expires=expires))
+                        huey.execute(huey.dequeue(), timestamp=expected +
+                                     datetime.timedelta(microseconds=delta))
+                        self.assertEqual(result.get(), value)
+
+    def test_subsecond_revocation(self):
+        for utc in (False, True):
+            for aware in (False, True):
+                for all_tasks in (False, True):
+                    with self.subTest(utc=utc, aware=aware,
+                                      all_tasks=all_tasks):
+                        huey = MemoryHuey(utc=utc)
+
+                        @huey.task()
+                        def task():
+                            pass
+
+                        until = datetime.datetime(2000, 1, 1, 12, 0, 0, 750000)
+                        if aware:
+                            until = until.replace(tzinfo=FakePacific())
+                        expected = until.replace(tzinfo=None)
+                        if utc:
+                            expected += datetime.timedelta(hours=8)
+                        queued = task.s()
+                        if all_tasks:
+                            huey.revoke_all(task, revoke_until=until)
+                        else:
+                            huey.revoke(queued, revoke_until=until)
+                        self.assertTrue(huey.is_revoked(
+                            queued, expected -
+                            datetime.timedelta(microseconds=1)))
+                        self.assertFalse(huey.is_revoked(queued, expected))
 
 
 class TestFileLock(unittest.TestCase):

@@ -61,7 +61,7 @@ def make_naive(dt):
     tt = dt.utctimetuple()
     ts = calendar.timegm(tt)
     local_tt = time.localtime(ts)
-    return datetime.datetime(*local_tt[:6])
+    return datetime.datetime(*local_tt[:6], microsecond=dt.microsecond)
 
 
 def aware_to_utc(dt):
@@ -75,7 +75,8 @@ def local_to_utc(dt):
     """
     Converts a naive local datetime.datetime in UTC time zone.
     """
-    return datetime.datetime(*time.gmtime(time.mktime(dt.timetuple()))[:6])
+    return datetime.datetime(*time.gmtime(time.mktime(dt.timetuple()))[:6],
+                             microsecond=dt.microsecond)
 
 
 def normalize_expire_time(expires, utc=True):

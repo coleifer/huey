@@ -3,6 +3,9 @@ Changelog
 
 ## Master
 
+* Preserve microseconds when converting task ETAs, expirations, and revocation
+  times between local time and UTC.
+
 [View commits](https://github.com/coleifer/huey/compare/3.5.4...master)
 
 ## 3.5.4
