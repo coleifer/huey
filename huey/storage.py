@@ -1237,6 +1237,11 @@ class PostgresStorage(BaseSqlStorage):
             return data
 
         conn = self._listen_conn()
+        # An enqueue between the initial check and LISTEN registration has
+        # no notification to wake us. Recheck after LISTEN is active.
+        data = self._dequeue()
+        if data is not None:
+            return data
         deadline = time.monotonic() + self.read_timeout
         while True:
             timeout = deadline - time.monotonic()

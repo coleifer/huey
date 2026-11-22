@@ -73,6 +73,27 @@ class TestPostgresStorage(StorageTests, BaseTestCase):
         self.assertLess(elapsed, 1.5)  # Notify wakes well under read_timeout.
         storage.close()
 
+    def test_blocking_dequeue_enqueue_before_listen(self):
+        for reconnect in (False, True):
+            with self.subTest(reconnect=reconnect):
+                huey = self.get_huey(read_timeout=0.1)
+                storage = huey.storage
+                if reconnect:
+                    storage._listen_conn().close()
+                listen_conn = storage._listen_conn
+
+                def enqueue_before_listen():
+                    self.s.enqueue(b'before-listen')
+                    return listen_conn()
+
+                storage._listen_conn = enqueue_before_listen
+                try:
+                    self.assertEqual(storage.dequeue(), b'before-listen')
+                    self.assertEqual(storage.queue_size(), 0)
+                finally:
+                    storage.flush_queue()
+                    storage.close()
+
     def test_concurrent_dequeue_disjoint(self):
         n = 50
         for i in range(n):
