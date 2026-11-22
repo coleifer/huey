@@ -1799,6 +1799,18 @@ class TestChordPrimitive(BaseTestCase):
             self.assertEqual(self.execute_next(), 0)
             self.assertEqual(result(), 0)
 
+    def test_chord_reenqueue_immediate(self):
+        # In immediate mode the callback is the caller's own task object,
+        # so completing the chord must not mutate it: re-enqueueing the
+        # same chord must not accumulate the previous results as args.
+        self.huey.immediate = True
+        prod, agg = self.funcs()
+        ch = chord([prod.s(1), prod.s(2)], agg.s())
+        for _ in range(2):
+            result = self.huey.enqueue(ch)
+            self.assertEqual(result(), 5)
+        self.assertEqual(ch.callback.data, ((), {}))
+
     def test_chord(self):
         prod, agg = self.funcs()
 

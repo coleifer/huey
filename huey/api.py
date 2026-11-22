@@ -565,7 +565,9 @@ class Huey(object):
                 results.append(self.get(key, peek=True))
                 self.delete(key)
 
-            callback = cc.callback
+            # Copy, as the callback is shared across re-enqueues of the
+            # chord (e.g. in immediate mode it is the caller's task object).
+            callback = copy.copy(cc.callback)
             callback.extend_data((results,))
             self.enqueue(callback)
 
